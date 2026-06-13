@@ -21,7 +21,7 @@ pub mod trade;
 
 pub use error::{Error, Result};
 pub use instances::{buff_stem, resolve_buff_ids, OperatorInstances};
-pub use operbox::{default_operbox_gongsun_path, OperBox};
+pub use operbox::{default_operbox_full_e2_path, default_operbox_gongsun_path, OperBox};
 pub use pool::{
     build_control_pool, build_manufacture_pool, build_power_pool, build_trade_pool,
     filter_control_pool, filter_manufacture_pool, filter_trade_pool, jie_e0_trade_operator,

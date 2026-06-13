@@ -191,6 +191,11 @@ pub fn default_operbox_gongsun_path() -> Result<std::path::PathBuf> {
     crate::skill_table::data_path("operbox_gongsun.json")
 }
 
+/// 243 标准测试样例：全精2 operbox（`data/fixtures/243/operbox_full_e2.json`）。
+pub fn default_operbox_full_e2_path() -> Result<std::path::PathBuf> {
+    crate::skill_table::data_path("fixtures/243/operbox_full_e2.json")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

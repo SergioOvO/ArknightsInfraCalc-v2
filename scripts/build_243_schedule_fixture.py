@@ -127,7 +127,7 @@ def main() -> None:
         "schedule",
         type=Path,
         nargs="?",
-        default=root / "243_layout_3_times_a_day.json",
+        default=root / "data" / "fixtures" / "243" / "schedule_export.json",
     )
     parser.add_argument(
         "--seed-operbox",

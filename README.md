@@ -36,17 +36,30 @@ cargo run -p infra-cli -- verify --all
 cargo run -p infra-cli -- verify --case reg_gsl_closure_tier90
 ```
 
-### 用你的练度盒搜索
+### 243 标准样例（layout + 全精2 operbox）
 
-准备 operbox JSON（见 `data/operbox_gongsun.json` 样例，或由 `scripts/xlsx_to_operbox.py` 从练度表导出）：
+仓库自带 [data/fixtures/243/](data/fixtures/243/) 测试夹具，无需自备练度表：
 
 ```bash
-# 243c 基准布局 + 贸易/制造 Top-K
-cargo run -p infra-cli -- bench --operbox data/operbox_gongsun.json --text
-
-# 自定义蓝图（排班工具导出的布局 JSON）
+# 243 布局 + 全精2 练度盒 → 贸易/制造 Top-K
 cargo run -p infra-cli -- layout test \
-  --layout data/layout/243_use_this_.json \
+  --layout data/fixtures/243/layout.json \
+  --operbox data/fixtures/243/operbox_full_e2.json \
+  --text
+
+# 同上 operbox，243 基准布局 bench
+cargo run -p infra-cli -- bench \
+  --operbox data/fixtures/243/operbox_full_e2.json \
+  --text
+```
+
+### 自定义练度盒
+
+也可使用自己的 operbox JSON（由 `scripts/xlsx_to_operbox.py` 从练度表导出）：
+
+```bash
+cargo run -p infra-cli -- layout test \
+  --layout data/fixtures/243/layout.json \
   --operbox data/operbox_gongsun.json \
   --text
 ```
@@ -55,7 +68,7 @@ cargo run -p infra-cli -- layout test \
 
 ```bash
 cargo run -p infra-cli -- schedule rotation \
-  --operbox data/operbox_gongsun.json \
+  --operbox data/fixtures/243/operbox_full_e2.json \
   --layout-baseline
 ```
 
@@ -114,6 +127,7 @@ operbox + operator_instances + skill_table
 | `data/operator_instances.json` | 干员 @tier → buff_ids |
 | `data/trade_shortcuts.json` | L3 组合锚点 |
 | `data/REGRESSION_CASES.csv` | verify 期望值 |
+| `data/fixtures/243/` | **243 标准测试样例**（layout + 全精2 operbox + 排班导出） |
 | `data/layout/*.json` | 基建蓝图模板 |
 
 ```bash

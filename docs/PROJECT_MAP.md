@@ -165,8 +165,9 @@ ArknightsInfraCalc-v2/
 | **`prts_trade_skills.json`** / `.csv` / `_table.html` | PRTS 贸易站技能原文快照（核对用） | 脚本抓取 |
 | **`roster.csv`** | 默认贸易站搜索名单 | 脚本 / 手工 |
 | **`roster_gongsun.csv`** / **`roster_xlsx.csv`** | 公孙长乐等扩展名单 | 导入 |
-| **`operbox_gongsun.json`** / **`operbox_xlsx.json`** | 练度盒样例 | xlsx 脚本 |
-| **`data/layout/243_use_this_.json`** | 公孙 243 事实蓝图（2 金贸）；`search_baseline()` 默认派生 | 模板 |
+| **`data/fixtures/243/`** | **243 标准测试样例**：`layout.json` + `operbox_full_e2.json` + `schedule_export.json` | 夹具 |
+| **`operbox_gongsun.json`** | 练度盒样例（较小子集） | 脚本 / 测试 |
+| **`data/layout/243_use_this_.json`** | 公孙 243 事实蓝图（2 金贸）；同 `fixtures/243/layout.json` | 模板 |
 | **`data/layout/243c.json`** | 旧版 243c（3 贸易：2 金 + 1 源石）；怪猎 `snhunt` 等同结构 | 模板 |
 | **`data/layout/snhunt.json`** | 怪猎评估蓝图（物理同 243c；木天蓼靠中枢编制） | 模板 |
 | **`MECHANICS_REGISTRY.csv`** | 全基建机制归档（727 条）；贸易站核对**不再依赖** | 归档 |
