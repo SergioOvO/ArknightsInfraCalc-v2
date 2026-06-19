@@ -14,7 +14,7 @@ use crate::tier::PromotionTier;
 use crate::global_resource::GlobalResourceKey;
 use crate::layout::context::{LayoutContext, DEFAULT_DORM_OCCUPANT_COUNT};
 use crate::trade::input::{TradeOperator, TradeOrderKind};
-use crate::types::RecipeKind;
+use crate::types::{AtomScope, CompiledAtom, RecipeKind, Selector};
 
 #[derive(Debug, Clone)]
 pub struct ResolvedTradeRoom {
@@ -105,11 +105,6 @@ pub fn resolve_base(
         layout.apply_durin_dorm_planning(count);
     }
     layout.gold_manu_line_count = blueprint.gold_manu_line_count();
-    apply_wuyou_human_fireworks_baseline(&workforce, blueprint, &mut layout);
-    if let Some(instances) = instances {
-        apply_senxi_monster_cuisine_from_assignment(blueprint, assignment, instances, &mut layout);
-        apply_perception_producers(blueprint, assignment, instances, &mut layout);
-    }
 
     if let (Some(instances), Some(table)) = (instances, table) {
         let power_ops: Vec<(RoomId, PowerOperator)> = workforce
@@ -151,10 +146,23 @@ pub fn resolve_base(
         );
     }
 
+    // 跨设施编排层 — 执行 scope=Global 的 atom（在 control/power/office 之后）
+    if let (Some(instances), Some(table)) = (instances, table) {
+        let global_atoms = crate::cross_facility::collect_global_atoms(
+            blueprint, assignment, instances, table, &layout,
+        );
+        if !global_atoms.is_empty() {
+            let snapshot = crate::cross_facility::orchestrate_global_atoms(
+                &global_atoms, &layout, layout.global.clone(),
+            );
+            layout.global = snapshot.global;
+        }
+    }
+
     layout.global.run_conversions();
 
     let trade_rooms = build_trade_rooms(blueprint, assignment, instances, table, &layout);
-    let manu_rooms = build_manu_rooms(blueprint, assignment, instances, &layout);
+    let manu_rooms = build_manu_rooms(blueprint, assignment, instances, table, &layout);
     let power_rooms = build_power_rooms(&workforce, instances, &layout);
 
     Ok(ResolvedBase {
@@ -269,173 +277,70 @@ fn effective_dorm_occupants(blueprint: &BaseBlueprint, _assignment: &BaseAssignm
         .unwrap_or(DEFAULT_DORM_OCCUPANT_COUNT)
 }
 
-const WUYOU_OPERATOR_NAME: &str = "乌有";
-const SENXI_DORM_CUISINE_BUFF: &str = "dorm_rec_bd_dungeon[000]";
-
-/// 黑键·乐感（贸易站宿舍人数 → 感知信息）。
-const BLACKKEY_PERCEPTION_BUFF: &str = "trade_ord_spd_bd_n1[000]";
-/// 迷迭香·超感（制造站宿舍人数 → 感知信息）。
-const ROSEMARY_PERCEPTION_BUFF: &str = "manu_prod_spd_bd_n1[000]";
-/// 宿舍感知 producer（爱丽丝·梦境呓语 / 车尔尼·琴键漫步；每级 +1 感知，精2 生效）。
-/// `skill_table` 未建模其感知子效果（主效果是心情恢复，属非目标），故按名在 resolve 注入。
-const DORM_PERCEPTION_PRODUCERS: &[&str] = &["爱丽丝", "车尔尼"];
-/// 办公室感知 producer（絮雨·追忆：记忆碎片 → 感知）。
-/// 产出按办公室等级：Lv3 → 20，Lv2 → 10，Lv1 → 0，即 `(level-1)*10`（@公孙长乐 2026-06-15）。
-/// 与爱丽丝/车尔尼同款：主效果（招募）属非目标，故不入 `skill_table`，按名在 resolve 注入。
-const OFFICE_PERCEPTION_PRODUCER: &str = "絮雨";
-
-/// 感知信息（全基建共享）汇总：所有 producer 写入 `layout.global`，
-/// 由黑键/迷迭香各自读全量。中枢令/夕的感知已在 `apply_control_to_layout` 写回，这里补齐贸易/制造/宿舍侧。
-///
-/// 转化设施（黑键贸易 / 迷迭香制造）自身那份在房内 `state_produce` 重复计入，
-/// 故在 `room_layout_for_*` 扣回 `dorm_occupant_count`（与乌有人间烟火同款）。
-fn apply_perception_producers(
-    blueprint: &BaseBlueprint,
-    assignment: &BaseAssignment,
-    instances: &OperatorInstances,
-    layout: &mut LayoutContext,
-) {
-    let dorm = f64::from(layout.dorm_occupant_count);
-    for room in &blueprint.rooms {
-        for op in assignment.operators_in(&room.id) {
-            let tier = PromotionTier::from_elite(op.elite);
-            match room.kind {
-                FacilityKind::TradePost => {
-                    if instances
-                        .resolve_trade_buff_ids(&op.name, tier)
-                        .iter()
-                        .any(|b| b == BLACKKEY_PERCEPTION_BUFF)
-                    {
-                        layout.global.add(GlobalResourceKey::Perception, dorm);
-                    }
-                }
-                FacilityKind::Factory => {
-                    if instances
-                        .resolve_manufacture_buff_ids(&op.name, tier)
-                        .iter()
-                        .any(|b| b == ROSEMARY_PERCEPTION_BUFF)
-                    {
-                        layout.global.add(GlobalResourceKey::Perception, dorm);
-                    }
-                }
-                FacilityKind::Dormitory => {
-                    if op.elite >= 2 && DORM_PERCEPTION_PRODUCERS.contains(&op.name.as_str()) {
-                        layout
-                            .global
-                            .add(GlobalResourceKey::Perception, f64::from(room.level));
-                    }
-                }
-                FacilityKind::Office => {
-                    if op.elite >= 2 && op.name == OFFICE_PERCEPTION_PRODUCER {
-                        let amount = f64::from(room.level.saturating_sub(1)) * 10.0;
-                        layout.global.add(GlobalResourceKey::Perception, amount);
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-}
-
-/// 森西精2「森西大食堂」：进驻宿舍时，该宿舍每级 → 1 层魔物料理（写入全局池）。
-fn apply_senxi_monster_cuisine_from_assignment(
-    blueprint: &BaseBlueprint,
-    assignment: &BaseAssignment,
-    instances: &OperatorInstances,
-    layout: &mut LayoutContext,
-) {
-    let mut layers = 0.0f64;
-    for room in &blueprint.rooms {
-        if room.kind != FacilityKind::Dormitory {
-            continue;
-        }
-        for op in assignment.operators_in(&room.id) {
-            if op.elite < 2 {
+/// 通用扣回：对本房干员中 scope=Global 的 StateProduce atom 做扣回。
+/// 编排层已统一执行这些 atom 并将结果写入 `layout.global`。
+/// Per-room 求解时相同 atom 会再次执行，故须扣回编排层已计数的分量。
+fn deduct_room_global_atoms<'a, I>(room_layout: &mut LayoutContext, compiled_atoms_iter: I, layout: &LayoutContext)
+where
+    I: IntoIterator<Item = &'a Arc<[CompiledAtom]>>
+{
+    for atoms in compiled_atoms_iter {
+        for ca in atoms.iter() {
+            if ca.atom.scope != AtomScope::Global {
                 continue;
             }
-            let tier = PromotionTier::from_elite(op.elite);
-            let buffs = instances.resolve_dorm_buff_ids(&op.name, tier);
-            if buffs.iter().any(|b| b == SENXI_DORM_CUISINE_BUFF) {
-                layers += f64::from(room.level);
+            if let crate::types::Action::StateProduce { key, .. } = &ca.atom.action {
+                let contribution = scope_global_contribution(&ca.atom, layout);
+                if let Some(gk) = crate::global_resource::GlobalResourceKey::parse(key.as_str()) {
+                    room_layout.global.add(gk, -contribution);
+                }
             }
         }
     }
-    if layers > 0.0 {
-        layout
-            .global
-            .set(GlobalResourceKey::MonsterCuisine, layers);
+}
+
+/// 计算 scope=Global 的 StateProduce atom 在跨设施编排层的贡献值。
+/// cross_facility/interpreter.rs 的 resolve_selector_value 使用相同的 Selector 求值逻辑。
+fn scope_global_contribution(atom: &crate::types::EffectAtom, layout: &LayoutContext) -> f64 {
+    let Some(sel) = &atom.selector else {
+        return 1.0 * match &atom.action {
+            crate::types::Action::StateProduce { amount, .. } => *amount,
+            _ => 0.0,
+        };
+    };
+    let scale = match sel {
+        Selector::DormOccupantCount => f64::from(layout.dorm_occupant_count),
+        Selector::FacilityLevel => 0.0,
+        _ => 0.0,
+    };
+    match &atom.action {
+        crate::types::Action::StateProduce { amount, .. } => scale * amount,
+        _ => 0.0,
     }
 }
 
-/// 乌有在任意贸易站上岗时，将其产出的人间烟火注入全局池（供铎铃等 consumer 读取）。
-fn apply_wuyou_human_fireworks_baseline(
-    workforce: &WorkforceIndex,
-    blueprint: &BaseBlueprint,
-    layout: &mut LayoutContext,
-) {
-    if !wuyou_in_trade_workforce(workforce, blueprint) {
-        return;
-    }
-    layout.global.add(
-        GlobalResourceKey::HumanFireworks,
-        f64::from(layout.dorm_occupant_count),
-    );
-}
-
-fn wuyou_in_trade_workforce(workforce: &WorkforceIndex, blueprint: &BaseBlueprint) -> bool {
-    blueprint
-        .rooms
-        .iter()
-        .filter(|room| room.kind == FacilityKind::TradePost)
-        .any(|room| {
-            workforce
-                .by_room
-                .get(&room.id.0)
-                .is_some_and(|ops| ops.iter().any(|op| op.name == WUYOU_OPERATOR_NAME))
-        })
-}
-
+/// 贸易房：扣回 scope=Global atom（编排层已产出）。
 fn room_layout_for_trade(
     layout: &LayoutContext,
     operators: &[TradeOperator],
 ) -> LayoutContext {
     let mut room_layout = layout.clone();
-    if operators_include_wuyou_producer(operators) {
-        room_layout.global.add(
-            GlobalResourceKey::HumanFireworks,
-            -f64::from(layout.dorm_occupant_count),
-        );
-    }
-    // 黑键自产那份感知已在 `apply_perception_producers` 计入全局，房内 atom 会再产一次，故扣回。
-    if operators
-        .iter()
-        .any(|op| op.buff_ids.iter().any(|b| b == BLACKKEY_PERCEPTION_BUFF))
-    {
-        room_layout.global.add(
-            GlobalResourceKey::Perception,
-            -f64::from(layout.dorm_occupant_count),
-        );
-    }
+    deduct_room_global_atoms(&mut room_layout, operators.iter().map(|op| &op.compiled_atoms), layout);
     room_layout
 }
 
-fn operators_include_wuyou_producer(operators: &[TradeOperator]) -> bool {
-    operators
-        .iter()
-        .any(|op| op.name == WUYOU_OPERATOR_NAME && op.elite >= 2)
-}
-
-/// 迷迭香制造房：扣回其自产感知（与 `room_layout_for_trade` 的黑键处理对称）。
-fn room_layout_for_manu(layout: &LayoutContext, operators: &[ManuOperator]) -> LayoutContext {
+/// 制造房：扣回 scope=Global atom（编排层已产出）。
+fn room_layout_for_manu(
+    layout: &LayoutContext,
+    operators: &[crate::manufacture::ManuOperator],
+    table: Option<&SkillTable>,
+) -> LayoutContext {
     let mut room_layout = layout.clone();
-    if operators
-        .iter()
-        .any(|op| op.buff_ids.iter().any(|b| b == ROSEMARY_PERCEPTION_BUFF))
-    {
-        room_layout.global.add(
-            GlobalResourceKey::Perception,
-            -f64::from(layout.dorm_occupant_count),
-        );
+    if let Some(table) = table {
+        for op in operators {
+            let atoms = compile_operator_atoms(&op.buff_ids, table);
+            deduct_room_global_atoms(&mut room_layout, std::iter::once(&atoms), layout);
+        }
     }
     room_layout
 }
@@ -475,6 +380,7 @@ fn build_manu_rooms(
     blueprint: &BaseBlueprint,
     assignment: &BaseAssignment,
     instances: Option<&OperatorInstances>,
+    table: Option<&SkillTable>,
     layout: &LayoutContext,
 ) -> Vec<ResolvedManuRoom> {
     blueprint
@@ -494,7 +400,7 @@ fn build_manu_rooms(
                 id: room.id.clone(),
                 level: room.level,
                 recipe: *recipe,
-                layout: room_layout_for_manu(layout, &operators),
+                layout: room_layout_for_manu(layout, &operators, table),
                 operators,
             })
         })
@@ -809,8 +715,9 @@ mod tests {
         assert_eq!(layout.gold_manu_line_count, 2);
         assert_eq!(layout.durin_in_base, 0);
         assert_eq!(layout.facility_level_sum_excl_meeting, 45);
+        // MonsterCuisine 基线已从 search_baseline_legacy 中移除，由编排层按需生产
         assert!((layout.global.get(crate::global_resource::GlobalResourceKey::MonsterCuisine)
-            - 3.0)
+            - 0.0)
             .abs()
             < f64::EPSILON);
         assert!(layout.base_workforce.is_empty());
@@ -834,7 +741,8 @@ mod tests {
         .layout;
         assert!(
             (layout.global.get(GlobalResourceKey::MonsterCuisine) - 3.0).abs() < f64::EPSILON,
-            "Lv3 宿舍 + 森西精2 → 3 层魔物料理"
+            "Lv3 宿舍 + 森西精2 → 3 层魔物料理, got {}",
+            layout.global.get(GlobalResourceKey::MonsterCuisine)
         );
         assert_eq!(
             layout.dorm_occupant_count, 20,

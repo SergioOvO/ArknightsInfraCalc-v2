@@ -22,6 +22,8 @@ pub struct GlobalInjectManifest {
     karlan_precision: Option<KarlanPrecision>,
     /// 中枢八幡海铃 E2「家族认可」已进驻（叙拉古但书链段 producer；不含贸易站计数）。
     haru_e2_in_control: bool,
+    /// 中枢戴菲恩 E2「运筹好手」已进驻（推王组链段 producer）。
+    daifeen_e2_in_control: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -66,7 +68,11 @@ impl GlobalInjectManifest {
             ManuInjectSlot::Originium => &mut self.manu_originium_by_family,
         };
         let entry = map.entry(family.to_string()).or_insert(0.0);
-        *entry = entry.max(value);
+        if value >= 0.0 {
+            *entry = entry.max(value);
+        } else {
+            *entry += value;
+        }
     }
 
     /// 记录灵知·精密计算；单一中枢不叠加，取订单上限增益更大的一条。
@@ -92,6 +98,15 @@ impl GlobalInjectManifest {
 
     pub fn haru_e2_in_control(&self) -> bool {
         self.haru_e2_in_control
+    }
+
+    /// 推王组链段：中枢有戴菲恩 E2 时激活。
+    pub fn record_daifeen_e2_in_control(&mut self) {
+        self.daifeen_e2_in_control = true;
+    }
+
+    pub fn daifeen_e2_in_control(&self) -> bool {
+        self.daifeen_e2_in_control
     }
 }
 

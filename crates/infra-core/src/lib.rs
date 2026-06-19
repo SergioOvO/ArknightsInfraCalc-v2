@@ -1,3 +1,5 @@
+pub mod box_profile;
+pub mod cross_facility;
 pub mod eff_ramp;
 pub mod error;
 pub mod profile;
@@ -20,9 +22,16 @@ pub mod office;
 pub mod power;
 pub mod trade;
 
+pub use box_profile::{
+    baseline_path_or_default, build_box_profile, render_box_profile_narrative, ActionKind,
+    BoxProfile, BoxProfileOptions, GapSeverity, ProfileAction,
+};
 pub use error::{Error, Result};
 pub use instances::{buff_stem, resolve_buff_ids, OperatorInstances};
-pub use operbox::{default_operbox_full_e2_path, default_operbox_gongsun_path, OperBox};
+pub use operbox::{
+    default_layout_243_path, default_operbox_full_e2_path, default_operbox_gongsun_path,
+    from_xlsx_path, OperBox,
+};
 pub use pool::{
     build_control_pool, build_manufacture_pool, build_power_pool, build_trade_pool,
     filter_control_pool, filter_manufacture_pool, filter_trade_pool, jie_e0_trade_operator,

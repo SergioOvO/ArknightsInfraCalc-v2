@@ -197,7 +197,7 @@ impl LayoutContext {
             trade_station_count: 2,
             power_station_count: 3,
             drone_cap: 135,
-            global: GlobalResourcePool::with_value(GlobalResourceKey::MonsterCuisine, 3.0),
+            // NB: MonsterCuisine no longer hardcoded here; it's handled by cross_facility orchestration layer
             gold_manu_line_count: 2,
             ..Default::default()
         }
