@@ -35,6 +35,7 @@ crates/infra-cli/src/
 ├── main.rs              # 进程入口 + 子命令路由（其余子命令暂留此处，见「待拆」）
 ├── commands/
 │   ├── mod.rs           # 子命令模块聚合；对外 re-export
+│   ├── plan.rs          # `plan`：box profile + αβγ 排班 + MAA
 │   ├── layout.rs        # `layout test` / `rotation` / `team-rotation` / `analyze` / `eval` 全部子命令
 │   └── verify.rs        # `verify` 子命令：跑回归、汇总失败
 ├── verify/
@@ -60,7 +61,8 @@ crates/infra-cli/src/
 
 | 模块 | 职责 | 不负责 |
 |------|------|--------|
-| `layout.rs` | `layout test` / `rotation` / `team-rotation` / `analyze` / `eval`：蓝图 JSON + operbox → `assign_base_greedy` 宏观落位（或自定义 `--assignment`）→ `resolve_base` → 搜索/评分 | 蓝图格式定义（`infra-core::layout::blueprint`）；求解公式（在 `infra-core`） |
+| `plan.rs` | **`plan`**：box profile JSON + `schedule_team_rotation` + MAA；`--operbox` 支持 JSON/xlsx；布局默认 243 | 画像算法（`box_profile/`）；排班逻辑（`schedule/`） |
+| `layout.rs` | `layout test` / `rotation` / `team-rotation` / `analyze` / `eval`：蓝图 JSON + operbox → `assign_shift` 宏观落位（或自定义 `--assignment`）→ `resolve_base` → 搜索/评分 | 蓝图格式定义（`infra-core::layout::blueprint`）；求解公式（在 `infra-core`） |
 | `verify.rs` | `verify_cmd`：遍历 `REGRESSION_CASES.csv`；按 `expect_shortcut` 选夹具；对比 trade%/gold%/shortcut；再跑 `UNIT_OUTPUT_ANCHORS.csv` | 夹具定义（在 `verify/fixtures.rs`）；CSV 列定义（在 `verify/cases.rs`） |
 
 项目结构已定型：`pool` / `search` 等编排暂留 `main.rs`，**不再计划拆文件**。新增子命令仍应优先新建 `commands/foo.rs`，避免继续膨胀 `main.rs`。
@@ -113,12 +115,13 @@ crates/infra-cli/src/
 
 | 用户命令 | 编排（当前） | 输出 | 数据 / 夹具 |
 |----------|--------------|------|-------------|
+| **`plan`** | `commands/plan.rs` | profile JSON 文件 + stdout 分析/排班表；可选 MAA | 必选 `--operbox`（JSON/xlsx）；布局默认 `data/fixtures/243/layout.json` |
 | `verify` | `commands/verify.rs` | stdout/stderr 行文本 | `verify/cases.rs` + `verify/fixtures.rs` + `data/*.csv` |
 | `pool` | `main.rs` | `output::emit_pool` | operbox / roster → `infra-core::pool` |
 | `search trade` | `main.rs` | `output::emit_trade_search` | roster / operbox |
 | `bench` | `main.rs` | `output::emit_bench` | 必选 `--operbox`；布局固定 `search_baseline`（`243_use_this_.json`） |
-| **`layout test`** | `commands/layout.rs` | `output::emit_bench` | 必选 `--layout` + `--operbox`；默认调用 `assign_base_greedy` |
-| **`layout team-rotation`** | `commands/layout.rs` | `output::emit_team_rotation` | 必选 `--layout` + `--operbox`；**αβγ ABC 轮换（现行）**；用户说「跑一遍模拟」时的 Agent 默认 |
+| **`layout test`** | `commands/layout.rs` | `output::emit_bench` | 必选 `--layout` + `--operbox`；默认调用 `assign_shift` |
+| **`layout team-rotation`** | `commands/layout.rs` | `output::emit_team_rotation` | 必选 `--layout` + `--operbox`；**αβγ ABC 轮换**；仅排班时用 |
 | **`layout rotation`** | `commands/layout.rs` | `output::emit_base_rotation` | **已废弃**（A-B-A）；启动时 stderr 警告，请改用 `team-rotation` |
 | **`layout analyze`** | `commands/layout.rs` | `print_box_profile_report` | 必选 `--layout` + `--operbox`；练度概况分析 |
 | **`layout eval`** | `commands/layout.rs` | stderr 文本 / JSON | 必选 `--layout` + `--operbox` + `--assignment`；评估指定编制 |
@@ -142,9 +145,33 @@ crates/infra-cli/src/
 
 ---
 
+## `plan`（账号分析 + 排班，推荐入口）
+
+> **给 Cursor / 协作者**：用户要「分析练度 + 出排班 + MAA」时，优先用 **`plan`**。`layout team-rotation` 仅做排班（无 profile JSON、需显式 `--layout`）。前端集成见 [FRONTEND_CLI.md](FRONTEND_CLI.md)。
+
+```bash
+cargo run -p infra-cli -- plan \
+  --operbox data/fixtures/243/operbox_full_e2.json \
+  --maa-out out/243_maa.json
+```
+
+| 参数 | 说明 |
+|------|------|
+| `--operbox` | **必填**。`OperBox` JSON 或一图流练度 xlsx |
+| `--layout` | 可选。默认 `data/fixtures/243/layout.json` |
+| `--maa-out` | 写出 MAA 基建排班 JSON |
+| `--profile-out` | 可选。账号画像 JSON 路径（默认同目录 `*_profile.json`） |
+| `--output-dir` | 可选。写出三队 `team_shift_*.json` assignment |
+| `--baseline` | 可选。对比用基准 operbox（默认 `data/box_profile_knightcode.json`） |
+| `--top` | Top-K 搜索条数，默认 20 |
+| `--maa-title` | 覆盖 MAA JSON 顶层 `title` |
+| `--json` | 仅输出 profile JSON 到 stdout（跳过人类可读表） |
+
+---
+
 ## 跑一遍模拟（Agent 默认）
 
-> **给 Cursor / 协作者**：用户说「跑一遍模拟」「跑模拟」「三班模拟」等，且未指定其他命令时，**默认**跑 **αβγ 三队 ABC 轮换**并**写出 MAA JSON**。不要用 `layout rotation`（A-B-A）或 `layout test`（单班搜索）代替。
+> **给 Cursor / 协作者**：用户说「跑一遍模拟」「跑模拟」「三班模拟」等，且未指定其他命令时，**默认**跑 **`plan`** 或 **`layout team-rotation`** 并**写出 MAA JSON**。不要用 `layout rotation`（A-B-A）或 `layout test`（单班搜索）代替。
 
 **无用户指定路径时，Agent 固定用：**
 
@@ -157,6 +184,12 @@ crates/infra-cli/src/
 ### 命令（Agent 默认）
 
 ```bash
+# 推荐
+cargo run -p infra-cli -- plan \
+  --operbox data/fixtures/243/operbox_full_e2.json \
+  --maa-out out/243_maa.json
+
+# 或仅排班
 cargo run -p infra-cli -- layout team-rotation \
   --layout data/fixtures/243/layout.json \
   --operbox data/fixtures/243/operbox_full_e2.json \

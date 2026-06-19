@@ -1,6 +1,6 @@
 # 编排层重构路线图（Orchestration Layer）
 
-> **状态**：**下一步主工程**（2026-06）  
+> **状态**：**Phase 0–3 / 5 已落地**（2026-06）；Phase 4 global effect 收拢进行中  
 > **目标**：把「谁上哪个岗位」从 search/solve 评分里拆出来，统一到 **System → Plan → Execute**；L1–L3 求解器不改语义，只消费编制结果。  
 > **背景讨论**：同房组合、跨房体系、global effect 三套入口搅在 `assign_shift` 里是乱源，不是机制太多。  
 > **旧稿参考**：[plans/orchestration_engine_design.md](../plans/orchestration_engine_design.md)（阶段二/三「穷举方案 + DailyTotals 裁决」**不采用**；组合由 System 声明，不靠 search 发现）

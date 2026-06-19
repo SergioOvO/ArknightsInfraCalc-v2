@@ -5,7 +5,7 @@
 ## 1. 必读顺序
 
 1. **[docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)** — 目录、模块索引、域状态、常见任务路由
-2. **下一步主工程** → **[docs/ORCHESTRATION_LAYER.md](docs/ORCHESTRATION_LAYER.md)** — 编排层 `System → Plan → Execute`；组合进编、global effect、search 边界
+2. **编排层** → **[docs/ORCHESTRATION_LAYER.md](docs/ORCHESTRATION_LAYER.md)** — `System → Plan → Execute`；`base_systems.json` 体系认领、global effect、search 边界（Phase 0–3/5 已落地）
 3. 改机制 → 本文 **§4 协作工序** + **[docs/EFFECT_ATOM_DESIGN.md](docs/EFFECT_ATOM_DESIGN.md) §一、§八** + **[docs/COLLAB_WORKFLOW.md](docs/COLLAB_WORKFLOW.md)**
 4. 改 CLI → **[docs/INFRA_CLI.md](docs/INFRA_CLI.md)**（禁止在 CLI 写求解公式）
 5. 大文件内部边界 → **[docs/INTERNAL/](docs/INTERNAL/)**
@@ -38,10 +38,11 @@
 | 怪猎木天蓼链（调查团 / 火龙S黑角 / 麒麟R夜刀） | `snhunt_baseline()`、`data/layout/snhunt.json`；≠ 三星黑角/夜刀 |
 | 制造站（勿按贸易站假设改） | [docs/MANUFACTURE_STATUS.md](docs/MANUFACTURE_STATUS.md) |
 | 回归夹具 | `infra-cli/src/verify/fixtures.rs` + `PROJECT_MAP.md` 夹具表 |
-| **用户说「跑一遍模拟」** | **`layout team-rotation`** + 标准夹具 + **`--maa-out`** — 见本文 **§6.2**、**[SCHEDULE_ROTATION.md](docs/SCHEDULE_ROTATION.md)**；**不要**用 `layout rotation`（A-B-A 已废弃）或 `layout test` 代替 |
+| **用户说「跑一遍模拟」** | **`plan`**（推荐）或 **`layout team-rotation`** + 标准夹具 + **`--maa-out`** — 见本文 **§6.2**、**[SCHEDULE_ROTATION.md](docs/SCHEDULE_ROTATION.md)** |
+| **账号分析 + 排班一体化** | **`plan`** — 见 [INFRA_CLI.md](docs/INFRA_CLI.md)、[FRONTEND_CLI.md](docs/FRONTEND_CLI.md) |
 | **自定义布局 + operbox 探测** | **`layout test`** — 见 [INFRA_CLI.md](docs/INFRA_CLI.md)「自定义布局 + 练度盒测试」；**不要**用 `bench` 代替 |
 | **Agent 默认测试夹具（243 + 全精2）** | **`data/fixtures/243/layout.json`** + **`data/fixtures/243/operbox_full_e2.json`** — 见本文 **§6** |
-| **全基建进驻编制 / 宏观排班** | [docs/BASE_ASSIGNMENT.md](docs/BASE_ASSIGNMENT.md)（现行）；**重构路线** → [docs/ORCHESTRATION_LAYER.md](docs/ORCHESTRATION_LAYER.md) |
+| **全基建进驻编制 / 宏观排班** | [docs/BASE_ASSIGNMENT.md](docs/BASE_ASSIGNMENT.md)；编排实现 → [docs/ORCHESTRATION_LAYER.md](docs/ORCHESTRATION_LAYER.md) |
 | **贸易 meta 组合 / 并站 / 体系认领** | **[docs/ORCHESTRATION_LAYER.md](docs/ORCHESTRATION_LAYER.md)** — 改 `base_systems.json` / `trade_segments.json`，**禁止**用 search/solve 发现组合 |
 | **global 池 / scope=Global atom** | [docs/INTERNAL/CROSS_FACILITY.md](docs/INTERNAL/CROSS_FACILITY.md) — 只在 `resolve_base`，不参与进编 |
 | 数据一致性 | `scripts/check_trade_roster.py`、`instances.rs` |
@@ -159,6 +160,12 @@ cargo run -p infra-cli -- verify --all
 | MAA 排班输出 | `out/243_maa.json`（`/out/` 已在 `.gitignore`） |
 
 ```bash
+# 推荐：账号画像 + αβγ 排班 + MAA（布局默认 243；--operbox 支持 JSON/xlsx）
+cargo run -p infra-cli -- plan \
+  --operbox data/fixtures/243/operbox_full_e2.json \
+  --maa-out out/243_maa.json
+
+# 或仅排班（需显式 --layout）
 cargo run -p infra-cli -- layout team-rotation \
   --layout data/fixtures/243/layout.json \
   --operbox data/fixtures/243/operbox_full_e2.json \
@@ -167,7 +174,7 @@ cargo run -p infra-cli -- layout team-rotation \
 
 说明：
 
-- **默认是 `layout team-rotation`（αβγ ABC 三队轮换）**；`layout rotation`（A-B-A）**已废弃**（见 [SCHEDULE_ROTATION.md](docs/SCHEDULE_ROTATION.md)）。不要用 `layout test`（单班搜索探测）代替模拟。
+- **默认是 `plan` 或 `layout team-rotation`（αβγ ABC 三队轮换）**；`layout rotation`（A-B-A）**已废弃**（见 [SCHEDULE_ROTATION.md](docs/SCHEDULE_ROTATION.md)）。不要用 `layout test`（单班搜索探测）代替模拟。
 - **`--maa-out` 必带**；stderr 为人类可读排班表，MAA JSON 写入 `--maa-out` 路径（父目录不存在时 CLI 自动创建）。
 - 用户提供了自己的 `--layout` / `--operbox` / `--maa-out` 时，以用户路径为准；否则固定上述三路径。
 - **不要**默认 `operbox_gongsun.json` 或用户 xlsx 导出——那是较小/个人练度；标准模拟用 **`operbox_full_e2.json`**。

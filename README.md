@@ -1,8 +1,8 @@
 # ArknightsInfraCalc v2
 
-明日方舟基建效率求解器（v2 绿场重写）。给定干员练度与布局假设，计算贸易站同房三人组的订单效率、机制等效效率、单位产出；支持穷举搜索、自定义蓝图探测与 **αβγ ABC 三队轮换**排班（`layout team-rotation`）。旧版 A-B-A 已废弃，见 [docs/SCHEDULE_ROTATION.md](docs/SCHEDULE_ROTATION.md)。
+明日方舟基建效率求解器（v2 绿场重写）。给定干员练度与布局假设，计算贸易站同房三人组的订单效率、机制等效效率、单位产出；支持穷举搜索、自定义蓝图探测、**编排层体系认领**（`base_systems.json`）与 **αβγ ABC 三队轮换**排班。旧版 A-B-A 已废弃，见 [docs/SCHEDULE_ROTATION.md](docs/SCHEDULE_ROTATION.md)。
 
-**当前主力域**：贸易站（L1 解释器 + L2 域引擎 + L3 组合短路 + 回归齐全）。制造站、控制中枢、全局资源已有基础实现，详见 [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)。
+**当前主力域**：贸易站（L1 解释器 + L2 域引擎 + L3 组合短路 + 回归齐全）。制造站、控制中枢、全局资源、编排层（System → Plan → Execute）已有基础实现，详见 [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)。
 
 ## 能做什么
 
@@ -11,7 +11,9 @@
 | 单站求解 | 三人同房 → trade% / gold% / 机制等效 / 日产量 |
 | 池搜索 | 从 operbox 可建模干员中穷举 C(n,3) Top-K |
 | 自定义布局 | 加载 `BaseBlueprint` JSON，按你的基建结构搜索 |
-| 三班轮换 | αβγ ABC 三队轮换（`layout team-rotation`） |
+| 体系编排 | `base_systems.json` 认领固定组合（但书链、巫恋、红松林等） |
+| 三班轮换 | αβγ ABC 三队轮换（`plan` 或 `layout team-rotation`） |
+| 账号画像 | 练度分析 + 排班建议（`plan` / `layout analyze`） |
 | 回归验证 | CSV 锚点 + 硬编码夹具，防止机制回退 |
 
 **不做**：心情排班、宿管恢复、全基建连班优化——本求解器只输出效率，上层规划器再排班。
@@ -64,7 +66,16 @@ cargo run -p infra-cli -- layout test \
   --text
 ```
 
-### 三班模拟（默认：αβγ ABC 轮换 + MAA）
+### 一体化方案（推荐：账号分析 + 排班 + MAA）
+
+```bash
+# 默认 243 布局；--operbox 支持 JSON 或一图流 xlsx
+cargo run -p infra-cli -- plan \
+  --operbox data/fixtures/243/operbox_full_e2.json \
+  --maa-out out/243_maa.json
+```
+
+### 三班模拟（仅排班 + MAA）
 
 ```bash
 cargo run -p infra-cli -- layout team-rotation \
@@ -72,6 +83,11 @@ cargo run -p infra-cli -- layout team-rotation \
   --operbox data/fixtures/243/operbox_full_e2.json \
   --maa-out out/243_maa.json
 ```
+
+### 前端 / 发布包
+
+- 构建：`cargo build --release -p infra-cli`，产物与说明见 [release/README.md](release/README.md)
+- 集成文档：[docs/FRONTEND_CLI.md](docs/FRONTEND_CLI.md)（`plan` 命令、MAA JSON、layout-gen）
 
 ### 其他常用命令
 
@@ -87,10 +103,11 @@ cargo run -p infra-cli -- trade yield closure_solo
 
 ```
 crates/
-  infra-core/     类型、EffectAtom 解释器、求解、搜索、排班
-  infra-cli/      命令行：编排 + 输出 + 回归
+  infra-core/     类型、EffectAtom 解释器、求解、搜索、编排、排班
+  infra-cli/      命令行：plan / layout / verify / 输出
 data/             skill_table、干员实例、布局模板、回归用例（运行时真相源）
-docs/             设计文档与模块地图
+docs/             设计文档与模块地图（含 ORCHESTRATION_LAYER、FRONTEND_CLI）
+release/          前端发布包（infra-cli.exe、layout-gen、fixtures）
 scripts/          Python：技能表构建、operbox 转换、数据审计
 tests/fixtures/   最小 JSON 夹具
 ```
@@ -127,6 +144,7 @@ operbox + operator_instances + skill_table
 | `data/skill_table.json` | buff_id → EffectAtom；空 `atoms` 表示委托 L2 |
 | `data/operator_instances.json` | 干员 @tier → buff_ids |
 | `data/trade_shortcuts.json` | L3 组合锚点 |
+| `data/base_systems.json` | 编排层体系认领（但书链、巫恋、红松林等） |
 | `data/REGRESSION_CASES.csv` | verify 期望值 |
 | `data/fixtures/243/` | **243 标准测试样例**（layout + 全精2 operbox + 排班导出） |
 | `data/layout/*.json` | 基建蓝图模板 |

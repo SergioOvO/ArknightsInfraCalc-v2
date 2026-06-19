@@ -1,6 +1,6 @@
 ArknightsInfraCalc frontend release bundle
 Build date: 2026-06-18
-Git commit: 482cf71
+Git commit: 80d881f
 Platform: windows-x86_64 (infra-cli.exe, ~3.0 MB)
 
 Contents:
