@@ -2058,6 +2058,7 @@
       "atoms": [
         {
           "selector": "dorm_occupant_count",
+          "scope": "global",
           "action": {
             "kind": "state_produce",
             "params": {
@@ -2147,6 +2148,7 @@
       "atoms": [
         {
           "selector": "dorm_occupant_count",
+          "scope": "global",
           "action": {
             "kind": "state_produce",
             "params": {
@@ -2439,10 +2441,24 @@
     },
     {
       "id": "manu_formula_spd&cost_bd[100]",
-      "skill_name": "莱茵科技·β",
+      "skill_name": "造价高昂",
       "facility": "manufacture",
       "tier": "tier_up",
-      "atoms": []
+      "atoms": [
+        {
+          "selector": "rhine_life_in_base",
+          "action": {
+            "kind": "add_flat_eff_from_selector",
+            "params": {
+              "multiplier": 3.0,
+              "cap": 15.0,
+              "recipe": "gold"
+            }
+          },
+          "phase": "constant",
+          "phase_order": 20
+        }
+      ]
     },
     {
       "id": "manu_formula_spd&dorm&lv[000]",
@@ -4345,6 +4361,7 @@
       "atoms": [
         {
           "selector": "dorm_occupant_count",
+          "scope": "global",
           "action": {
             "kind": "state_produce",
             "params": {
@@ -5534,10 +5551,45 @@
     },
     {
       "id": "control_mp_psk[000]",
-      "skill_name": "捍卫之道",
+      "skill_name": "红松的骑士",
       "facility": "control",
       "tier": "tier_up",
-      "atoms": []
+      "atoms": [
+        {
+          "selector": {
+            "tagged_count_in_manu_sum": {
+              "tag": "cc.g.pinus"
+            }
+          },
+          "action": {
+            "kind": "global_inject_manu_eff",
+            "params": {
+              "value": 10.0,
+              "recipe": "battle_record"
+            }
+          },
+          "phase": "global_inject",
+          "phase_order": 10,
+          "tag": "pinus_knight_br"
+        },
+        {
+          "selector": {
+            "tagged_count_in_manu_sum": {
+              "tag": "cc.g.pinus"
+            }
+          },
+          "action": {
+            "kind": "global_inject_manu_eff",
+            "params": {
+              "value": -10.0,
+              "recipe": "gold"
+            }
+          },
+          "phase": "global_inject",
+          "phase_order": 11,
+          "tag": "pinus_knight_gold"
+        }
+      ]
     },
     {
       "id": "control_mp_cost[010]",
@@ -5559,6 +5611,31 @@
       "facility": "office",
       "tier": "tier_up",
       "atoms": [
+        {
+          "action": {
+            "kind": "state_produce",
+            "params": {
+              "key": "Perception",
+              "amount": -10.0
+            }
+          },
+          "scope": "global",
+          "phase": "state_write",
+          "phase_order": 5
+        },
+        {
+          "selector": "facility_level",
+          "scope": "global",
+          "action": {
+            "kind": "state_produce",
+            "params": {
+              "key": "Perception",
+              "amount": 10.0
+            }
+          },
+          "phase": "state_write",
+          "phase_order": 6
+        },
         {
           "action": {
             "kind": "add_flat_eff",
@@ -5661,7 +5738,7 @@
           "phase_order": 20
         },
         {
-          "selector": "rhine_life_in_base",
+          "selector": "rhine_life_in_base_excluding_self",
           "action": {
             "kind": "add_flat_eff_from_selector",
             "params": {
@@ -6298,6 +6375,69 @@
           },
           "phase": "constant",
           "phase_order": 21
+        }
+      ]
+    },
+    {
+      "id": "dorm_rec_bd_dungeon[000]",
+      "facility": "dorm",
+      "tier": "tier_up",
+      "skill_name": "森西大食堂",
+      "atoms": [
+        {
+          "selector": "facility_level",
+          "scope": "global",
+          "action": {
+            "kind": "state_produce",
+            "params": {
+              "key": "MonsterCuisine",
+              "amount": 1.0
+            }
+          },
+          "phase": "state_write",
+          "phase_order": 10
+        }
+      ]
+    },
+    {
+      "id": "dorm_rec_bd_n1_n2[000]",
+      "skill_name": "梦境呓语",
+      "facility": "dorm",
+      "tier": "tier_0",
+      "atoms": [
+        {
+          "selector": "facility_level",
+          "scope": "global",
+          "action": {
+            "kind": "state_produce",
+            "params": {
+              "key": "Perception",
+              "amount": 1.0
+            }
+          },
+          "phase": "state_write",
+          "phase_order": 10
+        }
+      ]
+    },
+    {
+      "id": "dorm_rec_bd_n1_n3[000]",
+      "skill_name": "琴键漫步",
+      "facility": "dorm",
+      "tier": "tier_0",
+      "atoms": [
+        {
+          "selector": "facility_level",
+          "scope": "global",
+          "action": {
+            "kind": "state_produce",
+            "params": {
+              "key": "Perception",
+              "amount": 1.0
+            }
+          },
+          "phase": "state_write",
+          "phase_order": 10
         }
       ]
     }

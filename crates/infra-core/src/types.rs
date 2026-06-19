@@ -94,8 +94,10 @@ pub enum Selector {
     ControlOperatorCount,
     /// 无人机上限（承曦·巡线框架）。
     DroneCap,
-    /// 基建内除自身外莱茵生命干员数（缪尔赛思·生态科主任，最多 5）。
+    /// 基建内莱茵生命干员数（娜斯提·造价高昂等；最多 5，不含副手）。
     RhineLifeInBase,
+    /// 基建内除自身外莱茵生命干员数（缪尔赛思·生态科主任，最多 5）。
+    RhineLifeInBaseExcludingSelf,
     /// 同房金属工艺类技能数量（苍苔·打工心得；含自身）。
     MetalFormulaSkillCountInRoom,
     /// 同房标准化类技能数量（水月·意识协议；标准化·α/β）。
@@ -265,6 +267,29 @@ pub enum Action {
     },
 }
 
+/// 技能 atom 影响范围：同房（默认）或全基建跨房间。
+///
+/// - `Room`（默认）：现有行为，per-room 求解执行。
+/// - `Global`：跨房间效果，写入全局资源池供全基建共享。
+///   由 [`crate::cross_facility`] 编排层统一执行，per-room 求解时跳过。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AtomScope {
+    Room,
+    Global,
+}
+
+impl Default for AtomScope {
+    fn default() -> Self {
+        Self::Room
+    }
+}
+
+/// `#[serde(skip_serializing_if)]` helper for `AtomScope` defaults.
+pub fn is_room_scope(s: &AtomScope) -> bool {
+    *s == AtomScope::Room
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EffectAtom {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -276,6 +301,10 @@ pub struct EffectAtom {
     pub tag: Option<String>,
     pub phase: Phase,
     pub phase_order: i32,
+    /// 影响范围：`Room`（默认）或 `Global`。
+    /// Global 的 atom 由 cross_facility 编排层统一执行，per-room 求解会跳过。
+    #[serde(default, skip_serializing_if = "is_room_scope")]
+    pub scope: AtomScope,
 }
 
 /// 建池时预编译的单条 atom（含排序键，供 solve 时 k 路归并）。

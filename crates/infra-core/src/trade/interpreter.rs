@@ -681,6 +681,7 @@ fn resolve_selector_value(ctx: &TradeContext, selector: Option<&Selector>, owner
         Some(Selector::TaggedCountInControl { .. }) | Some(Selector::ControlOperatorCount) => 0.0,
         Some(Selector::DroneCap) => ctx.layout.drone_cap as f64,
         Some(Selector::RhineLifeInBase) => f64::from(ctx.layout.rhine_life_in_base),
+        Some(Selector::RhineLifeInBaseExcludingSelf) => 0.0,
         Some(Selector::GoldDeliveryCount) => default_gold_delivery(ctx),
         Some(Selector::MetalFormulaSkillCountInRoom) => 0.0,
         Some(Selector::StandardSkillCountInRoom) | Some(Selector::RhineSkillCountInRoom) => 0.0,
@@ -1610,7 +1611,8 @@ mod tests {
         let qie = ctx.operators.first().unwrap();
         assert!(
             (qie.settled_eff - 3.0).abs() < 0.01,
-            "森西 Lv3 宿舍 → 3 魔物料理 → +3%"
+            "森西 Lv3 宿舍 → 3 魔物料理 → +3%, got {}",
+            qie.settled_eff
         );
     }
 

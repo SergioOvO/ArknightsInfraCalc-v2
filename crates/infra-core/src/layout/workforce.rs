@@ -34,13 +34,14 @@ const PLATFORM_OPERATOR_NAMES: &[&str] = &[
 ];
 
 const TAG_LATERANO: &str = "cc.g.laterano";
-const TAG_RHINE: &str = "cc.g.rhine";
+pub const TAG_RHINE: &str = "cc.g.rhine";
 pub const TAG_DURIN: &str = "cc.g.durin";
 pub const TAG_KARLAN: &str = "cc.g.karlan";
 pub const TAG_GLASGOW: &str = "cc.g.glasgow";
 pub const TAG_SIRACUSA: &str = "cc.g.siracusa";
 pub const TAG_BLACKSTEEL: &str = "cc.g.blacksteel";
 pub const TAG_KNIGHT: &str = "cc.g.knight";
+pub const TAG_PINUS: &str = "cc.g.pinus";
 pub const TAG_LGD: &str = "cc.g.lgd";
 pub const TAG_RAINBOW: &str = "cc.g.rainbow";
 
@@ -50,6 +51,7 @@ const CROSS_FACILITY_TAGS: &[&str] = &[
     TAG_SIRACUSA,
     TAG_BLACKSTEEL,
     TAG_KNIGHT,
+    TAG_PINUS,
 ];
 
 #[derive(Debug, Clone)]
@@ -133,13 +135,19 @@ impl WorkforceIndex {
             }
         }
 
-        let rhine_life_in_base = count_tagged_in_base(instances, &all_base_names, TAG_RHINE);
-
         let training_assist = assignment
             .training_assist
             .as_ref()
             .map(|a| vec![a.name.clone()])
             .unwrap_or_default();
+
+        let rhine_life_in_base = count_tagged_in_base_excluding(
+            instances,
+            &all_base_names,
+            &training_assist,
+            TAG_RHINE,
+            5,
+        );
 
         let durin_in_base = count_tagged_in_base_excluding(
             instances,
@@ -482,6 +490,23 @@ mod tests {
         assignment.training_assist = Some(AssignedOperator::new("褐果", 0));
         let idx = WorkforceIndex::build(&bp, &assignment, Some(&instances));
         assert_eq!(idx.durin_in_base, 4);
+    }
+
+    #[test]
+    fn rhine_life_in_base_counts_tagged_workforce_capped_and_excludes_assist() {
+        let bp = BaseBlueprint::template_243_use_this().unwrap();
+        let instances = OperatorInstances::load(&crate::instances::default_instances_path().unwrap())
+            .unwrap();
+        let mut assignment = BaseAssignment::default();
+        assignment.base_workforce = [
+            "缪尔赛思", "多萝西", "娜斯提", "淬羽赫默", "赫默", "白面鸮", "星源",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        assignment.training_assist = Some(AssignedOperator::new("流明", 2));
+        let idx = WorkforceIndex::build(&bp, &assignment, Some(&instances));
+        assert_eq!(idx.rhine_life_in_base, 5);
     }
 
     #[test]

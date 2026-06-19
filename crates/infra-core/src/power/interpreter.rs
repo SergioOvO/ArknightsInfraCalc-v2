@@ -126,6 +126,18 @@ fn resolve_selector_value(ctx: &PowerContext, selector: Option<&Selector>) -> f6
         Some(Selector::DroneCap) => ctx.layout.drone_cap as f64,
         Some(Selector::DormLevelSum) => f64::from(ctx.layout.dorm_level_sum),
         Some(Selector::RhineLifeInBase) => f64::from(ctx.layout.rhine_life_in_base),
+        Some(Selector::RhineLifeInBaseExcludingSelf) => {
+            let mut n = ctx.layout.rhine_life_in_base;
+            if ctx
+                .operator
+                .tags
+                .iter()
+                .any(|t| t == crate::layout::TAG_RHINE)
+            {
+                n = n.saturating_sub(1);
+            }
+            f64::from(n)
+        }
         Some(Selector::PowerStationCount) => {
             f64::from(ctx.layout.effective_power_station_count())
         }

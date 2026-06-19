@@ -28,6 +28,9 @@ pub fn apply_control_to_layout(
     if control_has_haru_e2(operators) {
         result.inject.record_haru_e2_in_control();
     }
+    if control_has_daifeen_e2(operators) {
+        result.inject.record_daifeen_e2_in_control();
+    }
     layout.global = result.global.clone();
     layout.global_inject = result.inject.clone();
     result
@@ -41,5 +44,16 @@ pub fn control_has_haru_e2(operators: &[ControlOperator]) -> bool {
         o.name == HARU
             && o.elite >= 2
             && o.buff_ids.iter().any(|b| b == FAMILY_RECOGNITION)
+    })
+}
+
+/// 中枢戴菲恩 E2「运筹好手」——推王组链段 producer 条件。
+pub fn control_has_daifeen_e2(operators: &[ControlOperator]) -> bool {
+    const DAIFEEN: &str = "戴菲恩";
+    const OPS_HAND: &str = "control_tra_limit&spd[010]";
+    operators.iter().any(|o| {
+        o.name == DAIFEEN
+            && o.elite >= 2
+            && o.buff_ids.iter().any(|b| b == OPS_HAND)
     })
 }

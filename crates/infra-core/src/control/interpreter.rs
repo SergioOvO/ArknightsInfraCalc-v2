@@ -627,4 +627,53 @@ mod tests {
             result.inject.manu_eff_for(crate::types::RecipeKind::Gold)
         );
     }
+
+    #[test]
+    fn pinus_knight_injects_battle_record_and_debuffs_gold() {
+        use crate::layout::TAG_PINUS;
+
+        let mut layout = LayoutContext::default();
+        layout
+            .manu_tagged_count_sum
+            .insert(TAG_PINUS.to_string(), 3);
+        let input = ControlRoomInput {
+            operators: vec![control_op("焰尾", 2)],
+            mood: 24.0,
+            layout,
+        };
+        let result = solve_control(&input, &table());
+        assert!(
+            (result.inject.manu_eff_for(crate::types::RecipeKind::BattleRecord) - 30.0).abs()
+                < f64::EPSILON,
+            "BR inject {}",
+            result.inject.manu_eff_for(crate::types::RecipeKind::BattleRecord)
+        );
+        assert!(
+            (result.inject.manu_eff_for(crate::types::RecipeKind::Gold) - (-30.0)).abs()
+                < f64::EPSILON,
+            "gold inject {}",
+            result.inject.manu_eff_for(crate::types::RecipeKind::Gold)
+        );
+    }
+
+    #[test]
+    fn vivi_knight_micro_injects_per_manu_knight() {
+        use crate::layout::TAG_KNIGHT;
+
+        let mut layout = LayoutContext::default();
+        layout
+            .manu_tagged_count_sum
+            .insert(TAG_KNIGHT.to_string(), 1);
+        let input = ControlRoomInput {
+            operators: vec![control_op("薇薇安娜", 2)],
+            mood: 24.0,
+            layout,
+        };
+        let result = solve_control(&input, &table());
+        assert!(
+            (result.inject.manu_eff_for(crate::types::RecipeKind::Gold) - 7.0).abs() < f64::EPSILON,
+            "got {}",
+            result.inject.manu_eff_for(crate::types::RecipeKind::Gold)
+        );
+    }
 }

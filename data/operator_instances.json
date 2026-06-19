@@ -438,7 +438,9 @@
     "伊芙利特@tier_0": {
       "name": "伊芙利特",
       "tier": "tier_0",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "power": {
           "buff_ids": [
@@ -451,7 +453,9 @@
     "伊芙利特@tier_up": {
       "name": "伊芙利特",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "power": {
           "buff_ids": [
@@ -1375,7 +1379,9 @@
     "多萝西@tier_0": {
       "name": "多萝西",
       "tier": "tier_0",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -1388,7 +1394,9 @@
     "多萝西@tier_up": {
       "name": "多萝西",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -1552,7 +1560,9 @@
     "娜斯提@tier_up": {
       "name": "娜斯提",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -2499,7 +2509,9 @@
     "星源@tier_0": {
       "name": "星源",
       "tier": "tier_0",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -2512,7 +2524,9 @@
     "星源@tier_up": {
       "name": "星源",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -3202,7 +3216,9 @@
     "流明@tier_0": {
       "name": "流明",
       "tier": "tier_0",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "dorm": {
           "buff_ids": [
@@ -3215,7 +3231,9 @@
     "流明@tier_up": {
       "name": "流明",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "dorm": {
           "buff_ids": [
@@ -3284,6 +3302,19 @@
         }
       }
     },
+    "海蒂@tier_0": {
+      "name": "海蒂",
+      "tier": "tier_0",
+      "tags": [],
+      "facilities": {
+        "trade": {
+          "buff_ids": [
+            "trade_ord_spd&multiPar[000]"
+          ],
+          "stepwise": false
+        }
+      }
+    },
     "海蒂@tier_up": {
       "name": "海蒂",
       "tier": "tier_up",
@@ -3293,7 +3324,7 @@
           "buff_ids": [
             "trade_ord_spd[021]"
           ],
-          "stepwise": true
+          "stepwise": false
         }
       }
     },
@@ -3347,7 +3378,9 @@
     "淬羽赫默@tier_up": {
       "name": "淬羽赫默",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -3587,7 +3620,9 @@
     "溯光星源@tier_0": {
       "name": "溯光星源",
       "tier": "tier_0",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -3600,7 +3635,9 @@
     "溯光星源@tier_up": {
       "name": "溯光星源",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -3782,7 +3819,9 @@
     "灰毫@tier_0": {
       "name": "灰毫",
       "tier": "tier_0",
-      "tags": [],
+      "tags": [
+        "cc.g.pinus"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -3795,7 +3834,9 @@
     "灰毫@tier_up": {
       "name": "灰毫",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.pinus"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -4291,7 +4332,9 @@
     "白面鸮@tier_0": {
       "name": "白面鸮",
       "tier": "tier_0",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -4304,7 +4347,9 @@
     "白面鸮@tier_up": {
       "name": "白面鸮",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -4406,7 +4451,9 @@
     "砾@tier_up": {
       "name": "砾",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.knight"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -4795,7 +4842,9 @@
     "缪尔赛思@tier_0": {
       "name": "缪尔赛思",
       "tier": "tier_0",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "dorm": {
           "buff_ids": [
@@ -4808,7 +4857,9 @@
     "缪尔赛思@tier_up": {
       "name": "缪尔赛思",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "dorm": {
           "buff_ids": [
@@ -5655,7 +5706,9 @@
     "赫默@tier_0": {
       "name": "赫默",
       "tier": "tier_0",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -5668,7 +5721,9 @@
     "赫默@tier_up": {
       "name": "赫默",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -5721,7 +5776,9 @@
     "远牙@tier_0": {
       "name": "远牙",
       "tier": "tier_0",
-      "tags": [],
+      "tags": [
+        "cc.g.pinus"
+      ],
       "facilities": {
         "dorm": {
           "buff_ids": [
@@ -5740,7 +5797,9 @@
     "远牙@tier_up": {
       "name": "远牙",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.pinus"
+      ],
       "facilities": {
         "dorm": {
           "buff_ids": [
@@ -5902,7 +5961,9 @@
     "野鬃@tier_0": {
       "name": "野鬃",
       "tier": "tier_0",
-      "tags": [],
+      "tags": [
+        "cc.g.pinus"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -5915,7 +5976,9 @@
     "野鬃@tier_up": {
       "name": "野鬃",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.pinus"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [

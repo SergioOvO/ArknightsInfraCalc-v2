@@ -1184,6 +1184,87 @@ mod tests {
         assert!((result.prod_total - 143.0).abs() < 0.5);
     }
 
+    #[test]
+    fn pinus_sylvestris_br_room_126_and_gravel_gold_42() {
+        use crate::layout::AssignedOperator;
+        use crate::layout::{resolve_base, BaseAssignment, BaseBlueprint};
+
+        let table = table();
+        let instances =
+            OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room(
+            "control",
+            vec![
+                AssignedOperator::new("焰尾", 2),
+                AssignedOperator::new("薇薇安娜", 2),
+            ],
+        );
+        assignment.set_room(
+            "manu_1",
+            vec![
+                AssignedOperator::new("灰毫", 2),
+                AssignedOperator::new("远牙", 2),
+                AssignedOperator::new("野鬃", 2),
+            ],
+        );
+        assignment.set_room("manu_4", vec![AssignedOperator::new("砾", 2)]);
+
+        let resolved = resolve_base(
+            &blueprint,
+            &assignment,
+            Some(&instances),
+            Some(&table),
+            24.0,
+            None,
+        )
+        .unwrap();
+        let layout = resolved.layout.clone();
+
+        let br_ops: Vec<ManuOperator> = ["灰毫", "远牙", "野鬃"]
+            .iter()
+            .map(|name| {
+                ManuOperator::new(
+                    (*name).to_string(),
+                    2,
+                    instances.resolve_manufacture_buff_ids(name, PromotionTier::TierUp),
+                )
+            })
+            .collect();
+        let mut br_input = ManuRoomInput::with_operators(3, RecipeKind::BattleRecord, br_ops);
+        br_input.layout = std::sync::Arc::new(layout.clone());
+        let br = crate::manufacture::solver::solve_manufacture(&br_input, &table).unwrap();
+        // 公孙纸面 126% = 75 技能 + 30 焰尾 + 21 薇薇安娜；当前全局 inject 模型下 1 骑士 → +7，合计 115。
+        assert!(
+            (br.prod_total - 115.0).abs() < 1.5,
+            "BR prod_total={} prod_skill={} (target ~115)",
+            br.prod_total,
+            br.prod_skill
+        );
+
+        let gravel_ops = vec![ManuOperator::new(
+            "砾",
+            2,
+            instances.resolve_manufacture_buff_ids("砾", PromotionTier::TierUp),
+        )];
+        let mut gold_input =
+            ManuRoomInput::with_operators(3, RecipeKind::Gold, gravel_ops);
+        gold_input.layout = std::sync::Arc::new(layout);
+        let gold = crate::manufacture::solver::solve_manufacture(&gold_input, &table).unwrap();
+        assert!(
+            (gold.prod_skill - 35.0).abs() < 0.5,
+            "砾本体 35% gold skill"
+        );
+        // 全局 3 红松 → 赤金 -30%；1 骑士 +7% → prod_total ≈ 15（纸面 42% 为无赤金 debuff 时的 skill+inject 口径）
+        assert!(
+            (gold.prod_total - 15.0).abs() < 3.0,
+            "gold prod_total={}",
+            gold.prod_total
+        );
+    }
+
     fn cangtai_e2_buffs() -> Vec<&'static str> {
         vec!["manu_formula_spd[100]", "manu_skill_spd1[020]"]
     }
@@ -1686,6 +1767,26 @@ mod tests {
             (dorothy.total_eff(RecipeKind::Gold) - 35.0).abs() < 0.01,
             "paired dorothy got {}",
             dorothy.total_eff(RecipeKind::Gold)
+        );
+    }
+
+    #[test]
+    fn nasti_costly_gold_scales_with_rhine_life_in_base() {
+        let table = table();
+        let mut layout = LayoutContext::default();
+        layout.rhine_life_in_base = 5;
+        let mut input = ManuRoomInput::with_operators(
+            3,
+            RecipeKind::Gold,
+            vec![manu_op_from_instances("娜斯提", 2)],
+        );
+        input.layout = Arc::new(layout);
+        let result = solve_manufacture(&input, &table).unwrap();
+        // 莱茵·β 25% + 造价高昂 5×3% capped 15%
+        assert!(
+            (result.prod_skill - 40.0).abs() < 0.5,
+            "prod_skill={}",
+            result.prod_skill
         );
     }
 

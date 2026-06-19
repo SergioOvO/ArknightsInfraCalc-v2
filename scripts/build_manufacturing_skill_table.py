@@ -25,7 +25,6 @@ L2_DELEGATE = {
     "manu_formula_spd&cost[000]",
     "manu_formula_spd&cost[001]",
     "manu_formula_spd&cost_bd[000]",
-    "manu_formula_spd&cost_bd[100]",
     "manu_formula_spd&dorm&lv[000]",
 }
 
@@ -46,6 +45,7 @@ MANUAL_SKILL: dict[str, tuple[str, str]] = {
     "manu_skill_spd1[000]": ("意识协议", "tier_0"),
     "manu_skill_spd1[010]": ("源石技艺理论应用", "tier_0"),
     "manu_skill_limit[000]": ("勘探背包", "tier_0"),
+    "manu_formula_spd&cost_bd[100]": ("造价高昂", "tier_up"),
     "manu_skill_change[000]": ("意识兼容", "tier_0"),
     "manu_token_prod_spd[010]": ("机械精通·β", "tier_up"),
     "manu_formula_spd[102]": ("原质塑金副产物", "tier_up"),

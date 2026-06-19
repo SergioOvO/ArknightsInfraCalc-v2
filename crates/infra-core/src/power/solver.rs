@@ -135,4 +135,24 @@ mod tests {
         let result = solve_power(&input, &table).unwrap();
         assert!((result.charge_speed_pct - 20.0).abs() < 0.01);
     }
+
+    #[test]
+    fn muelsys_ecology_director_excludes_self_from_rhine_count() {
+        use crate::layout::{LayoutContext, TAG_RHINE};
+
+        let table = table();
+        let mut op = PowerOperator::new("缪尔赛思", 2, vec!["power_rec_rhine[000]".into()]);
+        op.tags = vec![TAG_RHINE.into()];
+        let mut layout = LayoutContext::default();
+        layout.rhine_life_in_base = 5;
+        let mut input = PowerRoomInput::with_operator(op);
+        input.layout = layout;
+        let result = solve_power(&input, &table).unwrap();
+        // +10% 基础 + 4×3%（除自身外 4 名莱茵）
+        assert!(
+            (result.charge_speed_pct - 22.0).abs() < 0.01,
+            "got {}",
+            result.charge_speed_pct
+        );
+    }
 }

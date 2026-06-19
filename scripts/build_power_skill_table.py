@@ -157,7 +157,7 @@ def atoms_for(buff_id: str) -> list[dict]:
         return [
             flat_charge(10.0, 20),
             {
-                "selector": "rhine_life_in_base",
+                "selector": "rhine_life_in_base_excluding_self",
                 "action": {
                     "kind": "add_flat_eff_from_selector",
                     "params": {"multiplier": 3.0, "cap": 15.0},
