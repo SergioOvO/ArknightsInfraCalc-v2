@@ -9,13 +9,10 @@ use std::sync::Arc;
 use std::path::PathBuf;
 
 use commands::{layout_cmd, plan_cmd, profile_cmd, verify_cmd};
-use output::{
-    emit_bench, emit_pool, emit_schedule, emit_trade_search, emit_trade_yield, BenchMeta, OutputOptions,
-    PoolSummary, SearchMeta, TradeYieldRow,
-};
 use infra_core::instances::{default_instances_path, OperatorInstances};
-use infra_core::operbox::OperBox;
+use infra_core::layout::LayoutContext;
 use infra_core::manufacture::ManuSearchRecipeMode;
+use infra_core::operbox::OperBox;
 use infra_core::pool::{build_manufacture_pool, build_trade_pool};
 use infra_core::roster::Roster;
 use infra_core::schedule::schedule_trade_rotation_a_b_a;
@@ -23,12 +20,15 @@ use infra_core::search::{
     search_manufacture_triples, search_trade_triples, ManuSearchOptions, TradeSearchOptions,
 };
 use infra_core::skill_table::{data_path, default_skill_table_path, SkillTable};
-use infra_core::layout::LayoutContext;
 use infra_core::trade::input::TradeSearchOrderMode;
 use infra_core::trade::solve_trade_with_shift;
 use infra_core::types::RecipeKind;
-use verify::unit_fixture;
 use infra_core::Error;
+use output::{
+    emit_bench, emit_pool, emit_schedule, emit_trade_search, emit_trade_yield, BenchMeta,
+    OutputOptions, PoolSummary, SearchMeta, TradeYieldRow,
+};
+use verify::unit_fixture;
 
 fn main() -> ExitCode {
     match run() {
@@ -65,7 +65,9 @@ fn run() -> Result<(), Error> {
 fn print_usage() {
     eprintln!("Usage:");
     eprintln!("  infra-cli plan --operbox <path.json|.xlsx> [--layout <path>] [--baseline <operbox>] [--top <n>]");
-    eprintln!("      [--profile-out <file.json>] [--output-dir <dir>] [--maa-out <file.json>] [--json]");
+    eprintln!(
+        "      [--profile-out <file.json>] [--output-dir <dir>] [--maa-out <file.json>] [--json]"
+    );
     eprintln!("      (default layout: data/fixtures/243/layout.json)");
     eprintln!("  infra-cli verify --case <case_id>");
     eprintln!("  infra-cli verify --all");
@@ -76,7 +78,9 @@ fn print_usage() {
     eprintln!("  infra-cli schedule rotation --operbox <path> [--layout-baseline] [-o <file.csv>] [--text|--json]");
     eprintln!("  infra-cli layout test --layout <path> --operbox <path> [--assignment <path>] [--top <n>] [-o <file.csv>] [--text]");
     eprintln!("  infra-cli layout analyze --layout <path> --operbox <path> [--baseline <operbox>] [--top <n>] [-o profile.json] [--json]");
-    eprintln!("  infra-cli layout eval --layout <path> --operbox <path> --assignment <path> [--text]");
+    eprintln!(
+        "  infra-cli layout eval --layout <path> --operbox <path> --assignment <path> [--text]"
+    );
     eprintln!("  infra-cli layout rotation --layout <path> --operbox <path> [--top <n>] [--output-dir <dir>] [-o <file.csv>] [--text|--json]");
     eprintln!("  infra-cli profile layout-full [--layout <path>] [--operbox <path>] [--top <n>] [--runs <n>] [--label <name>]");
     eprintln!("  infra-cli profile analyze-compare [--layout <path>] [--operbox <path>] [--schedule <path>] [--runs <n>]");
@@ -134,11 +138,25 @@ fn pool_cmd(args: &[String]) -> Result<(), Error> {
         let ob_str = ob_path.to_string_lossy();
         if trade {
             let roster = operbox.trade_roster(&instances);
-            emit_trade_pool(&out, &roster, &instances, &table, Some(ob_str.as_ref()), operbox.owned_count())?;
+            emit_trade_pool(
+                &out,
+                &roster,
+                &instances,
+                &table,
+                Some(ob_str.as_ref()),
+                operbox.owned_count(),
+            )?;
         }
         if manufacture {
             let roster = operbox.manufacture_roster(&instances);
-            emit_manufacture_pool(&out, &roster, &instances, &table, Some(ob_str.as_ref()), operbox.owned_count())?;
+            emit_manufacture_pool(
+                &out,
+                &roster,
+                &instances,
+                &table,
+                Some(ob_str.as_ref()),
+                operbox.owned_count(),
+            )?;
         }
         return Ok(());
     }
@@ -441,4 +459,3 @@ fn trade_cmd(args: &[String]) -> Result<(), Error> {
         },
     )
 }
-

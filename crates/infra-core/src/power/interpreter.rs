@@ -55,7 +55,9 @@ fn collect_power_atoms<'a>(
 ) -> Vec<(&'a EffectAtom, String)> {
     let mut atoms = Vec::new();
     for bid in &op.buff_ids {
-        let Some(skill) = table.get(bid) else { continue };
+        let Some(skill) = table.get(bid) else {
+            continue;
+        };
         if skill.facility != "power" {
             continue;
         }
@@ -138,9 +140,7 @@ fn resolve_selector_value(ctx: &PowerContext, selector: Option<&Selector>) -> f6
             }
             f64::from(n)
         }
-        Some(Selector::PowerStationCount) => {
-            f64::from(ctx.layout.effective_power_station_count())
-        }
+        Some(Selector::PowerStationCount) => f64::from(ctx.layout.effective_power_station_count()),
         Some(Selector::Mood) => ctx.mood,
         None => 0.0,
         _ => 0.0,

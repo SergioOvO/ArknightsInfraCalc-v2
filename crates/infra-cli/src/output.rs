@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use csv::Writer;
-use infra_core::layout::BaseAssignment;
 use infra_core::box_profile::{render_box_profile_narrative, BoxProfile};
+use infra_core::layout::BaseAssignment;
 use infra_core::pool::PoolSkip;
 use infra_core::schedule::{
     BaseRotationReport, BaseShiftRole, TeamLabel, TeamRotationReport, TradeRotationReport,
@@ -48,9 +48,7 @@ impl OutputOptions {
 }
 
 fn arg_value(args: &[String], flag: &str) -> Option<String> {
-    args.windows(2)
-        .find(|w| w[0] == flag)
-        .map(|w| w[1].clone())
+    args.windows(2).find(|w| w[0] == flag).map(|w| w[1].clone())
 }
 
 pub fn join_ops(names: &[String]) -> String {
@@ -204,7 +202,10 @@ fn write_pool_csv(
     flush_csv(wtr)
 }
 
-fn write_pool_text(summary: &PoolSummary<'_>, skipped: &[(String, u8, PoolSkip)]) -> Result<(), Error> {
+fn write_pool_text(
+    summary: &PoolSummary<'_>,
+    skipped: &[(String, u8, PoolSkip)],
+) -> Result<(), Error> {
     if let (Some(owned), Some(ob)) = (summary.owned, summary.operbox) {
         eprintln!(
             "operbox: {} owned={} {}_roster={}",
@@ -260,13 +261,13 @@ fn write_trade_search_csv(
     wtr.write_record([
         "区块",
         "排名",
-        "评分",
+        "排序分",
         "贸易效率%",
         "赤金效率%",
         "日贸易量",
         "日赤金消耗",
         "日固源岩",
-        "产出倍率",
+        "单位产出比(调试)",
         "短路ID",
         "干员组合",
         "赤金线干员",
@@ -296,7 +297,10 @@ fn write_trade_search_csv(
         &meta.evaluated.to_string(),
         &elapsed_secs(meta.elapsed),
         meta.order_mode_label,
-        &meta.operbox_owned.map(|n| n.to_string()).unwrap_or_default(),
+        &meta
+            .operbox_owned
+            .map(|n| n.to_string())
+            .unwrap_or_default(),
         &meta.trade_roster.map(|n| n.to_string()).unwrap_or_default(),
     ])?;
     for (i, hit) in report.top.iter().enumerate() {
@@ -360,7 +364,7 @@ fn write_trade_search_text(meta: &SearchMeta<'_>, report: &TradeSearchReport) ->
     for (i, hit) in report.top.iter().enumerate() {
         if !hit.gold_names.is_empty() || !hit.originium_names.is_empty() {
             eprintln!(
-                "  #{:<2} composite={:.3} trade={:.1} gold={:.1}",
+                "  #{:<2} sort={:.3} trade_eff={:.1}% gold_eff={:.1}%",
                 i + 1,
                 hit.score,
                 hit.trade_pct,
@@ -370,7 +374,7 @@ fn write_trade_search_text(meta: &SearchMeta<'_>, report: &TradeSearchReport) ->
             eprintln!("         ori_ops={:?}", hit.originium_names);
         } else {
             eprintln!(
-                "  #{:<2} score={:.3} trade={:.1} gold={:.1} unit={:.0} mult={:.3} shortcut={:?} ops={:?}",
+                "  #{:<2} sort={:.3} trade_eff={:.1}% gold_eff={:.1}% unit_trade={:.0} unit_ratio(debug)={:.3} shortcut={:?} ops={:?}",
                 i + 1,
                 hit.score,
                 hit.trade_pct,
@@ -382,13 +386,12 @@ fn write_trade_search_text(meta: &SearchMeta<'_>, report: &TradeSearchReport) ->
             );
         }
     }
-    if let (Some(gold), Some(ori)) = (
-        &report.gold_order_line,
-        &report.originium_order_line,
-    ) {
+    if let (Some(gold), Some(ori)) = (&report.gold_order_line, &report.originium_order_line) {
         eprintln!(
-            "  (split) gold_line score={:.3} {:?}  ori_line score={:.3} {:?} ori/day={:.1}",
+            "  (split) gold_line sort={:.3} trade_eff={:.1}% gold_eff={:.1}% {:?}  ori_line sort={:.3} {:?} ori/day={:.1}",
             gold.score,
+            gold.trade_pct,
+            gold.gold_pct,
             gold.names,
             ori.score,
             ori.names,
@@ -425,8 +428,12 @@ pub fn emit_bench(
             &manu_pool,
             manu_report,
         ),
-        OutputFormat::Text => write_bench_text(meta, &trade_pool, trade_report, &manu_pool, manu_report),
-        OutputFormat::Json => Err(Error::msg("bench does not support --json; use --format csv")),
+        OutputFormat::Text => {
+            write_bench_text(meta, &trade_pool, trade_report, &manu_pool, manu_report)
+        }
+        OutputFormat::Json => Err(Error::msg(
+            "bench does not support --json; use --format csv",
+        )),
     }
 }
 
@@ -443,7 +450,7 @@ fn write_bench_csv(
         "区块",
         "域",
         "排名",
-        "评分",
+        "排序分",
         "贸易效率%",
         "赤金效率%",
         "日固源岩",
@@ -532,10 +539,22 @@ fn write_bench_csv(
         write_bench_trade_row(&mut wtr, section_label("trade"), i + 1, hit, trade_report)?;
     }
     if let Some(hit) = &trade_report.gold_order_line {
-        write_bench_trade_row(&mut wtr, section_label("trade_gold_line"), 1, hit, trade_report)?;
+        write_bench_trade_row(
+            &mut wtr,
+            section_label("trade_gold_line"),
+            1,
+            hit,
+            trade_report,
+        )?;
     }
     if let Some(hit) = &trade_report.originium_order_line {
-        write_bench_trade_row(&mut wtr, section_label("trade_originium_line"), 1, hit, trade_report)?;
+        write_bench_trade_row(
+            &mut wtr,
+            section_label("trade_originium_line"),
+            1,
+            hit,
+            trade_report,
+        )?;
     }
     wtr.write_record([
         section_label("pool"),
@@ -566,13 +585,31 @@ fn write_bench_csv(
         &manu_pool.combinations_3.to_string(),
     ])?;
     for (i, hit) in manu_report.top.iter().enumerate() {
-        write_bench_manu_row(&mut wtr, section_label("manufacture"), i + 1, hit, manu_report)?;
+        write_bench_manu_row(
+            &mut wtr,
+            section_label("manufacture"),
+            i + 1,
+            hit,
+            manu_report,
+        )?;
     }
     if let Some(hit) = &manu_report.gold_line {
-        write_bench_manu_row(&mut wtr, section_label("manu_gold_line"), 1, hit, manu_report)?;
+        write_bench_manu_row(
+            &mut wtr,
+            section_label("manu_gold_line"),
+            1,
+            hit,
+            manu_report,
+        )?;
     }
     if let Some(hit) = &manu_report.battle_record_line {
-        write_bench_manu_row(&mut wtr, section_label("manu_exp_line"), 1, hit, manu_report)?;
+        write_bench_manu_row(
+            &mut wtr,
+            section_label("manu_exp_line"),
+            1,
+            hit,
+            manu_report,
+        )?;
     }
     flush_csv(wtr)
 }
@@ -720,10 +757,7 @@ fn write_bench_text(
     if let (Some(gold), Some(br)) = (&manu_report.gold_line, &manu_report.battle_record_line) {
         eprintln!(
             "  (split) gold_line={:.1}% {:?}  exp_line={:.1}% {:?}",
-            gold.composite_score,
-            gold.names,
-            br.composite_score,
-            br.names
+            gold.composite_score, gold.names, br.composite_score, br.names
         );
     }
     Ok(())
@@ -755,16 +789,16 @@ fn write_schedule_csv(
     wtr.write_record([
         "区块",
         "班次",
-        "班次评分",
+        "班次排序分",
         "复用班次",
         "本班干员",
         "贸易站",
         "角色",
-        "评分",
+        "排序分",
         "贸易效率%",
         "赤金效率%",
         "日贸易量",
-        "产出倍率",
+        "单位产出比(调试)",
         "短路ID",
         "干员组合",
         "拥有数",
@@ -840,7 +874,9 @@ pub fn emit_trade_yield(opts: &OutputOptions, row: &TradeYieldRow<'_>) -> Result
     match opts.format {
         OutputFormat::Csv => write_trade_yield_csv(opts.path.as_deref(), row),
         OutputFormat::Text => write_trade_yield_text(row),
-        OutputFormat::Json => Err(Error::msg("trade yield does not support --json; use --format csv")),
+        OutputFormat::Json => Err(Error::msg(
+            "trade yield does not support --json; use --format csv",
+        )),
     }
 }
 
@@ -854,7 +890,7 @@ fn write_trade_yield_csv(path: Option<&Path>, row: &TradeYieldRow<'_>) -> Result
         "短路ID",
         "日贸易量",
         "日GSL赤金",
-        "产出倍率",
+        "单位产出比(调试)",
         "日产贸易",
         "日产赤金",
         "无人机贸易",
@@ -883,7 +919,7 @@ fn write_trade_yield_text(row: &TradeYieldRow<'_>) -> Result<(), Error> {
         row.fixture, row.level, row.shift_hours, row.paper_eff_pct, row.shortcut
     );
     eprintln!(
-        "  unit_trade={:.1} unit_gsl_gold={:.1} mult={:.3}",
+        "  unit_trade={:.1} unit_gsl_gold={:.1} unit_ratio(debug)={:.3}",
         row.unit_trade, row.unit_gsl_gold, row.multiplier
     );
     eprintln!(
@@ -903,7 +939,9 @@ pub fn emit_base_rotation(
     report: &BaseRotationReport,
 ) -> Result<(), Error> {
     match opts.format {
-        OutputFormat::Csv => write_base_rotation_csv(opts.path.as_deref(), layout, operbox, owned, report),
+        OutputFormat::Csv => {
+            write_base_rotation_csv(opts.path.as_deref(), layout, operbox, owned, report)
+        }
         OutputFormat::Text => write_base_rotation_text(layout, operbox, owned, report),
         OutputFormat::Json => {
             println!("{}", serde_json::to_string_pretty(report)?);
@@ -979,17 +1017,17 @@ fn team_label(label: TeamLabel) -> &'static str {
     }
 }
 
-fn team_by_label<'a>(teams: &'a [infra_core::schedule::TeamAssignment], label: TeamLabel) -> &'a infra_core::schedule::TeamAssignment {
+fn team_by_label<'a>(
+    teams: &'a [infra_core::schedule::TeamAssignment],
+    label: TeamLabel,
+) -> &'a infra_core::schedule::TeamAssignment {
     teams
         .iter()
         .find(|t| t.label == label)
         .expect("team label in report")
 }
 
-fn assignment_room_ops<'a>(
-    assignment: &'a BaseAssignment,
-    room_id: &str,
-) -> Option<Vec<&'a str>> {
+fn assignment_room_ops<'a>(assignment: &'a BaseAssignment, room_id: &str) -> Option<Vec<&'a str>> {
     assignment
         .rooms
         .iter()
@@ -1041,22 +1079,8 @@ fn room_display_name(room_id: &str) -> String {
 
 /// 排班表按设施编号顺序列出（与蓝图 trade_1→…→control→办公室→会客室→宿舍 一致）。
 const SHIFT_STATION_ORDER: &[&str] = &[
-    "trade_1",
-    "trade_2",
-    "manu_1",
-    "manu_2",
-    "manu_3",
-    "manu_4",
-    "power_1",
-    "power_2",
-    "power_3",
-    "control",
-    "office_1",
-    "meeting",
-    "dorm_1",
-    "dorm_2",
-    "dorm_3",
-    "dorm_4",
+    "trade_1", "trade_2", "manu_1", "manu_2", "manu_3", "manu_4", "power_1", "power_2", "power_3",
+    "control", "office_1", "meeting", "dorm_1", "dorm_2", "dorm_3", "dorm_4",
 ];
 
 fn format_shift_station_line(
@@ -1065,20 +1089,44 @@ fn format_shift_station_line(
     room_id: &str,
 ) -> String {
     let label = room_display_name(room_id);
+    // 查找该房间的评分
+    let score_hint = shift
+        .scores
+        .room_lines
+        .iter()
+        .find(|r| r.room_id == room_id)
+        .map(|r| {
+            if r.trade_score != 0.0 {
+                format!(" [贸易效率{:.0}%]", r.trade_skill_pct)
+            } else if r.manu_score != 0.0 {
+                format!(" [产出{:.0}%]", r.manu_score)
+            } else if r.power_score != 0.0 {
+                format!(" [充能{:.0}%]", r.power_score)
+            } else {
+                String::new()
+            }
+        })
+        .unwrap_or_default();
+
     if let Some(ops) = shift_room_ops(shift, room_id) {
         let names = ops.join(", ");
         if let Some(team) = room_active_team(op_team, &ops) {
-            format!("  {label}: {names}（{t}队）", t = team_label(team))
-        } else if matches!(room_id, "control" | "meeting" | "office" | "office_1" | "office_2")
-            || room_id.starts_with("office_")
+            format!(
+                "  {label}: {names}（{t}队）{score_hint}",
+                t = team_label(team)
+            )
+        } else if matches!(
+            room_id,
+            "control" | "meeting" | "office" | "office_1" | "office_2"
+        ) || room_id.starts_with("office_")
             || room_id.starts_with("dorm_")
         {
-            format!("  {label}: {names}（共享）")
+            format!("  {label}: {names}（共享）{score_hint}")
         } else {
-            format!("  {label}: {names}")
+            format!("  {label}: {names}{score_hint}")
         }
     } else {
-        format!("  {label}: —")
+        format!("  {label}: —{score_hint}")
     }
 }
 
@@ -1094,7 +1142,9 @@ pub fn emit_team_rotation(
             println!("{}", serde_json::to_string_pretty(report)?);
             Ok(())
         }
-        OutputFormat::Csv => write_team_rotation_csv(opts.path.as_deref(), layout, operbox, owned, report),
+        OutputFormat::Csv => {
+            write_team_rotation_csv(opts.path.as_deref(), layout, operbox, owned, report)
+        }
         OutputFormat::Text => write_team_rotation_text(layout, operbox, owned, report),
     }
 }
@@ -1186,7 +1236,10 @@ fn write_team_rotation_text(
             .map(|r| r.0)
             .collect();
         if !trade_rooms.is_empty() {
-            report_line(&format!("  peak 贸易 meta 房间: {}", trade_rooms.join(", ")));
+            report_line(&format!(
+                "  peak 贸易 meta 房间: {}",
+                trade_rooms.join(", ")
+            ));
         }
     }
     report_line(&format!(
@@ -1281,9 +1334,26 @@ fn write_base_rotation_text(
         eprintln!("  rotating_workers: {:?}", shift.rotating_workers);
         eprintln!("  【各设施上岗情况】");
         for room_id in SHIFT_STATION_ORDER {
+            let score_hint = shift
+                .scores
+                .room_lines
+                .iter()
+                .find(|r| r.room_id == *room_id)
+                .map(|r| {
+                    if r.trade_score != 0.0 {
+                        format!(" [贸易效率{:.0}%]", r.trade_skill_pct)
+                    } else if r.manu_score != 0.0 {
+                        format!(" [产出{:.0}%]", r.manu_score)
+                    } else if r.power_score != 0.0 {
+                        format!(" [充能{:.0}%]", r.power_score)
+                    } else {
+                        String::new()
+                    }
+                })
+                .unwrap_or_default();
             if let Some(ops) = assignment_room_ops(&shift.assignment, room_id) {
                 let names = ops.join(", ");
-                eprintln!("  {}: {}", room_display_name(room_id), names);
+                eprintln!("  {}: {}{}", room_display_name(room_id), names, score_hint);
             }
         }
         for room in &shift.assignment.rooms {
@@ -1294,17 +1364,26 @@ fn write_base_rotation_text(
                 continue;
             }
             let names: Vec<_> = room.operators.iter().map(|o| o.name.as_str()).collect();
-            eprintln!("  {}: {}", room_display_name(&room.room_id.0), names.join(", "));
+            eprintln!(
+                "  {}: {}",
+                room_display_name(&room.room_id.0),
+                names.join(", ")
+            );
         }
     }
-    let avg_trade: f64 = report.shifts.iter().map(|s| s.scores.trade_score).sum::<f64>()
+    let avg_trade: f64 = report
+        .shifts
+        .iter()
+        .map(|s| s.scores.trade_score)
+        .sum::<f64>()
         / report.shifts.len() as f64;
-    let avg_manu: f64 = report.shifts.iter().map(|s| s.scores.manu_prod_sum).sum::<f64>()
+    let avg_manu: f64 = report
+        .shifts
+        .iter()
+        .map(|s| s.scores.manu_prod_sum)
+        .sum::<f64>()
         / report.shifts.len() as f64;
-    eprintln!(
-        "\n3-shift avg: trade={:.3} manu={:.1}",
-        avg_trade, avg_manu
-    );
+    eprintln!("\n3-shift avg: trade={:.3} manu={:.1}", avg_trade, avg_manu);
     Ok(())
 }
 
@@ -1328,7 +1407,7 @@ fn write_schedule_text(owned: usize, report: &TradeRotationReport) -> Result<(),
         for station in &shift.stations {
             let hit = &station.hit;
             eprintln!(
-                "  trade_{} role={:?} score={:.3} trade={:.1} gold={:.1} unit_trade={:.0} mult={:.3} shortcut={:?} ops={:?}",
+                "  trade_{} role={:?} sort={:.3} trade_eff={:.1}% gold_eff={:.1}% unit_trade={:.0} unit_ratio(debug)={:.3} shortcut={:?} ops={:?}",
                 station.station_index + 1,
                 station.role,
                 hit.score,

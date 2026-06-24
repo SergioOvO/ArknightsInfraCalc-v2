@@ -6,7 +6,9 @@ use crate::trade::input::TradeRoomInput;
 use crate::trade::interpreter::{apply_trade_phases, TradeContext};
 use crate::trade::order_mechanic::{self, OrderMechanicResult};
 use crate::trade::shortcut;
-use crate::trade::unit_output::{baseline_unit_trade_lv3_regular, compute_unit_output, daily_yield, TradeDailyYield};
+use crate::trade::unit_output::{
+    baseline_unit_trade_lv3_regular, compute_unit_output, daily_yield, TradeDailyYield,
+};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct OperatorMoodDrain {
@@ -71,12 +73,10 @@ fn build_production_shortcut(
     shift_hours: f64,
 ) -> TradeProductionReport {
     let base = baseline_unit_trade_lv3_regular();
-    let unit = sc
-        .unit_output_from_anchor(base)
-        .unwrap_or_else(|| {
-            let caps = ctx.mechanic_caps();
-            compute_unit_output(ctx, &mechanic.gold_distribution, &caps, mechanic)
-        });
+    let unit = sc.unit_output_from_anchor(base).unwrap_or_else(|| {
+        let caps = ctx.mechanic_caps();
+        compute_unit_output(ctx, &mechanic.gold_distribution, &caps, mechanic)
+    });
     TradeProductionReport {
         daily_at_shift: daily_yield(
             &unit,
@@ -192,10 +192,10 @@ mod tests {
 
     use super::*;
     use crate::instances::{default_instances_path, OperatorInstances};
-    use crate::skill_table::SkillTable;
     use crate::layout::LayoutContext;
-    use crate::trade::input::{TradeOperator, TradeRoomInput};
+    use crate::skill_table::SkillTable;
     use crate::tier::PromotionTier;
+    use crate::trade::input::{TradeOperator, TradeRoomInput};
 
     fn table() -> SkillTable {
         SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap()
@@ -370,11 +370,7 @@ mod tests {
             3,
             vec![
                 op("可露希尔", 2, vec!["trade_ord_closure[000]"]),
-                op(
-                    "蕾缪安",
-                    2,
-                    lemuen.iter().map(String::as_str).collect(),
-                ),
+                op("蕾缪安", 2, lemuen.iter().map(String::as_str).collect()),
                 op("海蒂", 2, heidi.iter().map(String::as_str).collect()),
             ],
         );
@@ -578,13 +574,16 @@ mod tests {
     #[test]
     fn control_amiya_injects_plus_seven_trade_eff() {
         let table = table();
-        let instances =
-            OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let mut layout = LayoutContext::default();
         let amiya_buffs = instances.resolve_control_buff_ids("阿米娅", PromotionTier::Tier0);
         crate::control::apply_control_to_layout(
             &mut layout,
-            &[crate::control::ControlOperator::new("阿米娅", 0, amiya_buffs)],
+            &[crate::control::ControlOperator::new(
+                "阿米娅",
+                0,
+                amiya_buffs,
+            )],
             &table,
             24.0,
         );
@@ -617,14 +616,16 @@ mod tests {
         let table = table();
         let instances =
             OperatorInstances::load(&crate::instances::default_instances_path().unwrap()).unwrap();
-        let roster = Roster::from_elite_map([
-            ("银灰".into(), 2),
-            ("角峰".into(), 0),
-            ("讯使".into(), 1),
-            ("孑".into(), 0),
-        ]
-        .into_iter()
-        .collect());
+        let roster = Roster::from_elite_map(
+            [
+                ("银灰".into(), 2),
+                ("角峰".into(), 0),
+                ("讯使".into(), 1),
+                ("孑".into(), 0),
+            ]
+            .into_iter()
+            .collect(),
+        );
         let pool = build_trade_pool(&roster, &instances, &table).unwrap();
 
         fn ops_from_pool(pool: &crate::pool::TradePool, names: &[&str]) -> Vec<TradeOperator> {
@@ -663,9 +664,7 @@ mod tests {
             let r = solve_trade_with_shift(&input, &table, 24.0).unwrap();
             eprintln!(
                 "{label}: score={:.3} trade={:.1} limit={}",
-                r.effective_eff_multiplier,
-                r.order_eff_total,
-                r.final_order_limit,
+                r.effective_eff_multiplier, r.order_eff_total, r.final_order_limit,
             );
         }
 
@@ -695,8 +694,7 @@ mod tests {
         let r_e2 = solve_trade_with_shift(&input_e2, &table, 24.0).unwrap();
         eprintln!(
             "孑e2(市井,纸面虚高): trade={:.1} limit={} — 游戏里精英化常倒扣，勿与 e0 同论",
-            r_e2.order_eff_total,
-            r_e2.final_order_limit
+            r_e2.order_eff_total, r_e2.final_order_limit
         );
 
         // 若当前订单数 = 上限（gap=0），摊贩经济失效，孑组合会输给角峰

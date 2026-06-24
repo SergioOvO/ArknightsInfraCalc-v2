@@ -59,11 +59,16 @@ pub struct RosemaryPlan {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SkipReason {
     RecoveryShift,
-    MissingOperator { name: String, need_elite: u8 },
+    MissingOperator {
+        name: String,
+        need_elite: u8,
+    },
     /// §8.2：无絮雨且无八幡海铃且无焰狐龙梓兰
     InsufficientPerceptionSources,
     /// §8.3：四发电等未验证布局
-    UnsupportedLayout { power_stations: u8 },
+    UnsupportedLayout {
+        power_stations: u8,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

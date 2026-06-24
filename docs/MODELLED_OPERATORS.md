@@ -32,16 +32,16 @@ L2 产量：`for_trade_level` 裁剪订单档位；违约链在 2/3 金订单上
 | Tier | 技能 | EffectAtom |
 |------|------|------------|
 | Tier0 | 摊贩经济 | Action: `AddPerGapEff(4.0)` |
-| TierUp | 市井之道 | Step1: `OtherOpsSettledEff` → `ReduceLimit(ceil(eff/10), min=1)` |
+| TierUp | 市井之道 | Step1: `OtherOpsSettledEff` → `ReduceLimit(floor(eff/10))` |
 | | | Step2: `OrderCount` → `AddFlatEffFromSelector(×4.0)`，`phase=order_var` |
 
-**精0 摊贩**为无灵知时的贸易常用态（`AddPerGapEff`，依赖 order_gap）。**精1+ 市井**需中枢**灵知 E2·精密计算**与喀兰队友（灵孑银崖）才为游戏正解。
+**精0 摊贩**为无灵知时的贸易常用态（`AddPerGapEff`，依赖 order_gap）。**精1+ 市井**默认不进通用贸易池；中枢**灵知 E2·精密计算**激活时注入市井孑，由 L1 搜索与喀兰队友自然上浮。
 
 `OrderCount` 语义：有市井 buff 时稳态按 `final_order_limit` 计 per-order（满槽假设）；否则用输入 `order_count` 并 clamp 至上限。
 
 与雪雉·天道酬勤：`Condition::TiandaoEffVarAllowed` — 同房仅有孑+雪雉且无第三方 settled 时，天道酬勤不生效（市井之道优先）；有第三方贡献时两者均生效。
 
-L3：`gsl_ling_jie_yaxin`（125% 工具人表锚）；L1 裸算约 132%，差值保留在 L3。
+L1 自然回归：`reg_ling_jie_yaxin_natural` 锁定中枢灵知 E2 + 贸易站精1+孑 / 银灰 / 琳琅诗怀雅 = 129%，且 `trade_shortcut=None`。拆法：银灰受精密计算后 5% + 琳琅 20% = 25%；孑按 18 单上限给 72%；琳琅按超出 10 单的 8 单给 32%；合计 129%。`gsl_ling_jie_yaxin` 保留在 `trade_shortcuts.json` 作为参考锚点，不参与 active L3 匹配。
 
 ### 4.3.1 灵知·精密计算（跨设施 → 贸易房）
 
@@ -49,7 +49,7 @@ L3：`gsl_ling_jie_yaxin`（125% 工具人表锚）；L1 裸算约 132%，差值
 |------|------|------------|
 | TierUp | 精密计算 | `Action::GlobalInjectKarlanPrecision { eff_per_karlan: -15, limit_per_karlan: 6 }`，`phase=global_inject` |
 
-控制域写入 `GlobalInjectManifest::karlan_precision`；贸易域 `TradeContext::seed_karlan_precision()` 在相位前对同房 **`cc.g.karlan` 干员**写入 settled_eff / limit_contrib，使市井 `ReduceLimit` 读到被 debuff 后的 `other_ops_settled_eff`。
+控制域写入 `GlobalInjectManifest::karlan_precision`；贸易域 `TradeContext::seed_karlan_precision()` 在相位前对同房 **`cc.g.karlan` 干员**写入 settled_eff / limit_contrib，使市井 `ReduceLimit` 读到被 debuff 后的 `other_ops_settled_eff`。孑与琳琅诗怀雅不带该 tag，不吃精密计算。
 
 **非目标**：灵知 E0「幕后指挥」心情恢复（`control_mp_cost&faction[030]`）。
 

@@ -120,7 +120,7 @@ crates/infra-cli/src/
 | `pool` | `main.rs` | `output::emit_pool` | operbox / roster → `infra-core::pool` |
 | `search trade` | `main.rs` | `output::emit_trade_search` | roster / operbox |
 | `bench` | `main.rs` | `output::emit_bench` | 必选 `--operbox`；布局固定 `search_baseline`（`243_use_this_.json`） |
-| **`layout test`** | `commands/layout.rs` | `output::emit_bench` | 必选 `--layout` + `--operbox`；默认调用 `assign_shift` |
+| **`layout test`** | `commands/layout.rs` | `output::emit_bench` | 必选 `--layout` + `--operbox`；默认调用 `assign_base_greedy` |
 | **`layout team-rotation`** | `commands/layout.rs` | `output::emit_team_rotation` | 必选 `--layout` + `--operbox`；**αβγ ABC 轮换**；仅排班时用 |
 | **`layout rotation`** | `commands/layout.rs` | `output::emit_base_rotation` | **已废弃**（A-B-A）；启动时 stderr 警告，请改用 `team-rotation` |
 | **`layout analyze`** | `commands/layout.rs` | `print_box_profile_report` | 必选 `--layout` + `--operbox`；练度概况分析 |
@@ -141,7 +141,7 @@ crates/infra-cli/src/
 | CSV 列名/列序 | `verify/cases.rs` | 散落在多个命令里重复解析 |
 | 表格列或中文标签 | `output.rs` | `infra-core` |
 | 搜索/排班行为 | `infra-core` | `infra-cli`（最多改传参） |
-| 自定义基建布局 + 练度盒探测 | `layout test`（见下节）；**不要**手写 `TradeLayoutContext` 或改 `bench` 硬编码 | 在 CLI 里复制搜索公式 |
+| 自定义基建布局 + 练度盒探测 | `layout test`（见下节）；**不要**手写 `LayoutContext` / 搜索上下文或改 `bench` 硬编码 | 在 CLI 里复制搜索公式 |
 
 ---
 
@@ -218,7 +218,7 @@ cargo run -p infra-cli -- layout team-rotation \
 
 ## 自定义布局 + 练度盒测试（改机制 smoke test）
 
-> **给 Cursor / 协作者**：用户给出「某布局 JSON + operbox / 练度表」要跑**单班贸易/制造搜索探测**时，**优先用 `layout test`**，不要用 `bench`（`bench` 布局锁死 243c 基准）、也不要在 CLI 里临时拼 `TradeLayoutContext`。若用户只说「跑一遍模拟」，见上节 **`layout team-rotation`**。
+> **给 Cursor / 协作者**：用户给出「某布局 JSON + operbox / 练度表」要跑**单班贸易/制造搜索探测**时，**优先用 `layout test`**，不要用 `bench`（`bench` 布局锁死 243c 基准）、也不要在 CLI 里临时拼 `LayoutContext` / 搜索上下文。若用户只说「跑一遍模拟」，见上节 **`layout team-rotation`**。
 >
 > **无用户指定文件时，Agent 默认固定用：**
 > - 布局：`data/fixtures/243/layout.json`
@@ -232,7 +232,7 @@ cargo run -p infra-cli -- layout team-rotation \
 | **改机制后 smoke test（无用户路径）** | **`layout test`** + **`data/fixtures/243/layout.json`** + **`data/fixtures/243/operbox_full_e2.json`** |
 | 用户提供了 `BaseBlueprint` JSON（如 `243测试用布局.json`、排班工具导出的布局） | **`layout test`** + 用户 `--layout` + 用户或标准 `--operbox` |
 | 对比固定 243c 基准 + operbox（无自定义房间结构） | `bench --operbox data/fixtures/243/operbox_full_e2.json` |
-| 怪猎账号（木天蓼 12、泰拉调查团、精2 全局 +7/+2） | 代码侧 `TradeLayoutContext::snhunt_baseline()` / `snhunt_elite2_baseline()` 传入搜索；或蓝图 + assignment 含中枢双人 |
+| 怪猎账号（木天蓼 12、泰拉调查团、精2 全局 +7/+2） | 代码侧 `LayoutContext::snhunt_baseline()` / `LayoutContext::snhunt_elite2_baseline()`，或 `resolve_snhunt_*_layout()` 生成布局快照；CLI 侧优先用蓝图 + assignment 含中枢双人 |
 | 机制回归、shortcut 断言 | `verify --case …` / `verify --all` |
 | 单站硬编码三人组产量 | `trade yield <fixture>` |
 
@@ -352,6 +352,7 @@ cargo run -p infra-cli -- layout test --layout 243测试用布局.json --operbox
 
 | 文档 | 内容 |
 |------|------|
+| [INDEX.md](INDEX.md) | 文档入口、TODO / ARCHIVE 分层、任务路由 |
 | [PROJECT_MAP.md](PROJECT_MAP.md) | 全仓库地图、`infra-core` 索引、`data/` 职责 |
 | [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) | 求解分层 L1/L2/L3 |
-| [COLLAB_WORKFLOW.md](COLLAB_WORKFLOW.md) | 改干员时的协作与 `verify` 节奏 |
+| [TODO/](TODO/) | 准备实现 / 正在实现的事项 |

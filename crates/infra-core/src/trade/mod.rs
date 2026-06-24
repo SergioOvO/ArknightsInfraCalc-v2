@@ -16,6 +16,4 @@ pub use segment::{
     segment_producer_active, SegmentProducerDef, TradeRoleDef, TradeSegmentDef,
 };
 pub use solver::{solve_trade, solve_trade_with_shift, TradeProductionReport, TradeResult};
-pub use unit_output::{
-    daily_yield, DRONE_TRADE_FACTOR, TradeDailyYield, TradeUnitOutput,
-};
+pub use unit_output::{daily_yield, TradeDailyYield, TradeUnitOutput, DRONE_TRADE_FACTOR};

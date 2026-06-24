@@ -20,9 +20,7 @@ impl<'a> EvaluateContext<'a> {
     }
 
     pub fn owns_at_least(&self, name: &str, min_elite: u8) -> bool {
-        self.operbox
-            .elite_of(name)
-            .is_some_and(|e| e >= min_elite)
+        self.operbox.elite_of(name).is_some_and(|e| e >= min_elite)
     }
 
     pub fn has_facility(&self, kind: crate::layout::blueprint::FacilityKind) -> bool {

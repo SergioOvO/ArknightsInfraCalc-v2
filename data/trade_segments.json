@@ -12,15 +12,6 @@
       "consumer": "docus_syracusa"
     },
     {
-      "id": "ling_jie",
-      "shortcut_id": "gsl_ling_jie_yaxin",
-      "priority": 15,
-      "producer": {
-        "karlan_precision": true
-      },
-      "consumer": "ling_jie"
-    },
-    {
       "id": "blackkey_closure",
       "shortcut_id": "gsl_blackkey_closure",
       "priority": 19,

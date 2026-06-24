@@ -59,7 +59,8 @@ impl BaseAssignment {
             .map_err(|e| Error::msg(format!("assignment write {}: {e}", path.display())))
     }
 
-    pub fn operators_in(&self, room_id: &RoomId) -> &[AssignedOperator] {        self.rooms
+    pub fn operators_in(&self, room_id: &RoomId) -> &[AssignedOperator] {
+        self.rooms
             .iter()
             .find(|r| &r.room_id == room_id)
             .map(|r| r.operators.as_slice())
@@ -72,10 +73,7 @@ impl BaseAssignment {
             entry.operators = operators;
             return;
         }
-        self.rooms.push(RoomAssignment {
-            room_id,
-            operators,
-        });
+        self.rooms.push(RoomAssignment { room_id, operators });
     }
 
     pub fn set_power_operator(&mut self, room_id: impl Into<RoomId>, op: AssignedOperator) {

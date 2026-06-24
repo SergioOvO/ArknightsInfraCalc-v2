@@ -32,6 +32,8 @@ pub struct LayoutContext {
     pub global_inject: GlobalInjectManifest,
     /// 发电站进驻名单（森蚺·我寻思能行等）。
     pub power_workforce: Vec<String>,
+    /// 控制中枢进驻名单（红松林等体系专属房内结算读取）。
+    pub control_workforce: Vec<String>,
     /// 无人机上限（承曦·巡线框架；默认 135）。
     pub drone_cap: u32,
     /// 基建内发电站作业平台数量（阿兰娜/布丁中枢·超频）。
@@ -85,6 +87,7 @@ impl Default for LayoutContext {
             global: GlobalResourcePool::default(),
             global_inject: GlobalInjectManifest::default(),
             power_workforce: Vec::new(),
+            control_workforce: Vec::new(),
             drone_cap: 135,
             platform_count_in_power: 0,
             rhine_life_in_base: 0,
@@ -114,7 +117,8 @@ pub fn trade_station_tagged_gte_key(tag: &str, min: u8) -> String {
 impl LayoutContext {
     /// 望·权变「外势」：贸易站 + 发电站间数。
     pub fn external_momentum(&self) -> u8 {
-        self.trade_station_count.saturating_add(self.power_station_count)
+        self.trade_station_count
+            .saturating_add(self.power_station_count)
     }
 
     /// 望·权变「实地」：制造站间数。
@@ -152,10 +156,9 @@ impl LayoutContext {
     pub fn snhunt_elite2_baseline() -> Self {
         super::resolve_snhunt_elite2_baseline_layout().unwrap_or_else(|_| {
             let mut layout = Self::snhunt_baseline_legacy();
-            layout.global_inject.record_trade(
-                crate::global_resource::INJECT_FAMILY_TRADE_GLOBAL_FLAT,
-                7.0,
-            );
+            layout
+                .global_inject
+                .record_trade(crate::global_resource::INJECT_FAMILY_TRADE_GLOBAL_FLAT, 7.0);
             layout.global_inject.record_manu(
                 crate::global_resource::INJECT_FAMILY_MANU_GLOBAL_ALL,
                 None,

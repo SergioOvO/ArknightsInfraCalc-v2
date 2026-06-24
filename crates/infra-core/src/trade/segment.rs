@@ -16,7 +16,7 @@ use crate::trade::input::TradeOperator;
 use crate::trade::shortcut::{
     is_blackkey_closure_station, is_docus_syracusa_station, is_penguin_exusiai_lemuen_station,
     is_penguin_texangel_e2_station, is_penguin_texlap_e0_station, is_vina_lungmen_station,
-    match_ling_jie_shortcut, trade_shortcut_cache, TradeShortcutMatch,
+    trade_shortcut_cache, TradeShortcutMatch,
 };
 
 #[derive(Debug, Clone, Deserialize)]
@@ -118,10 +118,12 @@ pub(crate) fn trade_segment_cache() -> Option<&'static TradeSegmentCache> {
         .as_ref()
 }
 
-pub fn segment_producer_active(producer: &SegmentProducerDef, inject: &GlobalInjectManifest) -> bool {
-    let any_required = producer.haru_e2_in_control
-        || producer.karlan_precision
-        || producer.daifeen_e2_in_control;
+pub fn segment_producer_active(
+    producer: &SegmentProducerDef,
+    inject: &GlobalInjectManifest,
+) -> bool {
+    let any_required =
+        producer.haru_e2_in_control || producer.karlan_precision || producer.daifeen_e2_in_control;
     if !any_required {
         return true;
     }
@@ -141,11 +143,10 @@ fn segment_consumer_matches(
     kind: &str,
     ops: &[TradeOperator],
     table: &SkillTable,
-    inject: &GlobalInjectManifest,
+    _inject: &GlobalInjectManifest,
 ) -> bool {
     match kind {
         "docus_syracusa" => is_docus_syracusa_station(ops, table),
-        "ling_jie" => match_ling_jie_shortcut(ops, inject).is_some(),
         "blackkey_closure" => is_blackkey_closure_station(ops, table),
         "vina_lungmen" => is_vina_lungmen_station(ops, table),
         "penguin_texlap_e0" => is_penguin_texlap_e0_station(ops, table),
@@ -199,7 +200,7 @@ mod tests {
     fn segment_registry_loads_phase2_entries() {
         let cache = trade_segment_cache().expect("segments loaded");
         assert!(cache.segment("docus_syracusa").is_some());
-        assert!(cache.segment("ling_jie").is_some());
+        assert!(cache.segment("ling_jie").is_none());
         assert!(cache.segment("blackkey_closure").is_some());
         assert!(cache.segment("vina_lungmen").is_some());
         assert!(cache.segment("penguin_exusiai_lemuen").is_some());

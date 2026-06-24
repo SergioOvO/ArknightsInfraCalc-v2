@@ -12,7 +12,10 @@ fn facility_counts_for_layout_stats(kind: FacilityKind) -> bool {
 }
 
 /// 副手不计入「该设施是否进驻精英干员」判定；控制中枢仅首领位。
-fn operators_for_facility_stat(kind: FacilityKind, ops: &[AssignedOperator]) -> &[AssignedOperator] {
+fn operators_for_facility_stat(
+    kind: FacilityKind,
+    ops: &[AssignedOperator],
+) -> &[AssignedOperator] {
     match kind {
         FacilityKind::ControlCenter => ops.get(..1).unwrap_or(&[]),
         _ => ops,
@@ -25,13 +28,8 @@ pub const TAG_ELITE_OPERATOR: &str = "cc.g.elite_op";
 const ELITE_OPERATOR_NAMES: &[&str] = &["迷迭香", "煌", "逻各斯", "烛煌", "电弧", "真言"];
 
 /// 游戏内作业平台（机器人）干员名。
-const PLATFORM_OPERATOR_NAMES: &[&str] = &[
-    "Lancet-2",
-    "Castle-3",
-    "PhonoR-0",
-    "THRM-EX",
-    "正义骑士号",
-];
+const PLATFORM_OPERATOR_NAMES: &[&str] =
+    &["Lancet-2", "Castle-3", "PhonoR-0", "THRM-EX", "正义骑士号"];
 
 const TAG_LATERANO: &str = "cc.g.laterano";
 pub const TAG_RHINE: &str = "cc.g.rhine";
@@ -42,6 +40,7 @@ pub const TAG_SIRACUSA: &str = "cc.g.siracusa";
 pub const TAG_BLACKSTEEL: &str = "cc.g.blacksteel";
 pub const TAG_KNIGHT: &str = "cc.g.knight";
 pub const TAG_PINUS: &str = "cc.g.pinus";
+pub const TAG_ABYSSAL: &str = "cc.g.abyssal";
 pub const TAG_LGD: &str = "cc.g.lgd";
 pub const TAG_RAINBOW: &str = "cc.g.rainbow";
 
@@ -52,6 +51,7 @@ const CROSS_FACILITY_TAGS: &[&str] = &[
     TAG_BLACKSTEEL,
     TAG_KNIGHT,
     TAG_PINUS,
+    TAG_ABYSSAL,
 ];
 
 #[derive(Debug, Clone)]
@@ -65,6 +65,7 @@ pub struct WorkforceIndex {
     pub by_room: HashMap<String, Vec<AssignedOperator>>,
     pub power_stations: Vec<PowerStationEntry>,
     pub power_workforce: Vec<String>,
+    pub control_workforce: Vec<String>,
     pub platform_rooms: Vec<RoomId>,
     pub all_base_names: Vec<String>,
     pub rhine_life_in_base: u8,
@@ -84,6 +85,7 @@ impl WorkforceIndex {
         let mut by_room: HashMap<String, Vec<AssignedOperator>> = HashMap::new();
         let mut power_stations = Vec::new();
         let mut power_workforce = Vec::new();
+        let mut control_workforce = Vec::new();
         let mut platform_rooms = Vec::new();
         let mut trade_workforce = Vec::new();
         let mut manu_workforce = Vec::new();
@@ -101,6 +103,11 @@ impl WorkforceIndex {
             if room.kind == FacilityKind::Factory {
                 for op in ops {
                     manu_workforce.push(op.name.clone());
+                }
+            }
+            if room.kind == FacilityKind::ControlCenter {
+                for op in ops {
+                    control_workforce.push(op.name.clone());
                 }
             }
             if room.kind == FacilityKind::PowerPlant {
@@ -161,6 +168,7 @@ impl WorkforceIndex {
             by_room,
             power_stations,
             power_workforce,
+            control_workforce,
             platform_rooms,
             all_base_names,
             rhine_life_in_base,
@@ -176,9 +184,7 @@ impl WorkforceIndex {
     }
 
     pub fn other_power_has_platform(&self, excluding_room: &RoomId) -> bool {
-        self.platform_rooms
-            .iter()
-            .any(|id| id != excluding_room)
+        self.platform_rooms.iter().any(|id| id != excluding_room)
     }
 
     pub fn other_platform_in_power(&self, viewing_room: &RoomId, viewing_name: &str) -> bool {
@@ -229,6 +235,7 @@ impl WorkforceIndex {
 
     pub fn apply_to_layout(&self, layout: &mut LayoutContext) {
         layout.power_workforce = self.power_workforce.clone();
+        layout.control_workforce = self.control_workforce.clone();
         layout.base_workforce = self.all_base_names.clone();
         layout.training_assist = self.training_assist.clone();
         layout.rhine_life_in_base = self.rhine_life_in_base;
@@ -297,13 +304,9 @@ impl WorkforceIndex {
     ) -> LayoutContext {
         let mut layout = base.clone();
         layout.other_power_has_platform = self.other_power_has_platform(room_id);
-        layout.other_platform_in_power =
-            self.other_platform_in_power(room_id, operator_name);
-        layout.other_laterano_in_power = self.other_laterano_in_power(
-            instances,
-            room_id,
-            operator_name,
-        );
+        layout.other_platform_in_power = self.other_platform_in_power(room_id, operator_name);
+        layout.other_laterano_in_power =
+            self.other_laterano_in_power(instances, room_id, operator_name);
         layout
     }
 }
@@ -312,15 +315,15 @@ pub fn is_platform_operator(name: &str) -> bool {
     PLATFORM_OPERATOR_NAMES.contains(&name)
 }
 
-pub fn is_elite_operator(
-    instances: Option<&OperatorInstances>,
-    op: &AssignedOperator,
-) -> bool {
+pub fn is_elite_operator(instances: Option<&OperatorInstances>, op: &AssignedOperator) -> bool {
     if operator_has_tag(instances, op, TAG_ELITE_OPERATOR) {
         return true;
     }
     if let Some(instances) = instances {
-        for tier in [crate::tier::PromotionTier::Tier0, crate::tier::PromotionTier::TierUp] {
+        for tier in [
+            crate::tier::PromotionTier::Tier0,
+            crate::tier::PromotionTier::TierUp,
+        ] {
             if let Some(inst) = instances.get(&op.name, tier) {
                 if inst.tags.iter().any(|t| t == TAG_ELITE_OPERATOR) {
                     return true;
@@ -345,11 +348,7 @@ fn operator_has_tag(
         .unwrap_or(false)
 }
 
-fn count_tagged_in_base(
-    instances: Option<&OperatorInstances>,
-    names: &[String],
-    tag: &str,
-) -> u8 {
+fn count_tagged_in_base(instances: Option<&OperatorInstances>, names: &[String], tag: &str) -> u8 {
     count_tagged_in_base_excluding(instances, names, &[], tag, 255)
 }
 
@@ -367,7 +366,10 @@ fn count_tagged_in_base_excluding(
         .iter()
         .filter(|name| !exclude.iter().any(|e| e == *name))
         .filter(|name| {
-            for tier in [crate::tier::PromotionTier::Tier0, crate::tier::PromotionTier::TierUp] {
+            for tier in [
+                crate::tier::PromotionTier::Tier0,
+                crate::tier::PromotionTier::TierUp,
+            ] {
                 if let Some(inst) = instances.get(name, tier) {
                     if inst.tags.iter().any(|t| t == tag) {
                         return true;
@@ -452,10 +454,7 @@ mod tests {
     fn trade_workforce_from_assignment() {
         let bp = BaseBlueprint::template_243_use_this().unwrap();
         let mut assignment = BaseAssignment::default();
-        assignment.set_room(
-            "trade_1",
-            vec![AssignedOperator::new("古米", 0)],
-        );
+        assignment.set_room("trade_1", vec![AssignedOperator::new("古米", 0)]);
         let idx = WorkforceIndex::build(&bp, &assignment, None);
         assert!(idx.trade_workforce.iter().any(|n| n == "古米"));
         let mut layout = LayoutContext::default();
@@ -495,11 +494,17 @@ mod tests {
     #[test]
     fn rhine_life_in_base_counts_tagged_workforce_capped_and_excludes_assist() {
         let bp = BaseBlueprint::template_243_use_this().unwrap();
-        let instances = OperatorInstances::load(&crate::instances::default_instances_path().unwrap())
-            .unwrap();
+        let instances =
+            OperatorInstances::load(&crate::instances::default_instances_path().unwrap()).unwrap();
         let mut assignment = BaseAssignment::default();
         assignment.base_workforce = [
-            "缪尔赛思", "多萝西", "娜斯提", "淬羽赫默", "赫默", "白面鸮", "星源",
+            "缪尔赛思",
+            "多萝西",
+            "娜斯提",
+            "淬羽赫默",
+            "赫默",
+            "白面鸮",
+            "星源",
         ]
         .iter()
         .map(|s| s.to_string())
@@ -523,10 +528,7 @@ mod tests {
         let bp = BaseBlueprint::template_252_auto1().unwrap();
         let mut assignment = BaseAssignment::default();
         assignment.set_power_operator("power_1", AssignedOperator::new("Lancet-2", 0));
-        assignment.set_power_operator(
-            "power_2",
-            AssignedOperator::new("承曦格雷伊", 2),
-        );
+        assignment.set_power_operator("power_2", AssignedOperator::new("承曦格雷伊", 2));
         let idx = WorkforceIndex::build(&bp, &assignment, None);
         assert_eq!(idx.platform_count_in_power(), 1);
         assert!(idx.other_power_has_platform(&RoomId::from("power_2")));

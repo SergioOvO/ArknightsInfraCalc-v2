@@ -215,7 +215,11 @@ pub fn verify_shift_binds(
         let active = report
             .shifts
             .iter()
-            .filter(|s| present.iter().all(|n| operator_in_shift(report, s.index, n)))
+            .filter(|s| {
+                present
+                    .iter()
+                    .all(|n| operator_in_shift(report, s.index, n))
+            })
             .count();
         if active != bind.on_shifts as usize {
             return Err(format!(

@@ -5,12 +5,36 @@ use rayon::prelude::*;
 use serde::Serialize;
 
 use crate::error::Result;
+use crate::layout::{LayoutContext, SharedLayout};
 use crate::manufacture::input::{ManuRoomInput, ManuSearchRecipeMode};
 use crate::manufacture::solver::{solve_manufacture, ManuProdBreakdown, ManuStorageBreakdown};
 use crate::pool::{combinations_triples, ManuPool};
 use crate::skill_table::SkillTable;
-use crate::layout::{LayoutContext, SharedLayout};
 use crate::types::RecipeKind;
+
+/// 制造站评分的完整分解，展示每个因子对 `composite_score` (= `prod_total`) 的贡献。
+///
+/// 制造评分公式：
+/// ```text
+/// prod_total = prod_base + prod_skill + prod_global
+/// ```
+/// 其中 `prod_base` 为房间内干员数 × 100%，`prod_skill` 为技能/站级/布局效率，
+/// `prod_global` 为全局注入。
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct ManuScoreBreakdown {
+    /// 房间基础 (人数 × 100%)
+    pub prod_base: f64,
+    /// 技能效率 (含站级/布局)
+    pub prod_skill: f64,
+    /// 全局注入
+    pub prod_global: f64,
+    /// = prod_base + prod_skill + prod_global（即 composite_score）
+    pub prod_total: f64,
+    /// 仓库上限
+    pub storage_limit: i32,
+    /// 配方类型
+    pub recipe: String,
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ManuSearchHit {
@@ -26,6 +50,8 @@ pub struct ManuSearchHit {
     pub composite_score: f64,
     pub per_station: ManuProdBreakdown,
     pub storage: ManuStorageBreakdown,
+    /// 评分明细分解
+    pub breakdown: ManuScoreBreakdown,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -112,13 +138,16 @@ fn search_manufacture_split_lines(
             battle_record: br_report.best.storage.battle_record,
             originium: 0,
         },
+        breakdown: ManuScoreBreakdown::default(),
     };
 
     Ok(ManuSearchReport {
         recipe_mode: ManuSearchRecipeMode::Lines(scenario),
         best: best.clone(),
         top: vec![best],
-        combinations: gold_report.combinations.saturating_add(br_report.combinations),
+        combinations: gold_report
+            .combinations
+            .saturating_add(br_report.combinations),
         evaluated: gold_report.evaluated.saturating_add(br_report.evaluated),
         elapsed: start.elapsed(),
         gold_line: Some(gold_report.best),
@@ -160,8 +189,8 @@ fn search_manufacture_single_recipe(
         .collect();
 
     hits.sort_by(|a, b| {
-        b.composite_score
-            .partial_cmp(&a.composite_score)
+        manufacture_efficiency_sort_key(b)
+            .partial_cmp(&manufacture_efficiency_sort_key(a))
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| {
                 b.storage
@@ -189,32 +218,54 @@ fn search_manufacture_single_recipe(
     })
 }
 
+fn manufacture_efficiency_sort_key(hit: &ManuSearchHit) -> f64 {
+    hit.composite_score
+}
+
 fn eval_single_recipe_hit(
     base: &ManuRoomInput,
     table: &SkillTable,
     recipe: RecipeKind,
 ) -> Option<ManuSearchHit> {
-    let names = base.operator_names().into_iter().map(str::to_string).collect();
+    let names = base
+        .operator_names()
+        .into_iter()
+        .map(str::to_string)
+        .collect();
     let mut room = base.clone();
     room.active_recipe = recipe;
     let result = solve_manufacture(&room, table).ok()?;
     let mut per_station = ManuProdBreakdown::default();
     let mut storage = ManuStorageBreakdown::default();
-    match recipe {
+    let recipe_str = match recipe {
         RecipeKind::Gold => {
             per_station.gold = result.prod_total;
             storage.gold = result.storage_limit;
+            "gold"
         }
         RecipeKind::BattleRecord => {
             per_station.battle_record = result.prod_total;
             storage.battle_record = result.storage_limit;
+            "battle_record"
         }
         RecipeKind::Originium => {
             per_station.originium = result.prod_total;
             storage.originium = result.storage_limit;
+            "originium"
         }
-        RecipeKind::All => {}
-    }
+        RecipeKind::All => "all",
+    };
+
+    let prod_global = result.prod_total - result.prod_base - result.prod_skill;
+    let breakdown = ManuScoreBreakdown {
+        prod_base: result.prod_base,
+        prod_skill: result.prod_skill,
+        prod_global,
+        prod_total: result.prod_total,
+        storage_limit: result.storage_limit,
+        recipe: recipe_str.to_string(),
+    };
+
     Some(ManuSearchHit {
         names,
         gold_names: vec![],
@@ -222,6 +273,7 @@ fn eval_single_recipe_hit(
         composite_score: result.prod_total,
         per_station,
         storage,
+        breakdown,
     })
 }
 
@@ -233,21 +285,45 @@ fn empty_hit() -> ManuSearchHit {
         composite_score: 0.0,
         per_station: ManuProdBreakdown::default(),
         storage: ManuStorageBreakdown::default(),
+        breakdown: ManuScoreBreakdown::default(),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::manufacture::solver::score_manu_composite;
     use crate::instances::{default_instances_path, OperatorInstances};
-    use crate::manufacture::input::{ManuLineScenario, ManuOperator, ManuRoomInput, ManuSearchRecipeMode};
+    use crate::manufacture::input::{
+        ManuLineScenario, ManuOperator, ManuRoomInput, ManuSearchRecipeMode,
+    };
+    use crate::manufacture::solver::score_manu_composite;
     use crate::pool::build_manufacture_pool;
     use crate::roster::Roster;
     use crate::tier::PromotionTier;
 
     fn table() -> SkillTable {
         SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn manufacture_search_score_is_prod_total_sort_key() {
+        let hit = ManuSearchHit {
+            names: vec!["a".into()],
+            gold_names: vec![],
+            battle_record_names: vec![],
+            composite_score: 245.0,
+            per_station: ManuProdBreakdown {
+                gold: 245.0,
+                ..Default::default()
+            },
+            storage: ManuStorageBreakdown::default(),
+            breakdown: ManuScoreBreakdown {
+                prod_total: 245.0,
+                ..Default::default()
+            },
+        };
+        assert_eq!(manufacture_efficiency_sort_key(&hit), hit.composite_score);
+        assert_eq!(hit.composite_score, hit.breakdown.prod_total);
     }
 
     #[test]
@@ -326,7 +402,8 @@ mod tests {
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = table();
         let pool = build_manufacture_pool(&roster, &instances, &table).unwrap();
-        let report = search_manufacture_triples(&pool, &table, &ManuSearchOptions::default()).unwrap();
+        let report =
+            search_manufacture_triples(&pool, &table, &ManuSearchOptions::default()).unwrap();
         assert_eq!(
             report.recipe_mode,
             ManuSearchRecipeMode::Lines(ManuLineScenario::standard_four_lines())
@@ -407,14 +484,20 @@ mod tests {
         let operbox = OperBox::from_entries(entries);
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = table();
-        let pool = build_manufacture_pool(&operbox.manufacture_roster(&instances), &instances, &table)
-            .unwrap();
-        let report = search_manufacture_triples(&pool, &table, &ManuSearchOptions::default()).unwrap();
+        let pool =
+            build_manufacture_pool(&operbox.manufacture_roster(&instances), &instances, &table)
+                .unwrap();
+        let report =
+            search_manufacture_triples(&pool, &table, &ManuSearchOptions::default()).unwrap();
         let gold = report.gold_line.as_ref().expect("gold line");
         let br = report.battle_record_line.as_ref().expect("exp line");
         assert!(gold.names.contains(&"清流".to_string()));
         assert!(br.names.contains(&"酒神".to_string()));
-        assert!((report.best.composite_score - (2.0 * gold.composite_score + 2.0 * br.composite_score)).abs() < 0.01);
+        assert!(
+            (report.best.composite_score - (2.0 * gold.composite_score + 2.0 * br.composite_score))
+                .abs()
+                < 0.01
+        );
         assert!(report.best.composite_score > 342.0);
     }
 
@@ -430,10 +513,7 @@ mod tests {
         let pool = build_manufacture_pool(&roster, &instances, &table).unwrap();
 
         let qingliu = pool.entry("清流").expect("清流应在制造池");
-        assert!(
-            !qingliu.has_l2_delegate,
-            "清流再生能源应已 L1 建模"
-        );
+        assert!(!qingliu.has_l2_delegate, "清流再生能源应已 L1 建模");
         let dongshi = pool.entry("冬时").expect("冬时应在制造池");
         assert!(!dongshi.has_l2_delegate);
 
@@ -442,10 +522,7 @@ mod tests {
             pool.entry("森蚺").is_none(),
             "E1 森蚺无制造技能实例，不应进制造池"
         );
-        let skipped_sen = pool
-            .skipped
-            .iter()
-            .find(|(n, _, _)| n == "森蚺");
+        let skipped_sen = pool.skipped.iter().find(|(n, _, _)| n == "森蚺");
         assert!(
             skipped_sen.is_none(),
             "森蚺不在制造 roster，不应出现在 skipped"
@@ -478,19 +555,14 @@ mod tests {
                 )
             })
             .collect();
-        let dongshi_room =
-            ManuRoomInput::with_operators(3, RecipeKind::Gold, dongshi_ops);
+        let dongshi_room = ManuRoomInput::with_operators(3, RecipeKind::Gold, dongshi_ops);
         let dongshi_gold = solve_manufacture(&dongshi_room, &table).unwrap();
         assert!(
             (dongshi_gold.prod_skill - 30.0).abs() < 0.01,
             "冬时站级 3×10%=30，got {}",
             dongshi_gold.prod_skill
         );
-        assert_eq!(
-            dongshi_gold.storage_limit,
-            35,
-            "精一冬时 3×5 仓库贡献"
-        );
+        assert_eq!(dongshi_gold.storage_limit, 35, "精一冬时 3×5 仓库贡献");
 
         let mixed_ops: Vec<ManuOperator> = ["冬时", "清流", "芬"]
             .iter()
@@ -504,8 +576,7 @@ mod tests {
                 )
             })
             .collect();
-        let mut mixed_room =
-            ManuRoomInput::with_operators(3, RecipeKind::Gold, mixed_ops);
+        let mut mixed_room = ManuRoomInput::with_operators(3, RecipeKind::Gold, mixed_ops);
         mixed_room.layout = Arc::new(LayoutContext::search_baseline());
         let mixed = solve_manufacture(&mixed_room, &table).unwrap();
         assert!(

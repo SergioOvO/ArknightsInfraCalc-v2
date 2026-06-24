@@ -5,8 +5,8 @@ use serde::Serialize;
 
 use super::interpreter::{MechanicCaps, TradeContext};
 use super::order_mechanic::{
-    unit_per_slot_per_day, GoldDistribution, OrderMechanicResult, OriginiumDistribution,
-    SpecialOrderKind, PEPE_ORDER_DURATION_MIN, PEPE_ORDER_LMD,
+    unit_per_slot_per_day, GoldDistribution, OrderMechanicResult, SpecialOrderKind,
+    PEPE_ORDER_DURATION_MIN, PEPE_ORDER_LMD,
 };
 
 pub use super::order_mechanic::baseline_unit_trade_lv3_regular;
@@ -171,7 +171,8 @@ mod tests {
 
     #[test]
     fn closure_unit_output_near_gsl_anchor() {
-        let table = SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
+        let table =
+            SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
         let input = TradeRoomInput::with_operators(
             3,
             vec![TradeOperator::new(
@@ -204,15 +205,9 @@ mod tests {
                 "但书",
                 elite,
                 if elite >= 2 {
-                    vec![
-                        "trade_ord_law[000]".into(),
-                        "trade_ord_against[010]".into(),
-                    ]
+                    vec!["trade_ord_law[000]".into(), "trade_ord_against[010]".into()]
                 } else {
-                    vec![
-                        "trade_ord_law[000]".into(),
-                        "trade_ord_against[000]".into(),
-                    ]
+                    vec!["trade_ord_law[000]".into(), "trade_ord_against[000]".into()]
                 },
             )
         };
@@ -234,7 +229,8 @@ mod tests {
 
     #[test]
     fn pepe_exclusive_unit_and_ignores_paper_eff() {
-        let table = SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
+        let table =
+            SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
         let pepe = |extra: Vec<TradeOperator>| {
             let mut ops = vec![TradeOperator::new(
                 "佩佩",
@@ -270,7 +266,8 @@ mod tests {
             "pepe score unchanged with limit-only roommates"
         );
         assert!(
-            (with_limits.production.daily_at_shift.trade_lmd - solo.production.daily_at_shift.trade_lmd)
+            (with_limits.production.daily_at_shift.trade_lmd
+                - solo.production.daily_at_shift.trade_lmd)
                 .abs()
                 < 1.0,
             "daily lmd must not scale with paper eff"

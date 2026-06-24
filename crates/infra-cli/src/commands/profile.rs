@@ -6,9 +6,7 @@ use infra_core::box_profile::{
     build_box_profile, default_schedule_export_path, run_layout_probe, BoxProfileOptions,
 };
 use infra_core::instances::{default_instances_path, OperatorInstances};
-use infra_core::layout::{
-    assign_base_greedy, resolve_base, AssignBaseOptions, BaseBlueprint,
-};
+use infra_core::layout::{assign_base_greedy, resolve_base, AssignBaseOptions, BaseBlueprint};
 use infra_core::manufacture::input::ManuSearchRecipeMode;
 use infra_core::operbox::OperBox;
 use infra_core::pool::{build_manufacture_pool, build_trade_pool};
@@ -116,12 +114,7 @@ fn profile_layout_full_cmd(args: &[String]) -> Result<(), Error> {
             owned_labels.last().unwrap().clone()
         };
         profiles.push(run_layout_full(
-            &run_label,
-            &blueprint,
-            &operbox,
-            &instances,
-            &table,
-            top_k,
+            &run_label, &blueprint, &operbox, &instances, &table, top_k,
         )?);
     }
 
@@ -369,9 +362,10 @@ fn profile_analyze_compare_cmd(args: &[String]) -> Result<(), Error> {
         .windows(2)
         .find(|w| w[0] == "--schedule")
         .map(|w| PathBuf::from(&w[1]))
-        .unwrap_or_else(|| default_schedule_export_path().unwrap_or_else(|_| {
-            PathBuf::from("data/fixtures/243/schedule_export.json")
-        }));
+        .unwrap_or_else(|| {
+            default_schedule_export_path()
+                .unwrap_or_else(|_| PathBuf::from("data/fixtures/243/schedule_export.json"))
+        });
     let runs = args
         .windows(2)
         .find(|w| w[0] == "--runs")

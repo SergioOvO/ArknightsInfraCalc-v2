@@ -98,10 +98,7 @@ impl BaseBlueprint {
     }
 
     pub fn rooms_of(&self, kind: FacilityKind) -> Vec<&RoomBlueprint> {
-        self.rooms
-            .iter()
-            .filter(|r| r.kind == kind)
-            .collect()
+        self.rooms.iter().filter(|r| r.kind == kind).collect()
     }
 
     pub fn count_facility(&self, kind: FacilityKind) -> u8 {

@@ -6,13 +6,11 @@ mod interpreter;
 pub use input::{OfficeOperator, OfficeRoomInput};
 pub use interpreter::{solve_office, OfficeResult};
 
-use crate::layout::{
-    AssignedOperator, BaseAssignment, BaseBlueprint, FacilityKind, LayoutContext,
-};
+use crate::error::Result;
 use crate::instances::OperatorInstances;
+use crate::layout::{AssignedOperator, BaseAssignment, BaseBlueprint, FacilityKind, LayoutContext};
 use crate::skill_table::SkillTable;
 use crate::tier::PromotionTier;
-use crate::error::Result;
 
 pub fn apply_office_to_layout(
     layout: &mut LayoutContext,
@@ -49,7 +47,10 @@ pub fn apply_office_to_layout(
     layout.office_hire_spd_pct = best;
 }
 
-fn to_office_operator(instances: &OperatorInstances, op: &AssignedOperator) -> Result<OfficeOperator> {
+fn to_office_operator(
+    instances: &OperatorInstances,
+    op: &AssignedOperator,
+) -> Result<OfficeOperator> {
     let tier = PromotionTier::from_elite(op.elite);
     let buff_ids = instances.resolve_office_buff_ids(&op.name, tier);
     if buff_ids.is_empty() {

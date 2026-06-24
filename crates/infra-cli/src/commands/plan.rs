@@ -4,9 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::output::{print_box_profile_report, print_team_rotation_text};
-use infra_core::box_profile::{
-    baseline_path_or_default, build_box_profile, BoxProfileOptions,
-};
+use infra_core::box_profile::{baseline_path_or_default, build_box_profile, BoxProfileOptions};
 use infra_core::export::{build_from_team_rotation, MaaExportOptions};
 use infra_core::instances::{default_instances_path, OperatorInstances};
 use infra_core::layout::{AssignBaseOptions, BaseBlueprint};
@@ -163,12 +161,11 @@ fn profile_out_path(args: &[String], operbox_path: &Path) -> PathBuf {
     if let Some(dir) = output_dir_from_args(args) {
         return dir.join("box_profile.json");
     }
-    operbox_path
-        .with_file_name(format!(
-            "{}_profile.json",
-            operbox_path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("operbox")
-        ))
+    operbox_path.with_file_name(format!(
+        "{}_profile.json",
+        operbox_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("operbox")
+    ))
 }

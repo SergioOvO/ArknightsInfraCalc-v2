@@ -7,20 +7,20 @@ use crate::output::{
     print_box_profile_report, print_team_rotation_text, BenchMeta, OutputFormat, OutputOptions,
     PoolSummary,
 };
-use infra_core::box_profile::{
-    baseline_path_or_default, build_box_profile, BoxProfileOptions,
+use infra_core::box_profile::{baseline_path_or_default, build_box_profile, BoxProfileOptions};
+use infra_core::export::{
+    build_from_base_rotation, build_from_team_rotation, MaaExportOptions, MaaSchedule,
 };
-use infra_core::export::{build_from_base_rotation, build_from_team_rotation, MaaExportOptions, MaaSchedule};
 use infra_core::instances::{default_instances_path, OperatorInstances};
 use infra_core::layout::{
-    assign_base_greedy, BaseAssignment, BaseBlueprint, resolve_base, AssignBaseOptions,
+    assign_base_greedy, resolve_base, AssignBaseOptions, BaseAssignment, BaseBlueprint,
 };
-use infra_core::schedule::{schedule_base_rotation_a_b_a, schedule_team_rotation};
 use infra_core::manufacture::input::ManuRoomInput;
 use infra_core::manufacture::solve_manufacture;
 use infra_core::manufacture::ManuSearchRecipeMode;
 use infra_core::operbox::OperBox;
 use infra_core::pool::{build_manufacture_pool, build_trade_pool};
+use infra_core::schedule::{schedule_base_rotation_a_b_a, schedule_team_rotation};
 use infra_core::search::{
     search_manufacture_triples, search_trade_triples, ManuSearchOptions, TradeSearchOptions,
 };
@@ -180,7 +180,10 @@ fn layout_rotation_cmd(args: &[String]) -> Result<(), Error> {
     Ok(())
 }
 
-fn write_rotation_assignments(dir: &Path, report: &infra_core::schedule::BaseRotationReport) -> Result<(), Error> {
+fn write_rotation_assignments(
+    dir: &Path,
+    report: &infra_core::schedule::BaseRotationReport,
+) -> Result<(), Error> {
     fs::create_dir_all(dir)?;
     for shift in &report.shifts {
         let role = match shift.role {
@@ -297,9 +300,7 @@ fn layout_analyze_cmd(args: &[String]) -> Result<(), Error> {
     let instances = OperatorInstances::load(&default_instances_path()?)?;
     let table = SkillTable::load(&default_skill_table_path()?)?;
 
-    let baseline_path = baseline_path_or_default(
-        baseline_path_from_args(args).as_deref(),
-    )?;
+    let baseline_path = baseline_path_or_default(baseline_path_from_args(args).as_deref())?;
 
     let profile = build_box_profile(
         &blueprint,
@@ -546,11 +547,7 @@ fn layout_eval_cmd(args: &[String]) -> Result<(), Error> {
             let names: Vec<_> = room.operators.iter().map(|o| o.name.as_str()).collect();
             eprintln!(
                 "  manu {} {:?} ops={:?} prod%={:.1} storage={}",
-                room.id.0,
-                room.recipe,
-                names,
-                result.prod_total,
-                result.storage_limit
+                room.id.0, room.recipe, names, result.prod_total, result.storage_limit
             );
         }
     }

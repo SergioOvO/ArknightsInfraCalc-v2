@@ -5,7 +5,7 @@ mod trade_rotation;
 
 pub use base_rotation::{
     schedule_base_rotation_a_b_a, score_base_assignment, BaseRotationReport, BaseShiftPlan,
-    BaseShiftRole, ShiftScores,
+    BaseShiftRole, RoomScoreLine, ShiftScores,
 };
 pub use shift_bind::{
     active_shift_binds, align_shift_binds_in_halves, bound_operator_names, operator_in_shift,

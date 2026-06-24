@@ -9,8 +9,8 @@ pub use crate::global_resource::{
 pub use input::{ControlOperator, ControlRoomInput};
 pub use interpreter::{solve_control, ControlCenterResult};
 
-use crate::skill_table::SkillTable;
 use crate::layout::LayoutContext;
+use crate::skill_table::SkillTable;
 
 /// 在中枢编制上求值，将资源池与全局注入写回 `layout`。
 pub fn apply_control_to_layout(
@@ -41,9 +41,7 @@ pub fn control_has_haru_e2(operators: &[ControlOperator]) -> bool {
     const HARU: &str = "八幡海铃";
     const FAMILY_RECOGNITION: &str = "control_tra_limit&spd2[000]";
     operators.iter().any(|o| {
-        o.name == HARU
-            && o.elite >= 2
-            && o.buff_ids.iter().any(|b| b == FAMILY_RECOGNITION)
+        o.name == HARU && o.elite >= 2 && o.buff_ids.iter().any(|b| b == FAMILY_RECOGNITION)
     })
 }
 
@@ -51,9 +49,7 @@ pub fn control_has_haru_e2(operators: &[ControlOperator]) -> bool {
 pub fn control_has_daifeen_e2(operators: &[ControlOperator]) -> bool {
     const DAIFEEN: &str = "戴菲恩";
     const OPS_HAND: &str = "control_tra_limit&spd[010]";
-    operators.iter().any(|o| {
-        o.name == DAIFEEN
-            && o.elite >= 2
-            && o.buff_ids.iter().any(|b| b == OPS_HAND)
-    })
+    operators
+        .iter()
+        .any(|o| o.name == DAIFEEN && o.elite >= 2 && o.buff_ids.iter().any(|b| b == OPS_HAND))
 }

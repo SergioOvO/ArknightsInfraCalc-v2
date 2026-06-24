@@ -9,7 +9,9 @@ use crate::tier::PromotionTier;
 use crate::trade::TradeOperator;
 use crate::types::{Action, CompiledAtom, Phase, SkillDef};
 
-use super::base::{build_roster_pool, filter_pool, HasName, PoolCore};
+use crate::layout::tier::OperatorTier;
+
+use super::base::{build_roster_pool, filter_pool, HasName, PoolCore, TierTagged};
 
 /// 建池时按 buff 展开并排序 atom，供 solve 热路径归并。
 pub fn compile_operator_atoms(buff_ids: &[String], table: &SkillTable) -> Arc<[CompiledAtom]> {
@@ -40,7 +42,10 @@ pub fn karlan_precision_active(inject: &crate::global_resource::GlobalInjectMani
     inject.karlan_precision().is_some()
 }
 
-pub fn jie_e0_trade_operator(instances: &OperatorInstances, table: &SkillTable) -> Option<TradeOperator> {
+pub fn jie_e0_trade_operator(
+    instances: &OperatorInstances,
+    table: &SkillTable,
+) -> Option<TradeOperator> {
     let buff_ids = instances.resolve_trade_buff_ids(JIE_TRADE_NAME, PromotionTier::Tier0);
     if buff_ids.is_empty() {
         return None;
@@ -50,7 +55,7 @@ pub fn jie_e0_trade_operator(instances: &OperatorInstances, table: &SkillTable) 
     Some(op)
 }
 
-/// 灵知线精1+ 孑（市井之道）；仅 `karlan_precision` 激活时的固定搭配注入，不进通用池。
+/// 精1+ 孑（市井之道）；默认不进通用池，仅在灵知精密计算等明确场景中注入。
 pub fn jie_market_trade_operator(
     instances: &OperatorInstances,
     table: &SkillTable,
@@ -60,9 +65,51 @@ pub fn jie_market_trade_operator(
     if !buff_ids.iter().any(|b| b == JIE_MARKET_BUFF) {
         return None;
     }
-    let mut op = TradeOperator::new(JIE_TRADE_NAME, 1, buff_ids);
+    // 市井之道与摊贩经济是精0/精1替换关系，但它们的 buff stem 不同，通用
+    // stepwise 合并会把两者都带上。灵知线注入的精1+ 孑必须只使用市井之道。
+    let buff_ids = vec![JIE_MARKET_BUFF.to_string()];
+    // BaseAssignment only stores `elite`, and resolve currently maps unknown rarity
+    // tier_up by elite>=2. Keep the injected 市井孑 stable across search -> assign -> resolve.
+    let mut op = TradeOperator::new(JIE_TRADE_NAME, 2, buff_ids);
     op.compiled_atoms = compile_operator_atoms(&op.buff_ids, table);
     Some(op)
+}
+
+pub fn jie_market_trade_pool_entry(
+    instances: &OperatorInstances,
+    table: &SkillTable,
+) -> Option<TradePoolEntry> {
+    let op = jie_market_trade_operator(instances, table)?;
+    Some(TradePoolEntry {
+        name: op.name,
+        elite: op.elite,
+        buff_ids: op.buff_ids,
+        tags: op.tags,
+        compiled_atoms: op.compiled_atoms,
+        flat_eff_hint: 0.0,
+        is_mechanic: true,
+        tier: OperatorTier::CrossStation,
+    })
+}
+
+pub fn add_jie_market_to_trade_pool(
+    pool: &mut TradePool,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+) {
+    if pool.entry(JIE_TRADE_NAME).is_some() {
+        return;
+    }
+    let Some(entry) = jie_market_trade_pool_entry(instances, table) else {
+        return;
+    };
+    pool.entries.push(entry);
+    pool.entries.sort_by(|a, b| {
+        b.flat_eff_hint
+            .partial_cmp(&a.flat_eff_hint)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.name.cmp(&b.name))
+    });
 }
 
 #[derive(Debug, Clone)]
@@ -75,11 +122,22 @@ pub struct TradePoolEntry {
     /// Sum of `AddFlatEff` in `constant` phase — sort hint only, not final score.
     pub flat_eff_hint: f64,
     pub is_mechanic: bool,
+    pub tier: OperatorTier,
 }
 
 impl HasName for TradePoolEntry {
     fn pool_name(&self) -> &str {
         &self.name
+    }
+}
+
+impl TierTagged for TradePoolEntry {
+    fn tier(&self) -> OperatorTier {
+        self.tier
+    }
+
+    fn set_tier(&mut self, tier: OperatorTier) {
+        self.tier = tier;
     }
 }
 
@@ -176,9 +234,7 @@ fn try_entry(
         is_mechanic |= mech;
     }
 
-    let tags = inst
-        .map(|i| i.tags.clone())
-        .unwrap_or_default();
+    let tags = inst.map(|i| i.tags.clone()).unwrap_or_default();
 
     Ok(TradePoolEntry {
         name: name.to_string(),
@@ -188,6 +244,7 @@ fn try_entry(
         compiled_atoms: compile_operator_atoms(&buff_ids, table),
         flat_eff_hint,
         is_mechanic,
+        tier: OperatorTier::Standalone,
     })
 }
 
@@ -221,9 +278,7 @@ fn trade_skill_hints(skill: &SkillDef) -> (f64, bool) {
 }
 
 fn is_gold_flow_skill(id: &str) -> bool {
-    id.contains("line_gold")
-        || id.contains("spd&gold")
-        || id.contains("line_durin")
+    id.contains("line_gold") || id.contains("spd&gold") || id.contains("line_durin")
 }
 
 pub fn n_choose_k_u64(n: usize, k: usize) -> u64 {
@@ -354,11 +409,9 @@ mod tests {
     use crate::skill_table::{default_skill_table_path, SkillTable};
 
     fn fixture_pool() -> TradePool {
-        let roster = Roster::load_csv_for_facility(
-            &crate::roster::default_roster_path().unwrap(),
-            "trade",
-        )
-        .unwrap();
+        let roster =
+            Roster::load_csv_for_facility(&crate::roster::default_roster_path().unwrap(), "trade")
+                .unwrap();
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         build_trade_pool(&roster, &instances, &table).unwrap()
@@ -418,10 +471,7 @@ mod tests {
         roster.insert("海蒂", OperatorProgress::elite_only(2));
         let pool = build_trade_pool(&roster, &instances, &table).unwrap();
         let heidi = pool.entry("海蒂").expect("海蒂");
-        assert_eq!(
-            heidi.buff_ids,
-            vec!["trade_ord_spd[021]".to_string()]
-        );
+        assert_eq!(heidi.buff_ids, vec!["trade_ord_spd[021]".to_string()]);
         assert!(
             (heidi.flat_eff_hint - 35.0).abs() < f64::EPSILON,
             "名流欢会 flat_eff_hint 应仅 35%，got {}",
@@ -472,14 +522,25 @@ mod tests {
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let mut roster = Roster::default();
-        roster.insert(
-            "孑",
-            crate::roster::OperatorProgress::elite_only(2),
-        );
+        roster.insert("孑", crate::roster::OperatorProgress::elite_only(2));
         let pool = build_trade_pool(&roster, &instances, &table).unwrap();
-        assert!(
-            pool.entry("孑").is_none(),
-            "精1+ 孑应从通用贸易池排除"
+        assert!(pool.entry("孑").is_none(), "精1+ 孑应从通用贸易池排除");
+    }
+
+    #[test]
+    fn jie_market_injection_uses_market_skill_only() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let op = jie_market_trade_operator(&instances, &table).expect("市井孑");
+
+        assert_eq!(
+            op.buff_ids,
+            vec!["trade_ord_limit_count[000]".to_string()],
+            "灵知线注入的是精1 市井之道，不能同时叠精0 摊贩经济"
+        );
+        assert_eq!(
+            op.elite, 2,
+            "assignment 只有 elite 字段；市井孑需在 resolve 时保持 tier_up"
         );
     }
 }

@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
+use crate::control::input::ControlRoomInput;
+use crate::global_resource::GlobalResourcePool;
 use crate::global_resource::{
     GlobalInjectManifest, INJECT_FAMILY_MANU_GLOBAL_ALL, INJECT_FAMILY_TRADE_GLOBAL_FLAT,
 };
-use crate::control::input::ControlRoomInput;
-use crate::global_resource::GlobalResourcePool;
-use crate::skill_table::SkillTable;
 use crate::layout::trade_station_tagged_gte_key;
+use crate::skill_table::SkillTable;
 use crate::types::{Action, Condition, EffectAtom, Phase, Selector, StateKey};
 
 #[derive(Debug, Clone, Default)]
@@ -87,7 +87,9 @@ fn collect_control_atoms<'a>(
     let mut atoms = Vec::new();
     for op in ops {
         for bid in &op.buff_ids {
-            let Some(skill) = table.get(bid) else { continue };
+            let Some(skill) = table.get(bid) else {
+                continue;
+            };
             if skill.facility != "control" {
                 continue;
             }
@@ -122,9 +124,10 @@ fn condition_met(cond: &Option<Condition>, ctx: &ControlContext, owner: &str) ->
             .operators
             .iter()
             .any(|o| o.tags.iter().any(|t| t == tag)),
-        Condition::PeerTagInRoom { tag } => ctx.operators.iter().any(|o| {
-            o.name != owner && o.tags.iter().any(|t| t == tag)
-        }),
+        Condition::PeerTagInRoom { tag } => ctx
+            .operators
+            .iter()
+            .any(|o| o.name != owner && o.tags.iter().any(|t| t == tag)),
         Condition::ExternalMomentumGteField {} => {
             ctx.layout.external_momentum() >= ctx.layout.field_momentum()
         }
@@ -219,14 +222,11 @@ fn apply_state_write(ctx: &mut ControlContext, atom: &EffectAtom) {
 }
 
 fn apply_global_inject(ctx: &mut ControlContext, atom: &EffectAtom) {
-    let family = atom
-        .tag
-        .as_deref()
-        .unwrap_or(match &atom.action {
-            Action::GlobalInjectTradeEff { .. } => INJECT_FAMILY_TRADE_GLOBAL_FLAT,
-            Action::GlobalInjectManuEff { .. } => INJECT_FAMILY_MANU_GLOBAL_ALL,
-            _ => "default",
-        });
+    let family = atom.tag.as_deref().unwrap_or(match &atom.action {
+        Action::GlobalInjectTradeEff { .. } => INJECT_FAMILY_TRADE_GLOBAL_FLAT,
+        Action::GlobalInjectManuEff { .. } => INJECT_FAMILY_MANU_GLOBAL_ALL,
+        _ => "default",
+    });
     match &atom.action {
         Action::GlobalInjectTradeEff { value } => {
             let v = scaled_inject_value(ctx, atom, *value);
@@ -266,21 +266,18 @@ fn resolve_selector_value(ctx: &ControlContext, selector: Option<&Selector>) -> 
         Some(Selector::DormOccupantCount) => f64::from(ctx.layout.dorm_occupant_count),
         Some(Selector::Mood) => ctx.mood,
         Some(Selector::PlatformCountInPower) => f64::from(ctx.layout.platform_count_in_power),
-        Some(Selector::TaggedCountInTradeSum { tag }) => f64::from(
-            *ctx.layout
-                .trade_tagged_count_sum
-                .get(tag)
-                .unwrap_or(&0),
-        ),
+        Some(Selector::TaggedCountInTradeSum { tag }) => {
+            f64::from(*ctx.layout.trade_tagged_count_sum.get(tag).unwrap_or(&0))
+        }
         Some(Selector::TradeStationsWithTaggedGte { tag, min }) => f64::from(
             *ctx.layout
                 .trade_stations_tagged_gte
                 .get(&trade_station_tagged_gte_key(tag, *min))
                 .unwrap_or(&0),
         ),
-        Some(Selector::TaggedCountInManuSum { tag }) => f64::from(
-            *ctx.layout.manu_tagged_count_sum.get(tag).unwrap_or(&0),
-        ),
+        Some(Selector::TaggedCountInManuSum { tag }) => {
+            f64::from(*ctx.layout.manu_tagged_count_sum.get(tag).unwrap_or(&0))
+        }
         Some(Selector::StatePoolFloored { key, div }) => {
             let Some(sk) = StateKey::parse(key) else {
                 return 0.0;
@@ -302,8 +299,8 @@ mod tests {
     use crate::control::input::ControlOperator;
     use crate::global_resource::GlobalResourceKey;
     use crate::instances::{default_instances_path, resolve_buff_ids, OperatorInstances};
-    use crate::tier::PromotionTier;
     use crate::layout::LayoutContext;
+    use crate::tier::PromotionTier;
 
     fn table() -> SkillTable {
         SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap()
@@ -316,7 +313,9 @@ mod tests {
     fn control_op(name: &str, elite: u8) -> ControlOperator {
         let inst = instances();
         let tier = PromotionTier::from_elite(elite);
-        let binding = inst.get(name, tier).and_then(|i| i.facilities.get("control"));
+        let binding = inst
+            .get(name, tier)
+            .and_then(|i| i.facilities.get("control"));
         let tier0 = inst
             .get(name, PromotionTier::Tier0)
             .and_then(|i| i.facilities.get("control"));
@@ -370,14 +369,18 @@ mod tests {
     fn mon3tr_global_manu_plus_two() {
         let input = ControlRoomInput::with_operators(vec![control_op("Mon3tr", 2)]);
         let result = solve_control(&input, &table());
-        assert!((result.inject.manu_eff_for(crate::types::RecipeKind::Gold) - 2.0).abs() < f64::EPSILON);
+        assert!(
+            (result.inject.manu_eff_for(crate::types::RecipeKind::Gold) - 2.0).abs() < f64::EPSILON
+        );
     }
 
     #[test]
     fn kaltsit_global_manu_plus_two() {
         let input = ControlRoomInput::with_operators(vec![control_op("凯尔希", 2)]);
         let result = solve_control(&input, &table());
-        assert!((result.inject.manu_eff_for(crate::types::RecipeKind::Gold) - 2.0).abs() < f64::EPSILON);
+        assert!(
+            (result.inject.manu_eff_for(crate::types::RecipeKind::Gold) - 2.0).abs() < f64::EPSILON
+        );
     }
 
     #[test]
@@ -395,12 +398,9 @@ mod tests {
 
     #[test]
     fn matatabi_from_monhun_ops() {
-        let mut layout = LayoutContext::default();
+        let layout = LayoutContext::default();
         let input = ControlRoomInput {
-            operators: vec![
-                control_op("火龙S黑角", 0),
-                control_op("麒麟R夜刀", 0),
-            ],
+            operators: vec![control_op("火龙S黑角", 0), control_op("麒麟R夜刀", 0)],
             mood: 24.0,
             layout,
         };
@@ -517,7 +517,11 @@ mod tests {
             result.inject.trade_eff_pct()
         );
         assert!(
-            result.inject.manu_eff_for(crate::types::RecipeKind::Gold).abs() < f64::EPSILON,
+            result
+                .inject
+                .manu_eff_for(crate::types::RecipeKind::Gold)
+                .abs()
+                < f64::EPSILON,
             "manu inject should be 0, got {}",
             result.inject.manu_eff_for(crate::types::RecipeKind::Gold)
         );
@@ -629,7 +633,7 @@ mod tests {
     }
 
     #[test]
-    fn pinus_knight_injects_battle_record_and_debuffs_gold() {
+    fn pinus_knight_is_resolved_in_manufacture_room() {
         use crate::layout::TAG_PINUS;
 
         let mut layout = LayoutContext::default();
@@ -643,13 +647,21 @@ mod tests {
         };
         let result = solve_control(&input, &table());
         assert!(
-            (result.inject.manu_eff_for(crate::types::RecipeKind::BattleRecord) - 30.0).abs()
+            result
+                .inject
+                .manu_eff_for(crate::types::RecipeKind::BattleRecord)
+                .abs()
                 < f64::EPSILON,
-            "BR inject {}",
-            result.inject.manu_eff_for(crate::types::RecipeKind::BattleRecord)
+            "焰尾红松经验加成按制造房内同伴数结算，不走 generic inject: {}",
+            result
+                .inject
+                .manu_eff_for(crate::types::RecipeKind::BattleRecord)
         );
         assert!(
-            (result.inject.manu_eff_for(crate::types::RecipeKind::Gold) - (-30.0)).abs()
+            result
+                .inject
+                .manu_eff_for(crate::types::RecipeKind::Gold)
+                .abs()
                 < f64::EPSILON,
             "gold inject {}",
             result.inject.manu_eff_for(crate::types::RecipeKind::Gold)
@@ -657,7 +669,7 @@ mod tests {
     }
 
     #[test]
-    fn vivi_knight_micro_injects_per_manu_knight() {
+    fn vivi_knight_micro_is_resolved_in_manufacture_room() {
         use crate::layout::TAG_KNIGHT;
 
         let mut layout = LayoutContext::default();
@@ -671,7 +683,11 @@ mod tests {
         };
         let result = solve_control(&input, &table());
         assert!(
-            (result.inject.manu_eff_for(crate::types::RecipeKind::Gold) - 7.0).abs() < f64::EPSILON,
+            result
+                .inject
+                .manu_eff_for(crate::types::RecipeKind::Gold)
+                .abs()
+                < f64::EPSILON,
             "got {}",
             result.inject.manu_eff_for(crate::types::RecipeKind::Gold)
         );

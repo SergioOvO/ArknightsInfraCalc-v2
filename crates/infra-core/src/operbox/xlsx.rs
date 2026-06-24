@@ -34,9 +34,8 @@ struct ColumnMap {
 }
 
 pub fn from_xlsx_path(path: &Path) -> Result<OperBox> {
-    let mut workbook = open_workbook_auto(path).map_err(|e| {
-        Error::msg(format!("xlsx open {}: {e}", path.display()))
-    })?;
+    let mut workbook = open_workbook_auto(path)
+        .map_err(|e| Error::msg(format!("xlsx open {}: {e}", path.display())))?;
     let sheet_name = workbook
         .sheet_names()
         .first()

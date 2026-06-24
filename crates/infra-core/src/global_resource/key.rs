@@ -134,10 +134,22 @@ mod tests {
 
     #[test]
     fn parse_zh_and_en_aliases() {
-        assert_eq!(GlobalResourceKey::parse("思维链环"), Some(GlobalResourceKey::ThoughtChainRing));
-        assert_eq!(GlobalResourceKey::parse("ThoughtChainRing"), Some(GlobalResourceKey::ThoughtChainRing));
-        assert_eq!(GlobalResourceKey::parse("乌萨斯特饮"), Some(GlobalResourceKey::UsautDrink));
-        assert_eq!(GlobalResourceKey::parse("工程机器人"), Some(GlobalResourceKey::EngineeringRobot));
+        assert_eq!(
+            GlobalResourceKey::parse("思维链环"),
+            Some(GlobalResourceKey::ThoughtChainRing)
+        );
+        assert_eq!(
+            GlobalResourceKey::parse("ThoughtChainRing"),
+            Some(GlobalResourceKey::ThoughtChainRing)
+        );
+        assert_eq!(
+            GlobalResourceKey::parse("乌萨斯特饮"),
+            Some(GlobalResourceKey::UsautDrink)
+        );
+        assert_eq!(
+            GlobalResourceKey::parse("工程机器人"),
+            Some(GlobalResourceKey::EngineeringRobot)
+        );
     }
 
     #[test]

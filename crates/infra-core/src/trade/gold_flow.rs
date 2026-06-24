@@ -67,10 +67,8 @@ pub fn apply_gold_flow_chain(ctx: &mut TradeContext, table: &SkillTable) {
 mod tests {
     use std::sync::Arc;
 
-    use super::*;
     use crate::skill_table::default_skill_table_path;
     use crate::skill_table::SkillTable;
-    use crate::layout::LayoutContext;
     use crate::trade::input::{TradeOperator, TradeOrderKind, TradeRoomInput};
     use crate::trade::interpreter::{apply_trade_phases, TradeContext};
 
@@ -87,7 +85,7 @@ mod tests {
                 name: "鸿雪".into(),
                 elite: 0,
                 buff_ids: vec!["trade_ord_spd&gold[100]".into()],
-            tags: vec![],
+                tags: vec![],
                 ..Default::default()
             }],
             order_count: None,
@@ -101,7 +99,11 @@ mod tests {
         let mut ctx = TradeContext::from_room(&input);
         apply_trade_phases(&mut ctx, &table);
         let hx = ctx.operators.first().unwrap();
-        assert!((hx.settled_eff - 20.0).abs() < 0.01, "eff={}", hx.settled_eff);
+        assert!(
+            (hx.settled_eff - 20.0).abs() < 0.01,
+            "eff={}",
+            hx.settled_eff
+        );
     }
 
     #[test]
@@ -169,7 +171,7 @@ mod tests {
                     name: "绮良".into(),
                     elite: 2,
                     buff_ids: vec!["trade_ord_line_gold[010]".into()],
-                        tags: vec![],
+                    tags: vec![],
                     ..Default::default()
                 },
                 TradeOperator {
@@ -179,14 +181,14 @@ mod tests {
                         "trade_ord_line_durin[010]".into(),
                         "trade_ord_spd&gold[100]".into(),
                     ],
-                        tags: vec![],
+                    tags: vec![],
                     ..Default::default()
                 },
                 TradeOperator {
                     name: "图耶".into(),
                     elite: 2,
                     buff_ids: vec!["trade_ord_spd&gold[010]".into()],
-                        tags: vec![],
+                    tags: vec![],
                     ..Default::default()
                 },
             ],

@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::time::Instant;
 
 use std::sync::Arc;
 
@@ -9,33 +10,39 @@ use crate::layout::blueprint::{BaseBlueprint, FacilityKind, RoomId, RoomProduct}
 use crate::layout::orchestrate::{build_plan, execute_plan, AssignmentPlan};
 use crate::layout::resolve::resolve_base;
 use crate::layout::shift::AssignShiftMode;
+use crate::layout::LayoutContext;
 use crate::manufacture::input::ManuSearchRecipeMode;
 use crate::operbox::OperBox;
 use crate::pool::{
-    build_control_pool, build_manufacture_pool, build_power_pool, build_trade_pool,
-    filter_manufacture_pool, filter_trade_pool, jie_e0_trade_operator,
-    karlan_precision_active,
-    ControlPool, ManuPool, PowerPool, TradePool, JIE_TRADE_NAME,
+    add_jie_market_to_trade_pool, build_control_pool, build_manufacture_pool, build_power_pool,
+    build_trade_pool, filter_manufacture_pool, filter_trade_pool, jie_e0_trade_operator,
+    karlan_precision_active, try_filter_standalone, ControlPool, ManuPool, PowerPool, TradePool,
+    JIE_TRADE_NAME,
 };
 use crate::search::{
-    hit_witch_shortcut, pick_docus_trade_hit, search_control_combos,
+    control_entry_hr_mood_fill, hit_witch_shortcut, pick_docus_trade_hit, search_control_combos,
     search_manufacture_triples, search_power_assignment, search_trade_triples,
-    search_trade_triples_filtered, control_entry_hr_mood_fill, ControlFillPolicy,
-    ControlSearchOptions, ManuSearchHit, MATATABI_CONSUMER_NAME, ManuSearchOptions,
-    PowerSearchOptions, SearchTripleFilter, TradeSearchHit, TradeSearchOptions,
+    search_trade_triples_filtered, ControlFillPolicy, ControlSearchOptions, ManuSearchHit,
+    ManuSearchOptions, PowerSearchOptions, SearchTripleFilter, TradeSearchHit, TradeSearchOptions,
+    MATATABI_CONSUMER_NAME,
 };
 use crate::skill_table::SkillTable;
-use crate::layout::LayoutContext;
 use crate::trade::input::{TradeOrderKind, TradeSearchOrderMode};
 use crate::types::RecipeKind;
 
 const SENXI_DORM_CUISINE_BUFF: &str = "dorm_rec_bd_dungeon[000]";
+
+fn ms(a: Instant, b: Instant) -> f64 {
+    a.duration_since(b).as_secs_f64() * 1000.0
+}
 
 #[derive(Debug, Clone)]
 pub struct AssignBaseOptions {
     pub top_k: usize,
     pub mood: f64,
     pub shift_hours: f64,
+    /// 中枢分配时跳过 standalone_roster 白名单过滤（轮换编排中体系绑定干员可能不在白名单内）。
+    pub skip_standalone_control: bool,
 }
 
 impl Default for AssignBaseOptions {
@@ -44,6 +51,7 @@ impl Default for AssignBaseOptions {
             top_k: 20,
             mood: 24.0,
             shift_hours: 24.0,
+            skip_standalone_control: false,
         }
     }
 }
@@ -84,10 +92,26 @@ pub fn assign_shift(
     mode: AssignShiftMode,
     seed: &BaseAssignment,
 ) -> Result<BaseAssignment> {
-    Ok(assign_shift_with_plan(
-        blueprint, operbox, instances, table, options, mode, seed,
-    )?
-    .assignment)
+    Ok(
+        assign_shift_with_plan(blueprint, operbox, instances, table, options, mode, seed)?
+            .assignment,
+    )
+}
+
+/// 从编排计划提取 claimed 干员名并按 tier 标注池条目。
+fn tag_pool_from_plan<T: crate::pool::HasName + crate::pool::TierTagged>(
+    plan: &AssignmentPlan,
+    pool: &mut crate::pool::PoolCore<T>,
+) {
+    for claim in &plan.registry_claims {
+        let mut names = HashSet::new();
+        for slot in &claim.slots {
+            for op in &slot.operators {
+                names.insert(op.name.clone());
+            }
+        }
+        pool.tag_tier(&names, claim.tier);
+    }
 }
 
 /// 同 [`assign_shift`]，额外返回编排 `AssignmentPlan`（peak 班供 αβγ 轮换只读）。
@@ -100,13 +124,39 @@ pub fn assign_shift_with_plan(
     mode: AssignShiftMode,
     seed: &BaseAssignment,
 ) -> Result<AssignShiftResult> {
+    assign_shift_with_plan_skip(
+        blueprint,
+        operbox,
+        instances,
+        table,
+        options,
+        mode,
+        seed,
+        &HashSet::new(),
+    )
+}
+
+/// 同 [`assign_shift_with_plan`]，额外允许跳过指定体系。
+pub fn assign_shift_with_plan_skip(
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+    options: &AssignBaseOptions,
+    mode: AssignShiftMode,
+    seed: &BaseAssignment,
+    skip_system_ids: &HashSet<String>,
+) -> Result<AssignShiftResult> {
+    let t0 = Instant::now();
     blueprint.validate()?;
 
-    let plan = build_plan(blueprint, operbox, mode, seed)?;
+    let plan = build_plan(blueprint, operbox, mode, seed, skip_system_ids)?;
+    let t1 = Instant::now();
 
     let executed = execute_plan(blueprint, operbox, table, &plan, seed)?;
     let mut assignment = executed.assignment;
     let mut used = executed.used;
+    let t2 = Instant::now();
 
     let durin_plan = operbox.durin_dorm_planning_count(instances);
     let producer_layout = resolve_base(
@@ -118,10 +168,12 @@ pub fn assign_shift_with_plan(
         Some(durin_plan),
     )?
     .layout_snapshot();
+    let t3 = Instant::now();
 
     if mode == AssignShiftMode::Peak && assignment.control_operators().len() < 5 {
-        let control_pool =
+        let mut control_pool =
             build_control_pool(&operbox.control_roster(instances), instances, table)?;
+        tag_pool_from_plan(&plan, &mut control_pool);
         assign_control(
             &mut assignment,
             &control_pool,
@@ -131,11 +183,13 @@ pub fn assign_shift_with_plan(
             &mut used,
         )?;
     }
+    let t4 = Instant::now();
 
     if mode == AssignShiftMode::Peak {
         assign_perception_producers(blueprint, operbox, &mut assignment, &mut used)?;
         assign_dorm_producers(blueprint, operbox, instances, &mut assignment, &mut used)?;
     }
+    let t5 = Instant::now();
 
     let layout = resolve_base(
         blueprint,
@@ -146,12 +200,20 @@ pub fn assign_shift_with_plan(
         Some(durin_plan),
     )?
     .layout_snapshot();
+    let t6 = Instant::now();
 
-    let trade_pool = build_trade_pool(&operbox.trade_roster(instances), instances, table)?;
-    let manu_pool =
+    let mut trade_pool = build_trade_pool(&operbox.trade_roster(instances), instances, table)?;
+    if karlan_precision_active(&layout.global_inject) {
+        add_jie_market_to_trade_pool(&mut trade_pool, instances, table);
+    }
+    let mut manu_pool =
         build_manufacture_pool(&operbox.manufacture_roster(instances), instances, table)?;
-    let power_pool = build_power_pool(&operbox.power_roster(instances), instances, table)?;
+    let mut power_pool = build_power_pool(&operbox.power_roster(instances), instances, table)?;
+    tag_pool_from_plan(&plan, &mut trade_pool);
+    tag_pool_from_plan(&plan, &mut manu_pool);
+    tag_pool_from_plan(&plan, &mut power_pool);
     let gold_lines = blueprint.gold_manu_line_count();
+    let t7 = Instant::now();
 
     match mode {
         AssignShiftMode::Peak => {
@@ -164,6 +226,7 @@ pub fn assign_shift_with_plan(
                 &mut assignment,
                 &mut used,
             )?;
+            let t8 = Instant::now();
             let manu_layout = resolve_base(
                 blueprint,
                 &assignment,
@@ -173,6 +236,7 @@ pub fn assign_shift_with_plan(
                 Some(durin_plan),
             )?
             .layout_snapshot();
+            let t9 = Instant::now();
             assign_manufacture_lines(
                 blueprint,
                 &manu_pool,
@@ -182,6 +246,7 @@ pub fn assign_shift_with_plan(
                 &mut assignment,
                 &mut used,
             )?;
+            let t10 = Instant::now();
             let trade_layout = resolve_base(
                 blueprint,
                 &assignment,
@@ -191,6 +256,7 @@ pub fn assign_shift_with_plan(
                 Some(durin_plan),
             )?
             .layout_snapshot();
+            let t11 = Instant::now();
             assign_trade_remainder(
                 blueprint,
                 &trade_pool,
@@ -201,6 +267,15 @@ pub fn assign_shift_with_plan(
                 &mut assignment,
                 &mut used,
             )?;
+            let t12 = Instant::now();
+
+            eprintln!(
+                "[计时] 编排选型={:.2}ms  编排落位={:.2}ms  resolve(1st)={:.2}ms  中枢={:.2}ms  perception+dorm={:.2}ms  resolve(2nd)={:.2}ms  建池={:.2}ms  \
+                 发电={:.2}ms  resolve(3rd)={:.2}ms  制造={:.2}ms  resolve(4th)={:.2}ms  贸易余站={:.2}ms  单班总计={:.2}ms",
+                ms(t1, t0), ms(t2, t1), ms(t3, t2), ms(t4, t3), ms(t5, t4),
+                ms(t6, t5), ms(t7, t6), ms(t8, t7), ms(t9, t8), ms(t10, t9),
+                ms(t11, t10), ms(t12, t11), ms(t12, t0),
+            );
         }
         AssignShiftMode::Recovery => {
             assign_trade_jie_remainder(
@@ -214,6 +289,7 @@ pub fn assign_shift_with_plan(
                 &mut assignment,
                 &mut used,
             )?;
+            let t8 = Instant::now();
             assign_manufacture_lines(
                 blueprint,
                 &manu_pool,
@@ -223,6 +299,7 @@ pub fn assign_shift_with_plan(
                 &mut assignment,
                 &mut used,
             )?;
+            let t9 = Instant::now();
             assign_power_stations(
                 blueprint,
                 &power_pool,
@@ -232,6 +309,15 @@ pub fn assign_shift_with_plan(
                 &mut assignment,
                 &mut used,
             )?;
+            let t10 = Instant::now();
+
+            eprintln!(
+                "[计时] 编排选型={:.2}ms  编排落位={:.2}ms  resolve(1st)={:.2}ms  中枢={:.2}ms  perception+dorm={:.2}ms  resolve(2nd)={:.2}ms  建池={:.2}ms  \
+                  trade孑余站={:.2}ms  制造={:.2}ms  发电={:.2}ms  单班总计={:.2}ms",
+                ms(t1, t0), ms(t2, t1), ms(t3, t2), ms(t4, t3), ms(t5, t4),
+                ms(t6, t5), ms(t7, t6), ms(t8, t7), ms(t9, t8), ms(t10, t9),
+                ms(t10, t0),
+            );
         }
     }
 
@@ -244,10 +330,7 @@ pub fn assignment_operator_names(assignment: &BaseAssignment) -> HashSet<String>
 }
 
 /// 贸易 / 制造 / 发电岗位干员（跨班互斥池）。
-pub fn rotating_workers(
-    assignment: &BaseAssignment,
-    blueprint: &BaseBlueprint,
-) -> HashSet<String> {
+pub fn rotating_workers(assignment: &BaseAssignment, blueprint: &BaseBlueprint) -> HashSet<String> {
     let rotating_kinds = [
         FacilityKind::TradePost,
         FacilityKind::Factory,
@@ -269,19 +352,13 @@ pub fn rotating_workers(
 }
 
 /// 中枢 + 宿舍 + 办公室感知 producer（三班钉死，从高峰班拷贝）。
-pub fn pinned_assignment(
-    assignment: &BaseAssignment,
-    blueprint: &BaseBlueprint,
-) -> BaseAssignment {
+pub fn pinned_assignment(assignment: &BaseAssignment, blueprint: &BaseBlueprint) -> BaseAssignment {
     let mut pinned = BaseAssignment::default();
     for room in &assignment.rooms {
         let Some(bp) = blueprint.rooms.iter().find(|r| r.id == room.room_id) else {
             continue;
         };
-        if !matches!(
-            bp.kind,
-            FacilityKind::ControlCenter | FacilityKind::Dormitory | FacilityKind::Office
-        ) {
+        if !matches!(bp.kind, FacilityKind::Dormitory | FacilityKind::Office) {
             continue;
         }
         if room.operators.is_empty() {
@@ -300,7 +377,7 @@ fn assignment_has_matatabi_consumer(assignment: &BaseAssignment) -> bool {
     })
 }
 
-fn assign_control(
+pub(crate) fn assign_control(
     assignment: &mut BaseAssignment,
     pool: &ControlPool,
     table: &SkillTable,
@@ -321,35 +398,47 @@ fn assign_control(
         return Ok(());
     }
 
-    let mut control_opts = ControlSearchOptions {
+    let control_opts = ControlSearchOptions {
         max_operators: 5,
         top_k: options.top_k,
         mood: options.mood,
         layout: layout.clone(),
         matatabi_consumer_active: assignment_has_matatabi_consumer(assignment),
         must_include: pinned.clone(),
-        fill_policy: if pinned.is_empty() {
+        fill_policy: if pinned.is_empty() || options.skip_standalone_control {
             ControlFillPolicy::Efficiency
         } else {
             ControlFillPolicy::HrAndMood
         },
     };
 
+    let filtered_pool = if options.skip_standalone_control {
+        pool.clone()
+    } else {
+        try_filter_standalone(pool, FacilityKind::ControlCenter, 1)
+    };
+
     let hit = if pinned.is_empty() {
-        let combos = search_control_combos(pool, table, &control_opts)?;
+        let combos = search_control_combos(&filtered_pool, table, &control_opts)?;
         pick_cached_or_rescan_control(
             &combos,
             &pinned,
             used,
             || {
-                let sub = filter_control_pool_for_fill(pool, used, &pinned, control_opts.fill_policy);
+                let sub = filter_control_pool_for_fill(
+                    &filtered_pool,
+                    used,
+                    &pinned,
+                    control_opts.fill_policy,
+                );
                 search_control_combos(&sub, table, &control_opts)
             },
             |h| &h.names,
             "control: no disjoint combo after pool filter",
         )?
     } else {
-        let sub = filter_control_pool_for_fill(pool, used, &pinned, control_opts.fill_policy);
+        let sub =
+            filter_control_pool_for_fill(&filtered_pool, used, &pinned, control_opts.fill_policy);
         let combos = search_control_combos(&sub, table, &control_opts)?;
         pick_control_extending_pins(combos.iter().cloned(), &pinned, used, &|h| &h.names)
             .ok_or_else(|| Error::msg("control: no combo extending pinned after pool filter"))?
@@ -399,12 +488,12 @@ where
     T: Clone,
     F: FnOnce() -> Result<Vec<T>>,
 {
-    if let Some(hit) = pick_control_extending_pins(cached.iter().cloned(), pinned, used, &names_of) {
+    if let Some(hit) = pick_control_extending_pins(cached.iter().cloned(), pinned, used, &names_of)
+    {
         return Ok(hit);
     }
     let fresh = rescan()?;
-    pick_control_extending_pins(fresh, pinned, used, &names_of)
-        .ok_or_else(|| Error::msg(err))
+    pick_control_extending_pins(fresh, pinned, used, &names_of).ok_or_else(|| Error::msg(err))
 }
 
 fn pick_control_extending_pins<T: Clone>(
@@ -505,10 +594,7 @@ fn assign_dorm_producers(
             continue;
         };
         used.insert(name.clone());
-        assignment.set_room(
-            room.id.clone(),
-            vec![AssignedOperator::new(name, elite)],
-        );
+        assignment.set_room(room.id.clone(), vec![AssignedOperator::new(name, elite)]);
     }
     Ok(())
 }
@@ -528,7 +614,9 @@ fn best_dorm_producer(
         if !buffs.iter().any(|b| b == SENXI_DORM_CUISINE_BUFF) {
             continue;
         }
-        let replace = best.as_ref().is_none_or(|(_, _, level)| progress.elite > *level);
+        let replace = best
+            .as_ref()
+            .is_none_or(|(_, _, level)| progress.elite > *level);
         if replace {
             best = Some((name.clone(), progress.elite, progress.elite));
         }
@@ -617,9 +705,40 @@ fn try_assign_gongsun_gold_manu_team(
     pool: &ManuPool,
     used: &mut HashSet<String>,
 ) -> Result<()> {
+    // 优先：已有自动化组落位（清流+温蒂）的金房间，补齐第三人森蚺
+    if let Some(room) = blueprint.rooms.iter().find(|r| {
+        r.kind == FacilityKind::Factory
+            && matches!(
+                r.product.as_ref(),
+                Some(RoomProduct::Factory {
+                    recipe: RecipeKind::Gold
+                })
+            )
+    }) {
+        let existing = assignment.operators_in(&room.id);
+        let has_qingliu = existing.iter().any(|o| o.name == "清流");
+        let has_wendy = existing.iter().any(|o| o.name == "温蒂");
+        if has_qingliu && has_wendy && existing.len() < 3 {
+            let senxi_entry = pool.entry("森蚺");
+            if senxi_entry.is_some() && !used.contains("森蚺") {
+                let mut ops: Vec<AssignedOperator> = existing.to_vec();
+                ops.push(AssignedOperator::new("森蚺", senxi_entry.unwrap().elite));
+                assignment.set_room(room.id.clone(), ops);
+                used.insert("森蚺".to_string());
+                return Ok(());
+            }
+        }
+    }
+
+    // 退而求其次：找空金房间全部落位（旧逻辑）
     let Some(room) = blueprint.rooms.iter().find(|r| {
         r.kind == FacilityKind::Factory
-            && matches!(r.product.as_ref(), Some(RoomProduct::Factory { recipe: RecipeKind::Gold }))
+            && matches!(
+                r.product.as_ref(),
+                Some(RoomProduct::Factory {
+                    recipe: RecipeKind::Gold
+                })
+            )
             && assignment.operators_in(&r.id).is_empty()
     }) else {
         return Ok(());
@@ -702,12 +821,8 @@ fn assign_trade_jie_remainder(
             let sub = filter_trade_pool(pool, used);
             if sub.entries.len() >= 3 {
                 if let Some(jie_op) = jie_e0_trade_operator(instances, table) {
-                    let search_opts = trade_room_options(
-                        layout,
-                        gold_lines,
-                        options,
-                        TradeOrderKind::Gold,
-                    );
+                    let search_opts =
+                        trade_room_options(layout, gold_lines, options, TradeOrderKind::Gold);
                     if let Ok(report) = search_trade_triples_filtered(
                         &sub,
                         table,
@@ -754,7 +869,11 @@ fn assign_trade_remainder(
     assignment: &mut BaseAssignment,
     used: &mut HashSet<String>,
 ) -> Result<()> {
-    for room in blueprint.rooms.iter().filter(|r| r.kind == FacilityKind::TradePost) {
+    for room in blueprint
+        .rooms
+        .iter()
+        .filter(|r| r.kind == FacilityKind::TradePost)
+    {
         if !assignment.operators_in(&room.id).is_empty() {
             continue;
         }
@@ -792,11 +911,9 @@ fn assign_manufacture_lines(
         .iter()
         .filter(|r| r.kind == FacilityKind::Factory)
         .collect();
-    rooms.sort_by_key(|r| {
-        match r.product.as_ref() {
-            Some(RoomProduct::Factory { recipe }) => manu_recipe_fill_priority(*recipe),
-            _ => 99,
-        }
+    rooms.sort_by_key(|r| match r.product.as_ref() {
+        Some(RoomProduct::Factory { recipe }) => manu_recipe_fill_priority(*recipe),
+        _ => 99,
     });
 
     for room in rooms {
@@ -836,7 +953,14 @@ pub fn assign_team_producer_rooms(
     used: &mut HashSet<String>,
 ) -> Result<()> {
     assign_team_trade_meta_rooms(
-        blueprint, trade_pool, table, layout, options, trade_rooms, assignment, used,
+        blueprint,
+        trade_pool,
+        table,
+        layout,
+        options,
+        trade_rooms,
+        assignment,
+        used,
     )?;
     assign_team_manu_rooms(
         blueprint, manu_pool, table, layout, options, manu_rooms, assignment, used,
@@ -860,13 +984,27 @@ pub fn assign_team_gamma_half(
     used: &mut HashSet<String>,
 ) -> Result<()> {
     assign_team_trade_plain_rooms(
-        blueprint, trade_pool, table, layout, options, trade_rooms, assignment, used,
+        blueprint,
+        trade_pool,
+        table,
+        layout,
+        options,
+        trade_rooms,
+        assignment,
+        used,
     )?;
     assign_team_manu_rooms(
         blueprint, manu_pool, table, layout, options, manu_rooms, assignment, used,
     )?;
     assign_power_rooms(
-        blueprint, power_pool, table, layout, options, power_rooms, assignment, used,
+        blueprint,
+        power_pool,
+        table,
+        layout,
+        options,
+        power_rooms,
+        assignment,
+        used,
     )
 }
 
@@ -890,16 +1028,9 @@ fn assign_team_trade_meta_rooms(
             .room(room_id)
             .ok_or_else(|| Error::msg(format!("team trade room {} not in blueprint", room_id.0)))?;
         let order = trade_order_from_room(room)?;
-        let hit = pick_trade_meta_then_plain(
-            trade_pool,
-            table,
-            layout,
-            gold_lines,
-            options,
-            order,
-            used,
-        )
-        .map_err(|e| Error::msg(format!("team trade {}: {e}", room_id.0)))?;
+        let hit =
+            pick_trade_meta_then_plain(trade_pool, table, layout, gold_lines, options, order, used)
+                .map_err(|e| Error::msg(format!("team trade {}: {e}", room_id.0)))?;
         commit_trade_room(assignment, room_id, &hit, trade_pool, used)?;
     }
     Ok(())
@@ -999,7 +1130,9 @@ pub fn assign_power_stations(
         .filter(|r| r.kind == FacilityKind::PowerPlant)
         .map(|r| r.id.clone())
         .collect();
-    assign_power_rooms(blueprint, pool, table, layout, options, &room_ids, assignment, used)
+    assign_power_rooms(
+        blueprint, pool, table, layout, options, &room_ids, assignment, used,
+    )
 }
 
 /// 填满指定发电站（每站 1 人、贪心取可用最优）；供三队轮换按半区分配。
@@ -1045,6 +1178,7 @@ pub fn assign_power_rooms(
     }
 
     let sub = filter_power_pool(pool, used);
+    let sub = try_filter_standalone(&sub, FacilityKind::PowerPlant, 1);
     if sub.entries.is_empty() {
         return Err(Error::msg("power: no available operators"));
     }
@@ -1061,10 +1195,7 @@ pub fn assign_power_rooms(
     }
 
     for (room_id, station) in empty_rooms.iter().zip(report.assignments.iter()) {
-        let elite = pool
-            .entry(&station.hit.name)
-            .map(|e| e.elite)
-            .unwrap_or(0);
+        let elite = pool.entry(&station.hit.name).map(|e| e.elite).unwrap_or(0);
         if !used.insert(station.hit.name.clone()) {
             return Err(Error::msg(format!(
                 "power {}: duplicate {}",
@@ -1082,10 +1213,14 @@ pub fn assign_power_rooms(
 fn trade_order_from_room(room: &crate::layout::blueprint::RoomBlueprint) -> Result<TradeOrderKind> {
     match room.product.as_ref() {
         Some(RoomProduct::Trade { order }) => Ok(*order),
-        Some(RoomProduct::Factory { .. }) => {
-            Err(Error::msg(format!("trade room {} has factory product", room.id.0)))
-        }
-        None => Err(Error::msg(format!("trade room {} missing product", room.id.0))),
+        Some(RoomProduct::Factory { .. }) => Err(Error::msg(format!(
+            "trade room {} has factory product",
+            room.id.0
+        ))),
+        None => Err(Error::msg(format!(
+            "trade room {} missing product",
+            room.id.0
+        ))),
     }
 }
 
@@ -1139,6 +1274,11 @@ fn pick_trade_hit(
     top_k: usize,
 ) -> Result<TradeSearchHit> {
     let sub = filter_trade_pool(pool, used);
+    let sub = if karlan_precision_active(&search_opts.layout.global_inject) {
+        sub
+    } else {
+        try_filter_standalone(&sub, FacilityKind::TradePost, 3)
+    };
     if sub.entries.len() < 3 {
         return Err(Error::msg(format!(
             "trade pool has {} ready operators (need 3)",
@@ -1154,7 +1294,13 @@ fn pick_trade_hit(
         }
         Err(e) => return Err(e),
     };
-    pick_disjoint_from_report(report.best, report.top, trade_hit_names, used, "no disjoint trade triple")
+    pick_disjoint_from_report(
+        report.best,
+        report.top,
+        trade_hit_names,
+        used,
+        "no disjoint trade triple",
+    )
 }
 
 fn pick_manu_hit(
@@ -1165,6 +1311,7 @@ fn pick_manu_hit(
     top_k: usize,
 ) -> Result<ManuSearchHit> {
     let sub = filter_manufacture_pool(pool, used);
+    let sub = try_filter_standalone(&sub, FacilityKind::Factory, 3);
     if sub.entries.len() < 3 {
         return Err(Error::msg(format!(
             "manufacture pool has {} ready operators (need 3)",
@@ -1287,8 +1434,7 @@ fn pick_first_disjoint<T: Clone>(
     names_of: &impl Fn(&T) -> &[String],
     used: &HashSet<String>,
 ) -> Option<T> {
-    hits.into_iter()
-        .find(|h| names_disjoint(names_of(h), used))
+    hits.into_iter().find(|h| names_disjoint(names_of(h), used))
 }
 
 fn pick_disjoint_from_report<T: Clone>(
@@ -1298,8 +1444,12 @@ fn pick_disjoint_from_report<T: Clone>(
     used: &HashSet<String>,
     err: &str,
 ) -> Result<T> {
-    pick_first_disjoint(top.into_iter().chain(std::iter::once(best)), &names_of, used)
-        .ok_or_else(|| Error::msg(err))
+    pick_first_disjoint(
+        top.into_iter().chain(std::iter::once(best)),
+        &names_of,
+        used,
+    )
+    .ok_or_else(|| Error::msg(err))
 }
 
 fn commit_operators_to_room(
@@ -1351,7 +1501,10 @@ mod tests {
         .unwrap();
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-        if !operbox.owns("八幡海铃") || !operbox.owns("但书") || !operbox.owns("伺夜") || !operbox.owns("贝洛内")
+        if !operbox.owns("八幡海铃")
+            || !operbox.owns("但书")
+            || !operbox.owns("伺夜")
+            || !operbox.owns("贝洛内")
         {
             return;
         }
@@ -1377,7 +1530,11 @@ mod tests {
         let control_ops = assignment.control_operators();
         let control: HashSet<_> = control_ops.iter().map(|o| o.name.as_str()).collect();
         assert!(control.contains("八幡海铃"), "control: {:?}", control);
-        assert!(control.contains("斩业星熊") && control.contains("诗怀雅"), "control: {:?}", control);
+        assert!(
+            control.contains("斩业星熊") && control.contains("诗怀雅"),
+            "control: {:?}",
+            control
+        );
         assert!(
             !control.contains("三角初华") && !control.contains("若叶睦"),
             "钉死后补位应为公招/心情而非 MyGO 热情链: {:?}",
@@ -1398,7 +1555,7 @@ mod tests {
     #[test]
     fn assign_243_use_this_has_no_duplicate_operators() {
         let (blueprint, operbox, instances, table) = fixtures();
-        let assignment = assign_base_greedy(
+        let assignment = assign_shift_with_plan_skip(
             &blueprint,
             &operbox,
             &instances,
@@ -1407,16 +1564,16 @@ mod tests {
                 top_k: 10,
                 ..Default::default()
             },
+            AssignShiftMode::Peak,
+            &BaseAssignment::default(),
+            &HashSet::new(),
         )
-        .unwrap();
+        .unwrap()
+        .assignment;
         let mut seen = HashSet::new();
         for room in &assignment.rooms {
             for op in &room.operators {
-                assert!(
-                    seen.insert(op.name.clone()),
-                    "duplicate {}",
-                    op.name
-                );
+                assert!(seen.insert(op.name.clone()), "duplicate {}", op.name);
             }
         }
     }
@@ -1471,7 +1628,7 @@ mod tests {
 
     #[test]
     fn assign_full_e2_peak_manu_teams_match_gongsun() {
-        use crate::manufacture::{ManuRoomInput, solve_manufacture};
+        use crate::manufacture::{solve_manufacture, ManuRoomInput};
         use crate::operbox::default_operbox_full_e2_path;
         use crate::pool::build_manufacture_pool;
         use std::sync::Arc;
@@ -1508,8 +1665,7 @@ mod tests {
         .unwrap();
 
         let room_ops = |room_id: &str| -> Vec<String> {
-            peak
-                .operators_in(&RoomId::from(room_id))
+            peak.operators_in(&RoomId::from(room_id))
                 .iter()
                 .map(|o| o.name.clone())
                 .collect()
@@ -1517,30 +1673,31 @@ mod tests {
 
         let gold_trio: HashSet<_> = GONGSUN_GOLD_MANU_TEAM.iter().map(|s| *s).collect();
         let gold_room = peak.rooms.iter().find(|r| {
-            blueprint
-                .rooms
+            blueprint.rooms.iter().any(|b| {
+                b.id == r.room_id
+                    && b.kind == FacilityKind::Factory
+                    && matches!(
+                        b.product.as_ref(),
+                        Some(RoomProduct::Factory {
+                            recipe: RecipeKind::Gold
+                        })
+                    )
+            }) && gold_trio
                 .iter()
-                .any(|b| {
-                    b.id == r.room_id
-                        && b.kind == FacilityKind::Factory
-                        && matches!(
-                            b.product.as_ref(),
-                            Some(RoomProduct::Factory {
-                                recipe: RecipeKind::Gold
-                            })
-                        )
-                })
-                && gold_trio.iter().all(|n| r.operators.iter().any(|o| o.name == *n))
+                .all(|n| r.operators.iter().any(|o| o.name == *n))
         });
         assert!(
             gold_room.is_some(),
             "金线应有清流+温蒂+森蚺，实际制造编制: {:?}",
-            peak.rooms.iter().filter(|r| {
-                blueprint
-                    .rooms
-                    .iter()
-                    .any(|b| b.id == r.room_id && b.kind == FacilityKind::Factory)
-            }).collect::<Vec<_>>()
+            peak.rooms
+                .iter()
+                .filter(|r| {
+                    blueprint
+                        .rooms
+                        .iter()
+                        .any(|b| b.id == r.room_id && b.kind == FacilityKind::Factory)
+                })
+                .collect::<Vec<_>>()
         );
 
         let br_winter = room_ops("manu_2");
@@ -1549,8 +1706,9 @@ mod tests {
             "经验线 manu_2 不应占清流 trio: {br_winter:?}"
         );
 
-        let pool = build_manufacture_pool(&operbox.manufacture_roster(&instances), &instances, &table)
-            .unwrap();
+        let pool =
+            build_manufacture_pool(&operbox.manufacture_roster(&instances), &instances, &table)
+                .unwrap();
         let mk = |names: &[&str]| -> Vec<_> {
             names
                 .iter()
@@ -1560,7 +1718,11 @@ mod tests {
         let gold_room_resolved = resolved
             .manu_rooms
             .iter()
-            .find(|r| gold_trio.iter().all(|n| r.operators.iter().any(|o| o.name == *n)))
+            .find(|r| {
+                gold_trio
+                    .iter()
+                    .all(|n| r.operators.iter().any(|o| o.name == *n))
+            })
             .expect("resolved gold trio");
         let gold_skill = solve_manufacture(
             &ManuRoomInput {
@@ -1582,10 +1744,9 @@ mod tests {
 
     #[test]
     fn assign_snhunt_control_gets_monhun_ops_when_owned() {
-        let blueprint = BaseBlueprint::load(
-            &crate::skill_table::data_path("layout/snhunt.json").unwrap(),
-        )
-        .unwrap();
+        let blueprint =
+            BaseBlueprint::load(&crate::skill_table::data_path("layout/snhunt.json").unwrap())
+                .unwrap();
         let operbox = OperBox::load(&default_operbox_gongsun_path().unwrap()).unwrap();
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();

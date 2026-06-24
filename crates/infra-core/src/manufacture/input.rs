@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use crate::tier::PromotionTier;
 use crate::layout::{LayoutContext, SharedLayout};
+use crate::tier::PromotionTier;
 use crate::types::RecipeKind;
 
 /// 制造站产线布局假设：同类产线用同一三人组（L1 搜索简化，不做 12 人分站排班）。
@@ -92,7 +92,11 @@ pub struct ManuRoomInput {
 }
 
 impl ManuRoomInput {
-    pub fn with_operators(level: u8, active_recipe: RecipeKind, operators: Vec<ManuOperator>) -> Self {
+    pub fn with_operators(
+        level: u8,
+        active_recipe: RecipeKind,
+        operators: Vec<ManuOperator>,
+    ) -> Self {
         Self {
             level,
             operators,

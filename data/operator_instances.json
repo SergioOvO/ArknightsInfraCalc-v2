@@ -2864,7 +2864,9 @@
     "梅尔@tier_up": {
       "name": "梅尔",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.rhine"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -3216,9 +3218,7 @@
     "流明@tier_0": {
       "name": "流明",
       "tier": "tier_0",
-      "tags": [
-        "cc.g.rhine"
-      ],
+      "tags": [],
       "facilities": {
         "dorm": {
           "buff_ids": [
@@ -3231,9 +3231,7 @@
     "流明@tier_up": {
       "name": "流明",
       "tier": "tier_up",
-      "tags": [
-        "cc.g.rhine"
-      ],
+      "tags": [],
       "facilities": {
         "dorm": {
           "buff_ids": [
@@ -3378,9 +3376,7 @@
     "淬羽赫默@tier_up": {
       "name": "淬羽赫默",
       "tier": "tier_up",
-      "tags": [
-        "cc.g.rhine"
-      ],
+      "tags": [],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -3620,9 +3616,7 @@
     "溯光星源@tier_0": {
       "name": "溯光星源",
       "tier": "tier_0",
-      "tags": [
-        "cc.g.rhine"
-      ],
+      "tags": [],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -3635,9 +3629,7 @@
     "溯光星源@tier_up": {
       "name": "溯光星源",
       "tier": "tier_up",
-      "tags": [
-        "cc.g.rhine"
-      ],
+      "tags": [],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -3820,7 +3812,8 @@
       "name": "灰毫",
       "tier": "tier_0",
       "tags": [
-        "cc.g.pinus"
+        "cc.g.pinus",
+        "cc.g.knight"
       ],
       "facilities": {
         "manufacture": {
@@ -3835,7 +3828,8 @@
       "name": "灰毫",
       "tier": "tier_up",
       "tags": [
-        "cc.g.pinus"
+        "cc.g.pinus",
+        "cc.g.knight"
       ],
       "facilities": {
         "manufacture": {
@@ -5777,7 +5771,8 @@
       "name": "远牙",
       "tier": "tier_0",
       "tags": [
-        "cc.g.pinus"
+        "cc.g.pinus",
+        "cc.g.knight"
       ],
       "facilities": {
         "dorm": {
@@ -5798,7 +5793,8 @@
       "name": "远牙",
       "tier": "tier_up",
       "tags": [
-        "cc.g.pinus"
+        "cc.g.pinus",
+        "cc.g.knight"
       ],
       "facilities": {
         "dorm": {
@@ -5962,7 +5958,8 @@
       "name": "野鬃",
       "tier": "tier_0",
       "tags": [
-        "cc.g.pinus"
+        "cc.g.pinus",
+        "cc.g.knight"
       ],
       "facilities": {
         "manufacture": {
@@ -5977,7 +5974,8 @@
       "name": "野鬃",
       "tier": "tier_up",
       "tags": [
-        "cc.g.pinus"
+        "cc.g.pinus",
+        "cc.g.knight"
       ],
       "facilities": {
         "manufacture": {
@@ -6878,6 +6876,54 @@
           "stepwise": true
         }
       }
+    },
+    "乌尔比安@tier_0": {
+      "name": "乌尔比安",
+      "tier": "tier_0",
+      "tags": [
+        "cc.g.abyssal"
+      ],
+      "facilities": {}
+    },
+    "乌尔比安@tier_up": {
+      "name": "乌尔比安",
+      "tier": "tier_up",
+      "tags": [
+        "cc.g.abyssal"
+      ],
+      "facilities": {}
+    },
+    "塞雷娅@tier_0": {
+      "name": "塞雷娅",
+      "tier": "tier_0",
+      "tags": [
+        "cc.g.rhine"
+      ],
+      "facilities": {}
+    },
+    "塞雷娅@tier_up": {
+      "name": "塞雷娅",
+      "tier": "tier_up",
+      "tags": [
+        "cc.g.rhine"
+      ],
+      "facilities": {}
+    },
+    "麦哲伦@tier_0": {
+      "name": "麦哲伦",
+      "tier": "tier_0",
+      "tags": [
+        "cc.g.rhine"
+      ],
+      "facilities": {}
+    },
+    "麦哲伦@tier_up": {
+      "name": "麦哲伦",
+      "tier": "tier_up",
+      "tags": [
+        "cc.g.rhine"
+      ],
+      "facilities": {}
     }
   }
 }

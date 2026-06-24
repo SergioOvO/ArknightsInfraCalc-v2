@@ -7,7 +7,7 @@ mod plan;
 mod select;
 
 pub use execute::{execute_plan, ExecuteResult};
-pub use plan::{registry_as_activated, ActivatedSystem, AssignmentPlan, SlotFill};
+pub use plan::{ActivatedSystem, AssignmentPlan, SlotFill};
 pub use select::build_plan;
 
 #[cfg(test)]
@@ -30,6 +30,7 @@ mod tests {
             &operbox,
             AssignShiftMode::Recovery,
             &BaseAssignment::default(),
+            &std::collections::HashSet::new(),
         )
         .unwrap();
         assert!(plan.activated.is_empty());
@@ -51,6 +52,7 @@ mod tests {
             &operbox,
             AssignShiftMode::Peak,
             &BaseAssignment::default(),
+            &std::collections::HashSet::new(),
         )
         .unwrap();
         assert!(
@@ -77,6 +79,7 @@ mod tests {
             &operbox,
             AssignShiftMode::Peak,
             &BaseAssignment::default(),
+            &std::collections::HashSet::new(),
         )
         .unwrap();
         assert!(
@@ -109,6 +112,7 @@ mod tests {
             &operbox,
             AssignShiftMode::Peak,
             &BaseAssignment::default(),
+            &std::collections::HashSet::new(),
         )
         .unwrap();
         assert!(
@@ -116,10 +120,14 @@ mod tests {
                 .iter()
                 .any(|c| c.system_id == "docus_syracusa"),
             "应选型叙拉古链: {:?}",
-            plan.registry_claims.iter().map(|c| &c.system_id).collect::<Vec<_>>()
+            plan.registry_claims
+                .iter()
+                .map(|c| &c.system_id)
+                .collect::<Vec<_>>()
         );
         assert!(
-            !plan.registry_claims
+            !plan
+                .registry_claims
                 .iter()
                 .any(|c| c.system_id == "ling_jie_karlan"),
             "exclusive_group 应优先但书链而非灵知喀兰"
@@ -134,14 +142,16 @@ mod tests {
             &crate::skill_table::data_path("schedule_243/operbox_ideal_e2.json").unwrap(),
         )
         .unwrap();
-        let table =
-            crate::skill_table::SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap())
-                .unwrap();
+        let table = crate::skill_table::SkillTable::load(
+            &crate::skill_table::default_skill_table_path().unwrap(),
+        )
+        .unwrap();
         let plan = build_plan(
             &blueprint,
             &operbox,
             AssignShiftMode::Peak,
             &BaseAssignment::default(),
+            &std::collections::HashSet::new(),
         )
         .unwrap();
         let executed = execute_plan(
@@ -210,6 +220,7 @@ mod tests {
             &operbox,
             AssignShiftMode::Peak,
             &BaseAssignment::default(),
+            &std::collections::HashSet::new(),
         )
         .unwrap();
         assert!(
@@ -217,10 +228,14 @@ mod tests {
                 .iter()
                 .any(|c| c.system_id == "penguin_exusiai_lemuen"),
             "应选型企鹅能蕾链: {:?}",
-            plan.registry_claims.iter().map(|c| &c.system_id).collect::<Vec<_>>()
+            plan.registry_claims
+                .iter()
+                .map(|c| &c.system_id)
+                .collect::<Vec<_>>()
         );
         assert!(
-            !plan.registry_claims
+            !plan
+                .registry_claims
                 .iter()
                 .any(|c| c.system_id == "penguin_texlap_e0"),
             "全精2 operbox 不应选德E0狼链"

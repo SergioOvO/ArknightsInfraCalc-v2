@@ -13,7 +13,7 @@
 | 池 | `pool/trade.rs` | `pool/manufacture.rs` |
 | 搜索 | `search/trade.rs` | `search/manufacture.rs` |
 | 求解 | `solve_trade_with_shift` | `solve_manufacture` |
-| 排班 | `schedule/base_rotation.rs`（`assign_shift` 内制造产线） | ✅ `assign_shift`（高峰/恢复班覆盖） |
+| 排班 | `layout/assign.rs` / `schedule/team_rotation.rs` | ✅ `assign_shift`（高峰/恢复班覆盖）与 αβγ ABC |
 | CLI 回归 | `verify` + CSV | **无** dedicated verify case |
 
 ## 已实现
@@ -40,7 +40,7 @@
 |------|------|
 | `pool --manufacture --operbox <path>` | 制造池统计（**必须** operbox，无默认 roster） |
 | `bench --operbox <path>` | 同时 bench 贸易 + 制造搜索 |
-| `search` | 子命令内可触发制造搜索（见 `main.rs` `search_cmd`） |
+| `search trade` | 仅贸易单站探索；当前没有制造专用 `search` 子命令 |
 | **`layout test`** | 默认调用 `assign_base_greedy` 宏观落位→ `resolve_base` → 制造搜索（含产线拆解） |
 | **`layout team-rotation`** | αβγ ABC：三班均覆盖制造产线（现行） |
 | **`layout rotation`** | ~~A-B-A~~ 已废弃 |
@@ -60,7 +60,7 @@
 
 ## 全局资源 / 布局
 
-制造求解可读 `TradeLayoutContext`（搜索时传入）：`ManuRecipeKinds`、`effective_power_station_count` 等来自 layout / 全局池快照。中枢编制见 `control::apply_control_to_layout`；资源注册见 `EFFECT_ATOM_DESIGN.md` §8.13。
+制造求解可读 `LayoutContext`（搜索时传入）：`ManuRecipeKinds`、`effective_power_station_count` 等来自 layout / 全局池快照。中枢编制见 `control::apply_control_to_layout`；资源注册见 `EFFECT_ATOM_DESIGN.md` §8.13。
 
 `GlobalInject` phase 在贸易 L1 为空操作；制造 / 中控侧在 `control/interpreter.rs` 处理。
 
@@ -71,14 +71,14 @@
 | **泰拉大陆调查团** | 可靠的随从们 | `layout.global.Matatabi`（木天蓼 12 → 生产力 +17% 含 flat 5%） |
 | （间接）**麒麟R夜刀** 精2 | 以身作则 | `global_inject` 全制造 +2%（`snhunt_elite2_baseline()`） |
 
-评估怪猎制造搜索时应用 `TradeLayoutContext::snhunt_baseline()` 或 `snhunt_elite2_baseline()`，勿用默认 `search_baseline()`（无木天蓼）。
+评估怪猎制造搜索时应用 `LayoutContext::snhunt_baseline()` / `LayoutContext::snhunt_elite2_baseline()`，或使用 `resolve_snhunt_baseline_layout()` / `resolve_snhunt_elite2_baseline_layout()` 生成布局快照；勿用默认 `search_baseline()`（无木天蓼）。
 
 ## 已知缺口（相对贸易站）
 
 - [ ] 制造专用 L2 域引擎（若出现大量 `atoms: []` 委托）
 - [ ] 制造 L3 组合表（若出现类似巫恋核的表化最优解）
 - [ ] `verify` 制造回归 CSV + 夹具
-- [x] **制造产线排班** — 已通过 `assign_shift`（`Peak` / `Recovery`）覆盖；`schedule_base_rotation_a_b_a` 含制造评分
+- [x] **制造产线排班** — 已通过 `assign_shift`（`Peak` / `Recovery`）覆盖；现行 `schedule_team_rotation` 参与制造评分
 - [ ] `市井之道产能耦合` 类问题在制造侧重算 score 时尚未完全对齐贸易站讨论（见设计文档 §九）
 - [ ] 制造 `GlobalInject` 特定 buff（目前走 `control/interpreter.rs`，未单独拆制造侧 `global_inject` 阶段）
 

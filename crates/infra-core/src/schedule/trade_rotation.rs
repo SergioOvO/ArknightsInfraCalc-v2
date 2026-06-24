@@ -7,17 +7,16 @@ use crate::error::{Error, Result};
 use crate::instances::OperatorInstances;
 use crate::operbox::OperBox;
 use crate::pool::{
-    build_trade_pool, filter_trade_pool, jie_e0_trade_operator, karlan_precision_active,
-    JIE_TRADE_NAME, TradePool,
+    build_trade_pool, filter_trade_pool, jie_e0_trade_operator, karlan_precision_active, TradePool,
+    JIE_TRADE_NAME,
 };
 use crate::roster::Roster;
 use crate::search::{
-    hit_closure_shortcut, hit_docus_solo_shortcut, hit_witch_shortcut, pick_docus_trade_hit,
-    search_trade_triples,
+    hit_closure_shortcut, hit_witch_shortcut, pick_docus_trade_hit, search_trade_triples,
     search_trade_triples_filtered, SearchTripleFilter, TradeSearchHit, TradeSearchOptions,
 };
-use crate::trade::input::{TradeOrderKind, TradeSearchOrderMode};
 use crate::skill_table::SkillTable;
+use crate::trade::input::{TradeOrderKind, TradeSearchOrderMode};
 
 pub const TRADE_STATIONS_PER_SHIFT: usize = 3;
 pub const WORKERS_PER_STATION: usize = 3;
@@ -430,9 +429,13 @@ mod tests {
     #[test]
     fn gongsun_rotation_aba_disjoint_and_reuse() {
         let (operbox, instances, table) = ctx();
-        let report =
-            schedule_trade_rotation_a_b_a(&operbox, &instances, &table, &TradeSearchOptions::default())
-                .unwrap();
+        let report = schedule_trade_rotation_a_b_a(
+            &operbox,
+            &instances,
+            &table,
+            &TradeSearchOptions::default(),
+        )
+        .unwrap();
         assert_eq!(report.shifts.len(), 3);
 
         let w1: HashSet<_> = report.shifts[0].workers.iter().cloned().collect();
@@ -451,7 +454,11 @@ mod tests {
                     .iter()
                     .any(|s| s.role == TradeStationRole::Docus),
             "shift1 meta order starts with docus attempt: {:?}",
-            report.shifts[0].stations.iter().map(|s| s.role).collect::<Vec<_>>()
+            report.shifts[0]
+                .stations
+                .iter()
+                .map(|s| s.role)
+                .collect::<Vec<_>>()
         );
     }
 
@@ -461,9 +468,13 @@ mod tests {
         if !operbox.owns(JIE_TRADE_NAME) {
             return;
         }
-        let report =
-            schedule_trade_rotation_a_b_a(&operbox, &instances, &table, &TradeSearchOptions::default())
-                .unwrap();
+        let report = schedule_trade_rotation_a_b_a(
+            &operbox,
+            &instances,
+            &table,
+            &TradeSearchOptions::default(),
+        )
+        .unwrap();
         let jie_station = report.shifts[1]
             .stations
             .iter()
@@ -473,14 +484,12 @@ mod tests {
             "shift2 should have 孑 e0 lead station: {:?}",
             report.shifts[1].stations
         );
-        assert!(
-            jie_station
-                .unwrap()
-                .hit
-                .names
-                .iter()
-                .any(|n| n == JIE_TRADE_NAME)
-        );
+        assert!(jie_station
+            .unwrap()
+            .hit
+            .names
+            .iter()
+            .any(|n| n == JIE_TRADE_NAME));
     }
 
     #[test]

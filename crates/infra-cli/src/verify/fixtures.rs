@@ -123,19 +123,15 @@ pub fn blackkey_closure_fixture(level: u8) -> TradeRoomInput {
 }
 
 pub fn ling_jie_fixture(level: u8) -> TradeRoomInput {
-    let op = |name: &str, elite: u8, buff_ids: Vec<&str>, tags: Vec<&str>| {
-        TradeOperator {
-            name: name.into(),
-            elite,
-            buff_ids: buff_ids.into_iter().map(str::to_string).collect(),
-            tags: tags.into_iter().map(str::to_string).collect(),
-            ..Default::default()
-        }
+    let op = |name: &str, elite: u8, buff_ids: Vec<&str>, tags: Vec<&str>| TradeOperator {
+        name: name.into(),
+        elite,
+        buff_ids: buff_ids.into_iter().map(str::to_string).collect(),
+        tags: tags.into_iter().map(str::to_string).collect(),
+        ..Default::default()
     };
     let mut layout = LayoutContext::default();
-    layout
-        .global_inject
-        .record_karlan_precision(-15.0, 6);
+    layout.global_inject.record_karlan_precision(-15.0, 6);
     let mut input = TradeRoomInput::with_operators(
         level,
         vec![
@@ -147,10 +143,10 @@ pub fn ling_jie_fixture(level: u8) -> TradeRoomInput {
                 vec!["cc.g.karlan"],
             ),
             op(
-                "崖心",
+                "琳琅诗怀雅",
                 2,
-                vec!["trade_ord_spd&limit[021]"],
-                vec!["cc.g.karlan"],
+                vec!["trade_ord_spd[000]", "trade_ord_spd_variable[000]"],
+                vec![],
             ),
         ],
     );

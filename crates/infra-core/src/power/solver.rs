@@ -4,11 +4,11 @@ use crate::eff_ramp::{eff_ramp_at_shift_hours, EffRampStyle};
 use crate::error::Result;
 use crate::global_resource::GlobalResourceKey;
 use crate::instances::OperatorInstances;
+use crate::layout::LayoutContext;
 use crate::layout::{RoomId, WorkforceIndex};
 use crate::power::input::{PowerOperator, PowerRoomInput};
 use crate::power::interpreter::{apply_power_phases, PowerContext};
 use crate::skill_table::SkillTable;
-use crate::layout::LayoutContext;
 
 const ADDITION_ALPHA: &str = "power_rec_spd&addition[000]";
 const ADDITION_BETA: &str = "power_rec_spd&addition[001]";
@@ -37,12 +37,8 @@ pub fn apply_power_to_layout(
 ) -> Result<Vec<PowerResult>> {
     let mut results = Vec::with_capacity(rooms.len());
     for (room_id, operator) in rooms {
-        let room_layout = workforce.layout_for_power_room(
-            layout,
-            room_id,
-            &operator.name,
-            Some(instances),
-        );
+        let room_layout =
+            workforce.layout_for_power_room(layout, room_id, &operator.name, Some(instances));
         let input = PowerRoomInput {
             operator: operator.clone(),
             mood,
@@ -51,9 +47,10 @@ pub fn apply_power_to_layout(
         };
         let result = solve_power(&input, table)?;
         if result.virtual_power_produced > 0.0 {
-            layout
-                .global
-                .add(GlobalResourceKey::VirtualPower, result.virtual_power_produced);
+            layout.global.add(
+                GlobalResourceKey::VirtualPower,
+                result.virtual_power_produced,
+            );
         }
         results.push(result);
     }
@@ -89,9 +86,21 @@ pub fn solve_power(input: &PowerRoomInput, table: &SkillTable) -> Result<PowerRe
 /// 空构·技术交流：首小时 `initial`，此后每小时 +`per_hour`，上限 `cap`。
 pub fn charge_ramp_from_buffs(buff_ids: &[String], shift_hours: f64) -> f64 {
     if buff_ids.iter().any(|b| b == ADDITION_BETA) {
-        eff_ramp_at_shift_hours(EffRampStyle::FirstHourThenHourly, 15.0, 1.0, 20.0, shift_hours)
+        eff_ramp_at_shift_hours(
+            EffRampStyle::FirstHourThenHourly,
+            15.0,
+            1.0,
+            20.0,
+            shift_hours,
+        )
     } else if buff_ids.iter().any(|b| b == ADDITION_ALPHA) {
-        eff_ramp_at_shift_hours(EffRampStyle::FirstHourThenHourly, 10.0, 1.0, 15.0, shift_hours)
+        eff_ramp_at_shift_hours(
+            EffRampStyle::FirstHourThenHourly,
+            10.0,
+            1.0,
+            15.0,
+            shift_hours,
+        )
     } else {
         0.0
     }

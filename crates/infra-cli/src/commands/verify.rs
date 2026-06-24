@@ -34,7 +34,7 @@ pub fn verify_cmd(args: &[String]) -> Result<(), Error> {
             && !case.operators.starts_with("黑键")
             && case.operators != "see_roster"
             && !case.expect_shortcut.starts_with("gsl_witch_")
-            && !case.expect_shortcut.starts_with("gsl_ling_jie_")
+            && !case.case_id.contains("ling_jie")
         {
             println!("skip {} (fixture not wired)", case.case_id);
             continue;
@@ -42,7 +42,7 @@ pub fn verify_cmd(args: &[String]) -> Result<(), Error> {
 
         let input = if case.expect_shortcut == "gsl_blackkey_closure" {
             blackkey_closure_fixture(case.trade_level)
-        } else if case.expect_shortcut.starts_with("gsl_ling_jie_") {
+        } else if case.case_id.contains("ling_jie") {
             ling_jie_fixture(case.trade_level)
         } else if case.expect_shortcut.starts_with("gsl_witch_") {
             witch_fixture(&case.expect_shortcut, case.trade_level)
@@ -55,7 +55,11 @@ pub fn verify_cmd(args: &[String]) -> Result<(), Error> {
         let trade_ok = (result.order_eff_total - case.expect_trade_pct).abs() <= case.tolerance;
         let gold_ok = (result.order_mechanic.mechanic_equiv_eff_pct - case.expect_gold_pct).abs()
             <= case.tolerance;
-        let shortcut_ok = result.trade_shortcut.as_deref() == Some(case.expect_shortcut.as_str());
+        let shortcut_ok = if case.expect_shortcut == "none" {
+            result.trade_shortcut.is_none()
+        } else {
+            result.trade_shortcut.as_deref() == Some(case.expect_shortcut.as_str())
+        };
 
         if trade_ok && gold_ok && shortcut_ok {
             println!(

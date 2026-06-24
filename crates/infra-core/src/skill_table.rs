@@ -87,7 +87,10 @@ impl SkillTable {
     ) -> Result<()> {
         let mut missing = Vec::new();
         for name in operators {
-            for tier in [crate::tier::PromotionTier::Tier0, crate::tier::PromotionTier::TierUp] {
+            for tier in [
+                crate::tier::PromotionTier::Tier0,
+                crate::tier::PromotionTier::TierUp,
+            ] {
                 let key = format!("{}@{}", name, tier.as_str());
                 if instances.get(name, tier).is_none() {
                     continue;
@@ -144,9 +147,7 @@ mod tests {
     use super::*;
     use crate::instances::default_instances_path;
 
-    const PILOT_OPS: &[&str] = &[
-        "但书", "可露希尔", "孑", "德克萨斯", "拉普兰德", "能天使",
-    ];
+    const PILOT_OPS: &[&str] = &["但书", "可露希尔", "孑", "德克萨斯", "拉普兰德", "能天使"];
 
     fn load_pair() -> (SkillTable, OperatorInstances) {
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
@@ -157,7 +158,9 @@ mod tests {
     #[test]
     fn pilot_trade_buff_ids_resolve_in_skill_table() {
         let (table, instances) = load_pair();
-        table.validate_pilot_operators(&instances, PILOT_OPS).unwrap();
+        table
+            .validate_pilot_operators(&instances, PILOT_OPS)
+            .unwrap();
     }
 
     #[test]
@@ -173,7 +176,10 @@ mod tests {
         let mut missing = Vec::new();
         for (_key, inst) in instances.iter() {
             let name = inst.name.clone();
-            for tier in [crate::tier::PromotionTier::Tier0, crate::tier::PromotionTier::TierUp] {
+            for tier in [
+                crate::tier::PromotionTier::Tier0,
+                crate::tier::PromotionTier::TierUp,
+            ] {
                 for bid in instances.resolve_manufacture_buff_ids(&name, tier) {
                     if table.get(&bid).is_none() {
                         missing.push(format!("{}@{}: {bid}", name, tier.as_str()));
@@ -235,7 +241,10 @@ mod tests {
         let mut missing = Vec::new();
         for (_key, inst) in instances.iter() {
             let name = inst.name.clone();
-            for tier in [crate::tier::PromotionTier::Tier0, crate::tier::PromotionTier::TierUp] {
+            for tier in [
+                crate::tier::PromotionTier::Tier0,
+                crate::tier::PromotionTier::TierUp,
+            ] {
                 for bid in instances.resolve_power_buff_ids(&name, tier) {
                     if table.get(&bid).is_none() {
                         missing.push(format!("{}@{}: {bid}", name, tier.as_str()));

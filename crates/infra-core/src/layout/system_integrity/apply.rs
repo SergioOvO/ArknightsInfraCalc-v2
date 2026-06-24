@@ -34,16 +34,24 @@ fn place_anchor(
     if used.contains(&anchor.operator) {
         return Ok(());
     }
-    let room_id = find_room(blueprint, assignment, anchor.facility, anchor.room_id.as_ref())
-        .ok_or_else(|| {
-            Error::msg(format!(
-                "rosemary anchor {}: no {} room",
-                anchor.operator,
-                facility_label(anchor.facility)
-            ))
-        })?;
+    let room_id = find_room(
+        blueprint,
+        assignment,
+        anchor.facility,
+        anchor.room_id.as_ref(),
+    )
+    .ok_or_else(|| {
+        Error::msg(format!(
+            "rosemary anchor {}: no {} room",
+            anchor.operator,
+            facility_label(anchor.facility)
+        ))
+    })?;
     if !used.insert(anchor.operator.clone()) {
-        return Err(Error::msg(format!("rosemary duplicate {}", anchor.operator)));
+        return Err(Error::msg(format!(
+            "rosemary duplicate {}",
+            anchor.operator
+        )));
     }
     if anchor.facility == FacilityKind::ControlCenter {
         let mut existing = assignment.control_operators();
@@ -108,7 +116,10 @@ fn find_room(
         if facility == FacilityKind::ControlCenter {
             (assignment.operators_in(&r.id).len() < 5).then(|| r.id.clone())
         } else {
-            assignment.operators_in(&r.id).is_empty().then(|| r.id.clone())
+            assignment
+                .operators_in(&r.id)
+                .is_empty()
+                .then(|| r.id.clone())
         }
     })
 }
@@ -161,6 +172,9 @@ mod tests {
                 .any(|b| b.id == r.room_id && b.kind == FacilityKind::Factory)
                 && r.operators.iter().any(|o| o.name == "迷迭香")
         }));
-        assert!(assignment.control_operators().iter().any(|o| o.name == "夕"));
+        assert!(assignment
+            .control_operators()
+            .iter()
+            .any(|o| o.name == "夕"));
     }
 }

@@ -16,6 +16,10 @@ Thumbs.db
 /out/
 out_*.json
 
+# Generated LLM / RAG artifacts
+/raw.qwen2_5_7b/
+summaries*.jsonl
+
 # Local release artifacts (binaries / zip bundles — not for remote)
 /release.zip
 /release/*.exe

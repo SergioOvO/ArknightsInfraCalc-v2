@@ -2,7 +2,7 @@
 
 明日方舟基建效率求解器（v2 绿场重写）。给定干员练度与布局假设，计算贸易站同房三人组的订单效率、机制等效效率、单位产出；支持穷举搜索、自定义蓝图探测、**编排层体系认领**（`base_systems.json`）与 **αβγ ABC 三队轮换**排班。旧版 A-B-A 已废弃，见 [docs/SCHEDULE_ROTATION.md](docs/SCHEDULE_ROTATION.md)。
 
-**当前主力域**：贸易站（L1 解释器 + L2 域引擎 + L3 组合短路 + 回归齐全）。制造站、控制中枢、全局资源、编排层（System → Plan → Execute）已有基础实现，详见 [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)。
+**当前主力域**：贸易站（L1 解释器 + L2 域引擎 + L3 组合短路 + 回归齐全）。制造站、控制中枢、全局资源、编排层（System → Plan → Execute）已有基础实现。文档入口见 [docs/INDEX.md](docs/INDEX.md)，项目地图见 [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)。
 
 ## 能做什么
 
@@ -106,7 +106,7 @@ crates/
   infra-core/     类型、EffectAtom 解释器、求解、搜索、编排、排班
   infra-cli/      命令行：plan / layout / verify / 输出
 data/             skill_table、干员实例、布局模板、回归用例（运行时真相源）
-docs/             设计文档与模块地图（含 ORCHESTRATION_LAYER、FRONTEND_CLI）
+docs/             文档入口、模块地图、TODO、归档、设计参考
 release/          前端发布包（infra-cli.exe、layout-gen、fixtures）
 scripts/          Python：技能表构建、operbox 转换、数据审计
 tests/fixtures/   最小 JSON 夹具
@@ -163,8 +163,10 @@ cargo test -p infra-core
 cargo run -p infra-cli -- verify --all
 ```
 
-- **Cursor / AI 协作**：先读 [AGENTS.md](AGENTS.md) → [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)
+- **Cursor / AI 协作**：先读 [AGENTS.md](AGENTS.md) → [docs/INDEX.md](docs/INDEX.md) → [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)
 - **改 CLI**：见 [docs/INFRA_CLI.md](docs/INFRA_CLI.md)（禁止在 CLI 写求解公式）
+- **准备实现的事项**：见 [docs/TODO/](docs/TODO/)
+- **归档材料**：见 [docs/ARCHIVE/](docs/ARCHIVE/)
 - **待建模干员**：[docs/需要完成的干员建模.md](docs/需要完成的干员建模.md)
 
 ## License

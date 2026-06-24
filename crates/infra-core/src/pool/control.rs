@@ -7,7 +7,9 @@ use crate::roster::Roster;
 use crate::skill_table::SkillTable;
 use crate::tier::PromotionTier;
 
-use super::base::{build_roster_pool, filter_pool, HasName, PoolCore};
+use crate::layout::tier::OperatorTier;
+
+use super::base::{build_roster_pool, filter_pool, HasName, PoolCore, TierTagged};
 pub use super::trade::PoolSkip;
 
 #[derive(Debug, Clone)]
@@ -16,11 +18,22 @@ pub struct ControlPoolEntry {
     pub elite: u8,
     pub buff_ids: Vec<String>,
     pub tags: Vec<String>,
+    pub tier: OperatorTier,
 }
 
 impl HasName for ControlPoolEntry {
     fn pool_name(&self) -> &str {
         &self.name
+    }
+}
+
+impl TierTagged for ControlPoolEntry {
+    fn tier(&self) -> OperatorTier {
+        self.tier
+    }
+
+    fn set_tier(&mut self, tier: OperatorTier) {
+        self.tier = tier;
     }
 }
 
@@ -84,5 +97,6 @@ fn try_entry(
         elite: progress.elite,
         buff_ids,
         tags,
+        tier: OperatorTier::Standalone,
     })
 }

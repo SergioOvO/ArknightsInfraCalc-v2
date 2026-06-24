@@ -6,7 +6,6 @@ use crate::error::Result;
 use crate::instances::OperatorInstances;
 use crate::layout::BaseBlueprint;
 use crate::operbox::{default_operbox_full_e2_path, OperBox};
-use crate::roster::OperatorProgress;
 use crate::skill_table::SkillTable;
 use crate::tier::PromotionTier;
 
@@ -134,10 +133,7 @@ pub fn build_box_profile(
         .clone()
         .unwrap_or_else(|| default_operbox_full_e2_path().expect("baseline operbox path"));
     let baseline_operbox = OperBox::load(&full_e2_path)?;
-    let baseline_label = format!(
-        "{} (full_e2)",
-        schedule_path.display()
-    );
+    let baseline_label = format!("{} (full_e2)", schedule_path.display());
 
     // current：用户练度 → solver 排班；baseline：公孙固定编制 + 顶配练度 eval。
     let current = run_user_rotation_probe(blueprint, operbox, instances, table, options.top_k)?;
@@ -421,8 +417,7 @@ pub(super) fn build_actions(operbox: &OperBox, domains: &[DomainMetric]) -> Vec<
             if !seen.insert((name.clone(), format!("{}_sub", domain.id))) {
                 continue;
             }
-            if let Some(action) =
-                tier_up_action(operbox, name, "P2", domain, "当前在用组合")
+            if let Some(action) = tier_up_action(operbox, name, "P2", domain, "当前在用组合")
             {
                 actions.push(action);
             }
@@ -553,6 +548,8 @@ mod tests {
     #[test]
     fn tier_up_action_respects_star_rules() {
         use std::collections::HashMap;
+
+        use crate::roster::OperatorProgress;
 
         let operbox = OperBox {
             entries: vec![],

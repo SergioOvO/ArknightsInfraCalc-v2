@@ -104,9 +104,7 @@ impl OperatorInstances {
     }
 
     pub fn resolve_trade_buff_ids(&self, name: &str, tier: PromotionTier) -> Vec<String> {
-        let tier_binding = self
-            .get(name, tier)
-            .and_then(|i| i.facilities.get("trade"));
+        let tier_binding = self.get(name, tier).and_then(|i| i.facilities.get("trade"));
         let Some(binding) = tier_binding else {
             return Vec::new();
         };
@@ -147,9 +145,7 @@ impl OperatorInstances {
     }
 
     pub fn resolve_power_buff_ids(&self, name: &str, tier: PromotionTier) -> Vec<String> {
-        let tier_binding = self
-            .get(name, tier)
-            .and_then(|i| i.facilities.get("power"));
+        let tier_binding = self.get(name, tier).and_then(|i| i.facilities.get("power"));
         let Some(binding) = tier_binding else {
             return Vec::new();
         };
@@ -160,9 +156,7 @@ impl OperatorInstances {
     }
 
     pub fn resolve_dorm_buff_ids(&self, name: &str, tier: PromotionTier) -> Vec<String> {
-        let tier_binding = self
-            .get(name, tier)
-            .and_then(|i| i.facilities.get("dorm"));
+        let tier_binding = self.get(name, tier).and_then(|i| i.facilities.get("dorm"));
         let Some(binding) = tier_binding else {
             return Vec::new();
         };
@@ -215,14 +209,8 @@ mod tests {
 
     #[test]
     fn merge_stepwise_replaces_same_stem() {
-        let t0 = vec![
-            "trade_ord_against[000]".into(),
-            "trade_ord_law[000]".into(),
-        ];
-        let up = vec![
-            "trade_ord_against[010]".into(),
-            "trade_ord_law[000]".into(),
-        ];
+        let t0 = vec!["trade_ord_against[000]".into(), "trade_ord_law[000]".into()];
+        let up = vec!["trade_ord_against[010]".into(), "trade_ord_law[000]".into()];
         let expected: Vec<String> = vec![
             "trade_ord_law[000]".to_string(),
             "trade_ord_against[010]".to_string(),
@@ -257,8 +245,7 @@ mod tests {
 
     #[test]
     fn resolve_stellar_thorn_tier_up_keeps_metal_and_trade_bonus() {
-        let instances =
-            OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let ids = instances.resolve_manufacture_buff_ids("引星棘刺", PromotionTier::TierUp);
         assert_eq!(
             ids,

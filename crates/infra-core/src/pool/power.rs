@@ -6,7 +6,9 @@ use crate::skill_table::SkillTable;
 use crate::tier::PromotionTier;
 use crate::types::{Action, Phase, SkillDef};
 
-use super::base::{build_roster_pool, HasName, PoolCore};
+use crate::layout::tier::OperatorTier;
+
+use super::base::{build_roster_pool, HasName, PoolCore, TierTagged};
 pub use super::trade::PoolSkip;
 
 #[derive(Debug, Clone)]
@@ -18,11 +20,22 @@ pub struct PowerPoolEntry {
     /// Sum of constant `AddFlatEff` — sort hint only.
     pub flat_charge_hint: f64,
     pub has_l2_delegate: bool,
+    pub tier: OperatorTier,
 }
 
 impl HasName for PowerPoolEntry {
     fn pool_name(&self) -> &str {
         &self.name
+    }
+}
+
+impl TierTagged for PowerPoolEntry {
+    fn tier(&self) -> OperatorTier {
+        self.tier
+    }
+
+    fn set_tier(&mut self, tier: OperatorTier) {
+        self.tier = tier;
     }
 }
 
@@ -88,6 +101,7 @@ fn try_entry(
         tags,
         flat_charge_hint,
         has_l2_delegate,
+        tier: OperatorTier::Standalone,
     })
 }
 

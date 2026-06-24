@@ -107,18 +107,9 @@ pub struct OriginiumDistribution {
 impl OriginiumDistribution {
     pub fn for_trade_level(level: u8) -> Self {
         match level {
-            1 => Self {
-                p1: 1.0,
-                p2: 0.0,
-            },
-            2 => Self {
-                p1: 0.65,
-                p2: 0.35,
-            },
-            _ => Self {
-                p1: 0.30,
-                p2: 0.70,
-            },
+            1 => Self { p1: 1.0, p2: 0.0 },
+            2 => Self { p1: 0.65, p2: 0.35 },
+            _ => Self { p1: 0.30, p2: 0.70 },
         }
     }
 }
@@ -199,11 +190,8 @@ pub fn resolve_order_mechanic(ctx: &TradeContext, order_eff_total_pct: f64) -> O
         breach_add: 0,
         closure: false,
     };
-    let baseline_mpg = weighted_minutes_per_gold(
-        &GoldDistribution::for_trade_level(level),
-        &vanilla,
-        0,
-    );
+    let baseline_mpg =
+        weighted_minutes_per_gold(&GoldDistribution::for_trade_level(level), &vanilla, 0);
     let mpg = weighted_minutes_per_gold(&dist, &caps, ctx.order_lmd_bonus);
     let mut mechanic_equiv = if baseline_mpg > 0.0 && mpg > 0.0 {
         (baseline_mpg / mpg - 1.0) * 100.0
@@ -436,10 +424,7 @@ pub fn originium_unit_per_slot_per_day(dist: &OriginiumDistribution) -> (f64, f6
         lmd_rate += p * (lmd / dur);
         shard_rate += p * (cost / dur);
     }
-    (
-        lmd_rate * MINUTES_PER_DAY,
-        shard_rate * MINUTES_PER_DAY,
-    )
+    (lmd_rate * MINUTES_PER_DAY, shard_rate * MINUTES_PER_DAY)
 }
 
 /// 3 级站常规源石订单分布、纸面 100% 时的日贸易产出（倍率分母）。
@@ -473,10 +458,7 @@ pub fn unit_per_slot_per_day(
         lmd_rate += p * (lmd / dur);
         gold_rate += p * (gold / dur);
     }
-    (
-        lmd_rate * MINUTES_PER_DAY,
-        gold_rate * MINUTES_PER_DAY,
-    )
+    (lmd_rate * MINUTES_PER_DAY, gold_rate * MINUTES_PER_DAY)
 }
 
 #[cfg(test)]
@@ -490,16 +472,14 @@ mod tests {
 
     #[test]
     fn docus_lv3_unit_trade_near_anchor() {
-        let table = SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
+        let table =
+            SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
         let input = TradeRoomInput::with_operators(
             3,
             vec![TradeOperator::new(
                 "但书",
                 2,
-                vec![
-                    "trade_ord_law[000]".into(),
-                    "trade_ord_against[010]".into(),
-                ],
+                vec!["trade_ord_law[000]".into(), "trade_ord_against[010]".into()],
             )],
         );
         let mut ctx = TradeContext::from_room(&input);

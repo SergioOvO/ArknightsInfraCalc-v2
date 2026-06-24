@@ -5,17 +5,52 @@ use rayon::prelude::*;
 use serde::Serialize;
 
 use crate::error::Result;
+use crate::layout::{LayoutContext, SharedLayout};
 use crate::pool::{
     build_trade_combo_operators, combinations_triples, combinations_triples_with_anchor, TradePool,
 };
 use crate::skill_table::SkillTable;
-use crate::layout::{LayoutContext, SharedLayout};
 use crate::trade::input::{
-    TradeOperator, TradeOrderKind, TradeRoomInput,
-    TradeSearchOrderMode, TradeStationScenario,
+    TradeOperator, TradeOrderKind, TradeRoomInput, TradeSearchOrderMode, TradeStationScenario,
 };
 use crate::trade::shortcut::trade_station_exclusive_violation;
 use crate::trade::solver::solve_trade_with_shift_prevalidated;
+
+/// 贸易站评分的完整分解。
+///
+/// 当前搜索排序主键是 [`TradeSearchHit::score`]，其口径为贸易效率
+/// `order_eff_total_pct`。对 L3 shortcut 命中的复杂贸易组合，该值来自
+/// `data/trade_shortcuts.json` 的公孙长乐等效贸易效率；赤金侧等效值单独放在
+/// `mechanic_equiv_eff_pct` / [`TradeSearchHit::gold_pct`]。
+///
+/// `effective_eff_multiplier` 仅是内部调试用的乘积解释值，不作为用户侧结论；
+/// CLI 应优先展示「贸易效率%」和「赤金效率%」，不要把乘积称为最终倍率。
+/// PepeExclusive 订单走固定节奏，调试倍率 = 日产量 / 基准日产量。
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct TradeScoreBreakdown {
+    /// 基础效率 (每名干员 +100%)
+    pub order_eff_base: f64,
+    /// 技能效率总和
+    pub order_eff_skill: f64,
+    /// 全局注入 (如阿米娅中枢 +7%)
+    pub order_eff_global: f64,
+    /// 纸面贸易效率%
+    pub order_eff_total_pct: f64,
+    /// 订单机制等效效率%
+    pub mechanic_equiv_eff_pct: f64,
+    /// 效率因子 = 1 + order_eff_total/100
+    pub eff_factor: f64,
+    /// 机制因子 = 1 + mechanic_equiv_eff/100
+    pub mech_factor: f64,
+    /// 内部调试用乘积解释值；用户侧以 trade_pct / gold_pct 拆开阅读。
+    pub effective_eff_multiplier: f64,
+    /// 实际日产量（龙门币/天）
+    pub unit_trade_per_day: f64,
+    /// 实际日耗赤金
+    pub unit_gold_per_day: f64,
+    /// 命中的短路 ID
+    pub shortcut_id: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TradeSearchHit {
@@ -24,6 +59,7 @@ pub struct TradeSearchHit {
     pub gold_names: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub originium_names: Vec<String>,
+    /// 搜索排序主键：贸易效率 `order_eff_total`（%）；shortcut 命中时为公孙等效贸易效率。
     pub score: f64,
     pub trade_pct: f64,
     pub gold_pct: f64,
@@ -33,6 +69,8 @@ pub struct TradeSearchHit {
     #[serde(default, skip_serializing_if = "is_zero")]
     pub unit_originium_per_day: f64,
     pub output_multiplier: f64,
+    /// 评分明细分解
+    pub breakdown: TradeScoreBreakdown,
 }
 
 fn is_zero(v: &f64) -> bool {
@@ -145,13 +183,8 @@ fn search_trade_split_stations(
 
     let mut ori_opts = options.clone();
     ori_opts.order_mode = TradeSearchOrderMode::Single(TradeOrderKind::Originium);
-    let ori_report = search_trade_single_order(
-        pool,
-        table,
-        &ori_opts,
-        TradeOrderKind::Originium,
-        filter,
-    )?;
+    let ori_report =
+        search_trade_single_order(pool, table, &ori_opts, TradeOrderKind::Originium, filter)?;
 
     let composite_score = f64::from(scenario.gold_order_stations) * gold_report.best.score
         + f64::from(scenario.originium_order_stations) * ori_report.best.score;
@@ -168,6 +201,7 @@ fn search_trade_split_stations(
         unit_gold_per_day: gold_report.best.unit_gold_per_day,
         unit_originium_per_day: ori_report.best.unit_originium_per_day,
         output_multiplier: gold_report.best.output_multiplier,
+        breakdown: TradeScoreBreakdown::default(),
     };
 
     Ok(TradeSearchReport {
@@ -182,6 +216,10 @@ fn search_trade_split_stations(
         gold_order_line: Some(gold_report.best),
         originium_order_line: Some(ori_report.best),
     })
+}
+
+fn trade_efficiency_sort_key(hit: &TradeSearchHit) -> f64 {
+    hit.trade_pct
 }
 
 fn search_trade_single_order(
@@ -203,7 +241,11 @@ fn search_trade_single_order(
             .iter()
             .position(|e| e.name == *name)
             .or_else(|| {
-                if filter.must_operator_override.as_ref().is_some_and(|o| o.name == *name) {
+                if filter
+                    .must_operator_override
+                    .as_ref()
+                    .is_some_and(|o| o.name == *name)
+                {
                     Some(0)
                 } else {
                     None
@@ -251,15 +293,7 @@ fn search_trade_single_order(
             .collect::<Vec<_>>()
             .par_iter()
             .filter_map(|combo| {
-                eval_combo_hit(
-                    pool,
-                    table,
-                    options,
-                    order_kind,
-                    *combo,
-                    None,
-                    None,
-                )
+                eval_combo_hit(pool, table, options, order_kind, *combo, None, None)
             })
             .filter(|hit| hit_filter.is_none_or(|f| f(hit)))
             .collect()
@@ -267,17 +301,18 @@ fn search_trade_single_order(
 
     let evaluated = hits.len() as u64;
     hits.sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
+        trade_efficiency_sort_key(b)
+            .partial_cmp(&trade_efficiency_sort_key(a))
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     let best = hits.first().cloned().ok_or_else(|| {
-        crate::error::Error::msg(if filter.hit_filter.is_some() || filter.must_include_name.is_some()
-        {
-            "no trade triple matched search filter"
-        } else {
-            "trade pool has fewer than 3 ready operators"
-        })
+        crate::error::Error::msg(
+            if filter.hit_filter.is_some() || filter.must_include_name.is_some() {
+                "no trade triple matched search filter"
+            } else {
+                "trade pool has fewer than 3 ready operators"
+            },
+        )
     })?;
     let top = hits.into_iter().take(options.top_k).collect();
 
@@ -324,11 +359,33 @@ fn eval_combo_hit(
     };
     let result = solve_trade_with_shift_prevalidated(&input, table, options.shift_hours).ok()?;
     let names: Vec<String> = input.operators.iter().map(|o| o.name.clone()).collect();
+
+    let order_eff_global = result.order_eff_total - result.order_eff_base - result.order_eff_skill;
+    let eff_factor = if result.order_mechanic.ignores_order_eff() {
+        1.0
+    } else {
+        1.0 + result.order_eff_total / 100.0
+    };
+    let mech_factor = 1.0 + result.order_mechanic.mechanic_equiv_eff_pct / 100.0;
+    let breakdown = TradeScoreBreakdown {
+        order_eff_base: result.order_eff_base,
+        order_eff_skill: result.order_eff_skill,
+        order_eff_global,
+        order_eff_total_pct: result.order_eff_total,
+        mechanic_equiv_eff_pct: result.order_mechanic.mechanic_equiv_eff_pct,
+        eff_factor,
+        mech_factor,
+        effective_eff_multiplier: result.effective_eff_multiplier,
+        unit_trade_per_day: result.production.unit.unit_trade_per_day,
+        unit_gold_per_day: result.production.unit.unit_gold_per_day,
+        shortcut_id: result.trade_shortcut.clone(),
+    };
+
     Some(TradeSearchHit {
         names,
         gold_names: vec![],
         originium_names: vec![],
-        score: result.effective_eff_multiplier,
+        score: result.order_eff_total,
         trade_pct: result.order_eff_total,
         gold_pct: result.order_mechanic.mechanic_equiv_eff_pct,
         shortcut: result.trade_shortcut,
@@ -336,6 +393,7 @@ fn eval_combo_hit(
         unit_gold_per_day: result.production.unit.unit_gold_per_day,
         unit_originium_per_day: result.production.unit.unit_originium_per_day,
         output_multiplier: result.production.unit.multiplier_vs_lv3_regular,
+        breakdown,
     })
 }
 
@@ -346,9 +404,9 @@ pub fn hit_witch_shortcut(hit: &TradeSearchHit) -> bool {
 }
 
 pub fn hit_closure_shortcut(hit: &TradeSearchHit) -> bool {
-    hit.shortcut.as_deref().is_some_and(|id| {
-        id.starts_with("gsl_closure") || id == "gsl_blackkey_closure"
-    })
+    hit.shortcut
+        .as_deref()
+        .is_some_and(|id| id.starts_with("gsl_closure") || id == "gsl_blackkey_closure")
 }
 
 pub fn hit_blackkey_closure_shortcut(hit: &TradeSearchHit) -> bool {
@@ -364,8 +422,8 @@ mod tests {
     use super::*;
     use crate::instances::default_instances_path;
     use crate::instances::OperatorInstances;
-    use crate::pool::build_trade_pool;
-    use crate::roster::Roster;
+    use crate::pool::{add_jie_market_to_trade_pool, build_trade_pool};
+    use crate::roster::{OperatorProgress, Roster};
     use crate::skill_table::{default_skill_table_path, SkillTable};
 
     #[test]
@@ -375,7 +433,9 @@ mod tests {
         assert_eq!(opts.layout.dorm_occupant_count, 20);
         // MonsterCuisine 基线已移除；无 assignment 时编排层不运行，所以初始为 0
         assert_eq!(
-            opts.layout.global.get(crate::global_resource::GlobalResourceKey::MonsterCuisine),
+            opts.layout
+                .global
+                .get(crate::global_resource::GlobalResourceKey::MonsterCuisine),
             0.0
         );
         assert!(opts.layout.base_workforce.is_empty());
@@ -383,11 +443,9 @@ mod tests {
 
     #[test]
     fn roster_search_finds_docus_station() {
-        let roster = Roster::load_csv_for_facility(
-            &crate::roster::default_roster_path().unwrap(),
-            "trade",
-        )
-        .unwrap();
+        let roster =
+            Roster::load_csv_for_facility(&crate::roster::default_roster_path().unwrap(), "trade")
+                .unwrap();
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let pool = build_trade_pool(&roster, &instances, &table).unwrap();
@@ -398,15 +456,23 @@ mod tests {
             &pool,
             &table,
             &TradeSearchOptions {
-                top_k: 20,
+                top_k: 200,
                 order_mode: TradeSearchOrderMode::Single(TradeOrderKind::Gold),
                 ..TradeSearchOptions::default()
             },
         )
         .unwrap();
         assert!(report.evaluated > 0);
-        let docus_solo = report.top.iter().find(|h| h.names.contains(&"但书".to_string()));
-        assert!(docus_solo.is_some(), "但书应出现在 top 结果中: {:?}", report.top);
+        let docus_solo = report
+            .top
+            .iter()
+            .find(|h| h.names.contains(&"但书".to_string()));
+        assert!(
+            docus_solo.is_some(),
+            "但书应出现在搜索结果中（score={} 为贸易效率%，赤金效率另列）: top_k={}",
+            docus_solo.map(|h| h.score).unwrap_or(0.0),
+            report.top.len()
+        );
         let hit = docus_solo.unwrap();
         assert!(
             hit.shortcut.as_deref() == Some("gsl_docus_solo"),
@@ -421,12 +487,79 @@ mod tests {
     }
 
     #[test]
-    fn split_station_search_reports_gold_and_originium_lines() {
-        let roster = Roster::load_csv_for_facility(
-            &crate::roster::default_roster_path().unwrap(),
-            "trade",
+    fn trade_search_score_is_paper_efficiency_sort_key() {
+        let hit = TradeSearchHit {
+            names: vec!["a".into()],
+            gold_names: vec![],
+            originium_names: vec![],
+            score: 123.0,
+            trade_pct: 123.0,
+            gold_pct: 45.0,
+            shortcut: None,
+            unit_trade_per_day: 10_000.0,
+            unit_gold_per_day: 1_000.0,
+            unit_originium_per_day: 0.0,
+            output_multiplier: 3.14,
+            breakdown: TradeScoreBreakdown {
+                order_eff_total_pct: 123.0,
+                effective_eff_multiplier: 3.14,
+                ..Default::default()
+            },
+        };
+        assert_eq!(trade_efficiency_sort_key(&hit), hit.trade_pct);
+        assert_eq!(hit.score, hit.breakdown.order_eff_total_pct);
+    }
+
+    #[test]
+    fn karlan_precision_search_finds_ling_jie_by_l1() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let mut roster = Roster::default();
+        for (name, elite) in [
+            ("孑", 2),
+            ("银灰", 2),
+            ("琳琅诗怀雅", 2),
+            ("崖心", 2),
+            ("讯使", 0),
+        ] {
+            roster.insert(name, OperatorProgress::elite_only(elite));
+        }
+        let mut pool = build_trade_pool(&roster, &instances, &table).unwrap();
+        assert!(pool.entry("孑").is_none(), "精1+孑默认不进通用池");
+        add_jie_market_to_trade_pool(&mut pool, &instances, &table);
+        assert!(pool.entry("孑").is_some(), "灵知线搜索应注入市井孑");
+
+        let mut layout = LayoutContext::default();
+        layout.global_inject.record_karlan_precision(-15.0, 6);
+        let report = search_trade_triples(
+            &pool,
+            &table,
+            &TradeSearchOptions {
+                top_k: 5,
+                layout: Arc::new(layout),
+                order_mode: TradeSearchOrderMode::Single(TradeOrderKind::Gold),
+                ..TradeSearchOptions::default()
+            },
         )
         .unwrap();
+
+        let best = report.best;
+        assert_eq!(best.shortcut, None);
+        assert!(best.names.contains(&"孑".to_string()), "{:?}", best.names);
+        assert!(best.names.contains(&"银灰".to_string()), "{:?}", best.names);
+        assert!(
+            best.names.contains(&"琳琅诗怀雅".to_string()),
+            "{:?}",
+            best.names
+        );
+        assert!((best.trade_pct - 129.0).abs() < 0.01, "best={best:?}");
+    }
+
+    #[test]
+    fn split_station_search_reports_gold_and_originium_lines() {
+        let roster =
+            Roster::load_csv_for_facility(&crate::roster::default_roster_path().unwrap(), "trade")
+                .unwrap();
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let pool = build_trade_pool(&roster, &instances, &table).unwrap();

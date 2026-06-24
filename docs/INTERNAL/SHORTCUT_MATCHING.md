@@ -24,13 +24,13 @@
 | `segments[]` | producer 条件 + `consumer` 种类 + `shortcut_id` + `priority` |
 | `roles[].pick_steps` | meta 站落位顺序：`segment` → `shortcut` → `unfiltered` |
 
-**Producer**（`GlobalInjectManifest`）：`haru_e2_in_control`、`karlan_precision`。
+**Producer**（`GlobalInjectManifest`）：`haru_e2_in_control`、`daifeen_e2_in_control` 等；`karlan_precision` 仍是全局注入，但喀兰市井孑已改走 L1 自然计算，不再注册 active L3 segment。
 
-**Consumer**（Rust 匹配器）：`docus_syracusa`（但书+伺夜+贝洛内）、`ling_jie`（灵孑银崖）。
+**Consumer**（Rust 匹配器）：`docus_syracusa`、`blackkey_closure`、`vina_lungmen`、`penguin_*`。
 
 **`roles.docus` fallback 链**：
 
-1. `segment/docus_syracusa`（仅 `haru_e2_in_control` 时尝试）→ `gsl_docus_syracusa` trade=90
+1. `segment/docus_syracusa`（仅 `haru_e2_in_control` 时尝试）→ `gsl_docus_syracusa` trade=200 / gold=55（含阿米娅7%、贸易站人头3%、中枢八幡海铃E2）
 2. `shortcut/gsl_docus_solo` → L1 动态 `order_eff_pre`
 3. `unfiltered` → 无 filter 全池（公孙盒无但书时 Plain）
 
@@ -38,18 +38,18 @@
 
 ## 成套方案认领（`base_systems.json`）
 
-数据：`data/base_systems.json`；代码：`layout/system.rs`（`claim_base_systems`）。
+数据：`data/base_systems.json`（每 System 含 `"tier"` 字段：`cross_station` / `same_station`）；主路径代码：`layout/orchestrate::{build_plan, execute_plan}`，其中 `build_plan` 调用 `select_registry_systems`。`layout/system.rs::claim_base_systems` 仅作兼容 / 测试辅助入口。
 
-在 `assign_shift` **开头**（高峰班）按 `priority` 认领跨设施固定组合：先占 `control` / `trade_post` 等空房，写入 `used`；后续设施贪心跳过已占房间。中枢若只钉了体系内 1 人（如海铃），`assign_control` 会**补满剩余席位**而非整房重搜。
+在 `assign_shift` **开头**（高峰班）由 `build_plan` 按 **tier 两阶段**贪心认领固定组合：先 `CrossStation`（跨站体系）、后 `SameStation`（同站组合），各阶段内按 `priority` 排序，`exclusive_group` 互斥态跨阶段共享。随后 `execute_plan` 先占 `control` / `trade_post` 等空房并写入 `used`；后续设施贪心跳过已占房间。中枢若只钉了体系内 1 人（如海铃），`assign_control` 会**补满剩余席位**而非整房重搜。
 
-来源：公孙长乐工具人表（`scripts/build_base_systems_from_gongsun_xlsx.py` 维护小目录）。`exclusive_group` 互斥（如 `meta_chain`：叙拉古/喀兰/推王/怪猎四选一）；`pick_one` 在认领时按顺序取盒内第一个可用干员（如裁缝β四选一）。贸易 L3 锚点仍在 `trade_shortcuts.json`。
+来源：公孙长乐工具人表（`scripts/build_base_systems_from_gongsun_xlsx.py` 维护小目录）。`exclusive_group` 互斥（如 `meta_chain`：叙拉古/喀兰/推王/怪猎四选一）；`pick_one` 在认领时按顺序取盒内第一个可用干员（如裁缝β四选一）。贸易 L3 锚点仍在 `trade_shortcuts.json`，但 `gsl_ling_jie_yaxin` 仅作参考锚点，不参与 active 匹配。
 
 ## 匹配优先级（`resolve_trade_shortcut`）
 
 ```
 互斥检查 → None（solver 层已 Err，此处双保险）
     ↓
-链段表 match_registered_trade_segment（docus_syracusa / ling_jie）
+链段表 match_registered_trade_segment（docus_syracusa / blackkey_closure / vina_lungmen / penguin_*）
     ↓
 但书单走 match_docus_solo_shortcut
     ↓
@@ -95,11 +95,13 @@ None → 走 L2
 
 表内 `trade_pct` / `gold_pct` / `unit_trade_anchor` 为公孙工具人锚点；L1 仍算 `order_eff_pre` 供对比。
 
-## 灵孑银崖（`gsl_ling_jie_yaxin`）
+## 灵知市井孑（L1 自然计算）
 
-- 条件：`inject.karlan_precision()` 有值（中枢灵知 E2 已 resolve）+ 孑带 `trade_ord_limit_count[000]` + 同房有 **银灰** 与另一名 **`cc.g.karlan` 干员**（崖心/角峰/讯使等）。
-- `trade_pct` 固定 **125.0**（工具人表）；`gold_pct` 0。
-- 与巫恋/可露希尔/但书无互斥；未命中时 L1 裸算约 132%（见 `docs/需要完成的干员建模.md` §一）。
+- 当前不走 active L3：`trade_segments.json` 无 `ling_jie`，`shortcut.rs` 无 `match_ling_jie_shortcut`。
+- `base_systems.json` 的 `ling_jie_karlan` 只认领灵知 E2 中枢；贸易站由 L1 搜索在 `karlan_precision` 激活时注入精1+ 市井孑，再自然选择银灰、琳琅诗怀雅、崖心、讯使等第三人。
+- 回归：`reg_ling_jie_yaxin_natural` 断言中枢灵知 E2 + 精1+孑 / 银灰 / 琳琅诗怀雅 = **129.0**，且 `trade_shortcut=None`。
+- 129 拆法：银灰受精密计算后 5% + 琳琅 20% = 25%；孑按 18 单上限给 72%；琳琅按超出 10 单的 8 单给 32%；合计 129%。
+- `gsl_ling_jie_yaxin` 保留在 `trade_shortcuts.json` 作为参考锚点，不应出现在 solver 输出的 `trade_shortcut`。
 
 ## 可露希尔分档（`match.kind == "closure"`）
 
@@ -128,6 +130,7 @@ None → 走 L2
 |------------------------|----------|
 | `gsl_witch_*` | `witch_fixture(shortcut_id, level)` |
 | `gsl_docus_*` | `docus_fixture(case_id, level)` |
+| `case_id contains ling_jie` + `expect_shortcut=none` | `ling_jie_fixture(level)` |
 | 其他已接线 closure | `closure_fixture(case_id, level)` |
 
 未接线 case 打印 `skip ... (fixture not wired)`。夹具定义：`infra-cli/src/verify/fixtures.rs`。

@@ -89,8 +89,8 @@
     },
     {
       "id": "gsl_docus_syracusa",
-      "label": "但书+伺夜+贝洛内（叙拉古链；需中枢八幡海铃E2，工具45+45）",
-      "trade_pct": 90.0,
+      "label": "但书+伺夜+贝洛内（叙拉古链；含阿米娅7%、人头3%、中枢八幡海铃E2，200%贸）",
+      "trade_pct": 200.0,
       "gold_pct": 55.0,
       "tailor_tier": "docus",
       "match": {
@@ -110,13 +110,10 @@
     },
     {
       "id": "gsl_ling_jie_yaxin",
-      "label": "灵知+孑+银灰+喀兰工具人（灵孑银崖）",
-      "trade_pct": 125.0,
+      "label": "灵知+精1孑+银灰+琳琅诗怀雅（参考锚点；现由L1自然计算129%贸）",
+      "trade_pct": 129.0,
       "gold_pct": 0.0,
-      "tailor_tier": "regular",
-      "match": {
-        "kind": "ling_jie"
-      }
+      "tailor_tier": "regular"
     },
     {
       "id": "gsl_blackkey_closure",
@@ -130,8 +127,8 @@
     },
     {
       "id": "gsl_vina_lungmen",
-      "label": "推王组：推进之王+摩根+维娜·维多利亚（95%贸；需中枢戴菲恩E2）",
-      "trade_pct": 95.0,
+      "label": "推王组：推进之王+摩根+维娜·维多利亚（135%贸；需中枢戴菲恩E2）",
+      "trade_pct": 135.0,
       "gold_pct": 0.0,
       "tailor_tier": "regular",
       "match": {
@@ -140,7 +137,7 @@
     },
     {
       "id": "gsl_penguin_texlap_e0",
-      "label": "企鹅物流：德E0恩怨+拉普兰德+挂件",
+      "label": "企鹅物流：德狼恩怨+拉普兰德+挂件（德克萨斯精0/精2均可）",
       "trade_pct": 88.0,
       "gold_pct": 0.0,
       "tailor_tier": "regular",

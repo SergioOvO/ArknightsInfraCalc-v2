@@ -50,7 +50,10 @@ impl GlobalInjectManifest {
     }
 
     pub fn record_trade(&mut self, family: &str, value: f64) {
-        let entry = self.trade_by_family.entry(family.to_string()).or_insert(0.0);
+        let entry = self
+            .trade_by_family
+            .entry(family.to_string())
+            .or_insert(0.0);
         *entry = entry.max(value);
     }
 
@@ -115,3 +118,18 @@ pub const INJECT_FAMILY_TRADE_GLOBAL_FLAT: &str = "trade_global_flat";
 
 /// 默认注入族：全制造站 flat %（凯尔希/Mon3tr 等）。
 pub const INJECT_FAMILY_MANU_GLOBAL_ALL: &str = "manu_global_all";
+
+/// Per-faction scaling 注入族：每叙拉古干员在贸易站提供 +5%。
+pub const INJECT_FAMILY_TRADE_SIRACUSA_SCALING: &str = "trade_siracusa_scaling";
+
+/// Per-faction scaling 注入族：每 3 谢拉格贸易站提供 +10%。
+pub const INJECT_FAMILY_TRADE_KARLAN_STATION: &str = "trade_karlan_station";
+
+/// Per-faction scaling 注入族：每格拉斯哥帮干员在贸易站提供 +10%。
+pub const INJECT_FAMILY_TRADE_GLASGOW_SCALING: &str = "trade_glasgow_scaling";
+
+/// Per-faction scaling 注入族：每黑钢国际干员在制造站提供 +5%。
+pub const INJECT_FAMILY_MANU_BLACKSTEEL_SCALING: &str = "manu_blacksteel_scaling";
+
+/// Per-faction scaling 注入族：每骑士干员在制造站提供 +7%。
+pub const INJECT_FAMILY_MANU_KNIGHT_SCALING: &str = "manu_knight_scaling";

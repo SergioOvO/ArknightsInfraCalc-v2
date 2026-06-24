@@ -1,6 +1,6 @@
 # 项目地图（Agent / 开发者入门）
 
-> **新会话请先读 [AGENTS.md](../AGENTS.md)**，再读本文。机制细节见 [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md)，协作节奏见 [COLLAB_WORKFLOW.md](COLLAB_WORKFLOW.md)。大文件内部边界见 [INTERNAL/](INTERNAL/)。
+> **新会话请先读 [AGENTS.md](../AGENTS.md)**，再读 [INDEX.md](INDEX.md) 和本文。机制细节见 [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md)，评分口径见 [SCORING_MODEL.md](SCORING_MODEL.md)，评分收敛计划见 [SCORING_REFACTOR_PLAN.md](SCORING_REFACTOR_PLAN.md)。准备实现事项见 [TODO/](TODO/)，归档材料见 [ARCHIVE/](ARCHIVE/)。大文件内部边界见 [INTERNAL/](INTERNAL/)。
 
 **结构已定稿**：不再做大范围源码拆分；靠文档路由到正确函数段即可。
 
@@ -27,7 +27,7 @@
 | **发电站** | ✅ | — | — | ✅ `search_power_assignment` | ✅ 宏观排班内 | — | 充能 + 虚拟发电折算（晨曦等） |
 | **全局资源** | 注册表 ✅ | 池 ✅ | — | — | — | — | P0：木天蓼 / 人间烟火（简化）/ 魔物料理（基准注入） |
 
-域详情：**制造** → [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)；**全局资源** → [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) §8.13。
+域详情：**制造** → [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)；**全局资源** → [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) §8.13；**评分口径/公孙公式接入** → [SCORING_MODEL.md](SCORING_MODEL.md)、[SCORING_REFACTOR_PLAN.md](SCORING_REFACTOR_PLAN.md)。
 
 **非目标**（由上层规划器负责）：心情排班、宿管恢复、全基建连班优化。见设计文档 §8.12。
 
@@ -65,7 +65,8 @@ ArknightsInfraCalc-v2/
 ├── README.md
 ├── AGENTS.md               Cursor / 新会话首读（链到本文）
 ├── docs/
-│   ├── PROJECT_MAP.md      ← 本文
+│   ├── INDEX.md            文档总入口：首读、TODO、归档、任务路由
+│   ├── PROJECT_MAP.md      ← 本文：当前架构地图
 │   ├── EFFECT_ATOM_DESIGN.md   机制词汇、已建模干员、分层求解定稿
 │   ├── MANUFACTURE_STATUS.md   制造站域状态（勿按贸易站假设改）
 │   ├── BASE_ASSIGNMENT.md      全基建进驻编制（宏观排班）设计
@@ -74,7 +75,8 @@ ArknightsInfraCalc-v2/
 │   ├── SCHEDULE_ROTATION.md    αβγ ABC 轮换 vs 废弃 A-B-A
 │   ├── SYSTEM_CHAINS.md        谜迭香/自动化/红松林/莱茵 体系链参考
 │   ├── INFRA_CLI.md            infra-cli 模块职责与改动边界
-│   ├── COLLAB_WORKFLOW.md      逐干员协作节奏与数据不变式
+│   ├── TODO/                   准备实现 / 正在实现的事项
+│   ├── ARCHIVE/                已完成 / 废弃 / 历史材料
 │   └── INTERNAL/               大文件内部地图（interpreter / shortcut）
 ├── crates/
 │   ├── infra-core/         库：类型、解释器、求解、搜索、排班、编排
@@ -93,6 +95,7 @@ ArknightsInfraCalc-v2/
 |------|------|------|
 | **types** | `src/types.rs` | `Phase` / `Selector` / `Action` / `Condition` / `EffectAtom` / `SkillDef` — JSON 与解释器共享的类型 |
 | **tier** | `src/tier.rs` | `PromotionTier`（精0 / 精1+） |
+| **layout/tier** | `src/layout/tier.rs` | `OperatorTier`（`CrossStation` / `SameStation` / `Standalone`）— 三层分配优先级 |
 | **skill_table** | `src/skill_table.rs` | 加载 `data/skill_table.json`；`data_path()` / `workspace_root()` |
 | **instances** | `src/instances.rs` | `operator_instances.json`；`resolve_buff_ids`（含 stepwise 技能）；`buff_stem` |
 | **roster** | `src/roster.rs` | 贸易站干员名单 CSV（`roster.csv` 等），按设施过滤 |
@@ -117,12 +120,12 @@ ArknightsInfraCalc-v2/
 
 | 文件 | 层级 | 职责 |
 |------|------|------|
-| `input.rs` | — | `TradeOperator` / `TradeRoomInput` / `TradeLayoutContext`（`search_baseline` / `snhunt_baseline` / `snhunt_elite2_baseline`） |
+| `input.rs` | — | `TradeOperator` / `TradeRoomInput`；`TradeLayoutContext` 是 `LayoutContext` 兼容别名（优先读 `layout/context.rs`） |
 | `interpreter.rs` | L1 | `TradeContext`、`apply_trade_phases`；按 Phase 执行 EffectAtom；挂钩 `gold_flow`。**内部地图**：[INTERNAL/TRADE_INTERPRETER.md](INTERNAL/TRADE_INTERPRETER.md) |
 | `gold_flow.rs` | L2 | `apply_gold_flow_chain`：绮良/鸿雪/图耶等虚拟赤金线累加 |
 | `order_mechanic.rs` | L2 | 订单 tag/分布 → `mechanic_equiv_eff_pct`（违约、裁缝、龙舌兰等） |
-| `shortcut.rs` | L3 | 加载 `trade_shortcuts.json`；但书 solo / 灵孑银崖 / 巫恋组 / 可露希尔分档；同房互斥校验。**内部地图**：[INTERNAL/SHORTCUT_MATCHING.md](INTERNAL/SHORTCUT_MATCHING.md) |
-| `segment.rs` | — | 链段注册表 `trade_segments.json`（docus_syracusa / ling_jie） |
+| `shortcut.rs` | L3 | 加载 `trade_shortcuts.json`；但书 solo / 巫恋组 / 可露希尔 / 黑键 / 推王 / 企鹅分档；同房互斥校验。**内部地图**：[INTERNAL/SHORTCUT_MATCHING.md](INTERNAL/SHORTCUT_MATCHING.md) |
+| `segment.rs` | — | 链段注册表 `trade_segments.json`（docus_syracusa / blackkey_closure / vina_lungmen / penguin_*） |
 | `solver.rs` | — | **`solve_trade` / `solve_trade_with_shift`**：串联 L1→L2→L3，输出 `TradeResult` |
 | `unit_output.rs` | — | 单位产出、无人机折算、`TradeDailyYield` |
 
@@ -137,11 +140,12 @@ ArknightsInfraCalc-v2/
 | `blueprint.rs` | `BaseBlueprint`、`RoomBlueprint`、`FacilityKind`、`RoomProduct`；`trade_station_scenario`、`manu_line_scenario` |
 | `assignment.rs` | `BaseAssignment`、`AssignedOperator`、`RoomAssignment` |
 | `assign.rs` | **`assign_shift` / `assign_shift_with_plan`**：编排 `build_plan` → `execute_plan`；贸易余站贪心 |
-| `orchestrate/` | **`AssignmentPlan`**、`select_registry_systems`、`execute_plan`（System → Plan → Execute） |
+| `orchestrate/` | **`AssignmentPlan`**、`select_registry_systems`、`execute_plan`（System → Plan → Execute；tier 两阶段贪心） |
 | `resolve.rs` | `resolve_base`：蓝图+编制 → `ResolvedBase`；集成 `cross_facility` global 池 |
 | `context.rs` | `LayoutContext`、`SharedLayout`、`DEFAULT_DORM_OCCUPANT_COUNT` |
 | `shift.rs` | `AssignShiftMode`（`Peak` / `Recovery`） |
-| `system.rs` | `base_systems.json` 解析；`fixed` / `bond` / `pick_one` slot 落位 |
+| `system.rs` | `base_systems.json` 解析（含 `tier` 字段）与兼容 helper；主路径落位在 `orchestrate/execute.rs` |
+| `tier.rs` | `OperatorTier` 枚举：`CrossStation` / `SameStation` / `Standalone`（三层分配优先级） |
 | `workforce.rs` | `WorkforceIndex`、杜林计数 tag |
 
 ---
@@ -155,7 +159,7 @@ ArknightsInfraCalc-v2/
 | `pool --trade` | 打印贸易站池统计与跳过原因 |
 | `search trade [--roster] [--top N]` | 全池 C(n,3) 搜索 Top-K |
 | `bench --operbox <path>` | 243c 基准布局 + operbox 贸易/制造搜索（**无**怪猎木天蓼；怪猎号见下） |
-| **`layout test`** | **自定义 `BaseBlueprint` + operbox（默认 `assign_shift` 宏观排班）** |
+| **`layout test`** | **自定义 `BaseBlueprint` + operbox（默认 `assign_base_greedy` 宏观排班）** |
 | **`layout team-rotation`** | **αβγ ABC 三队轮换（含 MAA 导出）— 现行默认** |
 | **`layout rotation`** | ~~三班 A-B-A~~ **已废弃**（启动警告）；请用 `team-rotation` |
 | **`layout analyze`** | **练度 box profile 分析（对比基线）** |
@@ -165,7 +169,7 @@ ArknightsInfraCalc-v2/
 
 **Agent 默认夹具**（无用户路径时）：`data/fixtures/243/layout.json` + `data/fixtures/243/operbox_full_e2.json` — 见 [AGENTS.md](../AGENTS.md) §6。
 
-**用户说「跑一遍模拟」**：`layout team-rotation` + `--maa-out out/243_maa.json` — 见 [AGENTS.md](../AGENTS.md) §6.2、[SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md)、[INFRA_CLI.md](INFRA_CLI.md)「跑一遍模拟」。
+**用户说「跑一遍模拟」**：`plan`（推荐）或 `layout team-rotation` + `--maa-out out/243_maa.json` — 见 [AGENTS.md](../AGENTS.md) §6.2、[SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md)、[INFRA_CLI.md](INFRA_CLI.md)「跑一遍模拟」。
 
 **模块职责（必读）**：[INFRA_CLI.md](INFRA_CLI.md) — 约定 `commands` / `verify` / `output` 分工，避免把机制或夹具塞回 `main.rs`。
 
@@ -188,7 +192,7 @@ ArknightsInfraCalc-v2/
 | `expect_shortcut` / 条件 | 夹具函数 | 典型 case |
 |--------------------------|----------|-----------|
 | `gsl_witch_*` | `witch_fixture(shortcut_id, level)` | 巫恋核各档 |
-| `gsl_ling_jie_yaxin` | `ling_jie_fixture` | 灵知 + 孑 + 银灰 + 喀兰工具人 |
+| `case_id contains ling_jie` + `expect_shortcut=none` | `ling_jie_fixture` | 灵知 + 孑 + 银灰 + 琳琅诗怀雅；L1 自然 129，shortcut=None |
 | `gsl_docus_*` | `docus_fixture(case_id, level)` | 但书三人组 |
 | `expect_shortcut` 为 closure 且已接线 | `closure_fixture(case_id, level)` | `reg_gsl_closure_tier90` 等 |
 | 其他 | — | 打印 `fixture not wired` 并 skip |
@@ -205,9 +209,9 @@ ArknightsInfraCalc-v2/
 |------|------|--------|
 | **`skill_table.json`** | `buff_id` → EffectAtom 列表；空 `atoms` = 委托 L2 | Cursor（用户确认后） |
 | **`operator_instances.json`** | `干员@tier_0` / `干员@tier_up` → `buff_ids`；干员归属唯一真相 | Cursor |
-| **`trade_shortcuts.json`** | L3 组合表化最优解 + verify 锚点 | 双方 |
-| **`trade_segments.json`** | 链段注册表（docus_syracusa / ling_jie + roles fallback 链） | 双方 |
-| **`base_systems.json`** | 编排层体系认领（`select_registry_systems` / `execute_plan`） | 脚本 + 手工 |
+| **`trade_shortcuts.json`** | L3 组合表化最优解 + verify / reference 锚点；`gsl_ling_jie_yaxin` 仅参考，不 active 匹配 | 双方 |
+| **`trade_segments.json`** | 链段注册表（docus_syracusa / blackkey_closure / vina_lungmen / penguin_* + roles fallback 链） | 双方 |
+| **`base_systems.json`** | 编排层体系认领（`select_registry_systems` / `execute_plan`）；字段含 `tier`（`cross_station` / `same_station`）、priority、`exclusive_group`、slots | 脚本 + 手工 |
 | **`REGRESSION_CASES.csv`** | CLI `verify` 用例：期望 trade%/gold%/shortcut_id | 双方 |
 | **`UNIT_OUTPUT_ANCHORS.csv`** | 单位产出 / GSL 赤金锚点 | 双方 |
 | **`prts_trade_skills.json`** / `.csv` / `_table.html` | PRTS 贸易站技能原文快照（核对用） | 脚本抓取 |
@@ -290,9 +294,9 @@ ArknightsInfraCalc-v2/
 
 ## 新 Agent 推荐阅读顺序
 
-1. **[AGENTS.md](../AGENTS.md)**（含 **§4 协作工序**）→ **本文**
+1. **[AGENTS.md](../AGENTS.md)**（含 **§5 改机制工序**）→ **[INDEX.md](INDEX.md)** → **本文**
 2. [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) **§一、§八**（原则 + 三层架构）
-3. 若改干员：[AGENTS.md §4](../AGENTS.md) + [COLLAB_WORKFLOW.md](COLLAB_WORKFLOW.md) + [需要完成的干员建模.md](需要完成的干员建模.md) 定稿案例
+3. 若改干员：[AGENTS.md §5](../AGENTS.md) + [需要完成的干员建模.md](需要完成的干员建模.md) 定稿案例
 4. 若改求解：`trade/solver.rs`（50 行内看清调用链）→ [INTERNAL/](INTERNAL/) 定位 L1/L2/L3 函数段
 5. 若改宏观排班或搜索：`layout/assign.rs` / `search/control.rs` / `search/power.rs`
 6. 若改制造：[MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)
@@ -317,7 +321,9 @@ ArknightsInfraCalc-v2/
 | [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) | EffectAtom 模型、词汇表、分层求解概要、全局资源注册表 |
 | [MODELLED_OPERATORS.md](MODELLED_OPERATORS.md) | 已建模干员索引（从 EFFECT_ATOM_DESIGN.md §4 抽出） |
 | [SYSTEM_CHAINS.md](SYSTEM_CHAINS.md) | 谜迭香/自动化/红松林/莱茵 四大体系链参考手册 |
-| [COLLAB_WORKFLOW.md](COLLAB_WORKFLOW.md) | 逐干员协作五步、数据不变式、验证命令 |
+| [INDEX.md](INDEX.md) | 文档入口、TODO / ARCHIVE 分层、任务路由 |
+| [TODO/](TODO/) | 准备实现 / 正在实现的事项 |
+| [ARCHIVE/](ARCHIVE/) | 已完成、废弃或历史文档 |
 | [INFRA_CLI.md](INFRA_CLI.md) | CLI 分层原则、`commands` / `verify` / `output` 职责 |
 | [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md) | 制造站实现范围与缺口 |
 | [BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md) | 全基建单班进驻编制设计（已落地） |

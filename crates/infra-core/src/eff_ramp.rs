@@ -14,13 +14,7 @@ pub enum EffRampStyle {
 }
 
 /// 第 `hour` 小时结束时的生产力/充能加成 %（`hour` ≥ 1）。
-pub fn eff_at_hour(
-    style: EffRampStyle,
-    initial: f64,
-    per_hour: f64,
-    cap: f64,
-    hour: u32,
-) -> f64 {
+pub fn eff_at_hour(style: EffRampStyle, initial: f64, per_hour: f64, cap: f64, hour: u32) -> f64 {
     if hour == 0 {
         return 0.0;
     }

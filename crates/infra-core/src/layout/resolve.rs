@@ -5,14 +5,13 @@ use crate::error::Result;
 use crate::instances::OperatorInstances;
 use crate::layout::assignment::{AssignedOperator, BaseAssignment};
 use crate::layout::blueprint::{BaseBlueprint, FacilityKind, RoomId, RoomProduct};
+use crate::layout::context::{LayoutContext, DEFAULT_DORM_OCCUPANT_COUNT};
 use crate::layout::workforce::WorkforceIndex;
 use crate::manufacture::input::ManuOperator;
 use crate::pool::compile_operator_atoms;
 use crate::power::{apply_power_to_layout, PowerOperator};
 use crate::skill_table::SkillTable;
 use crate::tier::PromotionTier;
-use crate::global_resource::GlobalResourceKey;
-use crate::layout::context::{LayoutContext, DEFAULT_DORM_OCCUPANT_COUNT};
 use crate::trade::input::{TradeOperator, TradeOrderKind};
 use crate::types::{AtomScope, CompiledAtom, RecipeKind, Selector};
 
@@ -83,10 +82,7 @@ pub fn resolve_base(
         facility_level_sum_excl_meeting: blueprint.facility_level_sum_excl_meeting(),
         manu_recipe_kinds: blueprint.manu_recipe_kinds(),
         elite_facility_count: effective_elite_facility_count(
-            blueprint,
-            assignment,
-            &workforce,
-            instances,
+            blueprint, assignment, &workforce, instances,
         ),
         sui_facility_count: blueprint.scenario.sui_facility_count.unwrap_or(0),
         dorm_occupant_count: effective_dorm_occupants(blueprint, assignment),
@@ -153,7 +149,9 @@ pub fn resolve_base(
         );
         if !global_atoms.is_empty() {
             let snapshot = crate::cross_facility::orchestrate_global_atoms(
-                &global_atoms, &layout, layout.global.clone(),
+                &global_atoms,
+                &layout,
+                layout.global.clone(),
             );
             layout.global = snapshot.global;
         }
@@ -204,17 +202,15 @@ pub fn resolve_snhunt_elite2_baseline_layout() -> Result<LayoutContext> {
     let assignment = snhunt_control_assignment(2);
     let instances = OperatorInstances::load(&crate::instances::default_instances_path()?)?;
     let table = SkillTable::load(&crate::skill_table::default_skill_table_path()?)?;
-    Ok(
-        resolve_base(
-            &blueprint,
-            &assignment,
-            Some(&instances),
-            Some(&table),
-            24.0,
-            None,
-        )?
-        .layout,
-    )
+    Ok(resolve_base(
+        &blueprint,
+        &assignment,
+        Some(&instances),
+        Some(&table),
+        24.0,
+        None,
+    )?
+    .layout)
 }
 
 pub fn resolve_snhunt_baseline_layout() -> Result<LayoutContext> {
@@ -222,17 +218,15 @@ pub fn resolve_snhunt_baseline_layout() -> Result<LayoutContext> {
     let assignment = snhunt_default_assignment();
     let instances = OperatorInstances::load(&crate::instances::default_instances_path()?)?;
     let table = SkillTable::load(&crate::skill_table::default_skill_table_path()?)?;
-    Ok(
-        resolve_base(
-            &blueprint,
-            &assignment,
-            Some(&instances),
-            Some(&table),
-            24.0,
-            None,
-        )?
-        .layout,
-    )
+    Ok(resolve_base(
+        &blueprint,
+        &assignment,
+        Some(&instances),
+        Some(&table),
+        24.0,
+        None,
+    )?
+    .layout)
 }
 
 pub fn resolve_automation_group_1_layout(
@@ -263,10 +257,7 @@ fn effective_elite_facility_count(
     if assignment.has_room_staffing() {
         return workforce.elite_facility_count(blueprint, instances);
     }
-    blueprint
-        .scenario
-        .elite_facility_count
-        .unwrap_or(0)
+    blueprint.scenario.elite_facility_count.unwrap_or(0)
 }
 
 fn effective_dorm_occupants(blueprint: &BaseBlueprint, _assignment: &BaseAssignment) -> u8 {
@@ -280,9 +271,12 @@ fn effective_dorm_occupants(blueprint: &BaseBlueprint, _assignment: &BaseAssignm
 /// 通用扣回：对本房干员中 scope=Global 的 StateProduce atom 做扣回。
 /// 编排层已统一执行这些 atom 并将结果写入 `layout.global`。
 /// Per-room 求解时相同 atom 会再次执行，故须扣回编排层已计数的分量。
-fn deduct_room_global_atoms<'a, I>(room_layout: &mut LayoutContext, compiled_atoms_iter: I, layout: &LayoutContext)
-where
-    I: IntoIterator<Item = &'a Arc<[CompiledAtom]>>
+fn deduct_room_global_atoms<'a, I>(
+    room_layout: &mut LayoutContext,
+    compiled_atoms_iter: I,
+    layout: &LayoutContext,
+) where
+    I: IntoIterator<Item = &'a Arc<[CompiledAtom]>>,
 {
     for atoms in compiled_atoms_iter {
         for ca in atoms.iter() {
@@ -303,10 +297,11 @@ where
 /// cross_facility/interpreter.rs 的 resolve_selector_value 使用相同的 Selector 求值逻辑。
 fn scope_global_contribution(atom: &crate::types::EffectAtom, layout: &LayoutContext) -> f64 {
     let Some(sel) = &atom.selector else {
-        return 1.0 * match &atom.action {
-            crate::types::Action::StateProduce { amount, .. } => *amount,
-            _ => 0.0,
-        };
+        return 1.0
+            * match &atom.action {
+                crate::types::Action::StateProduce { amount, .. } => *amount,
+                _ => 0.0,
+            };
     };
     let scale = match sel {
         Selector::DormOccupantCount => f64::from(layout.dorm_occupant_count),
@@ -320,12 +315,13 @@ fn scope_global_contribution(atom: &crate::types::EffectAtom, layout: &LayoutCon
 }
 
 /// 贸易房：扣回 scope=Global atom（编排层已产出）。
-fn room_layout_for_trade(
-    layout: &LayoutContext,
-    operators: &[TradeOperator],
-) -> LayoutContext {
+fn room_layout_for_trade(layout: &LayoutContext, operators: &[TradeOperator]) -> LayoutContext {
     let mut room_layout = layout.clone();
-    deduct_room_global_atoms(&mut room_layout, operators.iter().map(|op| &op.compiled_atoms), layout);
+    deduct_room_global_atoms(
+        &mut room_layout,
+        operators.iter().map(|op| &op.compiled_atoms),
+        layout,
+    );
     room_layout
 }
 
@@ -363,7 +359,7 @@ fn build_trade_rooms(
             let operators: Vec<TradeOperator> = assignment
                 .operators_in(&room.id)
                 .iter()
-                .filter_map(|op| to_trade_operator(instances, table, op).ok())
+                .filter_map(|op| to_trade_operator(instances, table, layout, op).ok())
                 .collect();
             Some(ResolvedTradeRoom {
                 id: room.id.clone(),
@@ -435,10 +431,20 @@ fn build_power_rooms(
 fn to_trade_operator(
     instances: Option<&OperatorInstances>,
     table: Option<&SkillTable>,
+    layout: &LayoutContext,
     op: &AssignedOperator,
 ) -> Result<TradeOperator> {
+    const JIE_MARKET_BUFF: &str = "trade_ord_limit_count[000]";
     let tier = PromotionTier::from_elite(op.elite);
-    let buff_ids = resolve_buff_ids(instances, op, "trade")?;
+    let mut buff_ids = resolve_buff_ids(instances, op, "trade")?;
+    if op.name == "孑"
+        && layout.global_inject.karlan_precision().is_some()
+        && buff_ids.iter().any(|b| b == JIE_MARKET_BUFF)
+    {
+        // 孑的精0摊贩与精1市井是替换关系，但当前 assignment 只保存 elite，
+        // 无法表达“四星精1”。灵知线落位后重解时必须与搜索注入保持一致。
+        buff_ids = vec![JIE_MARKET_BUFF.to_string()];
+    }
     let compiled_atoms = table
         .map(|t| compile_operator_atoms(&buff_ids, t))
         .unwrap_or_else(|| Arc::from([]));
@@ -524,6 +530,7 @@ fn resolve_buff_ids(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::global_resource::GlobalResourceKey;
     use crate::instances::{default_instances_path, OperatorInstances};
     use crate::layout::assignment::{AssignedOperator, BaseAssignment};
     use crate::layout::blueprint::BaseBlueprint;
@@ -532,9 +539,71 @@ mod tests {
 
     fn pair() -> (OperatorInstances, SkillTable) {
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
-        let table = SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap())
-            .unwrap();
+        let table =
+            SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
         (instances, table)
+    }
+
+    #[test]
+    fn ling_jie_assignment_roundtrip_keeps_market_jie() {
+        use crate::trade::input::TradeRoomInput;
+        use crate::trade::solve_trade;
+
+        let (instances, table) = pair();
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room("control", vec![AssignedOperator::new("灵知", 2)]);
+        assignment.set_room(
+            "trade_1",
+            vec![
+                AssignedOperator::new("琳琅诗怀雅", 2),
+                AssignedOperator::new("银灰", 2),
+                AssignedOperator::new("孑", 2),
+            ],
+        );
+
+        let resolved = resolve_base(
+            &blueprint,
+            &assignment,
+            Some(&instances),
+            Some(&table),
+            24.0,
+            None,
+        )
+        .unwrap();
+        let trade = resolved
+            .trade_rooms
+            .iter()
+            .find(|r| r.id.0 == "trade_1")
+            .unwrap();
+        let jie = trade.operators.iter().find(|o| o.name == "孑").unwrap();
+        assert_eq!(
+            jie.buff_ids,
+            vec!["trade_ord_limit_count[000]".to_string()],
+            "灵知线 assignment round-trip 不应把精0摊贩叠回市井孑"
+        );
+
+        let result = solve_trade(
+            &TradeRoomInput {
+                level: trade.level,
+                operators: trade.operators.clone(),
+                order_count: None,
+                mood: 24.0,
+                gold_production_lines: Some(resolved.gold_manu_line_count()),
+                durin_virtual_lines: None,
+                human_fireworks: None,
+                layout: Arc::new(trade.layout.clone()),
+                active_order_kind: trade.order,
+            },
+            &table,
+        )
+        .unwrap();
+        assert_eq!(result.trade_shortcut, None);
+        assert!(
+            (result.order_eff_total - 129.0).abs() < 0.01,
+            "灵知+市井孑+银灰+琳琅应自然算出 129，got {}",
+            result.order_eff_total
+        );
     }
 
     #[test]
@@ -649,7 +718,11 @@ mod tests {
         );
 
         // 迷迭香房扣回自产 → 读全量 76；意识实体 /1 = +76% 生产力（文档 §7.1「整十」满配上限 ~75-80%）。
-        let manu = resolved.manu_rooms.iter().find(|r| r.id.0 == "manu_4").unwrap();
+        let manu = resolved
+            .manu_rooms
+            .iter()
+            .find(|r| r.id.0 == "manu_4")
+            .unwrap();
         let manu_result = solve_manufacture(
             &ManuRoomInput {
                 level: manu.level,
@@ -668,7 +741,11 @@ mod tests {
         );
 
         // 黑键房读全量 76；怅惘和声 /2 = +38% 贸易效率（文档 §7.2 ~37.5-40%）。
-        let trade = resolved.trade_rooms.iter().find(|r| r.id.0 == "trade_1").unwrap();
+        let trade = resolved
+            .trade_rooms
+            .iter()
+            .find(|r| r.id.0 == "trade_1")
+            .unwrap();
         assert!(
             (trade.layout.global.get(GlobalResourceKey::Perception) - 56.0).abs() < f64::EPSILON,
             "黑键房应扣回自产 20 → 56, got {}",
@@ -694,7 +771,11 @@ mod tests {
         assert!((layout.global.get(GlobalResourceKey::Matatabi) - 12.0).abs() < f64::EPSILON);
         assert!((layout.global_inject.trade_eff_pct() - 7.0).abs() < f64::EPSILON);
         assert!(
-            (layout.global_inject.manu_eff_for(crate::types::RecipeKind::Gold) - 2.0).abs()
+            (layout
+                .global_inject
+                .manu_eff_for(crate::types::RecipeKind::Gold)
+                - 2.0)
+                .abs()
                 < f64::EPSILON
         );
     }
@@ -716,10 +797,14 @@ mod tests {
         assert_eq!(layout.durin_in_base, 0);
         assert_eq!(layout.facility_level_sum_excl_meeting, 45);
         // MonsterCuisine 基线已从 search_baseline_legacy 中移除，由编排层按需生产
-        assert!((layout.global.get(crate::global_resource::GlobalResourceKey::MonsterCuisine)
-            - 0.0)
-            .abs()
-            < f64::EPSILON);
+        assert!(
+            (layout
+                .global
+                .get(crate::global_resource::GlobalResourceKey::MonsterCuisine)
+                - 0.0)
+                .abs()
+                < f64::EPSILON
+        );
         assert!(layout.base_workforce.is_empty());
     }
 
@@ -755,12 +840,8 @@ mod tests {
         let (instances, table) = pair();
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let mut assignment = BaseAssignment::default();
-        assignment.base_workforce = vec![
-            "杜林".into(),
-            "桃金娘".into(),
-            "至简".into(),
-            "褐果".into(),
-        ];
+        assignment.base_workforce =
+            vec!["杜林".into(), "桃金娘".into(), "至简".into(), "褐果".into()];
         assignment.training_assist = Some(AssignedOperator::new("杜林", 0));
         let layout = resolve_base(
             &blueprint,
@@ -833,7 +914,10 @@ mod tests {
         assert_eq!(layout.power_station_count, 3);
         assert!(layout.power_workforce.iter().any(|n| n == "Lancet-2"));
         assert!(
-            (layout.global.get(crate::global_resource::GlobalResourceKey::VirtualPower) - 2.0)
+            (layout
+                .global
+                .get(crate::global_resource::GlobalResourceKey::VirtualPower)
+                - 2.0)
                 .abs()
                 < f64::EPSILON,
             "森蚺中枢 + Lancet-2 → VirtualPower +2"
@@ -850,10 +934,12 @@ mod tests {
         let (instances, table) = pair();
         let blueprint =
             BaseBlueprint::load(&data_path("layout/243_use_this_.json").unwrap()).unwrap();
-        let assignment =
-            BaseAssignment::load(&data_path("schedule_243/assignment_automation_trio_e2.json").unwrap())
-                .unwrap();
-        let operbox = OperBox::load(&data_path("schedule_243/operbox_ideal_e2.json").unwrap()).unwrap();
+        let assignment = BaseAssignment::load(
+            &data_path("schedule_243/assignment_automation_trio_e2.json").unwrap(),
+        )
+        .unwrap();
+        let operbox =
+            OperBox::load(&data_path("schedule_243/operbox_ideal_e2.json").unwrap()).unwrap();
         let durin_plan = operbox.durin_dorm_planning_count(&instances);
         let resolved = resolve_base(
             &blueprint,
@@ -869,7 +955,9 @@ mod tests {
             "trade={} eff_power={} virtual_power={} global_manu={}",
             layout.trade_station_count,
             layout.effective_power_station_count(),
-            layout.global.get(crate::global_resource::GlobalResourceKey::VirtualPower),
+            layout
+                .global
+                .get(crate::global_resource::GlobalResourceKey::VirtualPower),
             layout.global_inject.manu_eff_for(RecipeKind::Gold)
         );
         let manu = resolved
@@ -934,8 +1022,7 @@ mod tests {
         )
         .unwrap();
         assert!(
-            (resolved.layout.global.get(GlobalResourceKey::UsautDrink) - 1.0).abs()
-                < f64::EPSILON
+            (resolved.layout.global.get(GlobalResourceKey::UsautDrink) - 1.0).abs() < f64::EPSILON
         );
         let manu = resolved
             .manu_rooms
@@ -981,14 +1068,11 @@ mod tests {
         .unwrap()
         .layout;
         assert!(
-            (layout.global.get(GlobalResourceKey::IntelligenceReserve) - 3.0).abs()
-                < f64::EPSILON,
+            (layout.global.get(GlobalResourceKey::IntelligenceReserve) - 3.0).abs() < f64::EPSILON,
             "灰烬+霜华+战车 → 3 情报储备, got {}",
             layout.global.get(GlobalResourceKey::IntelligenceReserve)
         );
-        assert!(
-            (layout.global.get(GlobalResourceKey::UsautDrink) - 1.0).abs() < f64::EPSILON
-        );
+        assert!((layout.global.get(GlobalResourceKey::UsautDrink) - 1.0).abs() < f64::EPSILON);
         assert!(
             (layout.office_hire_spd_pct - 40.0).abs() < f64::EPSILON,
             "20 + 3×5 + 1×5 = 40, got {}",

@@ -3,6 +3,7 @@
 use crate::layout::blueprint::{FacilityKind, RoomId};
 use crate::layout::shift::AssignShiftMode;
 use crate::layout::system::RegistrySystemClaim;
+use crate::layout::tier::OperatorTier;
 use std::collections::HashSet;
 
 /// 单个 slot 的落位方式（Phase 0 以 fixed / optional 为主；bond / core 在 Phase 2+ 扩展）。
@@ -34,6 +35,7 @@ pub enum SlotFill {
 pub struct ActivatedSystem {
     pub system_id: String,
     pub priority: i32,
+    pub tier: OperatorTier,
     pub slots: Vec<SlotFill>,
 }
 
@@ -134,6 +136,7 @@ pub fn registry_as_activated(claim: &RegistrySystemClaim) -> ActivatedSystem {
     ActivatedSystem {
         system_id: claim.system_id.clone(),
         priority: claim.priority,
+        tier: claim.tier,
         slots,
     }
 }

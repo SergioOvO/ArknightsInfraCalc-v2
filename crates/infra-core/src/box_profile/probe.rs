@@ -8,8 +8,8 @@ use crate::operbox::OperBox;
 use crate::pool::{build_manufacture_pool, build_trade_pool};
 use crate::schedule::schedule_team_rotation;
 use crate::search::{
-    search_manufacture_triples, search_trade_triples, ManuSearchReport, TradeSearchOptions,
-    ManuSearchOptions, TradeSearchReport,
+    search_manufacture_triples, search_trade_triples, ManuSearchOptions, ManuSearchReport,
+    TradeSearchOptions, TradeSearchReport,
 };
 use crate::skill_table::SkillTable;
 use crate::tier::PromotionTier;
@@ -62,7 +62,8 @@ pub fn run_user_rotation_probe(
         .filter(|p| PromotionTier::is_tier_up(**p))
         .count();
     let trade_pool = build_trade_pool(&operbox.trade_roster(instances), instances, table)?;
-    let manu_pool = build_manufacture_pool(&operbox.manufacture_roster(instances), instances, table)?;
+    let manu_pool =
+        build_manufacture_pool(&operbox.manufacture_roster(instances), instances, table)?;
 
     Ok(LayoutProbe {
         owned: operbox.owned_count(),

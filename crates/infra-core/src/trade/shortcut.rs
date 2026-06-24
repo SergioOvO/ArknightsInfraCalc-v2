@@ -82,11 +82,7 @@ impl TradeShortcutCache {
         let mut closure_indices = Vec::new();
         for (i, entry) in entries.iter().enumerate() {
             by_id.insert(entry.id.clone(), i);
-            if entry
-                .r#match
-                .as_ref()
-                .is_some_and(|m| m.kind == "closure")
-            {
+            if entry.r#match.as_ref().is_some_and(|m| m.kind == "closure") {
                 closure_indices.push(i);
             }
         }
@@ -102,9 +98,7 @@ impl TradeShortcutCache {
     }
 
     fn closure_entries(&self) -> impl Iterator<Item = &TradeShortcutEntry> {
-        self.closure_indices
-            .iter()
-            .map(|&i| &self.entries[i])
+        self.closure_indices.iter().map(|&i| &self.entries[i])
     }
 }
 
@@ -173,9 +167,7 @@ pub fn trade_station_exclusive_violation(ops: &[TradeOperator], table: &SkillTab
 
 /// 但书 + 工具人三人站（搜索/轮换均为 C(n,3)）。
 pub fn is_docus_solo_station(ops: &[TradeOperator], table: &SkillTable) -> bool {
-    ops.len() >= 3
-        && room_has_docus_mechanic(ops, table)
-        && !room_has_witch_side_group(ops, table)
+    ops.len() >= 3 && room_has_docus_mechanic(ops, table) && !room_has_witch_side_group(ops, table)
 }
 
 /// 叙拉古但书链段 consumer：但书 + 伺夜 + 贝洛内（无巫恋侧）。
@@ -243,9 +235,8 @@ fn resolve_trade_shortcut_inner(
     if let Some(m) = match_blackkey_closure_shortcut(ops, table) {
         return Some(m);
     }
-    if let Some(m) = match_vina_lungmen_shortcut(ops, table) {
-        return Some(m);
-    }
+    // 推王龙门的 135% 贸易效率是戴菲恩中枢 producer 激活后的 vault 满配值，
+    // 只能通过 trade_segments 的 producer-gated 路径命中；无戴菲恩 fallback 需另建锚点。
     if let Some(m) = match_penguin_exusiai_lemuen_shortcut(ops, table) {
         return Some(m);
     }
@@ -279,50 +270,18 @@ pub fn match_blackkey_closure_shortcut(
     Some(TradeShortcutMatch { entry })
 }
 
-const JIE_MARKET_BUFF: &str = "trade_ord_limit_count[000]";
-const KARLAN_TAG: &str = "cc.g.karlan";
-/// 德克萨斯 E0「恩怨」；企鹅物流德狼 bond 识别用。
-const TEX_ENEMY_BUFF: &str = "trade_ord_spd&cost_P[000]";
 /// 德克萨斯 E2「默契」；企鹅物流德能 bond 识别用。
 const TEX_MOQI_BUFF: &str = "trade_ord_limit&cost_P[010]";
 /// 黑键·乐感（宿舍人数 → 感知）；E2 组合短路识别用。
 const BLACKKEY_PERCEPTION_BUFF: &str = "trade_ord_spd_bd_n1[000]";
 
-/// 灵知 E2 + 精1 孑 + 银灰 + 另一名 `cc.g.karlan` 贸易干员；需中枢精密计算已激活。
-pub fn match_ling_jie_shortcut(
-    ops: &[TradeOperator],
-    inject: &GlobalInjectManifest,
-) -> Option<TradeShortcutMatch> {
-    if inject.karlan_precision().is_none() {
-        return None;
-    }
-    let has_jie_market = ops.iter().any(|o| {
-        o.name == "孑" && o.buff_ids.iter().any(|b| b == JIE_MARKET_BUFF)
-    });
-    if !has_jie_market {
-        return None;
-    }
-    if !ops.iter().any(|o| o.name == "银灰") {
-        return None;
-    }
-    let other_karlan = ops.iter().any(|o| {
-        o.name != "孑"
-            && o.name != "银灰"
-            && o.tags.iter().any(|t| t == KARLAN_TAG)
-    });
-    if !other_karlan {
-        return None;
-    }
-    let cache = trade_shortcut_cache()?;
-    let entry = cache.get_by_id("gsl_ling_jie_yaxin")?.clone();
-    Some(TradeShortcutMatch { entry })
-}
-
-/// 德克萨斯 E0「恩怨」+ 拉普兰德；第三人任意。
+/// 德狼「恩怨」+ 拉普兰德；第三人任意。
+///
+/// 公孙 vault 明确德克萨斯精 2 不会失去「恩怨」，所以这里不再要求
+/// `TEX_ENEMY_BUFF` 只存在于 E0，也不因 E2「默契」排除德狼路线。
 pub fn is_penguin_texlap_e0_station(ops: &[TradeOperator], table: &SkillTable) -> bool {
     ops.len() >= 3
-        && room_has_named_buff(ops, "德克萨斯", TEX_ENEMY_BUFF)
-        && !room_has_named_buff(ops, "德克萨斯", TEX_MOQI_BUFF)
+        && ops.iter().any(|o| o.name == "德克萨斯")
         && ops.iter().any(|o| o.name == "拉普兰德")
         && !penguin_bond_excluded(ops, table)
 }
@@ -420,9 +379,8 @@ pub fn match_docus_syracusa_shortcut(
     table: &SkillTable,
     inject: &GlobalInjectManifest,
 ) -> Option<TradeShortcutMatch> {
-    crate::trade::segment::match_registered_trade_segment(ops, table, inject).filter(|m| {
-        m.entry.id == "gsl_docus_syracusa"
-    })
+    crate::trade::segment::match_registered_trade_segment(ops, table, inject)
+        .filter(|m| m.entry.id == "gsl_docus_syracusa")
 }
 
 pub fn match_witch_group_shortcut(
@@ -506,9 +464,8 @@ fn penguin_bond_excluded(ops: &[TradeOperator], table: &SkillTable) -> bool {
 }
 
 fn room_has_blackkey_perception(ops: &[TradeOperator], _table: &SkillTable) -> bool {
-    ops.iter().any(|op| {
-        op.elite >= 2 && op.buff_ids.iter().any(|b| b == BLACKKEY_PERCEPTION_BUFF)
-    })
+    ops.iter()
+        .any(|op| op.elite >= 2 && op.buff_ids.iter().any(|b| b == BLACKKEY_PERCEPTION_BUFF))
 }
 
 fn room_has_pepe_exclusive(ops: &[TradeOperator], table: &SkillTable) -> bool {
@@ -570,7 +527,9 @@ fn has_witch_e2(ops: &[TradeOperator], table: &SkillTable) -> bool {
     ops.iter().any(|o| {
         o.name == "巫恋"
             && o.elite >= 2
-            && o.buff_ids.iter().any(|bid| has_witch_peer_absorb(bid, table))
+            && o.buff_ids
+                .iter()
+                .any(|bid| has_witch_peer_absorb(bid, table))
     })
 }
 
@@ -651,9 +610,7 @@ fn is_mechanic_filler(op: &TradeOperator, table: &SkillTable) -> bool {
     if op.name == "巫恋" || op.name == "龙舌兰" {
         return false;
     }
-    !has_tailor_beta(op, table)
-        && !has_tailor_alpha(op, table)
-        && !has_docus_buff(op, table)
+    !has_tailor_beta(op, table) && !has_tailor_alpha(op, table) && !has_docus_buff(op, table)
 }
 
 fn has_blank_third(ops: &[TradeOperator], table: &SkillTable) -> bool {
@@ -760,7 +717,10 @@ fn expected_from_dist(dist: &GoldDistribution, long_bonus: f64) -> (f64, f64) {
 }
 
 impl TradeShortcutMatch {
-    pub fn unit_output_from_anchor(&self, baseline_unit_trade: f64) -> Option<crate::trade::unit_output::TradeUnitOutput> {
+    pub fn unit_output_from_anchor(
+        &self,
+        baseline_unit_trade: f64,
+    ) -> Option<crate::trade::unit_output::TradeUnitOutput> {
         let ut = self.entry.unit_trade_anchor?;
         let ug = self.entry.unit_gsl_gold_anchor.unwrap_or(0.0);
         let unit_gold = ug / crate::trade::unit_output::GSL_GOLD_UNIT_SCALE;
@@ -827,11 +787,10 @@ mod tests {
     #[test]
     fn gsl_penguin_exusiai_lemuen_shortcut() {
         let table = table();
-        let instances = OperatorInstances::load(&crate::instances::default_instances_path().unwrap()).unwrap();
-        let exu = instances
-            .resolve_trade_buff_ids("能天使", crate::tier::PromotionTier::TierUp);
-        let lemuen = instances
-            .resolve_trade_buff_ids("蕾缪安", crate::tier::PromotionTier::TierUp);
+        let instances =
+            OperatorInstances::load(&crate::instances::default_instances_path().unwrap()).unwrap();
+        let exu = instances.resolve_trade_buff_ids("能天使", crate::tier::PromotionTier::TierUp);
+        let lemuen = instances.resolve_trade_buff_ids("蕾缪安", crate::tier::PromotionTier::TierUp);
         let ops = vec![
             mk_op("能天使", 2, exu.iter().map(String::as_str).collect()),
             mk_op("蕾缪安", 2, lemuen.iter().map(String::as_str).collect()),
@@ -858,6 +817,18 @@ mod tests {
     }
 
     #[test]
+    fn gsl_penguin_texlap_allows_texas_e2_enemy_route() {
+        let table = table();
+        let ops = vec![
+            mk_op("德克萨斯", 2, vec!["trade_ord_limit&cost_P[010]"]),
+            mk_op("拉普兰德", 2, vec!["trade_ord_limit&cost_P[001]"]),
+            mk_op("芬", 0, vec!["trade_ord_spd[000]"]),
+        ];
+        let m = match_penguin_texlap_e0_shortcut(&ops, &table).expect("match");
+        assert_eq!(m.entry.id, "gsl_penguin_texlap_e0");
+    }
+
+    #[test]
     fn gsl_vina_lungmen_shortcut_requires_daifeen_producer_for_segment() {
         let table = table();
         let ops = vec![
@@ -865,25 +836,28 @@ mod tests {
             mk_op("摩根", 2, vec!["trade_ord_spd[010]"]),
             mk_op("维娜·维多利亚", 2, vec!["trade_ord_spd[010]"]),
         ];
-        assert!(match_vina_lungmen_shortcut(&ops, &table).is_some());
         let without_producer =
             resolve_trade_shortcut(&ops, &table, 80.0, 3, &GlobalInjectManifest::default());
-        assert_eq!(
-            without_producer.map(|m| m.entry.id),
-            Some("gsl_vina_lungmen".to_string())
+        assert!(
+            without_producer.is_none(),
+            "推王龙门 135% 满配锚点必须由戴菲恩中枢 producer 激活"
         );
         let mut inject = GlobalInjectManifest::default();
         inject.record_daifeen_e2_in_control();
-        let with_segment =
-            resolve_trade_shortcut(&ops, &table, 80.0, 3, &inject).expect("segment");
+        let with_segment = resolve_trade_shortcut(&ops, &table, 80.0, 3, &inject).expect("segment");
         assert_eq!(with_segment.entry.id, "gsl_vina_lungmen");
+        assert!((with_segment.entry.trade_pct - 135.0).abs() < 0.01);
     }
 
     #[test]
     fn gsl_witch_long_beta_shortcut() {
         let table = table();
         let ops = vec![
-            mk_op("巫恋", 2, vec!["trade_ord_vodfox[000]", "trade_ord_wt&cost[000]"]),
+            mk_op(
+                "巫恋",
+                2,
+                vec!["trade_ord_vodfox[000]", "trade_ord_wt&cost[000]"],
+            ),
             mk_op("龙舌兰", 2, vec!["trade_ord_long[010]"]),
             mk_op("卡夫卡", 2, vec!["trade_ord_wt&cost[011]"]),
         ];
@@ -897,7 +871,11 @@ mod tests {
     fn docus_and_tailor_group_are_mutually_exclusive() {
         let table = table();
         let witch_long_docus = vec![
-            mk_op("巫恋", 2, vec!["trade_ord_vodfox[000]", "trade_ord_wt&cost[000]"]),
+            mk_op(
+                "巫恋",
+                2,
+                vec!["trade_ord_vodfox[000]", "trade_ord_wt&cost[000]"],
+            ),
             mk_op("龙舌兰", 2, vec!["trade_ord_long[010]"]),
             mk_op(
                 "但书",
@@ -914,7 +892,11 @@ mod tests {
                 2,
                 vec!["trade_ord_law[000]", "trade_ord_against[010]"],
             ),
-            mk_op("能天使", 2, vec!["trade_ord_spd[010]", "trade_ord_spd[020]"]),
+            mk_op(
+                "能天使",
+                2,
+                vec!["trade_ord_spd[010]", "trade_ord_spd[020]"],
+            ),
             mk_op("德克萨斯", 2, vec!["trade_ord_spd&cost_P[000]"]),
         ];
         assert!(is_docus_solo_station(&docus_solo, &table));
@@ -925,7 +907,11 @@ mod tests {
     fn gsl_witch_beta_blank_shortcut() {
         let table = table();
         let ops = vec![
-            mk_op("巫恋", 2, vec!["trade_ord_vodfox[000]", "trade_ord_wt&cost[000]"]),
+            mk_op(
+                "巫恋",
+                2,
+                vec!["trade_ord_vodfox[000]", "trade_ord_wt&cost[000]"],
+            ),
             mk_op("卡夫卡", 2, vec!["trade_ord_wt&cost[011]"]),
             mk_op("古米", 0, vec!["trade_ord_spd&cost[000]"]),
         ];
@@ -942,7 +928,8 @@ mod tests {
             mk_op("能天使", 2, vec!["trade_ord_spd[020]"]),
             mk_op("德克萨斯", 2, vec!["trade_ord_spd&cost_P[000]"]),
         ];
-        let m = resolve_trade_shortcut(&ops, &table, 114.0, 3, &GlobalInjectManifest::default()).expect("match");
+        let m = resolve_trade_shortcut(&ops, &table, 114.0, 3, &GlobalInjectManifest::default())
+            .expect("match");
         assert_eq!(m.entry.id, "gsl_closure_tier90");
     }
 
@@ -992,11 +979,18 @@ mod tests {
         let table = table();
         let mix = vec![
             mk_op("可露希尔", 2, vec!["trade_ord_closure[000]"]),
-            mk_op("巫恋", 2, vec!["trade_ord_vodfox[000]", "trade_ord_wt&cost[000]"]),
+            mk_op(
+                "巫恋",
+                2,
+                vec!["trade_ord_vodfox[000]", "trade_ord_wt&cost[000]"],
+            ),
             mk_op("银灰", 2, vec!["trade_ord_spd[010]", "trade_ord_spd[020]"]),
         ];
         assert!(trade_station_exclusive_violation(&mix, &table));
-        assert!(resolve_trade_shortcut(&mix, &table, 93.0, 3, &GlobalInjectManifest::default()).is_none());
+        assert!(
+            resolve_trade_shortcut(&mix, &table, 93.0, 3, &GlobalInjectManifest::default())
+                .is_none()
+        );
         assert!(match_closure_shortcut(&mix, &table, 134.0, 3).is_none());
         assert!(match_witch_group_shortcut(&mix, &table).is_none());
     }
@@ -1005,12 +999,23 @@ mod tests {
     fn witch_blank_without_long_uses_no_closure_shortcut() {
         let table = table();
         let ops = vec![
-            mk_op("巫恋", 2, vec!["trade_ord_vodfox[000]", "trade_ord_wt&cost[000]"]),
+            mk_op(
+                "巫恋",
+                2,
+                vec!["trade_ord_vodfox[000]", "trade_ord_wt&cost[000]"],
+            ),
             mk_op("银灰", 2, vec!["trade_ord_spd[010]", "trade_ord_spd[020]"]),
-            mk_op("能天使", 2, vec!["trade_ord_spd[010]", "trade_ord_spd[020]"]),
+            mk_op(
+                "能天使",
+                2,
+                vec!["trade_ord_spd[010]", "trade_ord_spd[020]"],
+            ),
         ];
         assert!(!trade_station_exclusive_violation(&ops, &table));
-        assert!(resolve_trade_shortcut(&ops, &table, 93.0, 3, &GlobalInjectManifest::default()).is_none());
+        assert!(
+            resolve_trade_shortcut(&ops, &table, 93.0, 3, &GlobalInjectManifest::default())
+                .is_none()
+        );
     }
 
     #[test]
@@ -1040,7 +1045,8 @@ mod tests {
         with_haru.record_haru_e2_in_control();
         let m = resolve_trade_shortcut(&trio, &table, 80.0, 3, &with_haru).expect("match");
         assert_eq!(m.entry.id, "gsl_docus_syracusa");
-        assert!((m.entry.trade_pct - 90.0).abs() < 0.01);
+        assert!((m.entry.trade_pct - 200.0).abs() < 0.01);
+        assert!((m.entry.gold_pct - 55.0).abs() < 0.01);
 
         let without_haru = GlobalInjectManifest::default();
         let m2 = resolve_trade_shortcut(&trio, &table, 80.0, 3, &without_haru).expect("match");
@@ -1077,11 +1083,16 @@ mod tests {
                 2,
                 vec!["trade_ord_law[000]", "trade_ord_against[010]"],
             ),
-            mk_op("能天使", 2, vec!["trade_ord_spd[010]", "trade_ord_spd[020]"]),
+            mk_op(
+                "能天使",
+                2,
+                vec!["trade_ord_spd[010]", "trade_ord_spd[020]"],
+            ),
             mk_op("德克萨斯", 2, vec!["trade_ord_spd&cost_P[000]"]),
         ];
         let pre = 83.0;
-        let m = resolve_trade_shortcut(&ops, &table, pre, 3, &GlobalInjectManifest::default()).expect("match");
+        let m = resolve_trade_shortcut(&ops, &table, pre, 3, &GlobalInjectManifest::default())
+            .expect("match");
         assert_eq!(m.entry.id, "gsl_docus_solo");
         assert!((m.entry.trade_pct - pre).abs() < 0.01);
         assert!((m.effective_multiplier() - (1.0 + pre / 100.0) * 1.55).abs() < 0.02);
@@ -1091,74 +1102,18 @@ mod tests {
     fn docus_and_closure_are_mutually_exclusive() {
         let table = table();
         let mix = vec![
-            mk_op("但书", 2, vec!["trade_ord_law[000]", "trade_ord_against[010]"]),
+            mk_op(
+                "但书",
+                2,
+                vec!["trade_ord_law[000]", "trade_ord_against[010]"],
+            ),
             mk_op("可露希尔", 2, vec!["trade_ord_closure[000]"]),
-            mk_op("能天使", 2, vec!["trade_ord_spd[010]", "trade_ord_spd[020]"]),
+            mk_op(
+                "能天使",
+                2,
+                vec!["trade_ord_spd[010]", "trade_ord_spd[020]"],
+            ),
         ];
         assert!(trade_station_exclusive_violation(&mix, &table));
-    }
-
-    #[test]
-    fn gsl_ling_jie_accepts_karlan_peer_besides_yaxin() {
-        use crate::global_resource::GlobalInjectManifest;
-        let mut inject = GlobalInjectManifest::default();
-        inject.record_karlan_precision(-15.0, 6);
-        let ops = vec![
-            TradeOperator {
-                name: "孑".into(),
-                elite: 1,
-                buff_ids: vec!["trade_ord_limit_count[000]".into()],
-                tags: vec![],
-                compiled_atoms: std::sync::Arc::from([]),
-            },
-            TradeOperator {
-                name: "银灰".into(),
-                elite: 2,
-                buff_ids: vec![],
-                tags: vec!["cc.g.karlan".into()],
-                compiled_atoms: std::sync::Arc::from([]),
-            },
-            TradeOperator {
-                name: "角峰".into(),
-                elite: 0,
-                buff_ids: vec![],
-                tags: vec!["cc.g.karlan".into()],
-                compiled_atoms: std::sync::Arc::from([]),
-            },
-        ];
-        let m = match_ling_jie_shortcut(&ops, &inject).expect("match");
-        assert_eq!(m.entry.id, "gsl_ling_jie_yaxin");
-        assert!((m.entry.trade_pct - 125.0).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn gsl_ling_jie_rejects_without_second_karlan() {
-        use crate::global_resource::GlobalInjectManifest;
-        let mut inject = GlobalInjectManifest::default();
-        inject.record_karlan_precision(-15.0, 6);
-        let ops = vec![
-            TradeOperator {
-                name: "孑".into(),
-                elite: 1,
-                buff_ids: vec!["trade_ord_limit_count[000]".into()],
-                tags: vec![],
-                compiled_atoms: std::sync::Arc::from([]),
-            },
-            TradeOperator {
-                name: "银灰".into(),
-                elite: 2,
-                buff_ids: vec![],
-                tags: vec!["cc.g.karlan".into()],
-                compiled_atoms: std::sync::Arc::from([]),
-            },
-            TradeOperator {
-                name: "能天使".into(),
-                elite: 2,
-                buff_ids: vec![],
-                tags: vec![],
-                compiled_atoms: std::sync::Arc::from([]),
-            },
-        ];
-        assert!(match_ling_jie_shortcut(&ops, &inject).is_none());
     }
 }

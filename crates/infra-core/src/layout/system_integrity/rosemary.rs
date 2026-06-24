@@ -62,10 +62,28 @@ pub fn evaluate_rosemary(ctx: &EvaluateContext<'_>) -> RosemaryVerdict {
 
     record_producer(ctx, XI, 0, &mut producers_present, &mut producers_missing);
     record_producer(ctx, XUYU, 2, &mut producers_present, &mut producers_missing);
-    record_producer(ctx, ALICE, 2, &mut producers_present, &mut producers_missing);
-    record_producer(ctx, CHERNI, 2, &mut producers_present, &mut producers_missing);
+    record_producer(
+        ctx,
+        ALICE,
+        2,
+        &mut producers_present,
+        &mut producers_missing,
+    );
+    record_producer(
+        ctx,
+        CHERNI,
+        2,
+        &mut producers_present,
+        &mut producers_missing,
+    );
     record_producer(ctx, HAIL, 2, &mut producers_present, &mut producers_missing);
-    record_producer(ctx, ZILAN, 2, &mut producers_present, &mut producers_missing);
+    record_producer(
+        ctx,
+        ZILAN,
+        2,
+        &mut producers_present,
+        &mut producers_missing,
+    );
 
     let mut optional_producers = Vec::new();
     if has_xi {
@@ -265,5 +283,4 @@ mod tests {
         assert_eq!(plan.system_id, SYSTEM_CORE);
         assert_eq!(plan.priority, 15);
     }
-
 }

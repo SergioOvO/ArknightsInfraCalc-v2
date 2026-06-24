@@ -12,6 +12,7 @@ use serde::Deserialize;
 use crate::error::{Error, Result};
 use crate::layout::assignment::{AssignedOperator, BaseAssignment};
 use crate::layout::blueprint::{BaseBlueprint, FacilityKind, RoomId};
+use crate::layout::tier::OperatorTier;
 use crate::operbox::OperBox;
 use crate::skill_table::{data_path, SkillTable};
 
@@ -30,6 +31,7 @@ pub struct RegistrySlotClaim {
 pub struct RegistrySystemClaim {
     pub system_id: String,
     pub priority: i32,
+    pub tier: OperatorTier,
     pub slots: Vec<RegistrySlotClaim>,
 }
 
@@ -59,6 +61,9 @@ pub struct BaseSystemDef {
     pub label: String,
     #[serde(default)]
     pub priority: i32,
+    /// 跨站 / 同站 / 工具人三层分类。
+    #[serde(default)]
+    pub tier: Option<OperatorTier>,
     #[serde(default)]
     pub segment_id: Option<String>,
     #[serde(default)]
@@ -250,7 +255,8 @@ fn resolve_slot_room<'a>(
     })
 }
 
-/// 按 `priority` 贪心选型：返回将认领的 registry 体系（不调 solve）。
+/// 按 tier → priority 贪心选型：先跨站、后同站（不调 solve）。
+/// 两轮共享 `claimed_groups`，跨站认领的 `exclusive_group` 在同站轮可见。
 pub fn select_registry_systems(
     blueprint: &BaseBlueprint,
     operbox: &OperBox,
@@ -268,7 +274,51 @@ pub fn select_registry_systems(
     let mut claimed_groups: HashSet<String> = HashSet::new();
     let mut selected = Vec::new();
 
-    for system in systems_by_priority(cache) {
+    // Phase 1: 跨站体系优先
+    select_tier(
+        OperatorTier::CrossStation,
+        cache,
+        blueprint,
+        operbox,
+        mode,
+        &mut scratch,
+        &mut scratch_used,
+        &mut claimed_groups,
+        skip_system_ids,
+        &mut selected,
+    );
+
+    // Phase 2: 同站组合居次
+    select_tier(
+        OperatorTier::SameStation,
+        cache,
+        blueprint,
+        operbox,
+        mode,
+        &mut scratch,
+        &mut scratch_used,
+        &mut claimed_groups,
+        skip_system_ids,
+        &mut selected,
+    );
+
+    selected
+}
+
+/// 在单个 tier 内按 priority 贪心。
+fn select_tier(
+    tier: OperatorTier,
+    cache: &BaseSystemsCache,
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    mode: AssignShiftMode,
+    scratch: &mut BaseAssignment,
+    scratch_used: &mut HashSet<String>,
+    claimed_groups: &mut HashSet<String>,
+    skip_system_ids: &HashSet<String>,
+    out: &mut Vec<RegistrySystemClaim>,
+) {
+    for system in systems_by_tier_and_priority(cache, tier) {
         if skip_system_ids.contains(&system.id) {
             continue;
         }
@@ -280,17 +330,29 @@ pub fn select_registry_systems(
                 continue;
             }
         }
-        let Some(claim) = plan_registry_system(blueprint, operbox, &scratch, &scratch_used, system)
+        let Some(claim) = plan_registry_system(blueprint, operbox, scratch, scratch_used, system)
         else {
             continue;
         };
-        apply_registry_claim_to_assignment(&claim, &mut scratch, &mut scratch_used);
-        selected.push(claim);
+        apply_registry_claim_to_assignment(&claim, scratch, scratch_used);
         if let Some(group) = system.exclusive_group.clone() {
             claimed_groups.insert(group);
         }
+        out.push(claim);
     }
-    selected
+}
+
+fn systems_by_tier_and_priority(
+    cache: &BaseSystemsCache,
+    tier: OperatorTier,
+) -> Vec<&BaseSystemDef> {
+    let mut list: Vec<_> = cache
+        .systems
+        .iter()
+        .filter(|s| s.tier == Some(tier))
+        .collect();
+    list.sort_by(|a, b| b.priority.cmp(&a.priority));
+    list
 }
 
 /// 将 `RegistrySystemClaim` 写入编制。
@@ -336,14 +398,8 @@ pub fn claim_base_systems(
     used: &mut HashSet<String>,
     skip_system_ids: &HashSet<String>,
 ) -> Result<()> {
-    let selected = select_registry_systems(
-        blueprint,
-        operbox,
-        mode,
-        assignment,
-        used,
-        skip_system_ids,
-    );
+    let selected =
+        select_registry_systems(blueprint, operbox, mode, assignment, used, skip_system_ids);
     for claim in selected {
         apply_registry_system_claim(&claim, assignment, used)?;
     }
@@ -401,6 +457,7 @@ fn plan_registry_system(
     Some(RegistrySystemClaim {
         system_id: system.id.clone(),
         priority: system.priority,
+        tier: system.tier.unwrap_or(OperatorTier::Standalone),
         slots,
     })
 }
@@ -511,6 +568,11 @@ mod tests {
         assert!(ids.contains("pinus_sylvestris"));
         assert!(ids.contains("lungmen_manu_pair"));
         assert!(ids.contains("gongsun_greyy2_power_line"));
+        assert!(ids.contains("automation_group"), "自动化组应已注册");
+        assert!(
+            !ids.contains("abyssal_hunters"),
+            "深海链只在三班轮换 S2 短班入口尝试，不进入普通 base_systems registry"
+        );
     }
 
     #[test]
@@ -619,9 +681,10 @@ mod tests {
                 && r.operators.iter().any(|o| o.name == "龙舌兰")
         });
         assert!(witch_room.is_some(), "巫恋+龙舌兰应认领另一贸易站");
-        let docus_room = assignment.rooms.iter().find(|r| {
-            r.operators.iter().any(|o| o.name == "但书")
-        });
+        let docus_room = assignment
+            .rooms
+            .iter()
+            .find(|r| r.operators.iter().any(|o| o.name == "但书"));
         assert!(docus_room.is_some(), "但书链应认领贸易站");
         assert_ne!(
             witch_room.map(|r| &r.room_id),
@@ -719,10 +782,7 @@ mod tests {
                 &HashSet::new(),
             )
             .unwrap();
-            assert!(
-                !pinus_claimed(&assignment),
-                "缺 {exclude} 时不应认领红松林"
-            );
+            assert!(!pinus_claimed(&assignment), "缺 {exclude} 时不应认领红松林");
         }
     }
 
@@ -745,10 +805,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(
-            !pinus_claimed(&assignment),
-            "仅 1 名红松制造核时不应开启"
-        );
+        assert!(!pinus_claimed(&assignment), "仅 1 名红松制造核时不应开启");
     }
 
     #[test]
@@ -759,6 +816,9 @@ mod tests {
 
         let mut assignment = BaseAssignment::default();
         let mut used = HashSet::new();
+        // 自动化组 (cross_station priority 20) 会先抢占承曦格雷伊
+        let mut skip = HashSet::new();
+        skip.insert("automation_group".to_string());
         claim_base_systems(
             &blueprint,
             &operbox,
@@ -766,7 +826,7 @@ mod tests {
             AssignShiftMode::Peak,
             &mut assignment,
             &mut used,
-            &HashSet::new(),
+            &skip,
         )
         .unwrap();
 
@@ -790,6 +850,92 @@ mod tests {
         assert!(
             power_ops.iter().any(|n| n == "布丁" || n == "炎熔"),
             "第三发电位: {power_ops:?}"
+        );
+    }
+
+    // ── automation_group ──
+
+    fn automation_claimed(assignment: &BaseAssignment) -> bool {
+        let power_has_chengxi = assignment
+            .rooms
+            .iter()
+            .any(|r| r.operators.iter().any(|o| o.name == "承曦格雷伊"));
+        let factory_has_qingliu_wendy = assignment.rooms.iter().any(|r| {
+            r.operators.iter().any(|o| o.name == "清流")
+                && r.operators.iter().any(|o| o.name == "温蒂")
+        });
+        power_has_chengxi && factory_has_qingliu_wendy
+    }
+
+    #[test]
+    fn claim_automation_group_on_ideal_e2_peak() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let operbox = ideal_e2_operbox();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+
+        let mut assignment = BaseAssignment::default();
+        let mut used = HashSet::new();
+        claim_base_systems(
+            &blueprint,
+            &operbox,
+            &table,
+            AssignShiftMode::Peak,
+            &mut assignment,
+            &mut used,
+            &HashSet::new(),
+        )
+        .unwrap();
+
+        assert!(
+            automation_claimed(&assignment),
+            "自动化组应认领承曦格雷伊(发电) + 清流+温蒂(制造)"
+        );
+    }
+
+    #[test]
+    fn claim_automation_group_skipped_without_weedy_e2() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let operbox = operbox_without_names(&ideal_e2_operbox(), &["温蒂"]);
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+
+        let mut assignment = BaseAssignment::default();
+        let mut used = HashSet::new();
+        claim_base_systems(
+            &blueprint,
+            &operbox,
+            &table,
+            AssignShiftMode::Peak,
+            &mut assignment,
+            &mut used,
+            &HashSet::new(),
+        )
+        .unwrap();
+
+        assert!(!automation_claimed(&assignment), "缺温蒂时不应认领自动化组");
+    }
+
+    #[test]
+    fn claim_automation_group_skipped_without_chengxi_greyy() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let operbox = operbox_without_names(&ideal_e2_operbox(), &["承曦格雷伊"]);
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+
+        let mut assignment = BaseAssignment::default();
+        let mut used = HashSet::new();
+        claim_base_systems(
+            &blueprint,
+            &operbox,
+            &table,
+            AssignShiftMode::Peak,
+            &mut assignment,
+            &mut used,
+            &HashSet::new(),
+        )
+        .unwrap();
+
+        assert!(
+            !automation_claimed(&assignment),
+            "缺承曦格雷伊时不应认领自动化组"
         );
     }
 }

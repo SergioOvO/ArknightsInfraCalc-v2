@@ -1,5 +1,5 @@
-use crate::tier::PromotionTier;
 use crate::layout::LayoutContext;
+use crate::tier::PromotionTier;
 
 #[derive(Debug, Clone)]
 pub struct PowerOperator {

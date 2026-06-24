@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 use crate::layout::{
-    assignment_operator_names, AssignedOperator, AssignmentPlan, AssignShiftMode, BaseAssignment,
-    BaseBlueprint, FacilityKind, RoomProduct,
+    assignment_operator_names, AssignedOperator, BaseAssignment, BaseBlueprint, FacilityKind,
+    RoomProduct,
 };
 use crate::operbox::OperBox;
 use crate::schedule::{BaseRotationReport, BaseShiftRole, TeamLabel, TeamRotationReport};
@@ -112,8 +112,9 @@ impl MaaSchedule {
             .map_err(|e| Error::msg(format!("maa schedule serialize: {e}")))?;
         if let Some(parent) = path.parent() {
             if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| Error::msg(format!("maa schedule mkdir {}: {e}", parent.display())))?;
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    Error::msg(format!("maa schedule mkdir {}: {e}", parent.display()))
+                })?;
             }
         }
         std::fs::write(path, json)
@@ -146,7 +147,11 @@ pub fn build_from_team_rotation(
                     shift.duration_hours,
                     active.join("+")
                 ),
-                description: format!("本班 {:.0} 小时；休息 {} 队", shift.duration_hours, team_label_zh(shift.resting_team)),
+                description: format!(
+                    "本班 {:.0} 小时；休息 {} 队",
+                    shift.duration_hours,
+                    team_label_zh(shift.resting_team)
+                ),
                 resting,
             }
         })
@@ -214,13 +219,10 @@ fn build_rooms(
             .rooms_of(FacilityKind::TradePost)
             .into_iter()
             .map(|room| {
-                let product = room
-                    .product
-                    .as_ref()
-                    .and_then(|p| match p {
-                        RoomProduct::Trade { order } => Some(maa_trade_product(*order)),
-                        _ => None,
-                    });
+                let product = room.product.as_ref().and_then(|p| match p {
+                    RoomProduct::Trade { order } => Some(maa_trade_product(*order)),
+                    _ => None,
+                });
                 production_slot(assignment, &room.id.0, product, true)
             })
             .collect(),
@@ -228,13 +230,10 @@ fn build_rooms(
             .rooms_of(FacilityKind::Factory)
             .into_iter()
             .map(|room| {
-                let product = room
-                    .product
-                    .as_ref()
-                    .and_then(|p| match p {
-                        RoomProduct::Factory { recipe } => Some(maa_factory_product(*recipe)),
-                        _ => None,
-                    });
+                let product = room.product.as_ref().and_then(|p| match p {
+                    RoomProduct::Factory { recipe } => Some(maa_factory_product(*recipe)),
+                    _ => None,
+                });
                 production_slot(assignment, &room.id.0, product, true)
             })
             .collect(),
@@ -553,7 +552,7 @@ fn push_room_ops(
 mod tests {
     use super::*;
     use crate::layout::{AssignedOperator, RoomBlueprint, RoomId};
-    use crate::schedule::{TeamAssignment, TeamShiftResult, ShiftScores};
+    use crate::schedule::{ShiftScores, TeamAssignment, TeamShiftResult};
     use std::time::Duration;
 
     fn sample_blueprint() -> BaseBlueprint {
@@ -604,7 +603,9 @@ mod tests {
         assignment.set_power_operator("power_1", AssignedOperator::new("格雷伊", 2));
 
         let report = TeamRotationReport {
-            peak_plan: AssignmentPlan::recovery(AssignShiftMode::Peak),
+            peak_plan: crate::layout::AssignmentPlan::recovery(
+                crate::layout::AssignShiftMode::Peak,
+            ),
             teams: vec![TeamAssignment {
                 label: TeamLabel::Gamma,
                 operators: vec!["休息干员".into()],
@@ -637,7 +638,10 @@ mod tests {
             schedule.plans[0].rooms.trading[0].operators,
             vec!["但书", "龙舌兰", "卡夫卡"]
         );
-        assert_eq!(schedule.plans[0].rooms.dormitory[0].operators, vec!["休息干员"]);
+        assert_eq!(
+            schedule.plans[0].rooms.dormitory[0].operators,
+            vec!["休息干员"]
+        );
         assert_eq!(schedule.plans[0].drones.index, 1);
     }
 }

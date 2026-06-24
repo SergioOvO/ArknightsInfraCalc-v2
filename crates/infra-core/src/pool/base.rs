@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use crate::error::Result;
 use crate::instances::OperatorInstances;
+use crate::layout::tier::OperatorTier;
 use crate::roster::Roster;
 use crate::skill_table::SkillTable;
 
@@ -10,6 +11,12 @@ use super::trade::{n_choose_k_u64, PoolSkip, PoolStats};
 /// PoolEntry 必须提供名称供 `entry()` 查找。
 pub trait HasName {
     fn pool_name(&self) -> &str;
+}
+
+/// PoolEntry 可携带三层分类标签。
+pub trait TierTagged {
+    fn tier(&self) -> OperatorTier;
+    fn set_tier(&mut self, tier: OperatorTier);
 }
 
 /// 泛型池核心：消除了 4 个 `*Pool` 结构体 + `stats()` + `entry()` 的复制粘贴。
@@ -24,6 +31,20 @@ pub trait HasName {
 pub struct PoolCore<T> {
     pub entries: Vec<T>,
     pub skipped: Vec<(String, u8, PoolSkip)>,
+}
+
+impl<T: HasName + TierTagged> PoolCore<T> {
+    /// 将 `names` 中出现的条目标注为指定 tier（高优先 tier 覆盖低优先）。
+    pub fn tag_tier(&mut self, names: &HashSet<String>, tier: OperatorTier) {
+        for entry in &mut self.entries {
+            if names.contains(entry.pool_name()) {
+                let current = entry.tier();
+                if tier.priority() > current.priority() {
+                    entry.set_tier(tier);
+                }
+            }
+        }
+    }
 }
 
 impl<T: HasName> PoolCore<T> {
@@ -54,8 +75,12 @@ pub fn build_roster_pool<T, F, S>(
     try_entry: F,
 ) -> Result<PoolCore<T>>
 where
-    F: Fn(&str, crate::roster::OperatorProgress, &OperatorInstances, &SkillTable)
-        -> std::result::Result<T, PoolSkip>,
+    F: Fn(
+        &str,
+        crate::roster::OperatorProgress,
+        &OperatorInstances,
+        &SkillTable,
+    ) -> std::result::Result<T, PoolSkip>,
     S: Fn(&T) -> f64,
     T: HasName,
 {
@@ -83,7 +108,10 @@ where
 }
 
 /// 通用过滤：排除已分配的干员（sub-pool）。
-pub fn filter_pool<T: HasName + Clone>(pool: &PoolCore<T>, exclude: &HashSet<String>) -> PoolCore<T> {
+pub fn filter_pool<T: HasName + Clone>(
+    pool: &PoolCore<T>,
+    exclude: &HashSet<String>,
+) -> PoolCore<T> {
     PoolCore {
         entries: pool
             .entries

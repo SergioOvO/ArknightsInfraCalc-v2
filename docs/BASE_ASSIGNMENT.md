@@ -1,6 +1,6 @@
 # 全基建进驻编制（宏观排班）
 
-> **状态**：**已落地**（`assign_base_greedy`、`assign_shift`、`search_control_combos`、`assign_dorm_producers`、`assign_trade_meta`、`assign_manufacture_lines`、`assign_power_stations`、`claim_base_systems`；`layout test` 默认调用宏观落位）。
+> **状态**：**已落地**（`assign_base_greedy`、`assign_shift`、`layout/orchestrate::{build_plan, execute_plan}`、`search_control_combos`、`assign_dorm_producers`、`assign_manufacture_lines`、`assign_power_stations`、`assign_trade_remainder`；`layout test` 默认调用宏观落位）。
 > 多班轮换见 **[SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md)**（现行 αβγ ABC；A-B-A 已废弃）。本文管**单班全蓝图各房间谁上岗**。
 > 心情 / 宿管 / 跨班连班仍属非目标，见 [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) §8.12。
 
@@ -16,7 +16,7 @@
 
 输出一份 **`BaseAssignment`**：每个 `room_id` 进驻哪些干员，且**同一人只占一个岗位**。
 
-当前 `layout test` **默认已调用 `assign_base_greedy`** 进行全基建宏观排班，用全局 `used` 集合消歧，同一人不会重复上岗。`bench` 仍为分搜模式（仅用于基准对比）。宏观排班在输出前用全局 `used` 集合消歧。
+当前 `layout test` **默认已调用 `assign_base_greedy`** 进行全基建宏观排班，用全局 `used` 集合消歧，同一人不会重复上岗。`bench` 仍为固定 243 基准分搜模式（仅用于搜索基准对比）。
 
 ---
 
@@ -38,9 +38,10 @@
 operbox + blueprint
         ↓
 ┌───────────────────────────────────────────────────┐
-│ 阶段 A：分设施搜索（可并行）                        │
-│  · 中枢  C(n,k)  k∈[1,5]（search_control_combos ✅） │
-│  · 贸易  每站 C(n,3)；meta 站带 shortcut 过滤       │
+│ 阶段 A：编排 + producer 落位 + 分设施搜索           │
+│  · System → Plan → Execute 先认领 registry 体系     │
+│  · 中枢  C(n,k)  k∈[1,5]（search_control_combos）   │
+│  · 贸易  registry 站由编排认领；余站 C(n,3)         │
 │  · 制造  每产线类型 C(n,3)（同 243c split-line）   │
 │  · 发电  每站 1 人贪心（已有 search_power_*）      │
 │  · 宿舍   producer 房（森西等）按 assignment 定人   │
@@ -56,7 +57,7 @@ operbox + blueprint
         ↓
    BaseAssignment
         ↓
-   resolve_base()  →  TradeLayoutContext + 各房局部 layout
+   resolve_base()  →  LayoutContext + 各房局部 layout
         ↓
    （可选）对 consumer 房再跑单房 solve 出分 / bench 输出
 ```
@@ -69,12 +70,12 @@ operbox + blueprint
 
 优先级从高到低（前者先占 `used`）：
 
-1. **控制中枢** `control`（木天蓼 / 全局贸易·制造 % 等）
-2. **宿舍 producer**（如森西 → 魔物料理；令/夕等烟火链日后同列）
-3. **贸易 meta 站**（但书 → 龙巫 → 可露希尔；逻辑同 `schedule/trade_rotation.rs` 的 `hit_filter`）
-4. **制造各产线**（按蓝图 `manu_line_scenario`：赤金线、经验线等同组三人）
-5. **发电各站**（每站 1 人，`search_power_assignment` 同款 `used`）
-6. **贸易余站**（赤金 / 源石普通三人组）
+1. **registry 体系**（`base_systems.json` → `build_plan` → `execute_plan`；跨站优先，同站次之）
+2. **控制中枢补位** `control`（木天蓼 / 全局贸易·制造 % 等；不足 5 人时用 `search_control_combos` 补满）
+3. **宿舍 / 感知 producer**（如森西、迷迭香感知源；先落位再 `resolve_base`）
+4. **发电各站**（每站 1 人，`search_power_assignment` 同款 `used`）
+5. **制造各产线**（按蓝图 `manu_line_scenario`：赤金线、经验线等同组三人）
+6. **贸易余站**（未被 registry 占用的普通贸易站）
 
 同类型多房间：按蓝图 `rooms` 数组顺序或稳定 `room_id` 字典序。
 
@@ -100,7 +101,7 @@ operbox + blueprint
 
 | 设施 | 每房人数 | 搜索入口（现有） | 编制备注 |
 |------|----------|------------------|----------|
-| 控制中枢 | 1～5 | `solve_control`（**无** search 包装，待补） | `control_operators()` |
+| 控制中枢 | 1～5 | `search_control_combos` | `ControlFillPolicy` 控制 HR / 心情补位 |
 | 贸易站 | 3 | `search_trade_triples` / `search_trade_triples_filtered` | 同房互斥：`trade_station_exclusive_violation` |
 | 制造站 | 3 | `search_manufacture_triples` | 同类产线共用三人（`ManuSearchRecipeMode::Lines`） |
 | 发电站 | 1 | `search_power_assignment` | 站内不重复 |
@@ -145,19 +146,20 @@ operbox + blueprint
 
 ## 8. 与现有命令的关系
 
-| 命令 | 现状 | 目标 |
-|------|------|------|
-| `layout test` | `BaseAssignment::default()`，贸易/制造分搜，**可重复上岗** | 调用宏观落位 → 输出 `BaseAssignment` + 各房分数 |
-| `bench` | 同上，243c 固定蓝图 | 可选接入编制 |
-| `schedule rotation` | 仅贸易 3 站 × 3 班 A-B-A，`used` 仅在**单班 9 人**内 | 不变；全基建编制是**单班快照** |
-| `search trade` | 单设施探索 | 不变 |
+| 命令 | 当前用途 | 备注 |
+|------|----------|------|
+| `layout test` | 默认调用 `assign_base_greedy`；传 `--assignment` 时消费用户给定编制 | 自定义布局 + operbox 的单班搜索 / 评分探测入口 |
+| `bench` | 固定 243 基准分搜 | 不代表宏观编制；不要用它替代 `layout test` |
+| `plan` | 账号画像 + αβγ ABC 排班 + 可选 MAA 导出 | 用户说“跑一遍模拟”时的推荐入口 |
+| `layout team-rotation` | αβγ ABC 三队轮换 | 当前全基建多班轮换入口 |
+| `layout rotation` / `schedule rotation` | A-B-A legacy | 保留兼容；新任务不要默认使用 |
+| `search trade` | 单贸易站探索 | 不做制造 / 全基建编制 |
 
 ---
 
 ## 9. 非目标（实现时勿扩 scope）
 
-- 心情预算、宿管恢复、8h 上班表
-- 制造 / 发电 / 中枢的**三班轮换**
+- 心情预算、宿管恢复、全基建连续时间最优化
 - 全局最优（整数规划 / 模拟退火）
 - 软搭档组合剪枝（无效组合靠低分淘汰）
 - 在 CLI 内写机制公式
@@ -172,11 +174,12 @@ operbox + blueprint
 | `search_control_combos` | `search/control.rs` | ✅ 已落地（含 `ControlFillPolicy`） |
 | `filter_manufacture_pool` | `pool/manufacture.rs` | ✅ 已落地（基于 `filter_pool` 泛型） |
 | `assign_dorm_producers` | `layout/assign.rs` | ✅ 已落地（森西宿舍 producer） |
-| `claim_base_systems` | `layout/system.rs` | ✅ 已落地（`base_systems.json` 认领） |
+| `layout/orchestrate::{build_plan, execute_plan}` | `layout/orchestrate/` | ✅ 当前主路径（`base_systems.json` 认领；tier 两阶段：`CrossStation` → `SameStation`） |
+| `claim_base_systems` | `layout/system.rs` | ✅ 兼容 / 测试辅助 API；主路径已迁到 `orchestrate` |
 | `layout test --assignment` | `infra-cli/commands/layout.rs` | ✅ 已落地（默认调用 `assign_base_greedy`） |
 | 单元测试 | `layout/assign.rs` tests | ✅ 无重名、黑键≠巫恋、金线 trio、怪猎中枢 |
 | MAA 导出 | `export/maa.rs` | ✅ `layout team-rotation --maa-out` |
-| **待增强** | `layout/assign.rs` / `schedule/` | αβγ 三队轮换需更多回归测试；制造 `complete_manu_anchor_rooms` 策略有待公孙夹具验证 |
+| **待增强** | `layout/assign.rs` / `schedule/` | αβγ 三队轮换需更多回归测试；制造 bond/anchor 策略等待公孙夹具 |
 
 ---
 
@@ -187,10 +190,10 @@ operbox + blueprint
 | `layout/assignment.rs` | `BaseAssignment`、`AssignedOperator` |
 | `layout/blueprint.rs` | `BaseBlueprint`、产线/贸易站场景推导 |
 | **`layout/assign.rs`** | **`assign_base_greedy` / `assign_shift`：宏观排班主入口** |
-| `layout/system.rs` | `claim_base_systems`：`base_systems.json` 成套方案认领 |
+| `layout/orchestrate/` | `build_plan` / `execute_plan`：System 选型与 fixed/bond/pick_one 落位 |
+| `layout/system.rs` | `base_systems.json` 解析、registry claim 兼容 API |
 | `layout/resolve.rs` | `resolve_base`、全局资源 producer 注入 |
 | `layout/workforce.rs` | `WorkforceIndex`、`apply_to_layout` |
-| `schedule/team_rotation.rs` | `schedule_team_rotation`：αβγ ABC 三队轮换 |
 | `schedule/shift_bind.rs` | 迷迭香+黑键等同上同下约束 |
 | `schedule/base_rotation.rs` | `schedule_base_rotation_a_b_a`（A-B-A legacy）+ `score_base_assignment` |
 | `schedule/team_rotation.rs` | `schedule_team_rotation`：αβγ 三队轮换 |

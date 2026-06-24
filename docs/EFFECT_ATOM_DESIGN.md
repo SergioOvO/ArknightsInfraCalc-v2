@@ -3,7 +3,7 @@
 > 本文档记录 ArknightsInfraCalc 重建模的核心设计。
 > **已建模干员详情**见 [`MODELLED_OPERATORS.md`](MODELLED_OPERATORS.md)。
 > **体系链**见 [`SYSTEM_CHAINS.md`](SYSTEM_CHAINS.md)。
-> **协作节奏**见 [`COLLAB_WORKFLOW.md`](COLLAB_WORKFLOW.md)。
+> **改机制协作流程**见 [`../AGENTS.md`](../AGENTS.md) §5；准备实现事项见 [`TODO/`](TODO/)。
 
 ---
 
@@ -78,7 +78,7 @@ EffectAtom {
 | `AddPerGapEff(rate)` | 每差 1 笔订单增加效率 | 孑精 0 |
 | `TagOrder(tag)` | 订单分类标签 | 但书、可露希尔等 |
 | `AddGoldDelivery(n)` | 赤金交付数额外增加 | 但书 |
-| `ReduceLimit(ceil(eff/N), min=M)` | 按效率减少订单上限 | 孑 |
+| `ReduceLimit(floor(eff/N))` | 按 selector 效率压缩订单上限；最终订单最少 1 由上限重算 clamp 保证 | 孑 |
 | `StateProduce(key, amount)` | 向全局状态池写入 | 凯尔希 |
 | `StateConsume(key, formula)` | 从全局状态池读取并计算 | 思衡托 |
 | `PeerEffAbsorb(rate_per_peer)` | 同房他人效率归零；每人向自身 +rate% | 巫恋 45、佩佩 0 |
@@ -140,7 +140,7 @@ L2 域短路：gold_flow（赤金链）、order_mechanic（订单分布→等效
 L3 组合短路：shortcut + trade_shortcuts.json（表化最优解）
 ```
 
-详细设计见 [`docs/PROJECT_MAP.md`](PROJECT_MAP.md)「求解流水线」及 `trade/solver.rs`。
+详细设计见 [`PROJECT_MAP.md`](PROJECT_MAP.md)「求解流水线」及 `trade/solver.rs`。
 
 **委托标记**：`skill_table.json` 中 `atoms: []` 表示「已注册，执行权委托给域引擎」，**不是未建模**。
 

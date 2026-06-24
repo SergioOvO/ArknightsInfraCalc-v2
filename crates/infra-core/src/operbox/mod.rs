@@ -40,12 +40,10 @@ impl OperBox {
         if is_xlsx_path(path) {
             return from_xlsx_path(path);
         }
-        let json = std::fs::read_to_string(path).map_err(|e| {
-            Error::msg(format!("operbox read {}: {e}", path.display()))
-        })?;
-        Self::from_json(&json).map_err(|error| {
-            Error::msg(format!("operbox parse {}: {error}", path.display()))
-        })
+        let json = std::fs::read_to_string(path)
+            .map_err(|e| Error::msg(format!("operbox read {}: {e}", path.display())))?;
+        Self::from_json(&json)
+            .map_err(|error| Error::msg(format!("operbox parse {}: {error}", path.display())))
     }
 
     pub fn from_json(json: &str) -> Result<Self> {
@@ -92,8 +90,7 @@ impl OperBox {
     }
 
     pub fn tier_of(&self, name: &str) -> Option<PromotionTier> {
-        self.progress_of(name)
-            .map(PromotionTier::from_progress)
+        self.progress_of(name).map(PromotionTier::from_progress)
     }
 
     pub fn owned_count(&self) -> usize {
@@ -120,11 +117,7 @@ impl OperBox {
         Self::facility_roster(self, instances, "control")
     }
 
-    fn facility_roster(
-        &self,
-        instances: &OperatorInstances,
-        facility: &str,
-    ) -> Roster {
+    fn facility_roster(&self, instances: &OperatorInstances, facility: &str) -> Roster {
         let mut roster = Roster::default();
         for (name, progress) in &self.owned {
             let tier = PromotionTier::from_progress(*progress);
@@ -161,6 +154,24 @@ impl OperBox {
         }
     }
 
+    /// 仅保留指定干员的练度盒（用于按队伍名册过滤中枢池）。
+    pub fn keeping_only(&self, names: &HashSet<String>) -> Self {
+        Self {
+            entries: self
+                .entries
+                .iter()
+                .filter(|e| names.contains(&e.name))
+                .cloned()
+                .collect(),
+            owned: self
+                .owned
+                .iter()
+                .filter(|(k, _)| names.contains(*k))
+                .map(|(k, v)| (k.clone(), *v))
+                .collect(),
+        }
+    }
+
     pub fn owned_subset(&self, excluded: &HashSet<String>) -> HashMap<String, OperatorProgress> {
         self.owned
             .iter()
@@ -186,9 +197,7 @@ impl OperBox {
 fn is_xlsx_path(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
-        .is_some_and(|ext| {
-            ext.eq_ignore_ascii_case("xlsx") || ext.eq_ignore_ascii_case("xls")
-        })
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("xlsx") || ext.eq_ignore_ascii_case("xls"))
 }
 
 fn owned_operator_has_tag(
@@ -252,10 +261,8 @@ mod tests {
     fn trade_roster_filters_to_trade_bindings() {
         let path = default_operbox_gongsun_path().unwrap();
         let box_ = OperBox::load(&path).unwrap();
-        let instances = OperatorInstances::load(
-            &crate::instances::default_instances_path().unwrap(),
-        )
-        .unwrap();
+        let instances =
+            OperatorInstances::load(&crate::instances::default_instances_path().unwrap()).unwrap();
         let trade = box_.trade_roster(&instances);
         assert!(trade.len() < box_.owned_count());
         assert!(trade.elite("巫恋").is_some());
@@ -266,12 +273,13 @@ mod tests {
     fn durin_dorm_planning_count_caps_at_four() {
         let path = default_operbox_gongsun_path().unwrap();
         let operbox = OperBox::load(&path).unwrap();
-        let instances = OperatorInstances::load(
-            &crate::instances::default_instances_path().unwrap(),
-        )
-        .unwrap();
+        let instances =
+            OperatorInstances::load(&crate::instances::default_instances_path().unwrap()).unwrap();
         let n = operbox.durin_dorm_planning_count(&instances);
-        assert!(n >= 4, "gongsun box should include multiple durin operators");
+        assert!(
+            n >= 4,
+            "gongsun box should include multiple durin operators"
+        );
         assert!(n <= 4);
     }
 
@@ -287,10 +295,8 @@ mod tests {
             rarity: 4,
         }];
         let operbox = OperBox::from_entries(entries);
-        let instances = OperatorInstances::load(
-            &crate::instances::default_instances_path().unwrap(),
-        )
-        .unwrap();
+        let instances =
+            OperatorInstances::load(&crate::instances::default_instances_path().unwrap()).unwrap();
         let table = crate::skill_table::SkillTable::load(
             &crate::skill_table::default_skill_table_path().unwrap(),
         )

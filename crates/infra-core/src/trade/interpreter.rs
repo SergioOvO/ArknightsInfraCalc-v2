@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::global_resource::GlobalResourceKey;
+use crate::layout::SharedLayout;
 use crate::skill_table::SkillTable;
 use crate::trade::gold_flow::apply_gold_flow_chain;
-use crate::layout::SharedLayout;
 use crate::types::{Action, CompiledAtom, Condition, EffectAtom, Phase, Selector, StateKey};
 #[derive(Debug, Clone, Default)]
 pub struct OperatorRuntime {
@@ -137,7 +137,16 @@ impl TradeContext {
     }
 
     pub fn order_eff_base(&self) -> f64 {
+        if self.has_jie_market() {
+            return 0.0;
+        }
         self.operators.len() as f64
+    }
+
+    fn has_jie_market(&self) -> bool {
+        self.operators
+            .iter()
+            .any(|o| o.buff_ids.iter().any(|b| b == JIE_LIMIT_COUNT_BUFF))
     }
 
     pub fn order_eff_skill(&self) -> f64 {
@@ -148,9 +157,7 @@ impl TradeContext {
     }
 
     pub fn order_eff_total(&self) -> f64 {
-        self.order_eff_base()
-            + self.order_eff_skill()
-            + self.layout.global_inject.trade_eff_pct()
+        self.order_eff_base() + self.order_eff_skill() + self.layout.global_inject.trade_eff_pct()
     }
 
     pub fn mechanic_caps(&self) -> MechanicCaps {
@@ -173,8 +180,8 @@ pub fn facility_base_limit(level: u8) -> i32 {
     match level {
         1 => 6,
         2 => 9,
-        3 => 12,
-        _ => 12,
+        3 => 10,
+        _ => 10,
     }
 }
 
@@ -185,7 +192,9 @@ pub fn collect_atoms<'a>(
     let mut atoms = Vec::new();
     for op in ops {
         for bid in &op.buff_ids {
-            let Some(skill) = table.get(bid) else { continue };
+            let Some(skill) = table.get(bid) else {
+                continue;
+            };
             for atom in &skill.atoms {
                 atoms.push((atom, op.name.clone()));
             }
@@ -272,7 +281,9 @@ fn apply_atoms_loop_compiled(
     let mut last_phase_group = 0i32;
     let mut gold_flow_done = false;
     for &(owner_idx, atom_idx) in order {
-        let atom = ctx.operators[owner_idx].compiled_atoms[atom_idx].atom.clone();
+        let atom = ctx.operators[owner_idx].compiled_atoms[atom_idx]
+            .atom
+            .clone();
         let owner_name = ctx.operators[owner_idx].name.clone();
         let phase_group = atom.phase.sort_key();
         if !gold_flow_done && phase_group >= peer_absorb_key && ctx.active_order_kind.is_gold() {
@@ -361,19 +372,16 @@ fn condition_met(
             .operators
             .iter()
             .any(|o| o.tags.iter().any(|t| t == tag)),
-        Condition::PeerTagInRoom { tag } => ctx.operators.iter().any(|o| {
-            o.name != _owner && o.tags.iter().any(|t| t == tag)
-        }),
+        Condition::PeerTagInRoom { tag } => ctx
+            .operators
+            .iter()
+            .any(|o| o.name != _owner && o.tags.iter().any(|t| t == tag)),
         Condition::OperatorInBase { name } => ctx.layout.base_workforce.iter().any(|n| n == name),
-        Condition::OperatorInPower { name } => {
-            ctx.layout.power_workforce.iter().any(|n| n == name)
-        }
+        Condition::OperatorInPower { name } => ctx.layout.power_workforce.iter().any(|n| n == name),
         Condition::OperatorInTraining { name } => {
             ctx.layout.training_assist.iter().any(|n| n == name)
         }
-        Condition::OperatorInTrade { name } => {
-            ctx.layout.trade_workforce.iter().any(|n| n == name)
-        }
+        Condition::OperatorInTrade { name } => ctx.layout.trade_workforce.iter().any(|n| n == name),
         Condition::NoPlatformInOtherPower {} => !ctx.layout.other_power_has_platform,
         Condition::OtherPlatformInPower {} => ctx.layout.other_platform_in_power,
         Condition::OtherLateranoInPower {} => ctx.layout.other_laterano_in_power,
@@ -457,11 +465,7 @@ fn apply_peer_absorb(ctx: &mut TradeContext, action: &Action, owner: &str) {
     let Action::PeerEffAbsorb { rate_per_peer } = action else {
         return;
     };
-    let peer_count = ctx
-        .operators
-        .iter()
-        .filter(|o| o.name != owner)
-        .count();
+    let peer_count = ctx.operators.iter().filter(|o| o.name != owner).count();
     for op in &mut ctx.operators {
         if op.name != owner {
             op.settled_eff = 0.0;
@@ -576,7 +580,9 @@ fn resolve_eff_value(ctx: &TradeContext, atom: &EffectAtom, owner: &str) -> f64 
     match &atom.action {
         Action::AddFlatEff { value, .. } => *value,
         Action::AddPerGapEff { rate } => *rate * ctx.order_gap() as f64,
-        Action::AddFlatEffFromSelector { multiplier, cap, .. } => {
+        Action::AddFlatEffFromSelector {
+            multiplier, cap, ..
+        } => {
             let base = resolve_selector_value(ctx, atom.selector.as_ref(), owner);
             let mut v = base * multiplier;
             if let Some(c) = cap {
@@ -628,11 +634,9 @@ fn resolve_selector_value(ctx: &TradeContext, selector: Option<&Selector>, owner
             .iter()
             .filter(|o| o.tags.iter().any(|t| t == tag))
             .count() as f64,
-        Some(Selector::LimitContribSum) => ctx
-            .operators
-            .iter()
-            .map(|o| o.limit_contrib)
-            .sum::<i32>() as f64,
+        Some(Selector::LimitContribSum) => {
+            ctx.operators.iter().map(|o| o.limit_contrib).sum::<i32>() as f64
+        }
         Some(Selector::MeetingMaxLevel) => f64::from(ctx.layout.meeting_max_level),
         Some(Selector::DormLevelSum) => f64::from(ctx.layout.dorm_level_sum),
         Some(Selector::ManuRecipeKinds) => f64::from(ctx.layout.manu_recipe_kinds),
@@ -644,11 +648,12 @@ fn resolve_selector_value(ctx: &TradeContext, selector: Option<&Selector>, owner
         Some(Selector::DormOccupantCount) => f64::from(ctx.layout.dorm_occupant_count),
         Some(Selector::OrderGap) => ctx.order_gap() as f64,
         // 市井之道「每持有 1 笔订单 +4%」：并行订单数不超过当前订单上限。
-        // 稳态满槽时按 effective limit 计（工具人表 / 灵孑银崖）；否则用输入 order_count。
+        // 稳态满槽时按 effective limit 计（工具人表 / 灵知市井孑）；否则用输入 order_count。
         Some(Selector::OrderCount) => {
-            let has_jie_market = ctx.operators.iter().any(|o| {
-                o.buff_ids.iter().any(|b| b == JIE_LIMIT_COUNT_BUFF)
-            });
+            let has_jie_market = ctx
+                .operators
+                .iter()
+                .any(|o| o.buff_ids.iter().any(|b| b == JIE_LIMIT_COUNT_BUFF));
             let raw = if has_jie_market {
                 ctx.final_order_limit
             } else {
@@ -666,17 +671,13 @@ fn resolve_selector_value(ctx: &TradeContext, selector: Option<&Selector>, owner
             .filter(|o| o.name != owner)
             .map(|o| o.settled_eff + o.variable_eff + o.direct_eff)
             .sum(),
-        Some(Selector::RoomPeerCount) => ctx
-            .operators
-            .iter()
-            .filter(|o| o.name != owner)
-            .count() as f64,
+        Some(Selector::RoomPeerCount) => {
+            ctx.operators.iter().filter(|o| o.name != owner).count() as f64
+        }
         Some(Selector::RoomOperatorCount) => ctx.operators.len() as f64,
         Some(Selector::Mood) => ctx.mood,
         Some(Selector::TradeStationCount) => f64::from(ctx.layout.trade_station_count),
-        Some(Selector::PowerStationCount) => {
-            f64::from(ctx.layout.effective_power_station_count())
-        }
+        Some(Selector::PowerStationCount) => f64::from(ctx.layout.effective_power_station_count()),
         Some(Selector::PlatformCountInPower) => f64::from(ctx.layout.platform_count_in_power),
         Some(Selector::TaggedCountInControl { .. }) | Some(Selector::ControlOperatorCount) => 0.0,
         Some(Selector::DroneCap) => ctx.layout.drone_cap as f64,
@@ -689,21 +690,18 @@ fn resolve_selector_value(ctx: &TradeContext, selector: Option<&Selector>, owner
         Some(Selector::FacilityLevelSumExclMeeting) => {
             f64::from(ctx.layout.facility_level_sum_excl_meeting).min(64.0)
         }
-        Some(Selector::TaggedCountInTradeSum { tag }) => f64::from(
-            *ctx.layout
-                .trade_tagged_count_sum
-                .get(tag)
-                .unwrap_or(&0),
-        ),
+        Some(Selector::TaggedCountInTradeSum { tag }) => {
+            f64::from(*ctx.layout.trade_tagged_count_sum.get(tag).unwrap_or(&0))
+        }
         Some(Selector::TradeStationsWithTaggedGte { tag, min }) => f64::from(
             *ctx.layout
                 .trade_stations_tagged_gte
                 .get(&crate::layout::trade_station_tagged_gte_key(tag, *min))
                 .unwrap_or(&0),
         ),
-        Some(Selector::TaggedCountInManuSum { tag }) => f64::from(
-            *ctx.layout.manu_tagged_count_sum.get(tag).unwrap_or(&0),
-        ),
+        Some(Selector::TaggedCountInManuSum { tag }) => {
+            f64::from(*ctx.layout.manu_tagged_count_sum.get(tag).unwrap_or(&0))
+        }
         Some(Selector::StatePoolFloored { .. }) => 0.0,
         None => 0.0,
     }
@@ -711,10 +709,10 @@ fn resolve_selector_value(ctx: &TradeContext, selector: Option<&Selector>, owner
 
 fn apply_limit_action(ctx: &mut TradeContext, atom: &EffectAtom, owner: &str) {
     match &atom.action {
-        Action::ReduceLimit { div, min } => {
+        Action::ReduceLimit { div, min: _ } => {
             let eff = resolve_selector_value(ctx, atom.selector.as_ref(), owner);
-            let reduce = (eff / div).ceil() as i32;
-            ctx.limit_compression += reduce.max(*min);
+            let reduce = (eff / div).floor() as i32;
+            ctx.limit_compression += reduce.max(0);
         }
         Action::AddLimitDelta { delta, .. } => {
             if let Some(idx) = ctx.operators.iter().position(|o| o.name == owner) {
@@ -756,8 +754,8 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::skill_table::SkillTable;
     use crate::layout::LayoutContext;
+    use crate::skill_table::SkillTable;
     use crate::trade::input::{TradeOperator, TradeOrderKind, TradeRoomInput};
     fn load_table() -> SkillTable {
         let path = crate::skill_table::default_skill_table_path().expect("path");
@@ -778,7 +776,7 @@ mod tests {
                 name: "subject".into(),
                 elite: 2,
                 buff_ids: vec!["trade_ord_closure[000]".into()],
-            tags: vec![],
+                tags: vec![],
                 ..Default::default()
             }],
             order_count: None,
@@ -834,10 +832,14 @@ mod tests {
         let mut ctx = TradeContext::from_room(&input);
         apply_trade_phases(&mut ctx, &table);
         assert_eq!(ctx.limit_compression, 4);
-        assert_eq!(ctx.final_order_limit, 12);
+        assert_eq!(ctx.final_order_limit, 10);
         let jie = ctx.operators.iter().find(|o| o.name == "孑").unwrap();
-        // 稳态按 limit=12 计 per-order
-        assert!((jie.variable_eff - 48.0).abs() < 0.01, "var={}", jie.variable_eff);
+        // 稳态按 limit=10 计 per-order
+        assert!(
+            (jie.variable_eff - 40.0).abs() < 0.01,
+            "var={}",
+            jie.variable_eff
+        );
     }
 
     #[test]
@@ -874,7 +876,11 @@ mod tests {
         apply_trade_phases(&mut ctx, &table);
         let xz = ctx.operators.iter().find(|o| o.name == "雪雉").unwrap();
         // peer settled 20+20=40 → floor(40/5)*5 = 35 (cap)
-        assert!((xz.variable_eff - 35.0).abs() < 0.01, "xz var={}", xz.variable_eff);
+        assert!(
+            (xz.variable_eff - 35.0).abs() < 0.01,
+            "xz var={}",
+            xz.variable_eff
+        );
     }
 
     #[test]
@@ -921,7 +927,7 @@ mod tests {
                 name: "subject".into(),
                 elite: 0,
                 buff_ids: vec!["trade_ord_limit_diff[000]".into()],
-            tags: vec![],
+                tags: vec![],
                 ..Default::default()
             }],
             order_count: Some(8),
@@ -934,8 +940,8 @@ mod tests {
         };
         let mut ctx = TradeContext::from_room(&input);
         apply_trade_phases(&mut ctx, &table);
-        // gap = 12 - 8 = 4 → 4 * 4 = 16
-        assert!((ctx.order_eff_skill() - 16.0).abs() < 0.01);
+        // gap = 10 - 8 = 2 → 2 * 4 = 8
+        assert!((ctx.order_eff_skill() - 8.0).abs() < 0.01);
     }
 
     #[test]
@@ -947,13 +953,10 @@ mod tests {
                 TradeOperator {
                     name: "subject".into(),
                     elite: 2,
-                    buff_ids: vec![
-                        "trade_cost[000]".into(),
-                        "trade_ord_spd&share[000]".into(),
-                    ],
-            tags: vec![],
-            ..Default::default()
-        },
+                    buff_ids: vec!["trade_cost[000]".into(), "trade_ord_spd&share[000]".into()],
+                    tags: vec![],
+                    ..Default::default()
+                },
                 trade_peer("peer_a", "trade_ord_spd[000]"),
                 trade_peer("peer_b", "trade_ord_spd[000]"),
             ],
@@ -982,7 +985,7 @@ mod tests {
                     name: "subject".into(),
                     elite: 0,
                     buff_ids: vec!["trade_cost[000]".into()],
-                tags: vec![],
+                    tags: vec![],
                     ..Default::default()
                 },
                 trade_peer("peer_a", "trade_ord_spd[000]"),
@@ -1018,7 +1021,7 @@ mod tests {
                     name: "subject".into(),
                     elite: 0,
                     buff_ids: vec!["trade_ord_spd&share[001]".into()],
-                tags: vec![],
+                    tags: vec![],
                     ..Default::default()
                 },
                 trade_peer("peer_a", "trade_ord_spd[000]"),
@@ -1052,9 +1055,9 @@ mod tests {
                         "trade_ord_limit&trade&lv[000]".into(),
                         "trade_ord_pepe[000]".into(),
                     ],
-            tags: vec![],
-            ..Default::default()
-        },
+                    tags: vec![],
+                    ..Default::default()
+                },
                 trade_peer("能天使", "trade_ord_spd[010]"),
                 trade_peer("德克萨斯", "trade_ord_spd&cost_P[000]"),
             ],
@@ -1097,9 +1100,9 @@ mod tests {
                         "trade_ord_vodfox[000]".into(),
                         "trade_ord_wt&cost[000]".into(),
                     ],
-            tags: vec![],
-            ..Default::default()
-        },
+                    tags: vec![],
+                    ..Default::default()
+                },
                 trade_peer("peer_a", "trade_ord_spd&cost[000]"),
                 trade_peer("peer_b", "trade_ord_spd&cost[000]"),
             ],
@@ -1136,7 +1139,7 @@ mod tests {
                     name: "铎铃".into(),
                     elite: 0,
                     buff_ids: vec!["trade_cost&bd2[000]".into()],
-                tags: vec![],
+                    tags: vec![],
                     ..Default::default()
                 },
                 trade_peer("peer_a", "trade_ord_spd[000]"),
@@ -1151,8 +1154,7 @@ mod tests {
             active_order_kind: TradeOrderKind::Gold,
         };
         let mut ctx = TradeContext::from_room(&input);
-        ctx.state_pool
-            .insert(StateKey::HumanFireworks, 35.0);
+        ctx.state_pool.insert(StateKey::HumanFireworks, 35.0);
         apply_trade_phases(&mut ctx, &table);
         for op in &ctx.operators {
             assert!(
@@ -1173,7 +1175,7 @@ mod tests {
                 name: "铎铃".into(),
                 elite: 2,
                 buff_ids: vec!["trade_cost&bd2[001]".into()],
-            tags: vec![],
+                tags: vec![],
                 ..Default::default()
             }],
             order_count: None,
@@ -1185,8 +1187,7 @@ mod tests {
             active_order_kind: TradeOrderKind::Gold,
         };
         let mut ctx = TradeContext::from_room(&input);
-        ctx.state_pool
-            .insert(StateKey::HumanFireworks, 25.0);
+        ctx.state_pool.insert(StateKey::HumanFireworks, 25.0);
         apply_trade_phases(&mut ctx, &table);
         let duoling = ctx.operators.first().unwrap();
         assert!(
@@ -1209,14 +1210,14 @@ mod tests {
                         "trade_ord_spd[000]".into(),
                         "trade_ord_spd_variable[000]".into(),
                     ],
-            tags: vec![],
-            ..Default::default()
-        },
+                    tags: vec![],
+                    ..Default::default()
+                },
                 TradeOperator {
                     name: "银灰".into(),
                     elite: 2,
                     buff_ids: vec!["trade_ord_spd&limit[022]".into()],
-                tags: vec![],
+                    tags: vec![],
                     ..Default::default()
                 },
             ],
@@ -1230,7 +1231,11 @@ mod tests {
         };
         let mut ctx = TradeContext::from_room(&input);
         apply_trade_phases(&mut ctx, &table);
-        let shiye = ctx.operators.iter().find(|o| o.name == "琳琅诗怀雅").unwrap();
+        let shiye = ctx
+            .operators
+            .iter()
+            .find(|o| o.name == "琳琅诗怀雅")
+            .unwrap();
         let skill = shiye.settled_eff + shiye.variable_eff;
         assert!((skill - 36.0).abs() < 0.01, "skill={skill}");
     }
@@ -1299,16 +1304,16 @@ mod tests {
                     name: "焰狐龙梓兰".into(),
                     elite: 2,
                     buff_ids: vec!["trade_ord_orchd2[000]".into()],
-                tags: vec!["cc.g.snhunt".into()],
-                ..Default::default()
-            },
+                    tags: vec!["cc.g.snhunt".into()],
+                    ..Default::default()
+                },
                 TradeOperator {
                     name: "雷狼龙S空爆".into(),
                     elite: 2,
                     buff_ids: vec!["trade_ord_spd3&catap2[000]".into()],
-                tags: vec!["cc.g.snhunt".into()],
-                ..Default::default()
-            },
+                    tags: vec!["cc.g.snhunt".into()],
+                    ..Default::default()
+                },
             ],
             order_count: None,
             mood: 24.0,
@@ -1320,9 +1325,13 @@ mod tests {
         };
         let mut ctx = TradeContext::from_room(&input);
         apply_trade_phases(&mut ctx, &table);
-        let zilan = ctx.operators.iter().find(|o| o.name == "焰狐龙梓兰").unwrap();
+        let zilan = ctx
+            .operators
+            .iter()
+            .find(|o| o.name == "焰狐龙梓兰")
+            .unwrap();
         assert!((zilan.settled_eff - 40.0).abs() < 0.01);
-        assert_eq!(ctx.final_order_limit, 15);
+        assert_eq!(ctx.final_order_limit, 13);
     }
 
     #[test]
@@ -1425,9 +1434,10 @@ mod tests {
     fn duoling_mood_with_default_wuyou_fireworks_baseline() {
         let table = load_table();
         let mut layout = LayoutContext::default();
-        layout
-            .global
-            .set(crate::global_resource::GlobalResourceKey::HumanFireworks, 20.0);
+        layout.global.set(
+            crate::global_resource::GlobalResourceKey::HumanFireworks,
+            20.0,
+        );
         let input = TradeRoomInput {
             level: 3,
             operators: vec![
@@ -1491,7 +1501,7 @@ mod tests {
             "5% flat + 12×3% matatabi = 41%, got {}",
             terra.settled_eff
         );
-        assert_eq!(ctx.final_order_limit, 12 + 2);
+        assert_eq!(ctx.final_order_limit, 10 + 2);
     }
 
     #[test]
@@ -1535,16 +1545,14 @@ mod tests {
             "3 泡影国小队 × 20% = 60%, got {}",
             zilan.settled_eff
         );
-        assert_eq!(ctx.final_order_limit, 12 + 3);
+        assert_eq!(ctx.final_order_limit, 10 + 3);
     }
 
     #[test]
     fn qiearchuck_monster_cuisine_from_global_pool() {
         let table = load_table();
         let mut layout = LayoutContext::default();
-        layout
-            .global
-            .set(GlobalResourceKey::MonsterCuisine, 3.0);
+        layout.global.set(GlobalResourceKey::MonsterCuisine, 3.0);
         let input = TradeRoomInput {
             level: 3,
             operators: vec![TradeOperator {
@@ -1625,7 +1633,7 @@ mod tests {
                 name: "subject".into(),
                 elite: 2,
                 buff_ids: vec!["trade_ord_limit&cost[000]".into()],
-            tags: vec![],
+                tags: vec![],
                 ..Default::default()
             }],
             order_count: None,
@@ -1638,7 +1646,7 @@ mod tests {
         };
         let mut ctx = TradeContext::from_room(&input);
         apply_trade_phases(&mut ctx, &table);
-        assert_eq!(ctx.final_order_limit, 12 + 5);
+        assert_eq!(ctx.final_order_limit, 10 + 5);
         let tao = ctx.operators.first().unwrap();
         assert!((tao.mood_drain_delta + 0.25).abs() < 0.001);
     }
@@ -1650,7 +1658,10 @@ mod tests {
         let table = load_table();
         let buff_sets: [(&str, &[&str]); 3] = [
             ("巫恋", &["trade_ord_spd_variable3[000]"]),
-            ("龙舌兰", &["trade_ord_spd[000]", "trade_ord_spd_variable[000]"]),
+            (
+                "龙舌兰",
+                &["trade_ord_spd[000]", "trade_ord_spd_variable[000]"],
+            ),
             ("能天使", &["trade_ord_spd&limit[033]"]),
         ];
         let ops: Vec<OperatorRuntime> = buff_sets
@@ -1688,9 +1699,7 @@ mod tests {
 
     fn layout_with_karlan_precision() -> std::sync::Arc<crate::trade::input::TradeLayoutContext> {
         let mut layout = crate::trade::input::TradeLayoutContext::default();
-        layout
-            .global_inject
-            .record_karlan_precision(-15.0, 6);
+        layout.global_inject.record_karlan_precision(-15.0, 6);
         std::sync::Arc::new(layout)
     }
 
@@ -1732,41 +1741,72 @@ mod tests {
         apply_trade_phases(&mut ctx, &table);
         // Constant +20 → 5；Limit +4 → limit_contrib 10
         let silver = ctx.operators.iter().find(|o| o.name == "银灰").unwrap();
-        assert!((silver.settled_eff - 5.0).abs() < 0.01, "silver={}", silver.settled_eff);
+        assert!(
+            (silver.settled_eff - 5.0).abs() < 0.01,
+            "silver={}",
+            silver.settled_eff
+        );
         assert_eq!(silver.limit_contrib, 10);
-        assert_eq!(ctx.final_order_limit, 12 + 10 + 10);
+        assert_eq!(ctx.final_order_limit, 10 + 10 + 10);
     }
 
-    #[test]
-    fn ling_jie_yaxin_kjera_combo() {
-        use crate::trade::solver::solve_trade_with_shift;
+    fn jie_market_op() -> TradeOperator {
+        TradeOperator {
+            name: "孑".into(),
+            elite: 2,
+            buff_ids: vec!["trade_ord_limit_count[000]".into()],
+            tags: vec![],
+            ..Default::default()
+        }
+    }
 
-        let table = load_table();
-        let input = TradeRoomInput {
-            level: 3,
-            operators: vec![
-                TradeOperator {
-                    name: "孑".into(),
-                    elite: 2,
-                    buff_ids: vec!["trade_ord_limit_count[000]".into()],
-                    tags: vec![],
-                    ..Default::default()
-                },
-                TradeOperator {
-                    name: "银灰".into(),
-                    elite: 2,
-                    buff_ids: vec!["trade_ord_spd&limit[022]".into()],
-                    tags: vec!["cc.g.karlan".into()],
-                    ..Default::default()
-                },
-                TradeOperator {
-                    name: "崖心".into(),
-                    elite: 2,
-                    buff_ids: vec!["trade_ord_spd&limit[021]".into()],
-                    tags: vec!["cc.g.karlan".into()],
-                    ..Default::default()
-                },
+    fn silverash_karlan_op() -> TradeOperator {
+        TradeOperator {
+            name: "银灰".into(),
+            elite: 2,
+            buff_ids: vec!["trade_ord_spd&limit[022]".into()],
+            tags: vec!["cc.g.karlan".into()],
+            ..Default::default()
+        }
+    }
+
+    fn cliffheart_karlan_op() -> TradeOperator {
+        TradeOperator {
+            name: "崖心".into(),
+            elite: 2,
+            buff_ids: vec!["trade_ord_spd&limit[021]".into()],
+            tags: vec!["cc.g.karlan".into()],
+            ..Default::default()
+        }
+    }
+
+    fn courier_karlan_op() -> TradeOperator {
+        TradeOperator {
+            name: "讯使".into(),
+            elite: 0,
+            buff_ids: vec!["trade_ord_spd&limit[020]".into()],
+            tags: vec!["cc.g.karlan".into()],
+            ..Default::default()
+        }
+    }
+
+    fn lingering_swire_op() -> TradeOperator {
+        TradeOperator {
+            name: "琳琅诗怀雅".into(),
+            elite: 2,
+            buff_ids: vec![
+                "trade_ord_spd[000]".into(),
+                "trade_ord_spd_variable[000]".into(),
             ],
+            tags: vec![],
+            ..Default::default()
+        }
+    }
+
+    fn ling_jie_input(third: TradeOperator) -> TradeRoomInput {
+        TradeRoomInput {
+            level: 3,
+            operators: vec![jie_market_op(), silverash_karlan_op(), third],
             order_count: None,
             mood: 24.0,
             gold_production_lines: None,
@@ -1774,15 +1814,75 @@ mod tests {
             human_fireworks: None,
             layout: layout_with_karlan_precision(),
             active_order_kind: TradeOrderKind::Gold,
-        };
-        let r = solve_trade_with_shift(&input, &table, 24.0).unwrap();
-        eprintln!(
-            "灵孑银崖: trade={:.1}% limit={} pre={:.1} shortcut={:?}",
-            r.order_eff_total, r.final_order_limit, r.order_eff_pre_shortcut, r.trade_shortcut
+        }
+    }
+
+    #[test]
+    fn ling_jie_lingering_swire_calculates_without_shortcut() {
+        use crate::trade::solver::solve_trade_with_shift;
+
+        let table = load_table();
+        let input = ling_jie_input(lingering_swire_op());
+        let mut ctx = TradeContext::from_room(&input);
+        apply_trade_phases(&mut ctx, &table);
+
+        assert_eq!(ctx.final_order_limit, 18);
+        assert!((ctx.order_eff_base() - 0.0).abs() < 0.01);
+        assert!((ctx.order_eff_skill() - 129.0).abs() < 0.01);
+        let jie = ctx.operators.iter().find(|o| o.name == "孑").unwrap();
+        assert!(
+            (jie.variable_eff - 72.0).abs() < 0.01,
+            "jie={}",
+            jie.variable_eff
         );
-        assert_eq!(r.trade_shortcut.as_deref(), Some("gsl_ling_jie_yaxin"));
-        assert!((r.order_eff_total - 125.0).abs() < f64::EPSILON);
-        assert_eq!(r.final_order_limit, 31);
+        let silver = ctx.operators.iter().find(|o| o.name == "银灰").unwrap();
+        assert!(
+            (silver.settled_eff - 5.0).abs() < 0.01,
+            "silver={}",
+            silver.settled_eff
+        );
+        let swire = ctx
+            .operators
+            .iter()
+            .find(|o| o.name == "琳琅诗怀雅")
+            .unwrap();
+        assert!(
+            (swire.settled_eff - 20.0).abs() < 0.01,
+            "swire settled={}",
+            swire.settled_eff
+        );
+        assert!(
+            (swire.variable_eff - 32.0).abs() < 0.01,
+            "swire var={}",
+            swire.variable_eff
+        );
+
+        let r = solve_trade_with_shift(&input, &table, 24.0).unwrap();
+        assert_eq!(r.trade_shortcut.as_deref(), None);
+        assert_eq!(r.final_order_limit, 18);
+        assert!((r.order_eff_total - 129.0).abs() < 0.01);
+        assert!((r.order_eff_pre_shortcut - 129.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn ling_jie_third_operator_changes_naturally() {
+        use crate::trade::solver::solve_trade_with_shift;
+
+        let table = load_table();
+        for (label, third, expect_trade, expect_limit) in [
+            ("崖心", cliffheart_karlan_op(), 125.0, 30),
+            ("讯使", courier_karlan_op(), 117.0, 28),
+        ] {
+            let input = ling_jie_input(third);
+            let r = solve_trade_with_shift(&input, &table, 24.0).unwrap();
+            assert_eq!(r.trade_shortcut.as_deref(), None, "{label}");
+            assert_eq!(r.final_order_limit, expect_limit, "{label}");
+            assert!(
+                (r.order_eff_total - expect_trade).abs() < 0.01,
+                "{label}: trade={}",
+                r.order_eff_total
+            );
+        }
     }
 
     #[test]
@@ -1817,17 +1917,21 @@ mod tests {
         };
         let mut ctx = TradeContext::from_room(&input);
         apply_trade_phases(&mut ctx, &table);
-        // 无灵知：compression=4 → limit=12；OrderCount clamp 12→12 不变
-        assert_eq!(ctx.final_order_limit, 12);
+        // 无灵知：compression=4 → limit=10；OrderCount clamp 12→10
+        assert_eq!(ctx.final_order_limit, 10);
         let jie = ctx.operators.iter().find(|o| o.name == "孑").unwrap();
-        assert!((jie.variable_eff - 48.0).abs() < 0.01, "var={}", jie.variable_eff);
+        assert!(
+            (jie.variable_eff - 40.0).abs() < 0.01,
+            "var={}",
+            jie.variable_eff
+        );
 
-        // 若上限被压至 8，per-order 应按 8 计而非 12
+        // 若上限被压至 6，per-order 应按 6 计而非输入的 12
         let input_tight = TradeRoomInput {
             order_count: Some(12),
             ..input
         };
-        // 三人全 +20 settled → compression 6 → limit 10（12+4-6）
+        // 两名 +20 settled → compression floor(40/10)=4 → limit 6
         let mut input_heavy = input_tight;
         input_heavy.operators = vec![
             TradeOperator {

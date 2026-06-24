@@ -62,7 +62,9 @@ pub enum Selector {
     /// Trade post facility level (1–3); used by 佩佩/瑰盐·每级+1 上限.
     FacilityLevel,
     /// Count of room peers carrying `tag` (摩根/新约能天使).
-    TaggedCountInRoom { tag: String },
+    TaggedCountInRoom {
+        tag: String,
+    },
     /// Sum of per-operator `limit_contrib` (锏·冠军风采).
     LimitContribSum,
     MeetingMaxLevel,
@@ -71,7 +73,9 @@ pub enum Selector {
     EliteFacilityCount,
     SuiFacilityCount,
     /// 岁干员进驻设施数，带上限（重岳·知我为我，最多 5）。
-    CappedSuiFacilityCount { max: u8 },
+    CappedSuiFacilityCount {
+        max: u8,
+    },
     DormOccupantCount,
     OrderGap,
     /// 当前订单数（孑·市井之道 per-order）。
@@ -89,7 +93,9 @@ pub enum Selector {
     /// 基建内发电站作业平台数量（阿兰娜·机械精通等）。
     PlatformCountInPower,
     /// 控制中枢内携带 `tag` 的干员数（黑角·团队合作等）。
-    TaggedCountInControl { tag: String },
+    TaggedCountInControl {
+        tag: String,
+    },
     /// 控制中枢进驻干员总数。
     ControlOperatorCount,
     /// 无人机上限（承曦·巡线框架）。
@@ -110,36 +116,72 @@ pub enum Selector {
     TrainingRoomLevel,
     Mood,
     /// 各贸易站同房 `tag` 干员数之和（戴菲恩/八幡海铃等中枢跨设施注入）。
-    TaggedCountInTradeSum { tag: String },
+    TaggedCountInTradeSum {
+        tag: String,
+    },
     /// 至少 `min` 名 `tag` 干员进驻的贸易站数量（凛御银灰·商业版图）。
-    TradeStationsWithTaggedGte { tag: String, min: u8 },
+    TradeStationsWithTaggedGte {
+        tag: String,
+        min: u8,
+    },
     /// 各制造站同房 `tag` 干员数之和（涤火杰西卡/薇薇安娜等）。
-    TaggedCountInManuSum { tag: String },
+    TaggedCountInManuSum {
+        tag: String,
+    },
     /// 中枢求解中 `state_pool` 资源量按 `div` 下取整（祥子/睦热情值阶梯）。
-    StatePoolFloored { key: String, div: f64 },
+    StatePoolFloored {
+        key: String,
+        div: f64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Condition {
-    GoldDeliveryBelow { n: u8 },
-    GoldDeliveryAbove { n: u8 },
+    GoldDeliveryBelow {
+        n: u8,
+    },
+    GoldDeliveryAbove {
+        n: u8,
+    },
     GoldOrderInvestEligible {},
-    OrderHasTag { tag: String },
-    OrderNotHasTag { tag: String },
-    MoodAbove { n: u8 },
-    MoodBelowOrEq { n: u8 },
-    PartnerInRoom { name: String },
-    TagPresentInRoom { tag: String },
+    OrderHasTag {
+        tag: String,
+    },
+    OrderNotHasTag {
+        tag: String,
+    },
+    MoodAbove {
+        n: u8,
+    },
+    MoodBelowOrEq {
+        n: u8,
+    },
+    PartnerInRoom {
+        name: String,
+    },
+    TagPresentInRoom {
+        tag: String,
+    },
     /// 同房存在带 `tag` 的**其他**干员（怪猎秘传交涉术/以身作则等）。
-    PeerTagInRoom { tag: String },
-    OperatorInBase { name: String },
+    PeerTagInRoom {
+        tag: String,
+    },
+    OperatorInBase {
+        name: String,
+    },
     /// 干员进驻在发电站（森蚺·我寻思能行）。
-    OperatorInPower { name: String },
+    OperatorInPower {
+        name: String,
+    },
     /// 干员在训练室协助位（PhonoR-0·咒文共鸣）。
-    OperatorInTraining { name: String },
+    OperatorInTraining {
+        name: String,
+    },
     /// 干员进驻在贸易站（烈夏·患难拍档等跨设施条件）。
-    OperatorInTrade { name: String },
+    OperatorInTrade {
+        name: String,
+    },
     /// 其他发电站无作业平台（承曦·晨曦）。
     NoPlatformInOtherPower {},
     /// 其他作业平台进驻发电站（GALLUS²·鸡励机制）。
@@ -149,15 +191,21 @@ pub enum Condition {
     /// 市井之道与天道酬勤不可单独互叠；无第三方 settled 贡献时天道酬勤不生效。
     TiandaoEffVarAllowed {},
     /// 制造站当前在产配方（仓库整备/剪辑/Vlog 等配方限定效果）。
-    ActiveRecipe { kind: RecipeKind },
+    ActiveRecipe {
+        kind: RecipeKind,
+    },
     /// 持有者未绑定该 buff（冬时精0 仓库 +5 vs 精1 科学改造 per-op）。
-    OwnerLacksBuff { buff_id: String },
+    OwnerLacksBuff {
+        buff_id: String,
+    },
     /// 望·权变：外势 ≥ 实地（贸易站+发电站 ≥ 制造站）.
     ExternalMomentumGteField {},
     /// 望·权变：实地 > 外势.
     FieldMomentumGtExternal {},
     /// 发电站作业平台数量 ≥ n（布丁·超频）。
-    PlatformCountGte { min: u8 },
+    PlatformCountGte {
+        min: u8,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -177,12 +225,23 @@ pub enum Action {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         recipe: Option<RecipeKind>,
     },
-    AddPerGapEff { rate: f64 },
+    AddPerGapEff {
+        rate: f64,
+    },
     /// 订单分类标签（违约、裁缝 peak、特别订单等共用同一原语）。
-    TagOrder { tag: String },
-    AddGoldDelivery { n: u8 },
-    ReduceLimit { div: f64, min: i32 },
-    AddLimitFromSelector { multiplier: f64 },
+    TagOrder {
+        tag: String,
+    },
+    AddGoldDelivery {
+        n: u8,
+    },
+    ReduceLimit {
+        div: f64,
+        min: i32,
+    },
+    AddLimitFromSelector {
+        multiplier: f64,
+    },
     /// 读取同房 `state_pool`，`floor(state) * multiplier` → 仓库贡献。
     AddLimitFromState {
         key: String,
@@ -200,8 +259,14 @@ pub enum Action {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         recipe: Option<RecipeKind>,
     },
-    StateProduce { key: String, amount: f64 },
-    StateConsume { key: String, div: f64 },
+    StateProduce {
+        key: String,
+        amount: f64,
+    },
+    StateConsume {
+        key: String,
+        div: f64,
+    },
     MoodDrainDelta {
         delta: f64,
         scope: MoodDrainScope,
@@ -213,10 +278,14 @@ pub enum Action {
         delta_per_step: f64,
         scope: MoodDrainScope,
     },
-    AddOrderLmdBonus { bonus: i32 },
+    AddOrderLmdBonus {
+        bonus: i32,
+    },
     /// 同房他人 trade 效率归零；`rate_per_peer` 为每名他人向自身转移的效率%（巫恋 45，佩佩 0）。
     #[serde(alias = "vodfox_absorb")]
-    PeerEffAbsorb { rate_per_peer: f64 },
+    PeerEffAbsorb {
+        rate_per_peer: f64,
+    },
     /// `floor(selector/step)*ret_per_step` capped (雪雉/锏 bucket).
     AddBucketEffFromSelector {
         step: f64,
@@ -224,7 +293,9 @@ pub enum Action {
         cap: f64,
     },
     /// 同房 `limit_contrib` 总和 × `rate`% → 站级生产力（红云·回收利用）。
-    AddEffFromLimitContribSum { rate: f64 },
+    AddEffFromLimitContribSum {
+        rate: f64,
+    },
     /// 同房每人 `limit_contrib` 分段 × rate → 站级生产力（泡泡·大就是好）。
     AddEffFromLimitContribTiered {
         threshold: i32,
@@ -244,7 +315,9 @@ pub enum Action {
         multiplier: Option<f64>,
     },
     /// 中枢注入：全贸易站订单效率 +%（同 `tag` 族取最高后合并）。
-    GlobalInjectTradeEff { value: f64 },
+    GlobalInjectTradeEff {
+        value: f64,
+    },
     /// 中枢注入：全制造站生产力 +%（`recipe` 默认 All）。
     GlobalInjectManuEff {
         value: f64,

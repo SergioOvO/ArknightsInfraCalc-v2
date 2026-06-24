@@ -7,13 +7,53 @@ use serde::Serialize;
 use crate::control::{solve_control, ControlOperator, ControlRoomInput};
 use crate::error::Result;
 use crate::global_resource::GlobalResourceKey;
-use crate::pool::{combinations_indices, ControlPool};
-use crate::skill_table::SkillTable;
 use crate::layout::LayoutContext;
+use crate::pool::{combinations_indices, ControlPool};
+use crate::scoring::{placeholder_trade_manu_balance, TradeManuBalanceInput};
+use crate::skill_table::SkillTable;
 use crate::types::RecipeKind;
 
 /// 木天蓼 consumer：贸易/制造侧的泰拉大陆调查团。
 pub const MATATABI_CONSUMER_NAME: &str = "泰拉大陆调查团";
+
+/// 中枢评分的完整分解。
+///
+/// 当前中枢评分公式（`Efficiency` 策略，待公孙贸易-制造平衡公式替换）：
+/// ```text
+/// score = trade_inject + manu_gold_inject + manu_br_inject
+/// ```
+/// 这是历史注入口径：三项均为效率百分比，但跨贸易/制造的最终平衡口径
+/// 等待公孙公式确认。vpower、木天蓼、心情扣分不在中枢评分里预支——
+/// 它们分别在制造 resolve、调查团 consumer、轮换层体现。
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct ControlScoreBreakdown {
+    /// 贸易效率注入%
+    pub trade_inject_pct: f64,
+    /// 赤金制造效率注入%
+    pub manu_gold_inject_pct: f64,
+    /// 经验书制造效率注入%
+    pub manu_br_inject_pct: f64,
+    /// 历史注入子总分 = trade + gold + br；待公孙平衡公式替换。
+    pub inject_subtotal: f64,
+    /// 虚拟发电站数
+    pub virtual_power: f64,
+    /// vpower × 2.0
+    pub virtual_power_score: f64,
+    /// 木天蓼点数
+    pub matatabi: f64,
+    /// 5.0 + matatabi × 3.0（仅调查团在岗时生效）
+    pub matatabi_score: f64,
+    /// 本班是否有调查团 consumer
+    pub matatabi_consumer_active: bool,
+    /// 心情消耗总和 (>0 的部分)
+    pub mood_penalty: f64,
+    /// -mood × 2.0（HrAndMood 策略时为 ×3.0）
+    pub mood_penalty_score: f64,
+    /// HrAndMood 策略固定加分（公招/心情技能）
+    pub ancillary_score: f64,
+    /// 搜索排序分；`Efficiency` 为 `inject_subtotal`，`HrAndMood` 为 `ancillary_score`。
+    pub total_score: f64,
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ControlSearchHit {
@@ -21,6 +61,8 @@ pub struct ControlSearchHit {
     pub score: f64,
     pub trade_inject_pct: f64,
     pub manu_gold_inject_pct: f64,
+    /// 评分明细分解
+    pub breakdown: ControlScoreBreakdown,
 }
 
 /// 中枢补位策略：`base_systems` 钉死后剩余席位按公孙「公招 + 心情」填，而非热情贸易链。
@@ -69,11 +111,36 @@ pub fn control_passion_chain_buff(buff_id: &str) -> bool {
     )
 }
 
+fn control_resource_producer_buff(buff_id: &str) -> bool {
+    matches!(
+        buff_id,
+        "control_mp_bd[000]"
+            | "control_mp_bd[010]"
+            | "control_mp_bd2[000]"
+            | "control_mp_cost&bd2[010]"
+    )
+}
+
+fn control_standalone_producer_buff(buff_id: &str) -> bool {
+    control_passion_chain_buff(buff_id) || control_resource_producer_buff(buff_id)
+}
+
 fn control_efficiency_inject_buff(buff_id: &str) -> bool {
     buff_id.starts_with("control_prod_spd")
         || buff_id.starts_with("control_tra_spd")
         || buff_id.starts_with("control_token_prod_spd")
-        || buff_id == "control_mp_bd[000]"
+        || matches!(
+            buff_id,
+            "control_token_tra_spd[000]"
+                | "control_prod_tra_spd[000]"
+                | "control_tra_limit&spd[010]"
+        )
+}
+
+fn control_mood_cost_buff(buff_id: &str) -> bool {
+    buff_id == "control_mp_psk[000]"
+        || (buff_id.starts_with("control_mp_cost[") && !buff_id.contains('&'))
+        || buff_id.starts_with("control_mp_cost&faction")
 }
 
 fn control_hr_mood_buff(buff_id: &str) -> bool {
@@ -89,11 +156,33 @@ fn control_hr_mood_buff(buff_id: &str) -> bool {
         || buff_id.starts_with("control_mp_cost&faction")
 }
 
+fn control_inject_sort_key(hit: &ControlSearchHit) -> f64 {
+    hit.score
+}
+
+pub fn control_entry_core_inject_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
+    entry
+        .buff_ids
+        .iter()
+        .any(|b| control_efficiency_inject_buff(b))
+}
+
+pub fn control_entry_mood_cost_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
+    if entry
+        .buff_ids
+        .iter()
+        .any(|b| control_standalone_producer_buff(b))
+    {
+        return false;
+    }
+    entry.buff_ids.iter().any(|b| control_mood_cost_buff(b))
+}
+
 pub fn control_entry_hr_mood_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
     if entry
         .buff_ids
         .iter()
-        .any(|b| control_passion_chain_buff(b) || control_efficiency_inject_buff(b))
+        .any(|b| control_standalone_producer_buff(b) || control_efficiency_inject_buff(b))
     {
         return false;
     }
@@ -136,13 +225,22 @@ fn control_hr_mood_ancillary(operators: &[ControlOperator], table: &SkillTable) 
     score
 }
 
-/// 中枢搜索评分：木天蓼仅在有调查团 consumer 时折算为贸易 eff%；producer 心情消耗恒扣分。
+/// 中枢搜索评分：当前为贸易/制造注入%之和。
+///
+/// TODO(scoring): 用公孙长乐贸易-制造平衡公式替换裸加的
+/// `trade_inject + manu_gold + manu_br`。在公式落地前保持现有行为，
+/// 只显式化排序口径。
+///
+/// vpower、木天蓼、心情扣分不在此评分——它们分别在制造站 resolve、调查团 consumer、
+/// 轮换层心情管理里体现。
+///
+/// 返回完整的评分明细分解；`.total_score` 即搜索排序分。
 fn score_control_result(
     result: &crate::control::ControlCenterResult,
     operators: &[ControlOperator],
     table: &SkillTable,
     options: &ControlSearchOptions,
-) -> f64 {
+) -> ControlScoreBreakdown {
     let mood_penalty: f64 = result
         .operator_mood_drains
         .values()
@@ -151,23 +249,48 @@ fn score_control_result(
 
     if options.fill_policy == ControlFillPolicy::HrAndMood {
         let ancillary = control_hr_mood_ancillary(operators, table);
-        return ancillary - mood_penalty * 3.0;
+        return ControlScoreBreakdown {
+            ancillary_score: ancillary,
+            mood_penalty,
+            mood_penalty_score: 0.0,
+            total_score: ancillary,
+            ..ControlScoreBreakdown::default()
+        };
     }
 
-    let mut score = result.inject.trade_eff_pct()
-        + result.inject.manu_eff_for(RecipeKind::Gold)
-        + result.inject.manu_eff_for(RecipeKind::BattleRecord)
-        + result.global.get(GlobalResourceKey::VirtualPower) * 2.0;
+    let trade_inject = result.inject.trade_eff_pct();
+    let manu_gold = result.inject.manu_eff_for(RecipeKind::Gold);
+    let manu_br = result.inject.manu_eff_for(RecipeKind::BattleRecord);
+    let gold_line_count = options.layout.gold_manu_line_count.min(u32::from(u8::MAX)) as u8;
+    let battle_record_line_count = options
+        .layout
+        .manufacture_station_count
+        .saturating_sub(gold_line_count);
+    let balanced = placeholder_trade_manu_balance(TradeManuBalanceInput {
+        trade_eff_pct: trade_inject,
+        gold_manu_eff_pct: manu_gold,
+        battle_record_manu_eff_pct: manu_br,
+        trade_station_count: options.layout.trade_station_count,
+        gold_line_count,
+        battle_record_line_count,
+    });
+    let inject_subtotal = balanced.composite_eff_pct;
 
-    if options.matatabi_consumer_active {
-        let matatabi = result.global.get(GlobalResourceKey::Matatabi);
-        // 可爱的艾露猫：5% + floor(木天蓼)×3%（中枢搜索按贸易侧计分）
-        score += 5.0 + matatabi * 3.0;
+    let matatabi = result.global.get(GlobalResourceKey::Matatabi);
+    let virtual_power = result.global.get(GlobalResourceKey::VirtualPower);
+
+    ControlScoreBreakdown {
+        trade_inject_pct: trade_inject,
+        manu_gold_inject_pct: manu_gold,
+        manu_br_inject_pct: manu_br,
+        inject_subtotal,
+        virtual_power,
+        matatabi,
+        matatabi_consumer_active: options.matatabi_consumer_active,
+        mood_penalty,
+        total_score: inject_subtotal,
+        ..ControlScoreBreakdown::default()
     }
-
-    score -= mood_penalty * 2.0;
-
-    score
 }
 
 /// 中枢 C(n,k)，k ∈ [1, max_operators]；按全局注入与资源池评分。
@@ -206,11 +329,13 @@ pub fn search_control_combos(
                 layout: layout.clone(),
             };
             let result = solve_control(&input, table);
+            let breakdown = score_control_result(&result, &operators, table, options);
             Some(ControlSearchHit {
-                score: score_control_result(&result, &operators, table, options),
+                score: breakdown.total_score,
                 trade_inject_pct: result.inject.trade_eff_pct(),
                 manu_gold_inject_pct: result.inject.manu_eff_for(RecipeKind::Gold),
                 names,
+                breakdown,
             })
         })
         .collect();
@@ -225,8 +350,8 @@ pub fn search_control_combos(
     }
 
     hits.sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
+        control_inject_sort_key(b)
+            .partial_cmp(&control_inject_sort_key(a))
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| a.names.cmp(&b.names))
     });
@@ -244,7 +369,9 @@ mod tests {
     use crate::roster::Roster;
     use crate::skill_table::{default_skill_table_path, SkillTable};
 
-    fn monhun_control_ops(table: &SkillTable) -> (crate::control::ControlCenterResult, Vec<ControlOperator>) {
+    fn monhun_control_ops(
+        table: &SkillTable,
+    ) -> (crate::control::ControlCenterResult, Vec<ControlOperator>) {
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let roster = Roster::from_elite_map(
             [("火龙S黑角", 2), ("麒麟R夜刀", 2)]
@@ -269,7 +396,24 @@ mod tests {
     }
 
     #[test]
-    fn matatabi_scores_only_with_survey_consumer() {
+    fn control_search_score_uses_total_score_sort_key() {
+        let hit = ControlSearchHit {
+            names: vec!["a".into()],
+            score: 12.0,
+            trade_inject_pct: 7.0,
+            manu_gold_inject_pct: 5.0,
+            breakdown: ControlScoreBreakdown {
+                total_score: 12.0,
+                inject_subtotal: 12.0,
+                ..Default::default()
+            },
+        };
+        assert_eq!(control_inject_sort_key(&hit), hit.score);
+        assert_eq!(hit.score, hit.breakdown.total_score);
+    }
+
+    #[test]
+    fn control_score_is_pure_inject_sum() {
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let (result, ops) = monhun_control_ops(&table);
         assert!(result.global.get(GlobalResourceKey::Matatabi) > 0.0);
@@ -292,12 +436,21 @@ mod tests {
                 ..Default::default()
             },
         );
+        // 纯注入评分：matatabi consumer 不影响 score（木天蓼不在中枢评分里预支）
         assert!(
-            with > without,
-            "consumer active should credit matatabi: with={with} without={without}"
+            (with.total_score - without.total_score).abs() < 0.001,
+            "matatabi 不应影响中枢注入评分: with={} without={}",
+            with.total_score,
+            without.total_score,
         );
+        assert!(with.matatabi > 0.0, "matatabi 仍应在 breakdown 中记录");
         assert!(
-            result.operator_mood_drains.get("麒麟R夜刀").copied().unwrap_or(0.0) > 0.0,
+            result
+                .operator_mood_drains
+                .get("麒麟R夜刀")
+                .copied()
+                .unwrap_or(0.0)
+                > 0.0,
             "夜刀应记账心情消耗"
         );
     }

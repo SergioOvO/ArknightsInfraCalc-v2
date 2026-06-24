@@ -5,18 +5,21 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::error::Result;
-use crate::export::maa::{assignment_from_maa_plan, load_maa_schedule, MaaPlanImport};
+use crate::export::maa::{assignment_from_maa_plan, load_maa_schedule};
 use crate::instances::OperatorInstances;
 use crate::layout::{
-    AssignmentPlan, AssignShiftMode, BaseAssignment, BaseBlueprint, ResolvedBase,
-    ResolvedManuRoom, ResolvedTradeRoom, resolve_base,
+    resolve_base, AssignShiftMode, AssignmentPlan, BaseAssignment, BaseBlueprint, ResolvedBase,
+    ResolvedManuRoom, ResolvedTradeRoom,
 };
 use crate::manufacture::input::ManuRoomInput;
 use crate::manufacture::solver::{solve_manufacture, ManuProdBreakdown, ManuStorageBreakdown};
-use crate::operbox::{default_operbox_full_e2_path, OperBox};
+use crate::operbox::OperBox;
 use crate::pool::{build_manufacture_pool, build_trade_pool};
 use crate::schedule::{score_base_assignment, DailyTotals, TeamRotationReport};
-use crate::search::{ManuSearchHit, ManuSearchReport, TradeSearchHit, TradeSearchReport};
+use crate::search::{
+    ManuScoreBreakdown, ManuSearchHit, ManuSearchReport, TradeScoreBreakdown, TradeSearchHit,
+    TradeSearchReport,
+};
 use crate::skill_table::{data_path, SkillTable};
 use crate::tier::PromotionTier;
 use crate::trade::input::{TradeOrderKind, TradeSearchOrderMode};
@@ -34,8 +37,7 @@ pub fn default_schedule_export_path() -> Result<PathBuf> {
             return Ok(path);
         }
     }
-    Ok(crate::skill_table::workspace_root()?
-        .join("data/fixtures/243/schedule_export.json"))
+    Ok(crate::skill_table::workspace_root()?.join("data/fixtures/243/schedule_export.json"))
 }
 
 /// 与 baseline 对齐：取第 2 班编制看巫恋线 / 制造分域（index 1，6h 班）。
@@ -62,8 +64,14 @@ pub fn run_schedule_eval_probe(
     let mut daily = DailyTotals::default();
     for (plan, &hours) in schedule.plans.iter().zip(SHIFT_HOURS.iter()) {
         let assignment = assignment_from_maa_plan(plan, operbox);
-        let scores =
-            score_base_assignment(blueprint, &assignment, instances, table, hours, Some(durin_plan))?;
+        let scores = score_base_assignment(
+            blueprint,
+            &assignment,
+            instances,
+            table,
+            hours,
+            Some(durin_plan),
+        )?;
         daily.trade += scores.weighted_trade(hours);
         daily.manu += scores.weighted_manu(hours);
         daily.power += scores.weighted_power(hours);
@@ -169,7 +177,8 @@ pub fn manu_report_from_assignment(
 
     let gold_line = average_manu_hit(&gold_hits);
     let br_line = average_manu_hit(&br_hits);
-    let composite = f64::from(scenario.gold_lines) * gold_line.as_ref().map(|h| h.composite_score).unwrap_or(0.0)
+    let composite = f64::from(scenario.gold_lines)
+        * gold_line.as_ref().map(|h| h.composite_score).unwrap_or(0.0)
         + f64::from(scenario.battle_record_lines)
             * br_line.as_ref().map(|h| h.composite_score).unwrap_or(0.0);
 
@@ -178,11 +187,18 @@ pub fn manu_report_from_assignment(
             .as_ref()
             .map(|h| h.names.clone())
             .unwrap_or_default(),
-        gold_names: gold_line.as_ref().map(|h| h.names.clone()).unwrap_or_default(),
-        battle_record_names: br_line.as_ref().map(|h| h.names.clone()).unwrap_or_default(),
+        gold_names: gold_line
+            .as_ref()
+            .map(|h| h.names.clone())
+            .unwrap_or_default(),
+        battle_record_names: br_line
+            .as_ref()
+            .map(|h| h.names.clone())
+            .unwrap_or_default(),
         composite_score: composite,
         per_station: Default::default(),
         storage: Default::default(),
+        breakdown: ManuScoreBreakdown::default(),
     };
 
     Ok(ManuSearchReport {
@@ -211,7 +227,8 @@ fn probe_shell(
         .filter(|p| PromotionTier::is_tier_up(**p))
         .count();
     let trade_pool = build_trade_pool(&operbox.trade_roster(instances), instances, table)?;
-    let manu_pool = build_manufacture_pool(&operbox.manufacture_roster(instances), instances, table)?;
+    let manu_pool =
+        build_manufacture_pool(&operbox.manufacture_roster(instances), instances, table)?;
 
     Ok(LayoutProbe {
         owned: operbox.owned_count(),
@@ -243,6 +260,7 @@ fn empty_trade_hit() -> TradeSearchHit {
         unit_gold_per_day: 0.0,
         unit_originium_per_day: 0.0,
         output_multiplier: 0.0,
+        breakdown: TradeScoreBreakdown::default(),
     }
 }
 
@@ -271,11 +289,18 @@ fn eval_trade_room(
         (vec![], names.clone())
     };
     let unit = &result.production.unit;
+    let order_eff_global = result.order_eff_total - result.order_eff_base - result.order_eff_skill;
+    let eff_factor = if result.order_mechanic.ignores_order_eff() {
+        1.0
+    } else {
+        1.0 + result.order_eff_total / 100.0
+    };
+    let mech_factor = 1.0 + result.order_mechanic.mechanic_equiv_eff_pct / 100.0;
     Ok(TradeSearchHit {
         names,
         gold_names,
         originium_names,
-        score: result.effective_eff_multiplier,
+        score: result.order_eff_total,
         trade_pct: result.order_eff_total,
         gold_pct: result.order_mechanic.mechanic_equiv_eff_pct,
         shortcut: result.trade_shortcut.clone(),
@@ -283,6 +308,19 @@ fn eval_trade_room(
         unit_gold_per_day: unit.unit_gold_per_day,
         unit_originium_per_day: unit.unit_originium_per_day,
         output_multiplier: unit.multiplier_vs_lv3_regular,
+        breakdown: TradeScoreBreakdown {
+            order_eff_base: result.order_eff_base,
+            order_eff_skill: result.order_eff_skill,
+            order_eff_global,
+            order_eff_total_pct: result.order_eff_total,
+            mechanic_equiv_eff_pct: result.order_mechanic.mechanic_equiv_eff_pct,
+            eff_factor,
+            mech_factor,
+            effective_eff_multiplier: result.effective_eff_multiplier,
+            unit_trade_per_day: unit.unit_trade_per_day,
+            unit_gold_per_day: unit.unit_gold_per_day,
+            shortcut_id: result.trade_shortcut.clone(),
+        },
     })
 }
 
@@ -318,6 +356,13 @@ fn eval_manu_room(
         }
         RecipeKind::All => {}
     }
+    let recipe_str = match room.recipe {
+        RecipeKind::Gold => "gold",
+        RecipeKind::BattleRecord => "battle_record",
+        RecipeKind::Originium => "originium",
+        RecipeKind::All => "all",
+    };
+    let prod_global = result.prod_total - result.prod_base - result.prod_skill;
     Ok(ManuSearchHit {
         names: names.clone(),
         gold_names: if room.recipe == RecipeKind::Gold {
@@ -333,6 +378,14 @@ fn eval_manu_room(
         composite_score: result.prod_total,
         per_station,
         storage,
+        breakdown: ManuScoreBreakdown {
+            prod_base: result.prod_base,
+            prod_skill: result.prod_skill,
+            prod_global,
+            prod_total: result.prod_total,
+            storage_limit: result.storage_limit,
+            recipe: recipe_str.to_string(),
+        },
     })
 }
 
@@ -349,6 +402,7 @@ fn average_manu_hit(hits: &[ManuSearchHit]) -> Option<ManuSearchHit> {
         composite_score,
         per_station: hits[0].per_station.clone(),
         storage: hits[0].storage.clone(),
+        breakdown: ManuScoreBreakdown::default(),
     })
 }
 
@@ -362,11 +416,12 @@ mod tests {
     #[test]
     fn schedule_eval_faster_than_search_probe() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let operbox = OperBox::load(&default_operbox_full_e2_path().unwrap()).unwrap();
+        let operbox =
+            OperBox::load(&crate::operbox::default_operbox_full_e2_path().unwrap()).unwrap();
         let instances =
             OperatorInstances::load(&crate::instances::default_instances_path().unwrap()).unwrap();
-        let table = SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap())
-            .unwrap();
+        let table =
+            SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
         let schedule = default_schedule_export_path().unwrap();
         if !schedule.exists() {
             return;

@@ -41,9 +41,8 @@ pub fn pick_trade_role_hit(
     let mut opts = search_opts;
     opts.top_k = top_k;
 
-    let cache = trade_segment_cache().ok_or_else(|| {
-        crate::error::Error::msg("trade_segments.json not loaded")
-    })?;
+    let cache = trade_segment_cache()
+        .ok_or_else(|| crate::error::Error::msg("trade_segments.json not loaded"))?;
     let role = cache
         .role(role_id)
         .ok_or_else(|| crate::error::Error::msg(format!("unknown trade role {role_id}")))?;
@@ -62,13 +61,9 @@ pub fn pick_trade_role_hit(
                 {
                     continue;
                 }
-                if let Ok(hit) = pick_with_shortcut_filter(
-                    &sub,
-                    table,
-                    &opts,
-                    &seg.shortcut_id,
-                    used,
-                ) {
+                if let Ok(hit) =
+                    pick_with_shortcut_filter(&sub, table, &opts, &seg.shortcut_id, used)
+                {
                     return Ok(hit);
                 }
             }
@@ -138,7 +133,9 @@ fn shortcut_hit_filter(shortcut_id: &str) -> Option<fn(&TradeSearchHit) -> bool>
         "gsl_vina_lungmen" => Some(|hit| hit_shortcut_id(hit, "gsl_vina_lungmen")),
         "gsl_penguin_texlap_e0" => Some(|hit| hit_shortcut_id(hit, "gsl_penguin_texlap_e0")),
         "gsl_penguin_texangel_e2" => Some(|hit| hit_shortcut_id(hit, "gsl_penguin_texangel_e2")),
-        "gsl_penguin_exusiai_lemuen" => Some(|hit| hit_shortcut_id(hit, "gsl_penguin_exusiai_lemuen")),
+        "gsl_penguin_exusiai_lemuen" => {
+            Some(|hit| hit_shortcut_id(hit, "gsl_penguin_exusiai_lemuen"))
+        }
         "gsl_blackkey_closure" => Some(|hit| hit_shortcut_id(hit, "gsl_blackkey_closure")),
         _ => None,
     }

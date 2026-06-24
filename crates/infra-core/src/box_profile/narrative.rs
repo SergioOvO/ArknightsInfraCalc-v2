@@ -46,10 +46,9 @@ pub fn render_box_profile_narrative(profile: &BoxProfile) -> String {
         out.push_str("【提升建议】\n");
         for action in &profile.actions {
             let tag = match action.kind {
-                ActionKind::PromoteTierUp => action
-                    .tier_up_requirement
-                    .as_deref()
-                    .unwrap_or("tier_up"),
+                ActionKind::PromoteTierUp => {
+                    action.tier_up_requirement.as_deref().unwrap_or("tier_up")
+                }
                 ActionKind::Acquire => "获取",
                 ActionKind::Note => "提示",
             };

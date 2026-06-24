@@ -1,10 +1,9 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use crate::eff_ramp::eff_ramp_avg_20h;
+use crate::layout::SharedLayout;
 use crate::manufacture::input::ManuRoomInput;
 use crate::skill_table::SkillTable;
-use crate::layout::SharedLayout;
 use crate::types::{Action, Condition, EffectAtom, Phase, RecipeKind, Selector, StateKey};
 
 #[derive(Debug, Clone, Default)]
@@ -17,12 +16,13 @@ pub struct RecipeEff {
 
 impl RecipeEff {
     pub fn for_recipe(&self, recipe: RecipeKind) -> f64 {
-        self.all + match recipe {
-            RecipeKind::All => 0.0,
-            RecipeKind::BattleRecord => self.battle_record,
-            RecipeKind::Gold => self.gold,
-            RecipeKind::Originium => self.originium,
-        }
+        self.all
+            + match recipe {
+                RecipeKind::All => 0.0,
+                RecipeKind::BattleRecord => self.battle_record,
+                RecipeKind::Gold => self.gold,
+                RecipeKind::Originium => self.originium,
+            }
     }
 
     fn add(&mut self, recipe: Option<RecipeKind>, value: f64) {
@@ -49,12 +49,13 @@ pub struct RecipeLimit {
 
 impl RecipeLimit {
     pub fn for_recipe(&self, recipe: RecipeKind) -> i32 {
-        self.all + match recipe {
-            RecipeKind::All => 0,
-            RecipeKind::BattleRecord => self.battle_record,
-            RecipeKind::Gold => self.gold,
-            RecipeKind::Originium => self.originium,
-        }
+        self.all
+            + match recipe {
+                RecipeKind::All => 0,
+                RecipeKind::BattleRecord => self.battle_record,
+                RecipeKind::Gold => self.gold,
+                RecipeKind::Originium => self.originium,
+            }
     }
 
     fn add(&mut self, recipe: Option<RecipeKind>, delta: i32) {
@@ -137,9 +138,7 @@ impl ManuContext {
     }
 
     pub fn prod_total(&self, recipe: RecipeKind) -> f64 {
-        self.prod_base()
-            + self.prod_skill(recipe)
-            + self.layout.global_inject.manu_eff_for(recipe)
+        self.prod_base() + self.prod_skill(recipe) + self.layout.global_inject.manu_eff_for(recipe)
     }
 
     pub fn storage_limit(&self, recipe: RecipeKind) -> i32 {
@@ -175,7 +174,9 @@ pub fn collect_manu_atoms<'a>(
     let mut atoms = Vec::new();
     for op in ops {
         for bid in &op.buff_ids {
-            let Some(skill) = table.get(bid) else { continue };
+            let Some(skill) = table.get(bid) else {
+                continue;
+            };
             if skill.facility != "manufacture" {
                 continue;
             }
@@ -205,6 +206,27 @@ pub fn apply_manu_phases(ctx: &mut ManuContext, table: &SkillTable) {
         }
         apply_atom(ctx, atom, &owner, &names);
     }
+    apply_pinus_sylvestris_control(ctx);
+}
+
+fn apply_pinus_sylvestris_control(ctx: &mut ManuContext) {
+    const YANWEI: &str = "焰尾";
+    const VIVIANA: &str = "薇薇安娜";
+    const TAG_PINUS: &str = "cc.g.pinus";
+    const TAG_KNIGHT: &str = "cc.g.knight";
+    let has_yanwei = ctx.layout.control_workforce.iter().any(|n| n == YANWEI);
+    let has_viviana = ctx.layout.control_workforce.iter().any(|n| n == VIVIANA);
+    for op in &mut ctx.operators {
+        if has_yanwei
+            && ctx.active_recipe == RecipeKind::BattleRecord
+            && op.tags.iter().any(|t| t == TAG_PINUS)
+        {
+            op.skill_eff.add(Some(RecipeKind::BattleRecord), 10.0);
+        }
+        if has_viviana && op.tags.iter().any(|t| t == TAG_KNIGHT) {
+            op.skill_eff.add(None, 7.0);
+        }
+    }
 }
 
 fn condition_met(cond: &Option<Condition>, ctx: &ManuContext, owner: &str) -> bool {
@@ -219,22 +241,15 @@ fn condition_met(cond: &Option<Condition>, ctx: &ManuContext, owner: &str) -> bo
             .find(|o| o.name == owner)
             .is_none_or(|o| !o.buff_ids.iter().any(|b| b == buff_id)),
         Condition::OperatorInBase { name } => ctx.layout.base_workforce.iter().any(|n| n == name),
-        Condition::OperatorInPower { name } => {
-            ctx.layout.power_workforce.iter().any(|n| n == name)
-        }
+        Condition::OperatorInPower { name } => ctx.layout.power_workforce.iter().any(|n| n == name),
         Condition::OperatorInTraining { name } => {
             ctx.layout.training_assist.iter().any(|n| n == name)
         }
-        Condition::OperatorInTrade { name } => {
-            ctx.layout.trade_workforce.iter().any(|n| n == name)
-        }
+        Condition::OperatorInTrade { name } => ctx.layout.trade_workforce.iter().any(|n| n == name),
         Condition::NoPlatformInOtherPower {} => !ctx.layout.other_power_has_platform,
         Condition::OtherPlatformInPower {} => ctx.layout.other_platform_in_power,
         Condition::OtherLateranoInPower {} => ctx.layout.other_laterano_in_power,
-        Condition::PartnerInRoom { name } => ctx
-            .operators
-            .iter()
-            .any(|o| o.name == *name),
+        Condition::PartnerInRoom { name } => ctx.operators.iter().any(|o| o.name == *name),
         Condition::ExternalMomentumGteField {} => {
             ctx.layout.external_momentum() >= ctx.layout.field_momentum()
         }
@@ -254,10 +269,8 @@ fn room_has_buff(ctx: &ManuContext, buff_id: &str) -> bool {
 }
 
 fn apply_atom(ctx: &mut ManuContext, atom: &EffectAtom, owner: &str, names: &[String]) {
-    if matches!(
-        &atom.action,
-        Action::AddEffFromLimitContribSum { .. }
-    ) && room_has_buff(ctx, BUFF_PAOPAO_LIMIT_VAR)
+    if matches!(&atom.action, Action::AddEffFromLimitContribSum { .. })
+        && room_has_buff(ctx, BUFF_PAOPAO_LIMIT_VAR)
     {
         return;
     }
@@ -278,7 +291,8 @@ fn apply_atom(ctx: &mut ManuContext, atom: &EffectAtom, owner: &str, names: &[St
 fn eff_target_is_layout(atom: &EffectAtom) -> bool {
     matches!(
         atom.selector.as_ref(),
-        Some(Selector::TradeStationCount) | Some(Selector::PowerStationCount)
+        Some(Selector::TradeStationCount)
+            | Some(Selector::PowerStationCount)
             | Some(Selector::PlatformCountInPower)
     )
 }
@@ -287,11 +301,7 @@ fn apply_peer_absorb(ctx: &mut ManuContext, action: &Action, owner: &str) {
     let Action::PeerEffAbsorb { rate_per_peer } = action else {
         return;
     };
-    let peer_count = ctx
-        .operators
-        .iter()
-        .filter(|o| o.name != owner)
-        .count();
+    let peer_count = ctx.operators.iter().filter(|o| o.name != owner).count();
     for op in &mut ctx.operators {
         if op.name != owner {
             op.skill_eff.zero();
@@ -433,7 +443,12 @@ fn apply_state_write(ctx: &mut ManuContext, atom: &EffectAtom, owner: &str) {
     let _ = owner;
 }
 
-fn eff_from_limit_contrib_tiered(contrib: i32, threshold: i32, low_rate: f64, high_rate: f64) -> f64 {
+fn eff_from_limit_contrib_tiered(
+    contrib: i32,
+    threshold: i32,
+    low_rate: f64,
+    high_rate: f64,
+) -> f64 {
     let c = contrib.max(0);
     if c > threshold {
         c as f64 * high_rate
@@ -444,12 +459,13 @@ fn eff_from_limit_contrib_tiered(contrib: i32, threshold: i32, low_rate: f64, hi
 
 fn resolve_eff_value(ctx: &ManuContext, atom: &EffectAtom, owner: &str) -> f64 {
     match &atom.action {
-        Action::AddEffFromLimitContribSum { rate } => ctx
-            .operators
-            .iter()
-            .map(|o| o.limit_contrib.max(0))
-            .sum::<i32>() as f64
-            * rate,
+        Action::AddEffFromLimitContribSum { rate } => {
+            ctx.operators
+                .iter()
+                .map(|o| o.limit_contrib.max(0))
+                .sum::<i32>() as f64
+                * rate
+        }
         Action::AddEffFromLimitContribTiered {
             threshold,
             low_rate,
@@ -458,12 +474,7 @@ fn resolve_eff_value(ctx: &ManuContext, atom: &EffectAtom, owner: &str) -> f64 {
             .operators
             .iter()
             .map(|o| {
-                eff_from_limit_contrib_tiered(
-                    o.limit_contrib,
-                    *threshold,
-                    *low_rate,
-                    *high_rate,
-                )
+                eff_from_limit_contrib_tiered(o.limit_contrib, *threshold, *low_rate, *high_rate)
             })
             .sum(),
         Action::AddEffRamp {
@@ -473,7 +484,9 @@ fn resolve_eff_value(ctx: &ManuContext, atom: &EffectAtom, owner: &str) -> f64 {
             style,
         } => eff_ramp_avg_20h(*style, *initial, *per_hour, *cap),
         Action::AddFlatEff { value, .. } => *value,
-        Action::AddFlatEffFromSelector { multiplier, cap, .. } => {
+        Action::AddFlatEffFromSelector {
+            multiplier, cap, ..
+        } => {
             let base = resolve_selector_value(ctx, atom.selector.as_ref(), owner);
             let mut v = base * multiplier;
             if let Some(c) = cap {
@@ -578,21 +591,15 @@ fn resolve_selector_value(ctx: &ManuContext, selector: Option<&Selector>, owner:
         }
         Some(Selector::DormOccupantCount) => f64::from(ctx.layout.dorm_occupant_count),
         Some(Selector::TradeStationCount) => f64::from(ctx.layout.trade_station_count),
-        Some(Selector::PowerStationCount) => {
-            f64::from(ctx.layout.effective_power_station_count())
-        }
+        Some(Selector::PowerStationCount) => f64::from(ctx.layout.effective_power_station_count()),
         Some(Selector::PlatformCountInPower) => f64::from(ctx.layout.platform_count_in_power),
-        Some(Selector::RoomPeerCount) => ctx
-            .operators
-            .iter()
-            .filter(|o| o.name != owner)
-            .count() as f64,
+        Some(Selector::RoomPeerCount) => {
+            ctx.operators.iter().filter(|o| o.name != owner).count() as f64
+        }
         Some(Selector::RoomOperatorCount) => ctx.operators.len() as f64,
-        Some(Selector::LimitContribSum) => ctx
-            .operators
-            .iter()
-            .map(|o| o.limit_contrib)
-            .sum::<i32>() as f64,
+        Some(Selector::LimitContribSum) => {
+            ctx.operators.iter().map(|o| o.limit_contrib).sum::<i32>() as f64
+        }
         Some(Selector::PeerSkillEffSum) => ctx
             .operators
             .iter()
@@ -629,11 +636,11 @@ mod tests {
     use super::*;
     use crate::control::{solve_control, ControlOperator, ControlRoomInput};
     use crate::instances::{default_instances_path, OperatorInstances};
-    use crate::manufacture::input::{ManuOperator, ManuRoomInput};
-    use crate::skill_table::SkillTable;
-    use crate::manufacture::solver::solve_manufacture;
-    use crate::tier::PromotionTier;
     use crate::layout::LayoutContext;
+    use crate::manufacture::input::{ManuOperator, ManuRoomInput};
+    use crate::manufacture::solver::solve_manufacture;
+    use crate::skill_table::SkillTable;
+    use crate::tier::PromotionTier;
 
     fn table() -> SkillTable {
         SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap()
@@ -784,7 +791,11 @@ mod tests {
             3,
             RecipeKind::Gold,
             vec![
-                op("冬时", 1, vec!["manu_prod_spd&manu[000]", "manu_prod_spd&manu[100]"]),
+                op(
+                    "冬时",
+                    1,
+                    vec!["manu_prod_spd&manu[000]", "manu_prod_spd&manu[100]"],
+                ),
                 op("芬", 0, vec!["manu_prod_spd[000]"]),
                 op("克洛丝", 0, vec!["manu_prod_spd[000]"]),
             ],
@@ -809,7 +820,11 @@ mod tests {
             3,
             RecipeKind::Gold,
             vec![
-                op("冬时", 1, vec!["manu_prod_spd&manu[000]", "manu_prod_spd&manu[100]"]),
+                op(
+                    "冬时",
+                    1,
+                    vec!["manu_prod_spd&manu[000]", "manu_prod_spd&manu[100]"],
+                ),
                 op("清流", 1, vec!["manu_prod_spd&trade[000]"]),
                 op("温蒂", 2, vec!["manu_prod_spd&power[020]"]),
             ],
@@ -848,7 +863,9 @@ mod tests {
     fn terra_snhunt_manu_matatabi_from_global_pool() {
         let table = table();
         let mut layout = LayoutContext::default();
-        layout.global.set(crate::global_resource::GlobalResourceKey::Matatabi, 12.0);
+        layout
+            .global
+            .set(crate::global_resource::GlobalResourceKey::Matatabi, 12.0);
         let mut input = ManuRoomInput::with_operators(
             3,
             RecipeKind::Gold,
@@ -1106,11 +1123,9 @@ mod tests {
     #[test]
     fn gongsun_243_automation_trio_with_greyy2_virtual_power() {
         let table = table();
-        let instances =
-            OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         // 公孙事实布局 243_use_this_（2 金贸）+ 承曦格雷伊晨曦 → 有效发电 4
-        let mut layout =
-            crate::layout::resolve_search_baseline_layout().unwrap();
+        let mut layout = crate::layout::resolve_search_baseline_layout().unwrap();
         layout
             .global
             .add(crate::global_resource::GlobalResourceKey::VirtualPower, 1.0);
@@ -1150,8 +1165,7 @@ mod tests {
     #[test]
     fn ideal_e2_saria_qingliu_weedy_gold_140_with_greyy2_power() {
         let table = table();
-        let instances =
-            OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let mut layout = crate::layout::resolve_search_baseline_layout().unwrap();
         layout
             .global
@@ -1160,11 +1174,7 @@ mod tests {
             .iter()
             .map(|&name| {
                 let tier = PromotionTier::TierUp;
-                ManuOperator::new(
-                    name,
-                    2,
-                    instances.resolve_manufacture_buff_ids(name, tier),
-                )
+                ManuOperator::new(name, 2, instances.resolve_manufacture_buff_ids(name, tier))
             })
             .collect();
         let mut input = ManuRoomInput::with_operators(3, RecipeKind::Gold, ops);
@@ -1190,8 +1200,7 @@ mod tests {
         use crate::layout::{resolve_base, BaseAssignment, BaseBlueprint};
 
         let table = table();
-        let instances =
-            OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
 
         let mut assignment = BaseAssignment::default();
@@ -1221,45 +1230,52 @@ mod tests {
             None,
         )
         .unwrap();
-        let layout = resolved.layout.clone();
-
-        let br_ops: Vec<ManuOperator> = ["灰毫", "远牙", "野鬃"]
+        let br_room = resolved
+            .manu_rooms
             .iter()
-            .map(|name| {
-                ManuOperator::new(
-                    (*name).to_string(),
-                    2,
-                    instances.resolve_manufacture_buff_ids(name, PromotionTier::TierUp),
-                )
-            })
-            .collect();
-        let mut br_input = ManuRoomInput::with_operators(3, RecipeKind::BattleRecord, br_ops);
-        br_input.layout = std::sync::Arc::new(layout.clone());
+            .find(|r| r.id.0 == "manu_1")
+            .unwrap();
+        let br_input = ManuRoomInput {
+            level: br_room.level,
+            operators: br_room.operators.clone(),
+            active_recipe: RecipeKind::BattleRecord,
+            mood: 24.0,
+            layout: std::sync::Arc::new(br_room.layout.clone()),
+        };
         let br = crate::manufacture::solver::solve_manufacture(&br_input, &table).unwrap();
-        // 公孙纸面 126% = 75 技能 + 30 焰尾 + 21 薇薇安娜；当前全局 inject 模型下 1 骑士 → +7，合计 115。
+        // 公孙社区口径 126% = 75 本体 + 60 焰尾 + 21 薇薇安娜；不含人头。
         assert!(
-            (br.prod_total - 115.0).abs() < 1.5,
-            "BR prod_total={} prod_skill={} (target ~115)",
+            (br.prod_skill - 126.0).abs() < 1.5,
+            "BR prod_total={} prod_skill={} (target skill ~126)",
+            br.prod_total,
+            br.prod_skill
+        );
+        assert!(
+            (br.prod_total - 129.0).abs() < 1.5,
+            "BR prod_total={} prod_skill={}",
             br.prod_total,
             br.prod_skill
         );
 
-        let gravel_ops = vec![ManuOperator::new(
-            "砾",
-            2,
-            instances.resolve_manufacture_buff_ids("砾", PromotionTier::TierUp),
-        )];
-        let mut gold_input =
-            ManuRoomInput::with_operators(3, RecipeKind::Gold, gravel_ops);
-        gold_input.layout = std::sync::Arc::new(layout);
+        let gravel_room = resolved
+            .manu_rooms
+            .iter()
+            .find(|r| r.id.0 == "manu_4")
+            .unwrap();
+        let gold_input = ManuRoomInput {
+            level: gravel_room.level,
+            operators: gravel_room.operators.clone(),
+            active_recipe: RecipeKind::Gold,
+            mood: 24.0,
+            layout: std::sync::Arc::new(gravel_room.layout.clone()),
+        };
         let gold = crate::manufacture::solver::solve_manufacture(&gold_input, &table).unwrap();
         assert!(
-            (gold.prod_skill - 35.0).abs() < 0.5,
-            "砾本体 35% gold skill"
+            (gold.prod_skill - 42.0).abs() < 0.5,
+            "砾本体 35% + 薇薇安娜 7% gold skill"
         );
-        // 全局 3 红松 → 赤金 -30%；1 骑士 +7% → prod_total ≈ 15（纸面 42% 为无赤金 debuff 时的 skill+inject 口径）
         assert!(
-            (gold.prod_total - 15.0).abs() < 3.0,
+            (gold.prod_total - 45.0).abs() < 3.0,
             "gold prod_total={}",
             gold.prod_total
         );
@@ -1324,11 +1340,7 @@ mod tests {
                 .map(|(name, elite)| {
                     let tier = PromotionTier::from_elite(*elite);
                     let buffs = instances.resolve_manufacture_buff_ids(name, tier);
-                    op(
-                        name,
-                        *elite,
-                        buffs.iter().map(String::as_str).collect(),
-                    )
+                    op(name, *elite, buffs.iter().map(String::as_str).collect())
                 })
                 .collect();
             ManuRoomInput {
@@ -1343,11 +1355,8 @@ mod tests {
         let with_yeyan = solve_manufacture(&mk(&[("苍苔", 2), ("夜烟", 2)]), &table).unwrap();
         assert!((with_yeyan.prod_skill - 70.0).abs() < 0.01);
 
-        let with_thorn = solve_manufacture(
-            &mk(&[("苍苔", 2), ("夜烟", 2), ("引星棘刺", 2)]),
-            &table,
-        )
-        .unwrap();
+        let with_thorn =
+            solve_manufacture(&mk(&[("苍苔", 2), ("夜烟", 2), ("引星棘刺", 2)]), &table).unwrap();
         let mut ctx = ManuContext::from_room(&mk(&[("苍苔", 2), ("夜烟", 2), ("引星棘刺", 2)]));
         apply_manu_phases(&mut ctx, &table);
         let cangtai = ctx.operators.iter().find(|o| o.name == "苍苔").unwrap();
@@ -1359,11 +1368,8 @@ mod tests {
             with_thorn.prod_skill
         );
 
-        let with_gravel = solve_manufacture(
-            &mk(&[("苍苔", 2), ("砾", 2), ("引星棘刺", 2)]),
-            &table,
-        )
-        .unwrap();
+        let with_gravel =
+            solve_manufacture(&mk(&[("苍苔", 2), ("砾", 2), ("引星棘刺", 2)]), &table).unwrap();
         let mut ctx = ManuContext::from_room(&mk(&[("苍苔", 2), ("砾", 2), ("引星棘刺", 2)]));
         apply_manu_phases(&mut ctx, &table);
         let cangtai_gravel = ctx.operators.iter().find(|o| o.name == "苍苔").unwrap();
@@ -1409,7 +1415,11 @@ mod tests {
             .find(|o| o.name == "Miss.Christine")
             .unwrap();
         assert!((christine.total_eff(RecipeKind::BattleRecord) - 30.0).abs() < 0.01);
-        assert!((paired_r.prod_skill - 65.0).abs() < 0.01, "got {}", paired_r.prod_skill);
+        assert!(
+            (paired_r.prod_skill - 65.0).abs() < 0.01,
+            "got {}",
+            paired_r.prod_skill
+        );
     }
 
     #[test]
@@ -1528,7 +1538,11 @@ mod tests {
     fn alanana_mechanical_mastery_scales_with_platform_count() {
         let table = table();
         let e0_one = solve_manufacture(&alanana_room(0, 1, false), &table).unwrap();
-        assert!((e0_one.prod_skill - 5.0).abs() < 0.01, "got {}", e0_one.prod_skill);
+        assert!(
+            (e0_one.prod_skill - 5.0).abs() < 0.01,
+            "got {}",
+            e0_one.prod_skill
+        );
 
         let e2_three = solve_manufacture(&alanana_room(2, 3, false), &table).unwrap();
         assert!(
@@ -1542,7 +1556,11 @@ mod tests {
     fn alanana_lending_hand_requires_wenmi_in_room() {
         let table = table();
         let solo = solve_manufacture(&alanana_room(2, 1, false), &table).unwrap();
-        assert!((solo.prod_skill - 10.0).abs() < 0.01, "got {}", solo.prod_skill);
+        assert!(
+            (solo.prod_skill - 10.0).abs() < 0.01,
+            "got {}",
+            solo.prod_skill
+        );
 
         let paired = solve_manufacture(&alanana_room(2, 1, true), &table).unwrap();
         let mut ctx = ManuContext::from_room(&alanana_room(2, 1, true));
@@ -1584,13 +1602,18 @@ mod tests {
     fn manu_marcille_monster_cuisine() {
         let table = table();
         let mut layout = LayoutContext::default();
-        layout
-            .global
-            .set(crate::global_resource::GlobalResourceKey::MonsterCuisine, 3.0);
+        layout.global.set(
+            crate::global_resource::GlobalResourceKey::MonsterCuisine,
+            3.0,
+        );
         let mut input = ManuRoomInput::with_operators(
             3,
             RecipeKind::Gold,
-            vec![op("玛露西尔", 2, vec!["manu_prod_spd_bd[400]", "manu_prod_spd[014]"])],
+            vec![op(
+                "玛露西尔",
+                2,
+                vec!["manu_prod_spd_bd[400]", "manu_prod_spd[014]"],
+            )],
         );
         input.layout = Arc::new(layout);
         let mut ctx = ManuContext::from_room(&input);
@@ -1706,7 +1729,11 @@ mod tests {
         )
         .unwrap();
         // 标准化·β +25%；自身 1 个标准化类技能 → 意识协议 +5%
-        assert!((e2.prod_skill - 30.0).abs() < 0.01, "e2 solo got {}", e2.prod_skill);
+        assert!(
+            (e2.prod_skill - 30.0).abs() < 0.01,
+            "e2 solo got {}",
+            e2.prod_skill
+        );
 
         let paired_room = ManuRoomInput::with_operators(
             3,
@@ -1750,7 +1777,11 @@ mod tests {
         )
         .unwrap();
         // 莱茵科技·β +25%；自身 1 个莱茵类技能 → 源石技艺理论应用 +5%
-        assert!((e2.prod_skill - 30.0).abs() < 0.01, "e2 solo got {}", e2.prod_skill);
+        assert!(
+            (e2.prod_skill - 30.0).abs() < 0.01,
+            "e2 solo got {}",
+            e2.prod_skill
+        );
 
         let paired_room = ManuRoomInput::with_operators(
             3,
@@ -1855,12 +1886,20 @@ mod tests {
         );
         room.layout = Arc::new(layout.clone());
         let r2 = solve_manufacture(&room, &table).unwrap();
-        assert!((r2.prod_skill - 20.0).abs() < 0.01, "lv2 got {}", r2.prod_skill);
+        assert!(
+            (r2.prod_skill - 20.0).abs() < 0.01,
+            "lv2 got {}",
+            r2.prod_skill
+        );
 
         layout.training_room_level = 3;
         room.layout = Arc::new(layout);
         let r3 = solve_manufacture(&room, &table).unwrap();
-        assert!((r3.prod_skill - 30.0).abs() < 0.01, "lv3 got {}", r3.prod_skill);
+        assert!(
+            (r3.prod_skill - 30.0).abs() < 0.01,
+            "lv3 got {}",
+            r3.prod_skill
+        );
     }
 
     #[test]
@@ -1876,7 +1915,11 @@ mod tests {
         );
         let mut base_ctx = ManuContext::from_room(&base_room);
         apply_manu_phases(&mut base_ctx, &table);
-        let mizuki_base = base_ctx.operators.iter().find(|o| o.name == "水月").unwrap();
+        let mizuki_base = base_ctx
+            .operators
+            .iter()
+            .find(|o| o.name == "水月")
+            .unwrap();
         assert!(
             (mizuki_base.total_eff(RecipeKind::Gold) - 30.0).abs() < 0.01,
             "without 海沫 got {}",
@@ -1894,7 +1937,11 @@ mod tests {
         );
         let mut compat_ctx = ManuContext::from_room(&compat_room);
         apply_manu_phases(&mut compat_ctx, &table);
-        let mizuki_compat = compat_ctx.operators.iter().find(|o| o.name == "水月").unwrap();
+        let mizuki_compat = compat_ctx
+            .operators
+            .iter()
+            .find(|o| o.name == "水月")
+            .unwrap();
         // 标准化·β 25% + 2 个标准化类等效（自身 β + 赫默莱茵·α）×5%
         assert!(
             (mizuki_compat.total_eff(RecipeKind::Gold) - 35.0).abs() < 0.01,
@@ -1924,9 +1971,10 @@ mod tests {
 
     fn room_with_human_fireworks(amount: f64) -> ManuRoomInput {
         let mut layout = LayoutContext::default();
-        layout
-            .global
-            .set(crate::global_resource::GlobalResourceKey::HumanFireworks, amount);
+        layout.global.set(
+            crate::global_resource::GlobalResourceKey::HumanFireworks,
+            amount,
+        );
         let mut room = ManuRoomInput::with_operators(3, RecipeKind::Gold, vec![]);
         room.layout = Arc::new(layout);
         room

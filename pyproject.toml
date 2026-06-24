@@ -3,7 +3,10 @@ name = "arknightsinfracalc-v2"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
+    "chromadb>=1.5.9",
+    "openai>=2.43.0",
     "pandas>=3.0.3",
+    "sentence-transformers>=5.6.0",
 ]
 
 [[tool.uv.index]]

@@ -118,15 +118,13 @@ mod tests {
 
     #[test]
     fn three_standard_ops_battle_record() {
-        let instances =
-            OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = table();
         let names = ["蛇屠箱", "黑角", "米格鲁"];
         let operators: Vec<ManuOperator> = names
             .iter()
             .map(|name| {
-                let buff_ids =
-                    instances.resolve_manufacture_buff_ids(name, PromotionTier::Tier0);
+                let buff_ids = instances.resolve_manufacture_buff_ids(name, PromotionTier::Tier0);
                 ManuOperator::new(*name, 0, buff_ids)
             })
             .collect();

@@ -1,7 +1,5 @@
 //! 跨设施编排执行器：执行 `scope=Global` 的 EffectAtom，产出全局资源池。
 
-use std::collections::HashMap;
-
 use crate::global_resource::GlobalResourcePool;
 use crate::layout::LayoutContext;
 use crate::types::{Action, Condition, Phase, Selector, StateKey};
@@ -45,17 +43,17 @@ pub fn orchestrate_global_atoms(
 /// 求值 Condition（仅处理在跨设施上下文中可用的条件）。
 fn condition_met(
     cond: &Option<crate::types::Condition>,
-    entry: &GlobalAtomEntry,
-    layout: &LayoutContext,
+    _entry: &GlobalAtomEntry,
+    _layout: &LayoutContext,
 ) -> bool {
     let Some(cond) = cond else {
         return true;
     };
     match cond {
-        Condition::MoodAbove { n } => true, // 跨设施编排暂不关心心情，视为满足
-        Condition::MoodBelowOrEq { n } => false,
-        Condition::PartnerInRoom { name } => true, // scope=Global 的跨设施 atom 不依赖同房条件
-        _ => true, // 其他条件视为满足（跨设施场景简化处理）
+        Condition::MoodAbove { n: _ } => true, // 跨设施编排暂不关心心情，视为满足
+        Condition::MoodBelowOrEq { n: _ } => false,
+        Condition::PartnerInRoom { name: _ } => true, // scope=Global 的跨设施 atom 不依赖同房条件
+        _ => true,                                    // 其他条件视为满足（跨设施场景简化处理）
     }
 }
 
@@ -94,7 +92,7 @@ fn apply_state_write(
                 global.add(to_k, converted);
             }
         }
-        Action::AddFlatEff { value, .. } => {
+        Action::AddFlatEff { value: _, .. } => {
             // scope=Global 的 AddFlatEff 仅在跨设施上下文中用于外部记账
             // 目前无实际用例，忽略
         }

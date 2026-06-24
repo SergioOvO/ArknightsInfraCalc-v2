@@ -5146,7 +5146,7 @@
           },
           "phase": "global_inject",
           "phase_order": 10,
-          "tag": "trade_global_flat"
+          "tag": "trade_karlan_station"
         }
       ]
     },
@@ -5170,7 +5170,7 @@
           },
           "phase": "global_inject",
           "phase_order": 10,
-          "tag": "trade_global_flat"
+          "tag": "trade_glasgow_scaling"
         }
       ]
     },
@@ -5194,7 +5194,7 @@
           },
           "phase": "global_inject",
           "phase_order": 10,
-          "tag": "trade_global_flat"
+          "tag": "trade_siracusa_scaling"
         }
       ]
     },
@@ -5266,7 +5266,7 @@
           },
           "phase": "global_inject",
           "phase_order": 10,
-          "tag": "manu_global_all"
+          "tag": "manu_blacksteel_scaling"
         },
         {
           "action": {
@@ -5310,24 +5310,7 @@
       "skill_name": "烛骑士微光",
       "facility": "control",
       "tier": "tier_up",
-      "atoms": [
-        {
-          "selector": {
-            "tagged_count_in_manu_sum": {
-              "tag": "cc.g.knight"
-            }
-          },
-          "action": {
-            "kind": "global_inject_manu_eff",
-            "params": {
-              "value": 7.0
-            }
-          },
-          "phase": "global_inject",
-          "phase_order": 10,
-          "tag": "manu_global_all"
-        }
-      ]
+      "atoms": []
     },
     {
       "id": "control_dorm_bd[000]",
@@ -5554,42 +5537,62 @@
       "skill_name": "红松的骑士",
       "facility": "control",
       "tier": "tier_up",
+      "atoms": []
+    },
+    {
+      "id": "control_mp_aegir2[000]",
+      "skill_name": "集群狩猎·α",
+      "facility": "control",
+      "tier": "tier_0",
       "atoms": [
         {
           "selector": {
             "tagged_count_in_manu_sum": {
-              "tag": "cc.g.pinus"
+              "tag": "cc.g.abyssal"
             }
           },
           "action": {
             "kind": "global_inject_manu_eff",
             "params": {
-              "value": 10.0,
-              "recipe": "battle_record"
+              "value": 10.0
             }
           },
           "phase": "global_inject",
           "phase_order": 10,
-          "tag": "pinus_knight_br"
-        },
+          "tag": "aegir_hunt_alpha"
+        }
+      ]
+    },
+    {
+      "id": "control_mp_aegir2[010]",
+      "skill_name": "集群狩猎·β",
+      "facility": "control",
+      "tier": "tier_up",
+      "atoms": [
         {
           "selector": {
             "tagged_count_in_manu_sum": {
-              "tag": "cc.g.pinus"
+              "tag": "cc.g.abyssal"
             }
           },
           "action": {
             "kind": "global_inject_manu_eff",
             "params": {
-              "value": -10.0,
-              "recipe": "gold"
+              "value": 20.0
             }
           },
           "phase": "global_inject",
-          "phase_order": 11,
-          "tag": "pinus_knight_gold"
+          "phase_order": 10,
+          "tag": "aegir_hunt_beta"
         }
       ]
+    },
+    {
+      "id": "control_mp_aegir1[000]",
+      "skill_name": "潮汐守望",
+      "facility": "control",
+      "tier": "tier_0",
+      "atoms": []
     },
     {
       "id": "control_mp_cost[010]",
