@@ -20,7 +20,7 @@ use crate::pool::{
     JIE_TRADE_NAME,
 };
 use crate::search::{
-    control_entry_hr_mood_fill, hit_witch_shortcut, pick_docus_trade_hit, search_control_combos,
+    control_entry_plugin_fill, hit_witch_shortcut, pick_docus_trade_hit, search_control_combos,
     search_manufacture_triples, search_power_assignment, search_trade_triples,
     search_trade_triples_filtered, ControlFillPolicy, ControlSearchOptions, ManuSearchHit,
     ManuSearchOptions, PowerSearchOptions, SearchTripleFilter, TradeSearchHit, TradeSearchOptions,
@@ -407,18 +407,16 @@ pub(crate) fn assign_control(
         layout: layout.clone(),
         matatabi_consumer_active: assignment_has_matatabi_consumer(assignment),
         must_include: pinned.clone(),
-        fill_policy: if pinned.is_empty() || options.skip_standalone_control {
-            ControlFillPolicy::Efficiency
-        } else {
-            ControlFillPolicy::HrAndMood
-        },
+        fill_policy: ControlFillPolicy::HrAndMood,
     };
 
-    let filtered_pool = if options.skip_standalone_control {
+    let base_pool = if options.skip_standalone_control {
         pool.clone()
     } else {
         try_filter_standalone(pool, FacilityKind::ControlCenter, 1)
     };
+    let filtered_pool =
+        filter_control_pool_for_fill(&base_pool, used, &pinned, control_opts.fill_policy);
 
     let hit = if pinned.is_empty() {
         let combos = search_control_combos(&filtered_pool, table, &control_opts)?;
@@ -426,22 +424,12 @@ pub(crate) fn assign_control(
             &combos,
             &pinned,
             used,
-            || {
-                let sub = filter_control_pool_for_fill(
-                    &filtered_pool,
-                    used,
-                    &pinned,
-                    control_opts.fill_policy,
-                );
-                search_control_combos(&sub, table, &control_opts)
-            },
+            || search_control_combos(&filtered_pool, table, &control_opts),
             |h| &h.names,
             "control: no disjoint combo after pool filter",
         )?
     } else {
-        let sub =
-            filter_control_pool_for_fill(&filtered_pool, used, &pinned, control_opts.fill_policy);
-        let combos = search_control_combos(&sub, table, &control_opts)?;
+        let combos = search_control_combos(&filtered_pool, table, &control_opts)?;
         pick_control_extending_pins(combos.iter().cloned(), &pinned, used, &|h| &h.names)
             .ok_or_else(|| Error::msg("control: no combo extending pinned after pool filter"))?
     };
@@ -470,7 +458,7 @@ fn filter_control_pool_for_fill(
                 (!used.contains(&e.name) || pinned.contains(&e.name))
                     && (fill_policy != ControlFillPolicy::HrAndMood
                         || pinned.contains(&e.name)
-                        || control_entry_hr_mood_fill(e))
+                        || control_entry_plugin_fill(e))
             })
             .cloned()
             .collect(),

@@ -153,7 +153,6 @@ fn control_hr_mood_buff(buff_id: &str) -> bool {
             | "control_mp_cost[012]"
             | "control_mp_psk[000]"
     ) || (buff_id.starts_with("control_mp_cost[") && !buff_id.contains('&'))
-        || buff_id.starts_with("control_mp_cost&faction")
 }
 
 fn control_inject_sort_key(hit: &ControlSearchHit) -> f64 {
@@ -176,6 +175,17 @@ pub fn control_entry_mood_cost_fill(entry: &crate::pool::ControlPoolEntry) -> bo
         return false;
     }
     entry.buff_ids.iter().any(|b| control_mood_cost_buff(b))
+}
+
+pub fn control_entry_plugin_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
+    if entry
+        .buff_ids
+        .iter()
+        .any(|b| control_standalone_producer_buff(b))
+    {
+        return false;
+    }
+    control_entry_core_inject_fill(entry) || control_entry_hr_mood_fill(entry)
 }
 
 pub fn control_entry_hr_mood_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
@@ -213,8 +223,6 @@ fn control_hr_mood_ancillary(operators: &[ControlOperator], table: &SkillTable) 
                     }
                     if bid.starts_with("control_mp_cost[") && !bid.contains('&') {
                         5.0
-                    } else if bid.starts_with("control_mp_cost&faction") {
-                        5.0
                     } else {
                         0.0
                     }
@@ -249,11 +257,29 @@ fn score_control_result(
 
     if options.fill_policy == ControlFillPolicy::HrAndMood {
         let ancillary = control_hr_mood_ancillary(operators, table);
+        let trade_inject = result.inject.trade_eff_pct();
+        let manu_gold = result.inject.manu_eff_for(RecipeKind::Gold);
+        let manu_br = result.inject.manu_eff_for(RecipeKind::BattleRecord);
+        let component_score = current_control_inject_sort_score(TradeManuEfficiencyComponents {
+            trade_eff_pct: trade_inject,
+            gold_manu_eff_pct: manu_gold,
+            battle_record_manu_eff_pct: manu_br,
+            trade_station_count: options.layout.trade_station_count,
+            gold_line_count: options.layout.gold_manu_line_count.min(u32::from(u8::MAX)) as u8,
+            battle_record_line_count: options
+                .layout
+                .manufacture_station_count
+                .saturating_sub(options.layout.gold_manu_line_count.min(u32::from(u8::MAX)) as u8),
+        });
         return ControlScoreBreakdown {
+            trade_inject_pct: trade_inject,
+            manu_gold_inject_pct: manu_gold,
+            manu_br_inject_pct: manu_br,
+            inject_subtotal: component_score.sort_key_pct,
             ancillary_score: ancillary,
             mood_penalty,
             mood_penalty_score: 0.0,
-            total_score: ancillary,
+            total_score: component_score.sort_key_pct + ancillary,
             ..ControlScoreBreakdown::default()
         };
     }
@@ -453,5 +479,43 @@ mod tests {
                 > 0.0,
             "夜刀应记账心情消耗"
         );
+    }
+
+    #[test]
+    fn control_plugin_fill_excludes_unclaimed_system_producers() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            [
+                ("阿米娅", 2),
+                ("诗怀雅", 2),
+                ("八幡海铃", 2),
+                ("焰尾", 2),
+                ("薇薇安娜", 2),
+                ("三角初华", 2),
+                ("若叶睦", 2),
+                ("丰川祥子", 2),
+            ]
+            .into_iter()
+            .map(|(n, e)| (n.to_string(), e))
+            .collect(),
+        );
+        let pool = build_control_pool(&roster, &instances, &table).unwrap();
+
+        for name in ["阿米娅", "诗怀雅", "八幡海铃", "焰尾", "薇薇安娜"] {
+            let entry = pool.entry(name).unwrap();
+            assert!(
+                control_entry_plugin_fill(entry),
+                "{name} should be allowed as control plugin fill"
+            );
+        }
+
+        for name in ["三角初华", "若叶睦", "丰川祥子"] {
+            let entry = pool.entry(name).unwrap();
+            assert!(
+                !control_entry_plugin_fill(entry),
+                "{name} is a system producer and should not be inserted as standalone control fill"
+            );
+        }
     }
 }

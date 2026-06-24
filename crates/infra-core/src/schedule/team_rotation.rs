@@ -15,7 +15,7 @@ use crate::operbox::OperBox;
 use crate::pool::{
     build_control_pool, build_manufacture_pool, build_power_pool, build_trade_pool, ManuPool,
 };
-use crate::search::{control_entry_core_inject_fill, control_entry_mood_cost_fill};
+use crate::search::control_entry_plugin_fill;
 use crate::skill_table::SkillTable;
 
 use super::base_rotation::{score_base_assignment, ShiftScores};
@@ -512,7 +512,7 @@ fn control_rotation_candidate(
     _layout: &crate::layout::LayoutContext,
     _mood: f64,
 ) -> bool {
-    control_entry_core_inject_fill(entry) || control_entry_mood_cost_fill(entry)
+    control_entry_plugin_fill(entry)
 }
 
 // ── 中枢队伍归属结束 ──

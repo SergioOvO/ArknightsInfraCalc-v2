@@ -31,7 +31,7 @@ align_shift_binds(h1, h2)            # 迷迭香+黑键等同队
 α = peak ∩ h1,  β = peak ∩ h2
 γ = assign_team_gamma_half(h1) + assign_team_gamma_half(h2)  # plain 贸易，不重搜 meta
 team_ctrl = build_team_control_map(peak.control, plan, h1)    # 中枢干员归入 αβγ
-team_ctrl += core inject / mood-cost control candidates       # 效率注入/心情类散件
+team_ctrl += core inject / hr-mood control candidates         # 效率注入/公招心情散件
 
 S1 (12h): shared + control(α+β) + α(H1) + β(H2)   休息 γ
 S2 (6h):  shared + control(β+γ) + β(H2) + γ(H1)   休息 α
@@ -51,16 +51,17 @@ S3 (6h):  shared + control(γ+α) + γ(H2) + α(H1)   休息 β
 - 每班中枢满编 5 人。
 - 休息队的中枢干员不进入当班中枢。
 - 每个中枢干员在 αβγ 周期内至少休息 1 班。
-- 优先保留贸易 / 制造效率注入；资源-only producer 不作为无消费方补位。
+- 优先保留贸易 / 制造效率注入；未被体系认领的 producer 不作为中枢插件补位。
 
 中枢干员归队：
 
 1. 体系绑定中枢位跟随其生产体系所在半区：H1 → α，H2 → β；纯中枢体系默认 α。
 2. peak 中枢里的非体系散件按当前队伍人数最少优先均分到 α/β/γ。
-3. 额外中枢候选只收两类：核心贸易/制造注入，或心情消耗类补位。
+3. 额外中枢候选只收两类：核心贸易/制造注入，或公招/心情回复类补位。
+   未被 `base_systems` 认领的状态 producer（热情、木天蓼、情报储备等）不作为普通插件放入中枢。
 4. 若额外候选已经在生产队中，跟随该生产队；否则分到当前中枢人数最少的队。
 
-每个班次只用活跃两队的中枢候选建池。体系中枢位先 pin 到 `control`，再由 `assign_control` 补满 5 人。轮换内设置 `skip_standalone_control = true`，中枢搜索按 `Efficiency` 策略排序，即 `ControlInjectRawSumV0`：`trade_inject + manu_gold + manu_br`。这是中枢候选的局部排序 policy，不是贸易/制造平衡公式。
+每个班次只用活跃两队的中枢候选建池。体系中枢位先 pin 到 `control`，再由 `assign_control` 补满 5 人。轮换内设置 `skip_standalone_control = true` 以保留体系 pin，但补位仍按 plugin 规则过滤；排序分为 `ControlInjectRawSumV0` 注入分量（`trade_inject + manu_gold + manu_br`）加公招/心情补位分。这是中枢候选的局部排序 policy，不是贸易/制造平衡公式。
 
 S2 有深海短班特例：若可构造歌蕾蒂娅中枢 + 深海制造候选，且制造评分优于普通 S2，才采用该路径；深海链不进入 12h 主班。
 
