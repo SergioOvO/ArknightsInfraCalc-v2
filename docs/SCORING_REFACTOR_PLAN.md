@@ -1,25 +1,22 @@
-# 评分口径收敛与公孙公式接入计划
+# 评分口径收敛与分量化计划
 
-> 状态：执行中 v1（2026-06-23）  
-> 已完成：Phase 0 首轮审计、Phase 1 注释修正、Phase 2 排序 key 显式化、Phase 3 `scoring` / `balance` 公式接口、Phase 4 当前行为锁定测试；安全 warning hygiene 已完成。  
-> 待做：Phase 5 等公孙长乐公式到位后接入真实平衡公式。  
-> 目标：在不重写现有求解器、不破坏百毫秒级求解性能的前提下，把历史遗留的 `score` / `composite_score` / `total_score` 口径收敛为**效率量纲**，并为公孙长乐提供的贸易-制造平衡公式预留唯一接入口。
+> 状态：执行中 v2（2026-06-24）  
+> 已完成：Phase 0 首轮审计、Phase 1 注释修正、Phase 2 排序 key 显式化、Phase 3 `scoring` 分量策略入口、Phase 4 当前行为锁定测试；安全 warning hygiene 已完成。  
+> 当前结论：公孙长乐确认**不需要贸易-制造平衡公式**。龙舌兰、可露希尔、但书等特殊贸易机制已给出等效效率，直接进入贸易站赤金订单总效率；制造站继续拆为赤金效率、经验效率。  
+> 待做：把输出、文档和后续实现统一为分量化口径，不再等待或设计跨贸易/制造的单一复合分。
 
 ---
 
 ## 1. 背景
 
-本项目是基于 Cursor + DeepSeek 快速迭代出的明日方舟基建排班引擎：
+本项目曾预留过“贸易-制造平衡公式”入口，用来约束历史遗留的 `score` / `composite_score` / `total_score` 字段，避免 AI 自创权重。现在公孙长乐给出的新口径更直接：
 
-- 机制层：EffectAtom、L1/L2/L3、shortcut、global resource；
-- 理论层：公孙长乐提供体系理论、排班理论、贸易-制造平衡公式；
-- 求解层：通过体系编排、剪枝、局部搜索、`top_k` 回退实现百毫秒内排班。
+- **贸易站**：龙舌兰、可露希尔、但书等机制已折算为贸易站赤金订单总效率；
+- **制造站**：赤金产线效率、经验书产线效率分别作为制造分量；
+- **跨域展示 / 比较**：保留分量，不强行合成一个全局综合分；
+- **中枢注入排序**：当前仍可保留 `trade_inject + manu_gold + manu_br` 作为局部候选排序策略，但它只是 heuristic / policy，不是理论公式。
 
-早期实现中，AI 曾引入过若干自创评分字段和综合分。后来项目方向已约束为：
-
-> **站内搜索使用效率贪心；跨贸易/制造的比较必须使用公孙长乐提供的严谨平衡公式。**
-
-当前要做的不是重写 solver，而是把评分口径显式化、可审计、可替换、可测试。
+因此评分主线从“等待平衡公式”改为“分量口径清晰化 + 局部排序策略显式化”。
 
 ---
 
@@ -27,98 +24,98 @@
 
 ### 2.1 必须达成
 
-1. 所有参与排序的字段都明确单位：贸易效率%、制造效率%、充能效率%、复合等效效率等。
-2. 所有跨贸易/制造/全局注入的换算都收敛到一个公式入口。
-3. 在公孙公式未落地前，不猜测权重、不发明综合分。
-4. 现有排班结果尽量保持稳定，先文档化和接口化，再接真实公式。
-5. 用测试锁定关键口径，防止后续 AI 或人误改。
+1. 所有参与排序的字段都明确单位：贸易赤金订单效率%、制造赤金效率%、制造经验效率%、充能效率%、局部排序 key 等。
+2. 跨贸易/制造/全局注入不再伪装成单一理论分；需要排序时必须声明具体策略 ID。
+3. 已有等效效率锚点进入各自设施分量，不再额外做贸易-制造平衡折算。
+4. 当前排班结果尽量保持稳定，先改命名、文档和接口语义，再按锚点补数据。
+5. 用测试锁定关键口径，防止后续又引入自创综合分。
 
 ### 2.2 非目标
 
 - 不引入通用约束求解器。
 - 不做全局 `trade * x + manu * y + power * z` 的任意综合分。
 - 不重写 EffectAtom / L1-L3 求解语义。
-- 不因为公式接入而牺牲百毫秒级主路径性能。
-- 不在公式未确认前改变大量排序结果。
+- 不因为分量化调整而牺牲百毫秒级主路径性能。
+- 不把中枢当前 raw-sum 排序当作理论锚点。
 
 ---
 
 ## 3. 核心原则
 
-### 3.1 效率量纲优先
-
-项目中所有排序口径都应落入以下明确类型之一：
+### 3.1 效率分量优先
 
 | 口径 | 含义 | 例子 | 是否可直接排序 |
 |------|------|------|----------------|
-| Facility efficiency | 设施内纸面效率 | 贸易 `order_eff_total`、制造 `prod_total`、发电 `charge_speed_pct` | 同设施内可以 |
-| Mechanic-adjusted metric | 机制解释值 | 贸易 `mechanic_equiv_eff_pct`、`effective_eff_multiplier` | `mechanic_equiv_eff_pct` 作为赤金效率展示；`effective_eff_multiplier` 仅作内部调试乘积，不作为用户侧“最终倍率” |
-| Balanced equivalent efficiency | 经公孙公式换算后的复合效率 | 黑键/但书/中枢注入的贸易-制造复合贡献 | 可以用于体系竞争 / 跨设施比较 |
-| Schedule weighted efficiency | 按班次时长折算后的效率 | `eff * shift_hours / 24` | 用于日汇总 / 展示 |
+| 贸易赤金订单效率 | 贸易站赤金订单总效率，含龙舌兰/可露希尔/但书等已折算机制 | `order_eff_total`、shortcut `trade_pct` | 贸易站内可以 |
+| 贸易赤金相关解释分量 | 赤金需求 / 订单机制等解释值 | `mechanic_equiv_eff_pct`、shortcut `gold_pct` | 展示/解释，不替代 trade_pct |
+| 制造赤金效率 | 赤金产线制造效率 | `prod_total` with `RecipeKind::Gold` | 同制造赤金产线内可以 |
+| 制造经验效率 | 经验书产线制造效率 | `prod_total` with `RecipeKind::BattleRecord` | 同制造经验产线内可以 |
+| 发电效率 | 无人机充能速度 | `charge_speed_pct` | 发电站内可以 |
+| 局部排序 key | 为某个局部选择策略生成的排序键 | `ControlInjectRawSumV0` | 仅限声明的局部策略 |
+| 时长折算效率 | 日排班汇总用，`eff * hours / 24` | `weighted_*` | 用于日汇总/展示 |
 
-### 3.2 站内搜索与体系竞争分层
+### 3.2 站内搜索与跨域展示分层
 
 | 层级 | 推荐口径 |
 |------|----------|
-| 贸易站 C(n,3) 搜索 | 贸易效率 `trade_pct`；L3 shortcut 命中时为公孙 vault 等效贸易效率，赤金效率 `gold_pct` 单独展示；不合成用户侧最终倍率 |
-| 制造站 C(n,3) 搜索 | 制造产出效率 `prod_total` |
-| 发电站 O(n) 搜索 | 充能效率 `charge_speed_pct`；虚拟电站是否折算由公式决定 |
-| 控制中枢补位 | 全局注入的平衡等效效率；公式未接入前先保留现状并标记 |
-| 体系选择 / 中枢竞争 | 公孙平衡公式后的复合效率 + 体系硬约束 / priority |
-| 排班日汇总 | 保留 trade/manu/power 分量；可新增 balanced summary，不替代原始分量 |
+| 贸易站 C(n,3) 搜索 | 贸易赤金订单效率 `trade_pct`；L3 shortcut 命中时使用公孙等效效率，`gold_pct` 单独展示 |
+| 制造站 C(n,3) 搜索 | 按配方产线排序：赤金线看赤金效率，经验线看经验效率 |
+| 发电站 O(n) 搜索 | 充能效率 `charge_speed_pct`；虚拟发电另列解释 |
+| 控制中枢补位 | 输出 trade/manu_gold/manu_br 三个注入分量；当前 `Efficiency` 策略用 raw-sum 排序 |
+| 体系选择 | 先走 `base_systems` priority / exclusive_group / fixture 锚点，不靠全局综合分发现体系 |
+| 排班日汇总 | 保留 trade/manu/power 分量；不新增单一 balanced summary |
 
-### 3.3 公式入口唯一化
+### 3.3 scoring 模块职责
 
-严禁散落写法：
-
-```rust
-trade_inject + manu_gold + manu_br
-trade_eff * 1.5 + manu_eff
-virtual_power * arbitrary_weight
-```
-
-跨设施换算必须进入统一模块，例如：
-
-```text
-crates/infra-core/src/scoring/balance.rs
-```
-
-或等价路径。
-
----
-
-## 4. 推荐模块设计
-
-### 4.1 新增模块
-
-建议新增：
-
-```text
-crates/infra-core/src/scoring/
-  mod.rs
-  balance.rs
-  metric.rs
-```
-
-职责：
+`crates/infra-core/src/scoring/` 不再表示“平衡公式入口”，而是：
 
 | 文件 | 职责 |
 |------|------|
-| `metric.rs` | 定义效率口径结构和单位说明，如 `EffPct`、`BalancedEff`、`ScoreUnit` |
-| `balance.rs` | 公孙贸易-制造平衡公式唯一入口；公式未到时仅放 placeholder / trait |
-| `mod.rs` | 对外导出评分口径和公式入口 |
+| `metric.rs` | `EffPct`、`ComponentScore` 等评分边界类型 |
+| `components.rs` | 分量输入与命名排序策略，如 `ControlInjectRawSumV0` |
+| `mod.rs` | 对外导出评分单位和策略入口 |
 
-### 4.2 初始接口草案
+排序策略必须满足：
+
+- 名称说明它只是 policy / heuristic；
+- 不宣称为公孙公式；
+- 不能作为最终理论锚点；
+- 调用点附近保留原始分量字段，供 CLI / 前端解释。
+
+---
+
+## 4. 分阶段实施
+
+### Phase 0：评分口径审计（已完成）
+
+产出：[SCORING_MODEL.md](SCORING_MODEL.md)
+
+已列出所有 `score` / `composite_score` / `total_score` / `weighted_*` 字段，标记单位、用途、是否参与排序。
+
+### Phase 1：修正文档和注释，不改行为（已完成）
+
+已修正 trade / power / control 等注释中与实际排序口径不一致的部分。
+
+### Phase 2：抽排序 key 函数，不改排序结果（已完成）
+
+已完成：
+
+- 贸易：`trade_efficiency_sort_key(hit)`；
+- 制造：`manufacture_efficiency_sort_key(hit)`；
+- 发电：`power_efficiency_sort_key(hit)`；
+- 中枢：`control_inject_sort_key(hit)`；
+- 排班层保留分量汇总，不混量纲。
+
+### Phase 3：建立分量策略入口，不接公式（已完成）
+
+当前接口：
 
 ```rust
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BalanceFormulaId {
-    Placeholder,
-    GongsunTradeManuV1,
+pub enum ScoringPolicyId {
+    ControlInjectRawSumV0,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct TradeManuBalanceInput {
+pub struct TradeManuEfficiencyComponents {
     pub trade_eff_pct: f64,
     pub gold_manu_eff_pct: f64,
     pub battle_record_manu_eff_pct: f64,
@@ -127,92 +124,15 @@ pub struct TradeManuBalanceInput {
     pub battle_record_line_count: u8,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct BalancedEff {
-    pub formula: BalanceFormulaId,
-    pub composite_eff_pct: f64,
+pub struct ComponentScore {
+    pub policy: ScoringPolicyId,
+    pub sort_key_pct: f64,
 }
 ```
 
-公式未到前，允许 placeholder 存在，但必须明确：
-
-- placeholder 不代表最终理论；
-- 不能作为回归锚点；
-- 只用于打通接口和标记调用点。
-
----
-
-## 5. 分阶段实施
-
-### Phase 0：评分口径审计（已完成首轮）
-
-产出：[SCORING_MODEL.md](SCORING_MODEL.md)
-
-任务：
-
-- 列出所有 `score` / `composite_score` / `total_score` / `weighted_*` 字段；
-- 标记当前单位、用途、是否参与排序；
-- 标记是否需要公孙公式替换；
-- 标记注释与代码不一致处。
-
-建议审计文件：
-
-- `crates/infra-core/src/search/trade.rs`
-- `crates/infra-core/src/search/manufacture.rs`
-- `crates/infra-core/src/search/power.rs`
-- `crates/infra-core/src/search/control.rs`
-- `crates/infra-core/src/schedule/base_rotation.rs`
-- `crates/infra-core/src/schedule/team_rotation.rs`
-- `crates/infra-core/src/schedule/trade_rotation.rs`
-- `crates/infra-core/src/layout/assign.rs`
-
-预计工期：0.5 天。
-
-### Phase 1：修正文档和注释，不改行为（已完成）
-
-任务：
-
-- 修正 trade 注释：`score` 当前是 `order_eff_total`，不是 `effective_eff_multiplier`；
-- 修正 power 注释：当前排序只看 `charge_speed_pct`，虚拟发电字段仅解释 / 后续公式；
-- 修正 control 注释：`inject_subtotal` 是临时注入口径，待公孙公式替换；
-- 在 PROJECT_MAP / 相关文档中链接评分口径文档。
-
-预计工期：0.5 天。
-
-### Phase 2：抽排序 key 函数，不改排序结果（已完成）
-
-任务：
-
-- 贸易：`trade_efficiency_sort_key(hit)`；
-- 制造：`manufacture_efficiency_sort_key(hit)`；
-- 发电：`power_efficiency_sort_key(hit)`；
-- 中枢：`control_inject_sort_key(hit)`；
-- 排班层保留分量汇总，不混量纲。
-
-原则：函数初始返回值必须与现有行为一致。当前已完成并由测试锁定。
-
-预计工期：0.5–1 天。
-
-### Phase 3：建立公式接口，不接真实公式（已完成）
-
-已完成：
-
-- 新增 `scoring` 或 `economy` 模块；
-- 定义公式 ID、输入、输出；
-- 在中枢搜索裸加注入口径处接入 placeholder 调用点；
-- 不改变主路径排序结果。
-
-预计工期：0.5–1 天。
+`search/control.rs` 通过 `current_control_inject_sort_score(...)` 保持旧 raw-sum 排序行为，同时明确它只是当前中枢候选排序策略。
 
 ### Phase 4：加当前行为锁定测试（已完成）
-
-任务：
-
-- 贸易：锁定 `score == order_eff_total` 或明确 sort key == `trade_pct`；
-- 制造：锁定 `composite_score == prod_total`；
-- 发电：锁定 `score == charge_speed_pct`；
-- 中枢：锁定当前 `total_score` 来源，并标记待公式替换；
-- 全精2 243 fixture 烟测仍通过。
 
 已完成测试锚点：
 
@@ -220,147 +140,98 @@ pub struct BalancedEff {
 - `search::manufacture::tests::manufacture_search_score_is_prod_total_sort_key`
 - `search::power::tests::power_search_score_is_charge_speed_sort_key`
 - `search::control::tests::control_search_score_uses_total_score_sort_key`
+- `scoring::components::tests::control_inject_raw_sum_reports_policy_and_current_sort_key`
 
-预计工期：0.5–1 天。
+### Phase 5：分量化输出与锚点收敛（当前后续）
 
-### Phase 5：接入公孙公式（等待公式）
+后续工作：
 
-公式到位后：
-
-- 在 `balance.rs` 实现 `GongsunTradeManuV1`；
-- 增加公孙提供的锚点测试；
-- 替换中枢注入评分；
-- 评估是否替换体系竞争 / meta priority 的部分逻辑；
-- 输出中显示公式 ID 和复合效率。
-
-预计工期：2–3 天，取决于公式复杂度和锚点数量。
+- CLI / JSON 输出中更明确展示贸易赤金订单效率、制造赤金效率、制造经验效率；
+- 中枢输出显示 `ScoringPolicyId::ControlInjectRawSumV0` 或等价说明；
+- 补齐公孙已给出的等效效率锚点，而不是补“平衡公式”锚点；
+- 审计前端字段命名，避免 `composite` / `balanced` 这类误导词；
+- 如果将来某个局部场景需要排序，新增命名 policy，而不是写匿名权重。
 
 ---
 
-## 6. 当前审计结论
+## 5. 当前审计结论
 
-> 该节会随着代码审计持续更新。2026-06-24 已完成首轮审计、注释修正、排序 key 显式化、行为锁定测试和 Phase 3 placeholder 公式入口。
-
-### 6.1 贸易搜索
+### 5.1 贸易搜索
 
 文件：`crates/infra-core/src/search/trade.rs`
 
-当前观察：
+- `TradeSearchHit.score` 当前等于 `result.order_eff_total`；
+- `trade_pct` 同样等于 `result.order_eff_total`；
+- L3 shortcut 的 `trade_pct` 使用公孙等效效率；
+- `gold_pct` 单独展示赤金相关解释分量；
+- `effective_eff_multiplier` 仅为内部调试乘积，不作为用户侧最终倍率。
 
-- `TradeSearchHit.score` 当前赋值为 `result.order_eff_total`；
-- `trade_pct` 也是 `result.order_eff_total`；
-- `effective_eff_multiplier` 在 breakdown 中，仅作为内部调试乘积；CLI / 文档优先拆开展示贸易效率与赤金效率；
-- 原“score = effective_eff_multiplier”的历史注释已修正；
-- 排序已显式走 `trade_efficiency_sort_key(hit)`，行为保持不变。
-
-### 6.2 制造搜索
+### 5.2 制造搜索
 
 文件：`crates/infra-core/src/search/manufacture.rs`
 
-当前观察：
+- 单配方搜索按 `prod_total` 排序；
+- 多产线模式按产线数加权输出当前排序结果；
+- 后续重点是输出字段命名，避免把 `composite_score` 理解为跨域综合分。
 
-- 单配方搜索按 `composite_score` 排序；
-- 单配方 `composite_score` 实际为 `prod_total`；
-- 多产线时按赤金线数 / 经验线数对各自 `prod_total` 加权；
-- 排序已显式走 `manufacture_efficiency_sort_key(hit)`，行为保持不变；
-- 该口径基本是制造效率量纲，但字段名“composite”仍需在后续公式接入时评估是否改名。
-
-### 6.3 发电搜索
+### 5.3 发电搜索
 
 文件：`crates/infra-core/src/search/power.rs`
 
-当前观察：
+- 当前排序只看 `charge_speed_pct`；
+- `virtual_power_equiv` / `VIRTUAL_POWER_MANU_EQUIV` 只保留解释，不参与当前排序；
+- 如果后续要排序虚拟发电价值，应新增明确 policy，而不是混入制造效率。
 
-- `power_station_score(charge_speed_pct, _virtual_power_produced)` 当前只返回 `charge_speed_pct`；
-- `virtual_power_equiv` / `VIRTUAL_POWER_MANU_EQUIV` 字段残留解释价值，但不参与当前排序；
-- 注释已明确当前不预支虚拟发电价值，是否折算等待公孙公式；
-- 排序已显式走 `power_efficiency_sort_key(hit)`，行为保持不变。
-
-### 6.4 中枢搜索
+### 5.4 中枢搜索
 
 文件：`crates/infra-core/src/search/control.rs`
 
-当前观察：
+- 普通中枢补位输出 `trade_inject` / `manu_gold` / `manu_br`；
+- 当前 `Efficiency` 排序策略使用 raw-sum：`trade_inject + manu_gold + manu_br`；
+- 该 raw-sum 是局部排序策略，不是公孙理论公式；
+- `HrAndMood` 策略仍使用 `ancillary_score`。
 
-- 普通中枢补位 `total_score = trade_inject + manu_gold + manu_br`；
-- `HrAndMood` 策略下使用 `ancillary_score`；
-- `matatabi` / `virtual_power` / `mood` 等字段在 breakdown 中存在，但当前普通排序主键不是它们；
-- 裸加口径已通过 `placeholder_trade_manu_balance` 进入 `scoring` 公式入口，等待公孙平衡公式替换；
-- 排序已显式走 `control_inject_sort_key(hit)`，行为保持不变；
-- 中枢是最优先等待公孙平衡公式替换的评分点。
-
-### 6.5 排班汇总
+### 5.5 排班汇总
 
 文件：`crates/infra-core/src/schedule/base_rotation.rs`、`team_rotation.rs`
 
-当前观察：
-
 - `ShiftScores` 分开存 `trade_score` / `manu_prod_sum` / `power_charge_sum`；
 - `weighted_*` 只做时长折算；
-- 当前没有把三类硬加成一个全局分，这一点应保留；
-- 后续可新增 `balanced_eff` 字段，但不应替代原始分量。
+- 当前没有把三类硬合成一个全局分，这一点应保留。
 
 ---
 
-## 7. Warning hygiene 记录
+## 6. Warning hygiene 记录
 
-2026-06-23 已完成一轮安全 warning 清理，仅处理：
-
-- unused import；
-- unused variable；
-- unused mut；
-- 测试专用 import 下沉；
-- 当前确认无用的局部变量。
+2026-06-23 已完成一轮安全 warning 清理，仅处理 unused import / unused variable / unused mut / 测试专用 import 下沉等。
 
 未处理且暂不建议处理：
 
 - `private_interfaces`：涉及内部数据结构可见性，可能影响 API / serde 边界；
-- `dead_code`：多为未来机制、公式接入或 schema 预留；
+- `dead_code`：多为未来机制或 schema 预留；
 - 预留字段未读：如 system schema、导出输入结构等；
-- 未来机制常量未使用：等待 Phase 4 global effect / 公孙公式接入。
-
-验证：`cargo test -p infra-core` 通过，289 passed；剩余 warning 为上述保留类别。
+- 未来 global effect 常量未使用：等待 Phase 4 global effect 收拢。
 
 ---
 
-## 8. 风险和防护
+## 7. 风险和防护
 
 | 风险 | 防护 |
 |------|------|
-| 误把展示字段用于排序 | 抽 sort key 函数 + 测试 |
-| 公式未到前又发明权重 | placeholder 明确禁止作为最终口径 |
-| 改评分导致排班大范围变化 | Phase 0–4 不改行为，公式接入后用锚点测试 |
-| 体系 priority 与公式冲突 | 先并存：priority 是硬先验，公式用于解释 / 局部替换 |
-| 性能退化 | 公式应为 O(1) 纯函数；不引入全局笛卡尔积 |
+| 又把展示字段用于排序 | 抽 sort key 函数 + 测试 |
+| 又发明跨域综合权重 | 只允许命名 policy，且保留原始分量 |
+| 改字段名导致前端误读 | `FRONTEND_CLI.md` 和 JSON 字段同步说明 |
+| 体系 priority 与局部排序冲突 | priority 是硬先验，局部 policy 只处理补位或同层候选 |
+| 性能退化 | policy 必须为 O(1) 纯函数，不引入全局笛卡尔积 |
 
 ---
 
-## 9. 待公孙公式确认的问题
-
-1. 贸易效率与制造效率的平衡公式具体形式是什么？
-2. 赤金线和经验线是否同权？是否依赖玩家目标？
-3. 贸易订单机制等效效率对用户侧拆分为贸易效率 / 赤金效率展示；不要合成用户侧最终倍率。
-4. 黑键、但书、巫恋、孑等机制锚点以 `arknights-base-vault/docs/2-体系/` 的公孙长乐体系文档为权威，代码和 shortcut 表需向 vault 对齐。
-5. 中枢全局贸易 +7%、制造 +2% 如何在 243 / 252 / 333 下折算？
-6. 虚拟发电站是否应折算成制造等效效率？如果是，公式是否依赖布局/无人机策略？
-7. 复合效率用于哪些层级：体系选择、中枢竞争、日报告，还是站内搜索也使用？
-
----
-
-## 10. 建议验收标准
-
-Phase 0–4 完成后：
+## 8. 建议验收标准
 
 - [x] `docs/SCORING_MODEL.md` 完成首轮审计表；
 - [x] 主要 score 字段注释与实际代码一致；
 - [x] 所有搜索模块有明确 sort key 入口或明确注释；
-- [x] 公孙公式模块接口存在；
+- [x] `scoring` 模块不再宣称等待贸易-制造平衡公式；
 - [x] 当前核心测试通过；
-- [x] 全精2 243 `layout team-rotation` 仍可在百毫秒级完成。
-
-公式接入后：
-
-- [ ] 公孙锚点测试通过；
-- [ ] 中枢注入评分不再直接裸加 trade/manu；
-- [ ] 输出能说明使用的公式 ID；
-- [ ] 关键体系选择结果符合理论预期。 
+- [ ] CLI / 前端字段进一步拆出 trade_gold_order / manu_gold / manu_br 等语义名；
+- [ ] 公孙等效效率锚点继续补入 shortcut / verify / unit anchors。

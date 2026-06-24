@@ -9,7 +9,7 @@
 - `infra-core`：机制、搜索、编排、排班、导出所需数据结构。
 - `infra-cli`：命令入口、文件加载、输出格式化、回归验证壳。
 - `data/`：技能、干员实例、体系、shortcut、标准夹具等运行时真源。
-- 当前架构目标：站内搜索使用清晰效率量纲；跨贸易 / 制造 / 全局注入比较统一进入 scoring / balance 公式入口。
+- 当前架构目标：站内搜索使用清晰效率量纲；贸易赤金订单效率、制造赤金效率、制造经验效率等跨域结果按分量展示；需要局部排序时进入 `scoring` 命名 policy，不发明匿名综合分。
 
 非目标：心情排班、宿管恢复、全基建连续时间最优化。
 
@@ -26,13 +26,14 @@
 
 ## 2. 当前主线
 
-评分 Phase 3 公式接口已完成并归档到 [docs/ARCHIVE/done/SCORING_PHASE3.md](docs/ARCHIVE/done/SCORING_PHASE3.md)：
+评分 Phase 3 已从“平衡公式入口”收敛为分量化 policy 入口：
 
-- `crates/infra-core/src/scoring/` 已提供 `BalanceFormulaId`、`TradeManuBalanceInput`、`BalancedEff`。
-- `search/control.rs` 已通过 placeholder 公式入口维持旧裸加排序行为。
-- 后续主线等待公孙长乐贸易-制造平衡公式与锚点，再进入 [docs/SCORING_REFACTOR_PLAN.md](docs/SCORING_REFACTOR_PLAN.md) Phase 5。
+- 公孙长乐确认不需要贸易-制造平衡公式；龙舌兰、可露希尔、但书等已折算等效效率，直接进入贸易站赤金订单总效率。
+- `crates/infra-core/src/scoring/` 已提供 `ScoringPolicyId`、`TradeManuEfficiencyComponents`、`ComponentScore`。
+- `search/control.rs` 通过 `ControlInjectRawSumV0` policy 维持旧 `trade_inject + manu_gold + manu_br` 局部排序行为；这是 heuristic，不是理论公式。
+- 后续主线是 [docs/SCORING_REFACTOR_PLAN.md](docs/SCORING_REFACTOR_PLAN.md) Phase 5：CLI / JSON 输出继续拆清 trade_gold_order / manu_gold / manu_br 等分量，并补公孙等效效率锚点。
 
-用户说“继续下一步”“看准备实现的功能”时，先看 [docs/TODO/README.md](docs/TODO/README.md)；若无 ready TODO，不要自行发明公式权重。
+用户说“继续下一步”“看准备实现的功能”时，先看 [docs/TODO/README.md](docs/TODO/README.md)；若无 ready TODO，不要自行发明综合权重。
 
 ## 3. 硬规则
 
@@ -42,7 +43,7 @@
 | L2 | `gold_flow.rs`、`order_mechanic.rs`、`unit_output.rs` 处理机制域最优解；`atoms: []` 可表示委托，不等于缺失 |
 | L3 | `shortcut.rs` + `trade_shortcuts.json` 处理固定最优 / 难 atom 化组合 |
 | GL | `cross_facility/`、`global_resource/`、`control/` 处理跨设施资源与注入 |
-| Scoring | 同设施内可按设施效率排序；跨贸易 / 制造 / 全局注入必须经公式入口 |
+| Scoring | 同设施内可按设施效率排序；跨贸易 / 制造 / 全局注入默认拆分量展示；需要排序必须经命名 policy |
 | CLI | 不写机制、公式、求解；只做命令、加载、输出、回归 |
 
 不要为了“零 warning”破坏 API / serde / 预留机制。当前允许保留 `private_interfaces`、未来机制 `dead_code`、预留字段 warning。
@@ -137,12 +138,12 @@ cargo run -q -p infra-cli -- layout test `
 5. `skill_table.atoms = []` 可表示“交给 L2 / L3 / 特例域处理”。
 6. 贸易搜索 `score == trade_pct == order_eff_total`；`gold_pct` 单独展示。
 7. 制造搜索当前按 `prod_total`；发电搜索当前按 `charge_speed_pct`。
-8. 中枢已通过 scoring placeholder 入口维持 `trade_inject + manu_gold + manu_br` 临时裸加口径，等待真实公式替换。
-9. 跨贸易 / 制造 / power / global 注入比较时，公式未到前只能 placeholder / TODO，不猜权重。
+8. 中枢已通过 `ControlInjectRawSumV0` policy 维持 `trade_inject + manu_gold + manu_br` 旧排序行为；这是局部排序策略，不是平衡公式。
+9. 跨贸易 / 制造 / power / global 注入比较时优先拆分量展示；若必须排序，只能新增命名 policy，不猜匿名权重。
 
 ## 8. 不必通读
 
 - `target/`、`out/`、release 产物、xlsx 二进制、`.venv/`。
 - PRTS HTML 快照、`MECHANICS_REGISTRY.csv`。
-- `docs/公孙长乐的体系分析文档/` 全部理论链，除非当前任务是体系 / 公式。
+- `docs/公孙长乐的体系分析文档/` 全部理论链，除非当前任务是体系 / 等效效率锚点。
 - `trade/interpreter.rs`、`manufacture/interpreter.rs`、`infra-cli/output.rs` 全文；按 `docs/INTERNAL/` 或函数名定位。

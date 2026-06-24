@@ -9,7 +9,7 @@ use crate::error::Result;
 use crate::global_resource::GlobalResourceKey;
 use crate::layout::LayoutContext;
 use crate::pool::{combinations_indices, ControlPool};
-use crate::scoring::{placeholder_trade_manu_balance, TradeManuBalanceInput};
+use crate::scoring::{current_control_inject_sort_score, TradeManuEfficiencyComponents};
 use crate::skill_table::SkillTable;
 use crate::types::RecipeKind;
 
@@ -18,13 +18,13 @@ pub const MATATABI_CONSUMER_NAME: &str = "泰拉大陆调查团";
 
 /// 中枢评分的完整分解。
 ///
-/// 当前中枢评分公式（`Efficiency` 策略，待公孙贸易-制造平衡公式替换）：
+/// 当前中枢排序策略（`Efficiency` 策略）：
 /// ```text
-/// score = trade_inject + manu_gold_inject + manu_br_inject
+/// sort_key = trade_inject + manu_gold_inject + manu_br_inject
 /// ```
-/// 这是历史注入口径：三项均为效率百分比，但跨贸易/制造的最终平衡口径
-/// 等待公孙公式确认。vpower、木天蓼、心情扣分不在中枢评分里预支——
-/// 它们分别在制造 resolve、调查团 consumer、轮换层体现。
+/// 这是历史注入排序策略：三项均为可解释效率百分比分量。它不是
+/// 贸易/制造平衡公式；vpower、木天蓼、心情扣分也不在中枢评分里预支，
+/// 而是分别在制造 resolve、调查团 consumer、轮换层体现。
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct ControlScoreBreakdown {
     /// 贸易效率注入%
@@ -33,7 +33,7 @@ pub struct ControlScoreBreakdown {
     pub manu_gold_inject_pct: f64,
     /// 经验书制造效率注入%
     pub manu_br_inject_pct: f64,
-    /// 历史注入子总分 = trade + gold + br；待公孙平衡公式替换。
+    /// 当前注入排序 key = trade + gold + br；仅用于中枢候选排序。
     pub inject_subtotal: f64,
     /// 虚拟发电站数
     pub virtual_power: f64,
@@ -225,11 +225,11 @@ fn control_hr_mood_ancillary(operators: &[ControlOperator], table: &SkillTable) 
     score
 }
 
-/// 中枢搜索评分：当前为贸易/制造注入%之和。
+/// 中枢搜索排序：当前为贸易/制造注入%之和。
 ///
-/// TODO(scoring): 用公孙长乐贸易-制造平衡公式替换裸加的
-/// `trade_inject + manu_gold + manu_br`。在公式落地前保持现有行为，
-/// 只显式化排序口径。
+/// 公孙长乐口径下不需要跨贸易/制造平衡公式；贸易站赤金订单总效率、
+/// 制造赤金效率、制造经验效率作为分量分别解释。这里保留裸加只作为
+/// 当前中枢候选的局部排序策略，并通过 `scoring` 命名入口显式标记。
 ///
 /// vpower、木天蓼、心情扣分不在此评分——它们分别在制造站 resolve、调查团 consumer、
 /// 轮换层心情管理里体现。
@@ -266,7 +266,7 @@ fn score_control_result(
         .layout
         .manufacture_station_count
         .saturating_sub(gold_line_count);
-    let balanced = placeholder_trade_manu_balance(TradeManuBalanceInput {
+    let component_score = current_control_inject_sort_score(TradeManuEfficiencyComponents {
         trade_eff_pct: trade_inject,
         gold_manu_eff_pct: manu_gold,
         battle_record_manu_eff_pct: manu_br,
@@ -274,7 +274,7 @@ fn score_control_result(
         gold_line_count,
         battle_record_line_count,
     });
-    let inject_subtotal = balanced.composite_eff_pct;
+    let inject_subtotal = component_score.sort_key_pct;
 
     let matatabi = result.global.get(GlobalResourceKey::Matatabi);
     let virtual_power = result.global.get(GlobalResourceKey::VirtualPower);

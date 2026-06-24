@@ -1,10 +1,13 @@
-//! Shared scoring units and balance-formula entry points.
+//! Shared scoring units and component-based scoring policy entry points.
 //!
-//! This module is intentionally small for now: real trade/manufacture balance
-//! formulas belong here once the theory and anchors are available.
+//! Trade and manufacture efficiency components stay separate unless a local
+//! ranking policy explicitly needs a sort key. No cross-domain balance formula
+//! is assumed.
 
-mod balance;
+mod components;
 mod metric;
 
-pub use balance::{placeholder_trade_manu_balance, BalanceFormulaId, TradeManuBalanceInput};
-pub use metric::{BalancedEff, EffPct};
+pub use components::{
+    current_control_inject_sort_score, ScoringPolicyId, TradeManuEfficiencyComponents,
+};
+pub use metric::{ComponentScore, EffPct};

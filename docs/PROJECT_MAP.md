@@ -27,7 +27,7 @@
 | **发电站** | ✅ | — | — | ✅ `search_power_assignment` | ✅ 宏观排班内 | — | 充能 + 虚拟发电折算（晨曦等） |
 | **全局资源** | 注册表 ✅ | 池 ✅ | — | — | — | — | P0：木天蓼 / 人间烟火（简化）/ 魔物料理（基准注入） |
 
-域详情：**制造** → [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)；**全局资源** → [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) §8.13；**评分口径/公孙公式接入** → [SCORING_MODEL.md](SCORING_MODEL.md)、[SCORING_REFACTOR_PLAN.md](SCORING_REFACTOR_PLAN.md)。
+域详情：**制造** → [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)；**全局资源** → [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) §8.13；**评分口径/分量化策略** → [SCORING_MODEL.md](SCORING_MODEL.md)、[SCORING_REFACTOR_PLAN.md](SCORING_REFACTOR_PLAN.md)。
 
 **非目标**（由上层规划器负责）：心情排班、宿管恢复、全基建连班优化。见设计文档 §8.12。
 

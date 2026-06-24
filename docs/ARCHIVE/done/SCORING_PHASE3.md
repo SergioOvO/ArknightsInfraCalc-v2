@@ -4,6 +4,7 @@
 > 来源：[SCORING_REFACTOR_PLAN.md](../../SCORING_REFACTOR_PLAN.md) Phase 3  
 > 完成日期：2026-06-24  
 > 约束：新增接口，不接真实公式，不改变当前排序行为。
+> 当前说明：本归档记录的是旧 Phase 3。当日后续已按公孙长乐意见改为**分量化评分 policy**，不再等待贸易-制造平衡公式；当前实现见 `crates/infra-core/src/scoring/components.rs` 和 [SCORING_REFACTOR_PLAN.md](../../SCORING_REFACTOR_PLAN.md)。
 
 ## 目标
 

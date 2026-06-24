@@ -56,7 +56,8 @@ pub struct TradeDailyYield {
     pub eff_factor: f64,
 }
 
-/// 公孙公式：产出 = 效率总和 × (上班/24) × 加强单位产出；此处 `order_eff_total_pct` 即纸面效率总和%。
+/// 公孙工具人表产出口径：产出 = 效率总和 × (上班/24) × 加强单位产出。
+/// 此处 `order_eff_total_pct` 即贸易站赤金订单效率总和%。
 /// 佩佩独占单固定 cadence，`ignore_order_eff=true` 时仅按 `(shift/24)` 缩放。
 pub fn daily_yield(
     unit: &TradeUnitOutput,

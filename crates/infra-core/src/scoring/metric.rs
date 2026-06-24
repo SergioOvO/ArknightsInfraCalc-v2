@@ -1,11 +1,11 @@
 use serde::Serialize;
 
-use super::balance::BalanceFormulaId;
+use super::components::ScoringPolicyId;
 
 /// Efficiency percentage (`%`) with an explicit type at scoring boundaries.
 ///
 /// Existing solver fields are still plain `f64`; this wrapper is for new
-/// formula-facing APIs where a value's unit must be obvious.
+/// scoring-boundary APIs where a value's unit must be obvious.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Default)]
 pub struct EffPct(pub f64);
 
@@ -25,18 +25,18 @@ impl From<f64> for EffPct {
     }
 }
 
-/// Formula output in a balanced efficiency percentage unit.
+/// Sort-key output produced by a named scoring policy.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-pub struct BalancedEff {
-    pub formula: BalanceFormulaId,
-    pub composite_eff_pct: f64,
+pub struct ComponentScore {
+    pub policy: ScoringPolicyId,
+    pub sort_key_pct: f64,
 }
 
-impl BalancedEff {
-    pub const fn new(formula: BalanceFormulaId, composite_eff_pct: f64) -> Self {
+impl ComponentScore {
+    pub const fn new(policy: ScoringPolicyId, sort_key_pct: f64) -> Self {
         Self {
-            formula,
-            composite_eff_pct,
+            policy,
+            sort_key_pct,
         }
     }
 }

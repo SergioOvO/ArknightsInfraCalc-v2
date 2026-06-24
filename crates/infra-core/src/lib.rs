@@ -75,7 +75,8 @@ pub use schedule::{
     TRADE_STATIONS_PER_SHIFT, WORKERS_PER_SHIFT,
 };
 pub use scoring::{
-    placeholder_trade_manu_balance, BalanceFormulaId, BalancedEff, EffPct, TradeManuBalanceInput,
+    current_control_inject_sort_score, ComponentScore, EffPct, ScoringPolicyId,
+    TradeManuEfficiencyComponents,
 };
 pub use search::{
     hit_closure_shortcut, hit_docus_solo_shortcut, hit_witch_shortcut, search_control_combos,
