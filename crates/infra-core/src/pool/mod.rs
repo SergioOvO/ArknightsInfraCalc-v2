@@ -12,7 +12,7 @@ pub use manufacture::{
     ManuPoolEntry,
 };
 pub use power::{build_power_pool, PowerPool, PowerPoolEntry};
-pub use standalone::try_filter_standalone;
+pub use standalone::{filter_standalone_exact, try_filter_standalone};
 pub use trade::{
     add_jie_market_to_trade_pool, build_trade_combo_operators, build_trade_pool,
     combinations_indices, combinations_triples, combinations_triples_with_anchor,

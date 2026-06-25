@@ -174,6 +174,29 @@ pub fn try_filter_standalone<T: HasName + Clone>(
     }
 }
 
+/// Return exactly the standalone whitelist subset for a facility.
+///
+/// Unlike [`try_filter_standalone`], this does not fall back to the full pool
+/// when the whitelist is too small. It is used by multi-level candidate policies
+/// that decide their own fallback/expansion after seeing the remaining demand.
+pub fn filter_standalone_exact<T: HasName + Clone>(
+    pool: &PoolCore<T>,
+    facility: FacilityKind,
+) -> Option<PoolCore<T>> {
+    let roster = load_standalone_roster()?;
+    let names = roster.get(facility)?;
+    let filtered: Vec<T> = pool
+        .entries
+        .iter()
+        .filter(|e| names.contains(e.pool_name()))
+        .cloned()
+        .collect();
+    Some(PoolCore {
+        entries: filtered,
+        skipped: pool.skipped.clone(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -16,8 +16,8 @@ use crate::operbox::OperBox;
 use crate::pool::{
     add_jie_market_to_trade_pool, build_control_pool, build_manufacture_pool, build_power_pool,
     build_trade_pool, expand_manufacture_candidate_pool, filter_manufacture_pool,
-    filter_trade_pool, jie_e0_trade_operator, karlan_precision_active, try_filter_standalone,
-    ControlPool, ManuPool, PowerPool, TradePool, JIE_TRADE_NAME,
+    filter_standalone_exact, filter_trade_pool, jie_e0_trade_operator, karlan_precision_active,
+    try_filter_standalone, ControlPool, ManuPool, PowerPool, TradePool, JIE_TRADE_NAME,
 };
 use crate::search::{
     control_entry_plugin_fill, hit_witch_shortcut, pick_docus_trade_hit, pick_trade_role_hit,
@@ -932,6 +932,12 @@ fn assign_manufacture_lines(
         _ => 99,
     });
 
+    let room_count = rooms
+        .iter()
+        .filter(|room| assignment.operators_in(&room.id).is_empty())
+        .count();
+    let candidate_pool = manufacture_candidate_pool_for_demand(pool, used, room_count);
+
     for room in rooms {
         if !assignment.operators_in(&room.id).is_empty() {
             continue;
@@ -941,14 +947,14 @@ fn assign_manufacture_lines(
             _ => continue,
         };
         let hit = pick_manu_hit(
-            pool,
+            &candidate_pool,
             table,
             manu_options(layout, options, recipe),
             used,
             options.top_k,
         )
         .map_err(|e| Error::msg(format!("manufacture {}: {e}", room.id.0)))?;
-        commit_manu_room(assignment, &room.id, &hit, pool, used)?;
+        commit_manu_room(assignment, &room.id, &hit, &candidate_pool, used)?;
     }
     Ok(())
 }
@@ -1063,6 +1069,12 @@ fn assign_team_manu_rooms(
     assignment: &mut BaseAssignment,
     used: &mut HashSet<String>,
 ) -> Result<()> {
+    let room_count = manu_rooms
+        .iter()
+        .filter(|room_id| assignment.operators_in(room_id).is_empty())
+        .count();
+    let candidate_pool = manufacture_candidate_pool_for_demand(manu_pool, used, room_count);
+
     for room_id in manu_rooms {
         if !assignment.operators_in(room_id).is_empty() {
             continue;
@@ -1080,14 +1092,14 @@ fn assign_team_manu_rooms(
             }
         };
         let hit = pick_manu_hit(
-            manu_pool,
+            &candidate_pool,
             table,
             manu_options(layout, options, recipe),
             used,
             options.top_k,
         )
         .map_err(|e| Error::msg(format!("team manu {}: {e}", room_id.0)))?;
-        commit_manu_room(assignment, room_id, &hit, manu_pool, used)?;
+        commit_manu_room(assignment, room_id, &hit, &candidate_pool, used)?;
     }
     Ok(())
 }
@@ -1319,6 +1331,27 @@ fn pick_trade_hit(
     )
 }
 
+fn manufacture_candidate_pool_for_demand(
+    pool: &ManuPool,
+    used: &HashSet<String>,
+    room_count: usize,
+) -> ManuPool {
+    let full_sub = filter_manufacture_pool(pool, used);
+    let Some(primary_sub) = filter_standalone_exact(&full_sub, FacilityKind::Factory) else {
+        return full_sub;
+    };
+    let required = room_count.saturating_mul(3);
+    if required == 0 || primary_sub.entries.len() >= required {
+        return primary_sub;
+    }
+    let expanded = expand_manufacture_candidate_pool(&primary_sub, &full_sub);
+    if expanded.entries.len() >= required {
+        expanded
+    } else {
+        full_sub
+    }
+}
+
 fn pick_manu_hit(
     pool: &ManuPool,
     table: &SkillTable,
@@ -1326,17 +1359,8 @@ fn pick_manu_hit(
     used: &HashSet<String>,
     top_k: usize,
 ) -> Result<ManuSearchHit> {
-    let full_sub = filter_manufacture_pool(pool, used);
-    let primary_sub = try_filter_standalone(&full_sub, FacilityKind::Factory, 3);
-    let candidate_sub = expand_manufacture_candidate_pool(&primary_sub, &full_sub);
-    search_manu_hit_in_pool(
-        &candidate_sub,
-        table,
-        search_opts,
-        used,
-        top_k,
-        "manufacture pool",
-    )
+    let sub = filter_manufacture_pool(pool, used);
+    search_manu_hit_in_pool(&sub, table, search_opts, used, top_k, "manufacture pool")
 }
 
 fn search_manu_hit_in_pool(
@@ -1617,9 +1641,12 @@ mod tests {
         );
         assert!(expanded.entry("芬").is_some());
         assert!(expanded.entry("克洛丝").is_some());
+        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 2);
+        assert!(candidate_pool.entry("芬").is_some());
+        assert!(candidate_pool.entry("克洛丝").is_some());
 
         let hit = pick_manu_hit(
-            &pool,
+            &candidate_pool,
             &table,
             ManuSearchOptions {
                 recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::Gold),
@@ -1638,6 +1665,47 @@ mod tests {
             "低效白名单组合不应压过扩展候选池中的爬升技能: {hit:?}"
         );
         assert!(hit.breakdown.prod_skill > 50.0, "hit={hit:?}");
+    }
+
+    #[test]
+    fn manufacture_candidate_pool_stays_primary_when_standalone_can_fill_rooms() {
+        let pool = ManuPool {
+            entries: vec![
+                manu_pool_entry("褐果", &["manu_prod_spd[000]"]),
+                manu_pool_entry("雪猎", &["manu_prod_spd&limit&cost[101]"]),
+                manu_pool_entry("卡达", &["manu_formula_cost[000]"]),
+                manu_pool_entry("芬", &["manu_prod_spd_addition[030]"]),
+                manu_pool_entry("克洛丝", &["manu_prod_spd_addition[040]"]),
+            ],
+            skipped: vec![],
+        };
+
+        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 1);
+        assert!(candidate_pool.entry("褐果").is_some());
+        assert!(candidate_pool.entry("雪猎").is_some());
+        assert!(candidate_pool.entry("卡达").is_some());
+        assert!(candidate_pool.entry("芬").is_none());
+        assert!(candidate_pool.entry("克洛丝").is_none());
+    }
+
+    #[test]
+    fn manufacture_candidate_pool_falls_back_to_full_pool_when_expansion_still_lacks_capacity() {
+        let pool = ManuPool {
+            entries: vec![
+                manu_pool_entry("褐果", &["manu_prod_spd[000]"]),
+                manu_pool_entry("雪猎", &["manu_prod_spd&limit&cost[101]"]),
+                manu_pool_entry("卡达", &["manu_formula_cost[000]"]),
+                manu_pool_entry("芬", &["manu_prod_spd_addition[030]"]),
+                manu_pool_entry("低效非候选A", &["manu_prod_spd[999]"]),
+                manu_pool_entry("低效非候选B", &["manu_prod_spd[998]"]),
+            ],
+            skipped: vec![],
+        };
+
+        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 2);
+        assert_eq!(candidate_pool.entries.len(), pool.entries.len());
+        assert!(candidate_pool.entry("低效非候选A").is_some());
+        assert!(candidate_pool.entry("低效非候选B").is_some());
     }
 
     #[test]
