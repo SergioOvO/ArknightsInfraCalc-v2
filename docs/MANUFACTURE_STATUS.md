@@ -33,6 +33,7 @@
 - 无 `PeerAbsorb` 后的 `gold_flow` 挂钩。
 - 共享同一 `skill_table.json`（制造 buff 与贸易 buff 同表不同 id）。
 - **时间爬升**（芬/克洛丝/稀音/阿罗玛等）：`Action::AddEffRamp` → 纸面取 **20h 逐时效率算术平均**（见 `eff_ramp.rs`）；发电空构仍用 `shift_hours` 单点。
+- 排班层 `assign_shift` 先用 `standalone_roster.json` 制造白名单作为主池；若全制造池搜索结果明显高于主池结果（例如急性子/慢性子等未列入白名单的散件自然更优），则回退采用全池结果。低星爬升技能不必为了可选中而加入工具人表。
 
 ## CLI 入口
 

@@ -31,6 +31,7 @@ use crate::trade::input::{TradeOrderKind, TradeSearchOrderMode};
 use crate::types::RecipeKind;
 
 const SENXI_DORM_CUISINE_BUFF: &str = "dorm_rec_bd_dungeon[000]";
+const MANU_FALLBACK_SCORE_EPSILON: f64 = 0.01;
 
 fn ms(a: Instant, b: Instant) -> f64 {
     a.duration_since(b).as_secs_f64() * 1000.0
@@ -1300,17 +1301,56 @@ fn pick_manu_hit(
     used: &HashSet<String>,
     top_k: usize,
 ) -> Result<ManuSearchHit> {
-    let sub = filter_manufacture_pool(pool, used);
-    let sub = try_filter_standalone(&sub, FacilityKind::Factory, 3);
-    if sub.entries.len() < 3 {
+    let full_sub = filter_manufacture_pool(pool, used);
+    let primary_sub = try_filter_standalone(&full_sub, FacilityKind::Factory, 3);
+    let primary_hit = search_manu_hit_in_pool(
+        &primary_sub,
+        table,
+        search_opts.clone(),
+        used,
+        top_k,
+        "manufacture pool",
+    )?;
+    if primary_sub.entries.len() < full_sub.entries.len() {
+        let fallback_hit = search_manu_hit_in_pool(
+            &full_sub,
+            table,
+            search_opts,
+            used,
+            top_k,
+            "manufacture full pool",
+        )?;
+        if fallback_hit.composite_score > primary_hit.composite_score + MANU_FALLBACK_SCORE_EPSILON
+        {
+            eprintln!(
+                "[工具人表] 制造站: 主池技能{:.1}%低于全池{:.1}%，回退全池选中 {}",
+                primary_hit.breakdown.prod_skill,
+                fallback_hit.breakdown.prod_skill,
+                manu_hit_names(&fallback_hit).join(", "),
+            );
+            return Ok(fallback_hit);
+        }
+    }
+    Ok(primary_hit)
+}
+
+fn search_manu_hit_in_pool(
+    pool: &ManuPool,
+    table: &SkillTable,
+    search_opts: ManuSearchOptions,
+    used: &HashSet<String>,
+    top_k: usize,
+    label: &str,
+) -> Result<ManuSearchHit> {
+    if pool.entries.len() < 3 {
         return Err(Error::msg(format!(
-            "manufacture pool has {} ready operators (need 3)",
-            sub.entries.len()
+            "{label} has {} ready operators (need 3)",
+            pool.entries.len()
         )));
     }
     let mut opts = search_opts;
     opts.top_k = top_k;
-    let report = search_manufacture_triples(&sub, table, &opts)?;
+    let report = search_manufacture_triples(pool, table, &opts)?;
     pick_disjoint_from_report(
         report.best,
         report.top,
@@ -1498,6 +1538,54 @@ mod tests {
                 })
                 .collect(),
         )
+    }
+
+    fn manu_pool_entry(name: &str, buff_ids: &[&str]) -> crate::pool::ManuPoolEntry {
+        crate::pool::ManuPoolEntry {
+            name: name.to_string(),
+            elite: 0,
+            buff_ids: buff_ids.iter().map(|id| (*id).to_string()).collect(),
+            tags: vec![],
+            flat_eff_hint: 0.0,
+            has_l2_delegate: false,
+            tier: crate::layout::tier::OperatorTier::Standalone,
+        }
+    }
+
+    #[test]
+    fn manufacture_low_standalone_pool_falls_back_to_full_pool_ramp_skills() {
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let pool = ManuPool {
+            entries: vec![
+                manu_pool_entry("褐果", &["manu_prod_spd[000]"]),
+                manu_pool_entry("雪猎", &["manu_prod_spd&limit&cost[101]"]),
+                manu_pool_entry("卡达", &["manu_formula_cost[000]"]),
+                manu_pool_entry("芬", &["manu_prod_spd_addition[030]"]),
+                manu_pool_entry("克洛丝", &["manu_prod_spd_addition[040]"]),
+                manu_pool_entry("泡普卡", &["manu_prod_spd&limit&cost[010]"]),
+            ],
+            skipped: vec![],
+        };
+        let hit = pick_manu_hit(
+            &pool,
+            &table,
+            ManuSearchOptions {
+                recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::Gold),
+                top_k: 20,
+                ..Default::default()
+            },
+            &HashSet::new(),
+            20,
+        )
+        .unwrap();
+        let names: HashSet<_> = manu_hit_names(&hit).iter().map(String::as_str).collect();
+        assert!(names.contains("芬"), "hit={hit:?}");
+        assert!(names.contains("克洛丝"), "hit={hit:?}");
+        assert!(
+            !names.contains("褐果") && !names.contains("卡达"),
+            "低效白名单组合不应压过全池爬升技能: {hit:?}"
+        );
+        assert!(hit.breakdown.prod_skill > 50.0, "hit={hit:?}");
     }
 
     #[test]
