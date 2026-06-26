@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use crate::error::Result;
 use crate::instances::OperatorInstances;
 use crate::layout::tier::OperatorTier;
+use crate::roster::OperatorProgress;
 use crate::roster::Roster;
 use crate::skill_table::SkillTable;
 
@@ -11,6 +12,11 @@ use super::trade::{n_choose_k_u64, PoolSkip, PoolStats};
 /// PoolEntry 必须提供名称供 `entry()` 查找。
 pub trait HasName {
     fn pool_name(&self) -> &str;
+}
+
+/// PoolEntry exposes account progress for data-driven standalone whitelist gates.
+pub trait HasProgress {
+    fn progress(&self) -> OperatorProgress;
 }
 
 /// PoolEntry 可携带三层分类标签。

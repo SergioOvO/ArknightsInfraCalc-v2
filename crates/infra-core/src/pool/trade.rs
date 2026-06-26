@@ -11,7 +11,7 @@ use crate::types::{Action, CompiledAtom, Phase, SkillDef};
 
 use crate::layout::tier::OperatorTier;
 
-use super::base::{build_roster_pool, filter_pool, HasName, PoolCore, TierTagged};
+use super::base::{build_roster_pool, filter_pool, HasName, HasProgress, PoolCore, TierTagged};
 
 /// 建池时按 buff 展开并排序 atom，供 solve 热路径归并。
 pub fn compile_operator_atoms(buff_ids: &[String], table: &SkillTable) -> Arc<[CompiledAtom]> {
@@ -130,6 +130,12 @@ pub struct TradePoolEntry {
 impl HasName for TradePoolEntry {
     fn pool_name(&self) -> &str {
         &self.name
+    }
+}
+
+impl HasProgress for TradePoolEntry {
+    fn progress(&self) -> OperatorProgress {
+        self.progress
     }
 }
 

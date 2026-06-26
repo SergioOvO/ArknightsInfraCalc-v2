@@ -8,7 +8,7 @@ use crate::types::{Action, Phase, SkillDef};
 
 use crate::layout::tier::OperatorTier;
 
-use super::base::{build_roster_pool, HasName, PoolCore, TierTagged};
+use super::base::{build_roster_pool, HasName, HasProgress, PoolCore, TierTagged};
 pub use super::trade::PoolSkip;
 
 #[derive(Debug, Clone)]
@@ -27,6 +27,12 @@ pub struct PowerPoolEntry {
 impl HasName for PowerPoolEntry {
     fn pool_name(&self) -> &str {
         &self.name
+    }
+}
+
+impl HasProgress for PowerPoolEntry {
+    fn progress(&self) -> OperatorProgress {
+        self.progress
     }
 }
 

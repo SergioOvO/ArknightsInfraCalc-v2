@@ -7,7 +7,8 @@ use serde::Serialize;
 use crate::error::Result;
 use crate::layout::{LayoutContext, SharedLayout};
 use crate::pool::{
-    build_trade_combo_operators, combinations_triples, combinations_triples_with_anchor, TradePool,
+    build_trade_combo_operators, combinations_triples, combinations_triples_with_anchor,
+    filter_standalone_exact_with, StandaloneFilter, TradePool,
 };
 use crate::skill_table::SkillTable;
 use crate::trade::input::{
@@ -229,7 +230,8 @@ fn search_trade_single_order(
     order_kind: TradeOrderKind,
     filter: SearchTripleFilter,
 ) -> Result<TradeSearchReport> {
-    let n = pool.entries.len();
+    let sub = trade_search_pool_for_order(pool, order_kind, &filter);
+    let n = sub.entries.len();
     if n < 3 {
         return Err(crate::error::Error::msg(
             "trade pool has fewer than 3 ready operators",
@@ -237,7 +239,7 @@ fn search_trade_single_order(
     }
 
     let must_idx = filter.must_include_name.as_ref().and_then(|name| {
-        pool.entries
+        sub.entries
             .iter()
             .position(|e| e.name == *name)
             .or_else(|| {
@@ -277,7 +279,7 @@ fn search_trade_single_order(
             .par_iter()
             .filter_map(|combo| {
                 eval_combo_hit(
-                    pool,
+                    &sub,
                     table,
                     options,
                     order_kind,
@@ -293,7 +295,7 @@ fn search_trade_single_order(
             .collect::<Vec<_>>()
             .par_iter()
             .filter_map(|combo| {
-                eval_combo_hit(pool, table, options, order_kind, *combo, None, None)
+                eval_combo_hit(&sub, table, options, order_kind, *combo, None, None)
             })
             .filter(|hit| hit_filter.is_none_or(|f| f(hit)))
             .collect()
@@ -326,6 +328,28 @@ fn search_trade_single_order(
         gold_order_line: None,
         originium_order_line: None,
     })
+}
+
+fn trade_search_pool_for_order(
+    pool: &TradePool,
+    order_kind: TradeOrderKind,
+    filter: &SearchTripleFilter,
+) -> TradePool {
+    if filter.must_include_name.is_some() || filter.hit_filter.is_some() {
+        return pool.clone();
+    }
+
+    let sub = filter_standalone_exact_with(
+        pool,
+        crate::FacilityKind::TradePost,
+        StandaloneFilter::for_order(order_kind),
+    )
+    .unwrap_or_else(|| pool.clone());
+    if sub.entries.len() >= 3 {
+        sub
+    } else {
+        pool.clone()
+    }
 }
 
 fn eval_combo_hit(

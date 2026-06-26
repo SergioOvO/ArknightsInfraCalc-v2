@@ -4,25 +4,460 @@
   "source": "散件干员速查.md @knightcode",
   "operators": {
     "trade_post": [
-      "空弦", "吉星", "石英", "雷狼龙S空爆", "海蒂", "能天使",
-      "雪雉", "可颂", "拜松", "衡沙", "月见夜", "空爆",
-      "玫兰莎", "古米", "慕斯", "缠丸", "安比尔", "瑰盐"
+      {
+        "name": "空弦",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "吉星",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "石英",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "雷狼龙S空爆",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "海蒂",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "能天使",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "雪雉",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "可颂",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "拜松",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "衡沙",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "月见夜",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "空爆",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "玫兰莎",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "古米",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "慕斯",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "缠丸",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "安比尔",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "瑰盐",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      }
     ],
     "factory": [
-      "清流", "引星棘刺", "苍苔", "砾", "阿罗玛", "夜烟", "斑点",
-      "裂响", "断罪者", "酒神", "食铁兽", "弑君者",
-      "Castle-3", "霜叶", "白雪", "红豆", "怒潮凛冬", "圣约送葬人",
-      "槐琥", "至简", "玛露西尔", "卡达", "梅尔", "雪猎",
-      "淬羽赫默", "维伊", "铅踝",
-      "褐果", "地灵", "锡兰", "艾雅法拉", "炎熔", "薄绿"
+      {
+        "name": "清流",
+        "min_tier": "tier_up",
+        "recipes": [
+          "gold"
+        ]
+      },
+      {
+        "name": "引星棘刺",
+        "recipes": [
+          "gold"
+        ]
+      },
+      {
+        "name": "苍苔",
+        "min_tier": "tier_up",
+        "recipes": [
+          "gold",
+          "battle_record",
+          "originium"
+        ]
+      },
+      {
+        "name": "砾",
+        "min_tier": "tier_up",
+        "recipes": [
+          "gold"
+        ]
+      },
+      {
+        "name": "阿罗玛",
+        "recipes": [
+          "gold"
+        ]
+      },
+      {
+        "name": "夜烟",
+        "min_tier": "tier_up",
+        "recipes": [
+          "gold"
+        ]
+      },
+      {
+        "name": "斑点",
+        "min_tier": "tier_up",
+        "recipes": [
+          "gold"
+        ]
+      },
+      {
+        "name": "裂响",
+        "min_tier": "tier_up",
+        "recipes": [
+          "battle_record"
+        ]
+      },
+      {
+        "name": "断罪者",
+        "min_tier": "tier_up",
+        "recipes": [
+          "battle_record"
+        ]
+      },
+      {
+        "name": "酒神",
+        "min_tier": "tier_up",
+        "recipes": [
+          "battle_record"
+        ]
+      },
+      {
+        "name": "食铁兽",
+        "recipes": [
+          "battle_record"
+        ]
+      },
+      {
+        "name": "弑君者",
+        "min_tier": "tier_up",
+        "recipes": [
+          "battle_record"
+        ]
+      },
+      {
+        "name": "Castle-3",
+        "min_tier": "tier_up",
+        "recipes": [
+          "battle_record"
+        ]
+      },
+      {
+        "name": "霜叶",
+        "min_tier": "tier_up",
+        "recipes": [
+          "battle_record"
+        ]
+      },
+      {
+        "name": "白雪",
+        "min_tier": "tier_up",
+        "recipes": [
+          "battle_record"
+        ]
+      },
+      {
+        "name": "红豆",
+        "min_tier": "tier_up",
+        "recipes": [
+          "battle_record"
+        ]
+      },
+      {
+        "name": "怒潮凛冬",
+        "recipes": [
+          "battle_record"
+        ]
+      },
+      {
+        "name": "圣约送葬人",
+        "min_tier": "tier_up",
+        "recipes": [
+          "battle_record"
+        ]
+      },
+      {
+        "name": "槐琥",
+        "min_tier": "tier_up",
+        "recipes": [
+          "gold",
+          "battle_record",
+          "originium"
+        ]
+      },
+      {
+        "name": "至简",
+        "min_tier": "tier_up",
+        "recipes": [
+          "gold",
+          "battle_record",
+          "originium"
+        ]
+      },
+      {
+        "name": "玛露西尔",
+        "min_tier": "tier_up",
+        "recipes": [
+          "gold",
+          "battle_record",
+          "originium"
+        ]
+      },
+      {
+        "name": "梅尔",
+        "min_tier": "tier_up",
+        "recipes": [
+          "gold",
+          "battle_record",
+          "originium"
+        ]
+      },
+      {
+        "name": "雪猎",
+        "min_tier": "tier_up",
+        "recipes": [
+          "gold",
+          "battle_record",
+          "originium"
+        ]
+      },
+      {
+        "name": "淬羽赫默",
+        "min_tier": "tier_up",
+        "recipes": [
+          "gold",
+          "battle_record",
+          "originium"
+        ]
+      },
+      {
+        "name": "维伊",
+        "min_tier": "tier_up",
+        "recipes": [
+          "gold",
+          "battle_record",
+          "originium"
+        ]
+      },
+      {
+        "name": "铅踝",
+        "recipes": [
+          "gold",
+          "battle_record",
+          "originium"
+        ]
+      },
+      {
+        "name": "褐果",
+        "min_tier": "tier_up",
+        "recipes": [
+          "originium"
+        ]
+      },
+      {
+        "name": "地灵",
+        "min_tier": "tier_up",
+        "recipes": [
+          "originium"
+        ]
+      },
+      {
+        "name": "锡兰",
+        "min_tier": "tier_up",
+        "recipes": [
+          "originium"
+        ]
+      },
+      {
+        "name": "艾雅法拉",
+        "recipes": [
+          "originium"
+        ]
+      },
+      {
+        "name": "炎熔",
+        "min_tier": "tier_up",
+        "recipes": [
+          "originium"
+        ]
+      },
+      {
+        "name": "薄绿",
+        "min_tier": "tier_up",
+        "recipes": [
+          "originium"
+        ]
+      }
     ],
     "power_plant": [
-      "承曦格雷伊", "格雷伊", "雷蛇", "澄闪", "炎狱炎熔",
-      "烛煌", "海霓", "天空盒", "菲莱"
+      {
+        "name": "承曦格雷伊",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "格雷伊",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "雷蛇",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "澄闪",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "炎狱炎熔",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "烛煌",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "海霓",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "天空盒",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "菲莱",
+        "min_tier": "tier_up"
+      }
     ],
     "control_center": [
-      "斩业星熊", "诗怀雅", "Mon3tr", "凯尔希",
-      "阿斯卡纶", "明椒", "阿米娅", "布丁", "望", "焰狐龙梓兰"
+      {
+        "name": "斩业星熊",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "诗怀雅"
+      },
+      {
+        "name": "Mon3tr",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "凯尔希",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "阿斯卡纶",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "明椒"
+      },
+      {
+        "name": "阿米娅"
+      },
+      {
+        "name": "布丁",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "望"
+      },
+      {
+        "name": "焰狐龙梓兰"
+      }
     ]
   }
 }

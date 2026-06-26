@@ -1635,11 +1635,15 @@ mod tests {
         )
     }
 
-    fn manu_pool_entry(name: &str, buff_ids: &[&str]) -> crate::pool::ManuPoolEntry {
+    fn manu_pool_entry_with_progress(
+        name: &str,
+        buff_ids: &[&str],
+        progress: crate::roster::OperatorProgress,
+    ) -> crate::pool::ManuPoolEntry {
         crate::pool::ManuPoolEntry {
             name: name.to_string(),
-            elite: 0,
-            progress: crate::roster::OperatorProgress::elite_only(0),
+            elite: progress.elite,
+            progress,
             buff_ids: buff_ids.iter().map(|id| (*id).to_string()).collect(),
             tags: vec![],
             flat_eff_hint: 0.0,
@@ -1648,14 +1652,30 @@ mod tests {
         }
     }
 
+    fn manu_pool_entry(name: &str, buff_ids: &[&str]) -> crate::pool::ManuPoolEntry {
+        manu_pool_entry_with_progress(
+            name,
+            buff_ids,
+            crate::roster::OperatorProgress::elite_only(2),
+        )
+    }
+
+    fn manu_pool_entry_tier0(name: &str, buff_ids: &[&str]) -> crate::pool::ManuPoolEntry {
+        manu_pool_entry_with_progress(
+            name,
+            buff_ids,
+            crate::roster::OperatorProgress::elite_only(0),
+        )
+    }
+
     #[test]
     fn gongsun_gold_fixed_team_requires_wendy_tier_up() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let pool = ManuPool {
             entries: vec![
                 manu_pool_entry("清流", &[QINGLIU_RENEWABLE_ENERGY_BUFF]),
-                manu_pool_entry("温蒂", &["manu_prod_spd&power[010]"]),
-                manu_pool_entry("冬时", &["manu_prod_spd&manu[000]"]),
+                manu_pool_entry_tier0("温蒂", &["manu_prod_spd&power[010]"]),
+                manu_pool_entry_tier0("冬时", &["manu_prod_spd&manu[000]"]),
             ],
             skipped: vec![],
         };
@@ -1677,24 +1697,21 @@ mod tests {
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let pool = ManuPool {
             entries: vec![
-                manu_pool_entry("褐果", &["manu_prod_spd[000]"]),
-                manu_pool_entry("雪猎", &["manu_prod_spd&limit&cost[101]"]),
+                manu_pool_entry_tier0("褐果", &["manu_prod_spd[000]"]),
+                manu_pool_entry_tier0("雪猎", &["manu_prod_spd&limit&cost[101]"]),
                 manu_pool_entry("卡达", &["manu_formula_cost[000]"]),
+                manu_pool_entry("史都华德", &["manu_prod_spd[010]"]),
                 manu_pool_entry("芬", &["manu_prod_spd_addition[030]"]),
                 manu_pool_entry("克洛丝", &["manu_prod_spd_addition[040]"]),
                 manu_pool_entry("泡普卡", &["manu_prod_spd&limit&cost[010]"]),
             ],
             skipped: vec![],
         };
-        let filtered = try_filter_standalone(&pool, FacilityKind::Factory, 3);
-        let expanded = expand_manufacture_candidate_pool(&filtered, &pool);
+        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 1);
         assert!(
-            expanded.entries.len() < pool.entries.len(),
+            candidate_pool.entries.len() < pool.entries.len(),
             "manufacture candidate extension should not fall back to the full pool"
         );
-        assert!(expanded.entry("芬").is_some());
-        assert!(expanded.entry("克洛丝").is_some());
-        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 2);
         assert!(candidate_pool.entry("芬").is_some());
         assert!(candidate_pool.entry("克洛丝").is_some());
 
@@ -1724,9 +1741,9 @@ mod tests {
     fn manufacture_candidate_pool_stays_primary_when_standalone_can_fill_rooms() {
         let pool = ManuPool {
             entries: vec![
-                manu_pool_entry("褐果", &["manu_prod_spd[000]"]),
+                manu_pool_entry("槐琥", &["manu_prod_spd[000]"]),
                 manu_pool_entry("雪猎", &["manu_prod_spd&limit&cost[101]"]),
-                manu_pool_entry("卡达", &["manu_formula_cost[000]"]),
+                manu_pool_entry("至简", &["manu_prod_spd[000]"]),
                 manu_pool_entry("芬", &["manu_prod_spd_addition[030]"]),
                 manu_pool_entry("克洛丝", &["manu_prod_spd_addition[040]"]),
             ],
@@ -1734,9 +1751,9 @@ mod tests {
         };
 
         let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 1);
-        assert!(candidate_pool.entry("褐果").is_some());
+        assert!(candidate_pool.entry("槐琥").is_some());
         assert!(candidate_pool.entry("雪猎").is_some());
-        assert!(candidate_pool.entry("卡达").is_some());
+        assert!(candidate_pool.entry("至简").is_some());
         assert!(candidate_pool.entry("芬").is_none());
         assert!(candidate_pool.entry("克洛丝").is_none());
     }

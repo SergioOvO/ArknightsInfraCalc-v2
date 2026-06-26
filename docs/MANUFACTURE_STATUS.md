@@ -34,7 +34,9 @@
 - 共享同一 `skill_table.json`（制造 buff 与贸易 buff 同表不同 id）。
 - **时间爬升**（芬/克洛丝/稀音/阿罗玛等）：`Action::AddEffRamp` → 纸面取 **20h 逐时效率算术平均**（见 `eff_ramp.rs`）；发电空构仍用 `shift_hours` 单点。
 - 排班层 `assign_shift` 在 meta/体系落位后统计剩余制造房间需求：若 `standalone_roster.json` 制造主池可用人数足够填满缺口，则只搜索主池；若主池人数不足，再通过 `expand_manufacture_candidate_pool` 补入不适合写进人工工具人表、但机制上应参与散件竞争的候选（当前包括标准化·β、急性子/慢性子同构的 25% 爬升技能）；若扩展池仍不足以填满当前缺口，才容量兜底到全池。制造站不在每个房间无条件二次搜索全池。低星爬升技能不必为了可选中而加入工具人表。
-- 体系专用制造干员仍可以留在制造池里供编排显式认领，但普通制造搜索会先通过 `filter_general_manufacture_search_pool()` 排除掉它们。当前这类干员包括冬时、温蒂：自动化组会显式使用温蒂，并在无森蚺时用冬时补清流+温蒂第三人；但 `search/manufacture.rs` 的普通三人穷举不会再把这些会清空同行生产力的自动化干员当散件候选。
+- 体系专用制造干员仍可以留在制造池里供编排显式认领，但普通制造搜索会先通过 `filter_general_manufacture_search_pool()` 排除掉它们。当前这类干员包括冬时、温蒂：自动化组会显式使用温蒂，并在无森蚺时用冬时补清流+温蒂第三人；但 `search/manufacture.rs` 的普通三人穷举不会再把这些会清空同行生产力的自动化干员当散件候选。卡达这类仅提供心情/仓库容量的非效率干员不进入 `standalone_roster.json` 制造效率工具人表。
+- `data/standalone_roster.json` 现支持结构化白名单条目：每个工具人可以声明 `min_tier`，并按 `recipes` / `order_types` 限定适用配方。制造搜索会按当前房间 `RecipeKind` 再裁一次候选池，贸易搜索会按 `TradeOrderKind` 再裁一次候选池；同名干员不再默认跨所有配方/订单类型通用。
+- 制造白名单按配方过滤后若不足 3 人，不再回退到制造全池；`search/manufacture.rs` 会改用 `filter_recipe_productive_pool()` 补入当前配方下确实能贡献生产力的候选。这样源石配方限定干员（如炎熔）不会被回退池带进作战记录 / 赤金房间。
 
 ## CLI 入口
 

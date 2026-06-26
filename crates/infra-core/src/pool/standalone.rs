@@ -10,15 +10,17 @@
 //! - 过滤后可用条目不足 `min_entries`（贸易/制造 = 3，发电/中枢 = 1）时回退全池
 //! - `OnceLock` 惰性缓存，首次调用后常驻
 
-use std::collections::HashSet;
 use std::sync::OnceLock;
 
 use serde::Deserialize;
 
 use crate::skill_table::data_path;
+use crate::tier::PromotionTier;
+use crate::trade::input::TradeOrderKind;
+use crate::types::RecipeKind;
 use crate::FacilityKind;
 
-use super::base::{HasName, PoolCore};
+use super::base::{HasName, HasProgress, PoolCore};
 
 /// JSON 文件顶层结构。
 #[derive(Debug, Clone, Deserialize)]
@@ -38,26 +40,54 @@ struct StandaloneRosterFile {
 #[derive(Debug, Clone, Deserialize)]
 struct StandaloneOperatorsFile {
     #[serde(default)]
-    trade_post: Vec<String>,
+    trade_post: Vec<StandaloneEntryFile>,
     #[serde(default)]
-    factory: Vec<String>,
+    factory: Vec<StandaloneEntryFile>,
     #[serde(default)]
-    power_plant: Vec<String>,
+    power_plant: Vec<StandaloneEntryFile>,
     #[serde(default)]
-    control_center: Vec<String>,
+    control_center: Vec<StandaloneEntryFile>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum StandaloneEntryFile {
+    Name(String),
+    Spec(StandaloneEntrySpec),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct StandaloneEntrySpec {
+    name: String,
+    #[serde(default)]
+    min_tier: Option<PromotionTier>,
+    #[serde(default)]
+    recipes: Vec<RecipeKind>,
+    #[serde(default)]
+    order_types: Vec<TradeOrderKind>,
+}
+
+#[derive(Debug, Clone)]
+struct StandaloneEntry {
+    min_tier: PromotionTier,
+    recipes: Vec<RecipeKind>,
+    order_types: Vec<TradeOrderKind>,
 }
 
 /// 工具人表运行时缓存：按设施类型索引的干员名集合。
 #[derive(Debug, Clone)]
 struct StandaloneRoster {
-    trade_post: HashSet<String>,
-    factory: HashSet<String>,
-    power_plant: HashSet<String>,
-    control_center: HashSet<String>,
+    trade_post: std::collections::HashMap<String, StandaloneEntry>,
+    factory: std::collections::HashMap<String, StandaloneEntry>,
+    power_plant: std::collections::HashMap<String, StandaloneEntry>,
+    control_center: std::collections::HashMap<String, StandaloneEntry>,
 }
 
 impl StandaloneRoster {
-    fn get(&self, facility: FacilityKind) -> Option<&HashSet<String>> {
+    fn get(
+        &self,
+        facility: FacilityKind,
+    ) -> Option<&std::collections::HashMap<String, StandaloneEntry>> {
         match facility {
             FacilityKind::TradePost => Some(&self.trade_post),
             FacilityKind::Factory => Some(&self.factory),
@@ -66,6 +96,43 @@ impl StandaloneRoster {
             _ => None,
         }
     }
+}
+
+impl From<StandaloneEntryFile> for StandaloneEntrySpec {
+    fn from(value: StandaloneEntryFile) -> Self {
+        match value {
+            StandaloneEntryFile::Name(name) => Self {
+                name,
+                min_tier: None,
+                recipes: Vec::new(),
+                order_types: Vec::new(),
+            },
+            StandaloneEntryFile::Spec(spec) => spec,
+        }
+    }
+}
+
+impl From<StandaloneEntrySpec> for (String, StandaloneEntry) {
+    fn from(value: StandaloneEntrySpec) -> Self {
+        (
+            value.name,
+            StandaloneEntry {
+                min_tier: value.min_tier.unwrap_or(PromotionTier::Tier0),
+                recipes: value.recipes,
+                order_types: value.order_types,
+            },
+        )
+    }
+}
+
+fn entry_map(
+    entries: Vec<StandaloneEntryFile>,
+) -> std::collections::HashMap<String, StandaloneEntry> {
+    entries
+        .into_iter()
+        .map(StandaloneEntrySpec::from)
+        .map(<(String, StandaloneEntry)>::from)
+        .collect()
 }
 
 fn facility_label(facility: FacilityKind) -> &'static str {
@@ -91,10 +158,10 @@ fn load_standalone_roster() -> Option<&'static StandaloneRoster> {
             let file: StandaloneRosterFile = serde_json::from_str(&raw).ok()?;
             let ops = file.operators;
             let roster = StandaloneRoster {
-                trade_post: ops.trade_post.into_iter().collect(),
-                factory: ops.factory.into_iter().collect(),
-                power_plant: ops.power_plant.into_iter().collect(),
-                control_center: ops.control_center.into_iter().collect(),
+                trade_post: entry_map(ops.trade_post),
+                factory: entry_map(ops.factory),
+                power_plant: entry_map(ops.power_plant),
+                control_center: entry_map(ops.control_center),
             };
             let total = roster.trade_post.len()
                 + roster.factory.len()
@@ -118,16 +185,73 @@ fn load_standalone_roster() -> Option<&'static StandaloneRoster> {
         .as_ref()
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StandaloneFilter {
+    pub recipe: Option<RecipeKind>,
+    pub order_type: Option<TradeOrderKind>,
+}
+
+impl StandaloneFilter {
+    pub fn for_recipe(recipe: RecipeKind) -> Self {
+        Self {
+            recipe: Some(recipe),
+            order_type: None,
+        }
+    }
+
+    pub fn for_order(order_type: TradeOrderKind) -> Self {
+        Self {
+            recipe: None,
+            order_type: Some(order_type),
+        }
+    }
+}
+
+fn standalone_entry_matches<T: HasName + HasProgress>(
+    e: &T,
+    spec: &StandaloneEntry,
+    filter: StandaloneFilter,
+) -> bool {
+    if PromotionTier::from_progress(e.progress()) != PromotionTier::TierUp
+        && spec.min_tier == PromotionTier::TierUp
+    {
+        return false;
+    }
+    if let Some(recipe) = filter.recipe {
+        if !spec.recipes.is_empty()
+            && !spec.recipes.contains(&RecipeKind::All)
+            && !spec.recipes.contains(&recipe)
+        {
+            return false;
+        }
+    }
+    if let Some(order_type) = filter.order_type {
+        if !spec.order_types.is_empty() && !spec.order_types.contains(&order_type) {
+            return false;
+        }
+    }
+    true
+}
+
 /// 尝试用工具人表白名单过滤池。
 ///
 /// 返回过滤后的池。如果工具人表未加载、该设施无白名单、或过滤后可用条目
 /// 不足 `min_entries`，则返回原池（兜底回退）。
 ///
 /// `min_entries`：贸易/制造 = 3（三人组最低要求），发电 = 1，中枢 = 1。
-pub fn try_filter_standalone<T: HasName + Clone>(
+pub fn try_filter_standalone<T: HasName + HasProgress + Clone>(
     pool: &PoolCore<T>,
     facility: FacilityKind,
     min_entries: usize,
+) -> PoolCore<T> {
+    try_filter_standalone_with(pool, facility, min_entries, StandaloneFilter::default())
+}
+
+pub fn try_filter_standalone_with<T: HasName + HasProgress + Clone>(
+    pool: &PoolCore<T>,
+    facility: FacilityKind,
+    min_entries: usize,
+    filter: StandaloneFilter,
 ) -> PoolCore<T> {
     let Some(roster) = load_standalone_roster() else {
         eprintln!(
@@ -137,7 +261,7 @@ pub fn try_filter_standalone<T: HasName + Clone>(
         );
         return pool.clone();
     };
-    let Some(names) = roster.get(facility) else {
+    let Some(entries) = roster.get(facility) else {
         eprintln!(
             "[工具人表] {}: 无此设施白名单，使用全池 (n={})",
             facility_label(facility),
@@ -149,7 +273,11 @@ pub fn try_filter_standalone<T: HasName + Clone>(
     let filtered: Vec<T> = pool
         .entries
         .iter()
-        .filter(|e| names.contains(e.pool_name()))
+        .filter(|e| {
+            entries
+                .get(e.pool_name())
+                .is_some_and(|spec| standalone_entry_matches(*e, spec, filter))
+        })
         .cloned()
         .collect();
     let after = filtered.len();
@@ -179,16 +307,28 @@ pub fn try_filter_standalone<T: HasName + Clone>(
 /// Unlike [`try_filter_standalone`], this does not fall back to the full pool
 /// when the whitelist is too small. It is used by multi-level candidate policies
 /// that decide their own fallback/expansion after seeing the remaining demand.
-pub fn filter_standalone_exact<T: HasName + Clone>(
+pub fn filter_standalone_exact<T: HasName + HasProgress + Clone>(
     pool: &PoolCore<T>,
     facility: FacilityKind,
 ) -> Option<PoolCore<T>> {
+    filter_standalone_exact_with(pool, facility, StandaloneFilter::default())
+}
+
+pub fn filter_standalone_exact_with<T: HasName + HasProgress + Clone>(
+    pool: &PoolCore<T>,
+    facility: FacilityKind,
+    filter: StandaloneFilter,
+) -> Option<PoolCore<T>> {
     let roster = load_standalone_roster()?;
-    let names = roster.get(facility)?;
+    let entries = roster.get(facility)?;
     let filtered: Vec<T> = pool
         .entries
         .iter()
-        .filter(|e| names.contains(e.pool_name()))
+        .filter(|e| {
+            entries
+                .get(e.pool_name())
+                .is_some_and(|spec| standalone_entry_matches(*e, spec, filter))
+        })
         .cloned()
         .collect();
     Some(PoolCore {
@@ -203,17 +343,32 @@ mod tests {
 
     /// 测试用最小 `HasName` 实现。
     #[derive(Debug, Clone, PartialEq, Eq)]
-    struct TestEntry(String);
+    struct TestEntry {
+        name: String,
+        progress: crate::roster::OperatorProgress,
+    }
 
     impl HasName for TestEntry {
         fn pool_name(&self) -> &str {
-            &self.0
+            &self.name
+        }
+    }
+
+    impl HasProgress for TestEntry {
+        fn progress(&self) -> crate::roster::OperatorProgress {
+            self.progress
         }
     }
 
     fn make_pool(names: &[&str]) -> PoolCore<TestEntry> {
         PoolCore {
-            entries: names.iter().map(|n| TestEntry(n.to_string())).collect(),
+            entries: names
+                .iter()
+                .map(|n| TestEntry {
+                    name: n.to_string(),
+                    progress: crate::roster::OperatorProgress::elite_only(2),
+                })
+                .collect(),
             skipped: vec![],
         }
     }
@@ -230,15 +385,15 @@ mod tests {
     #[test]
     fn trade_post_has_expected_entries() {
         let roster = load_standalone_roster().unwrap();
-        assert!(roster.trade_post.contains("空弦"));
-        assert!(roster.trade_post.contains("吉星"));
-        assert!(roster.trade_post.contains("石英"));
+        assert!(roster.trade_post.contains_key("空弦"));
+        assert!(roster.trade_post.contains_key("吉星"));
+        assert!(roster.trade_post.contains_key("石英"));
         assert!(
-            !roster.trade_post.contains("但书"),
+            !roster.trade_post.contains_key("但书"),
             "但书是体系核，不应在工具人表"
         );
         assert!(
-            !roster.trade_post.contains("巫恋"),
+            !roster.trade_post.contains_key("巫恋"),
             "巫恋是体系核，不应在工具人表"
         );
     }

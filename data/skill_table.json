@@ -2427,10 +2427,22 @@
     },
     {
       "id": "manu_formula_spd&cost[001]",
-      "skill_name": "例行清扫",
+      "skill_name": "净味香氛",
       "facility": "manufacture",
       "tier": "tier_0",
-      "atoms": []
+      "atoms": [
+        {
+          "phase": "constant",
+          "phase_order": 20,
+          "action": {
+            "kind": "add_flat_eff",
+            "params": {
+              "value": 25.0,
+              "recipe": "gold"
+            }
+          }
+        }
+      ]
     },
     {
       "id": "manu_formula_spd&cost_bd[000]",

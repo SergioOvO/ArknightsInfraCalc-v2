@@ -9,7 +9,7 @@ use crate::tier::PromotionTier;
 
 use crate::layout::tier::OperatorTier;
 
-use super::base::{build_roster_pool, filter_pool, HasName, PoolCore, TierTagged};
+use super::base::{build_roster_pool, filter_pool, HasName, HasProgress, PoolCore, TierTagged};
 pub use super::trade::PoolSkip;
 
 #[derive(Debug, Clone)]
@@ -25,6 +25,12 @@ pub struct ControlPoolEntry {
 impl HasName for ControlPoolEntry {
     fn pool_name(&self) -> &str {
         &self.name
+    }
+}
+
+impl HasProgress for ControlPoolEntry {
+    fn progress(&self) -> OperatorProgress {
+        self.progress
     }
 }
 

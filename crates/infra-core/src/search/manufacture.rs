@@ -8,9 +8,13 @@ use crate::error::Result;
 use crate::layout::{LayoutContext, SharedLayout};
 use crate::manufacture::input::{ManuRoomInput, ManuSearchRecipeMode};
 use crate::manufacture::solver::{solve_manufacture, ManuProdBreakdown, ManuStorageBreakdown};
-use crate::pool::{combinations_triples, filter_general_manufacture_search_pool, ManuPool};
+use crate::pool::{
+    combinations_triples, filter_general_manufacture_search_pool, filter_standalone_exact_with,
+    ManuPool, StandaloneFilter,
+};
 use crate::skill_table::SkillTable;
-use crate::types::RecipeKind;
+use crate::types::{Action, Condition, EffectAtom, RecipeKind, SkillDef};
+use crate::FacilityKind;
 
 /// 制造站评分的完整分解，展示每个因子对 `composite_score` (= `prod_total`) 的贡献。
 ///
@@ -168,7 +172,23 @@ fn search_manufacture_single_recipe(
             "search_manufacture_single_recipe requires Single recipe mode",
         ));
     };
-    let n = pool.entries.len();
+    let sub = filter_standalone_exact_with(
+        pool,
+        FacilityKind::Factory,
+        StandaloneFilter::for_recipe(recipe),
+    )
+    .unwrap_or_else(|| pool.clone());
+    let sub = if sub.entries.len() >= 3 {
+        sub
+    } else {
+        let fallback = filter_recipe_productive_pool(pool, table, recipe);
+        if fallback.entries.len() >= 3 {
+            fallback
+        } else {
+            sub
+        }
+    };
+    let n = sub.entries.len();
     let combos: Vec<[usize; 3]> = combinations_triples(n).collect();
     let combinations = combos.len() as u64;
     let start = Instant::now();
@@ -178,7 +198,7 @@ fn search_manufacture_single_recipe(
         .filter_map(|combo| {
             let ops: Vec<_> = combo
                 .iter()
-                .map(|i| pool.entries[*i].to_manu_operator())
+                .map(|i| sub.entries[*i].to_manu_operator())
                 .collect();
             let base = ManuRoomInput {
                 level: options.level,
@@ -219,6 +239,85 @@ fn search_manufacture_single_recipe(
         gold_line: None,
         battle_record_line: None,
     })
+}
+
+fn filter_recipe_productive_pool(
+    pool: &ManuPool,
+    table: &SkillTable,
+    recipe: RecipeKind,
+) -> ManuPool {
+    ManuPool {
+        entries: pool
+            .entries
+            .iter()
+            .filter(|entry| {
+                entry.buff_ids.iter().any(|buff_id| {
+                    table
+                        .get(buff_id)
+                        .is_some_and(|skill| skill_has_productive_eff_for_recipe(skill, recipe))
+                })
+            })
+            .cloned()
+            .collect(),
+        skipped: pool.skipped.clone(),
+    }
+}
+
+fn skill_has_productive_eff_for_recipe(skill: &SkillDef, recipe: RecipeKind) -> bool {
+    if skill.facility != "manufacture" {
+        return false;
+    }
+    skill
+        .atoms
+        .iter()
+        .any(|atom| atom_can_contribute_prod_for_recipe(atom, recipe))
+}
+
+fn atom_can_contribute_prod_for_recipe(atom: &EffectAtom, recipe: RecipeKind) -> bool {
+    if !atom_condition_can_match_recipe(&atom.condition, recipe) {
+        return false;
+    }
+    match &atom.action {
+        Action::AddFlatEff {
+            value,
+            recipe: action_recipe,
+        } => *value > 0.0 && recipe_filter_matches(*action_recipe, recipe),
+        Action::AddFlatEffFromSelector {
+            multiplier,
+            recipe: action_recipe,
+            ..
+        } => *multiplier > 0.0 && recipe_filter_matches(*action_recipe, recipe),
+        Action::AddEffRamp {
+            initial,
+            per_hour,
+            cap,
+            ..
+        } => *cap > 0.0 && (*initial > 0.0 || *per_hour > 0.0),
+        Action::AddBucketEffFromSelector {
+            ret_per_step, cap, ..
+        } => *ret_per_step > 0.0 && *cap > 0.0,
+        Action::AddEffFromLimitContribSum { rate } => *rate > 0.0,
+        Action::AddEffFromLimitContribTiered {
+            low_rate,
+            high_rate,
+            ..
+        } => *low_rate > 0.0 || *high_rate > 0.0,
+        Action::StateConsumeToEff {
+            div, multiplier, ..
+        } => *div > 0.0 && multiplier.unwrap_or(1.0) > 0.0,
+        _ => false,
+    }
+}
+
+fn atom_condition_can_match_recipe(condition: &Option<Condition>, recipe: RecipeKind) -> bool {
+    match condition {
+        Some(Condition::ActiveRecipe { kind }) => *kind == recipe,
+        _ => true,
+    }
+}
+
+fn recipe_filter_matches(filter: Option<RecipeKind>, recipe: RecipeKind) -> bool {
+    matches!(filter, None | Some(RecipeKind::All)) || filter == Some(recipe)
 }
 
 fn manufacture_efficiency_sort_key(hit: &ManuSearchHit) -> f64 {
@@ -300,12 +399,46 @@ mod tests {
         ManuLineScenario, ManuOperator, ManuRoomInput, ManuSearchRecipeMode,
     };
     use crate::manufacture::solver::score_manu_composite;
-    use crate::pool::build_manufacture_pool;
+    use crate::pool::{build_manufacture_pool, ManuPoolEntry};
     use crate::roster::Roster;
     use crate::tier::PromotionTier;
 
     fn table() -> SkillTable {
         SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap()
+    }
+
+    fn test_entry(name: &str, buff_ids: &[&str]) -> ManuPoolEntry {
+        ManuPoolEntry {
+            name: name.to_string(),
+            elite: 0,
+            progress: crate::roster::OperatorProgress::elite_only(0),
+            buff_ids: buff_ids.iter().map(|id| (*id).to_string()).collect(),
+            tags: vec![],
+            flat_eff_hint: 0.0,
+            has_l2_delegate: false,
+            tier: crate::layout::tier::OperatorTier::Standalone,
+        }
+    }
+
+    #[test]
+    fn recipe_productive_fallback_excludes_incompatible_formula_skills() {
+        let table = table();
+        let pool = ManuPool {
+            entries: vec![
+                test_entry("炎熔", &["manu_formula_spd[210]"]),
+                test_entry("通用标准化", &["manu_prod_spd[000]"]),
+                test_entry("赤金工艺", &["manu_formula_spd[100]"]),
+            ],
+            skipped: vec![],
+        };
+
+        let battle_record = filter_recipe_productive_pool(&pool, &table, RecipeKind::BattleRecord);
+        assert!(battle_record.entry("通用标准化").is_some());
+        assert!(battle_record.entry("炎熔").is_none());
+        assert!(battle_record.entry("赤金工艺").is_none());
+
+        let originium = filter_recipe_productive_pool(&pool, &table, RecipeKind::Originium);
+        assert!(originium.entry("炎熔").is_some());
     }
 
     #[test]
