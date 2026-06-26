@@ -236,22 +236,33 @@ fn apply_abyssal_hunters_control(ctx: &mut ManuContext) {
     const GLADIIA_BETA: &str = "control_mp_aegir2[010]";
     const TAG_ABYSSAL: &str = "cc.g.abyssal";
 
-    let rate = if ctx.layout.control_buff_active(GLADIIA, GLADIIA_BETA) {
-        20.0
+    let has_abyssal_in_room = ctx
+        .operators
+        .iter()
+        .any(|op| op.tags.iter().any(|t| t == TAG_ABYSSAL));
+    if !has_abyssal_in_room {
+        return;
+    }
+
+    let (rate, cap) = if ctx.layout.control_buff_active(GLADIIA, GLADIIA_BETA) {
+        (10.0, 90.0)
     } else if ctx.layout.control_buff_active(GLADIIA, GLADIIA_ALPHA) {
-        10.0
+        (5.0, 45.0)
     } else {
-        0.0
+        (0.0, 0.0)
     };
     if rate == 0.0 {
         return;
     }
 
-    for op in &mut ctx.operators {
-        if op.tags.iter().any(|t| t == TAG_ABYSSAL) {
-            op.skill_eff.add(None, rate);
-        }
-    }
+    let abyssal_count = f64::from(
+        *ctx.layout
+            .manu_tagged_count_sum
+            .get(TAG_ABYSSAL)
+            .unwrap_or(&0),
+    );
+    let bonus = (abyssal_count * rate).min(cap);
+    ctx.station_eff.add(None, bonus);
 }
 
 fn condition_met(cond: &Option<Condition>, ctx: &ManuContext, owner: &str) -> bool {
@@ -1134,13 +1145,16 @@ mod tests {
     }
 
     #[test]
-    fn gladiia_control_boosts_only_abyssal_ops_in_current_manu_room() {
+    fn gladiia_control_boosts_abyssal_manu_rooms_by_global_hunter_count() {
         let table = table();
         let mut layout = LayoutContext::default();
         layout.control_workforce.push("歌蕾蒂娅".to_string());
         layout
             .control_buffs
             .push(("歌蕾蒂娅".to_string(), "control_mp_aegir2[010]".to_string()));
+        layout
+            .manu_tagged_count_sum
+            .insert("cc.g.abyssal".to_string(), 4);
 
         let mut abyssal_room = ManuRoomInput::with_operators(
             3,
@@ -1165,7 +1179,7 @@ mod tests {
         let abyssal = crate::manufacture::solver::solve_manufacture(&abyssal_room, &table).unwrap();
         assert!(
             (abyssal.prod_skill - 55.0).abs() < 0.01,
-            "two abyssal hunters ×20 plus 芬15, got {}",
+            "4 abyssal hunters in manufacture ×10 plus 芬15, got {}",
             abyssal.prod_skill
         );
 
@@ -1180,6 +1194,18 @@ mod tests {
             (normal.prod_skill - 15.0).abs() < 0.01,
             "non-abyssal room must not inherit global abyssal boost, got {}",
             normal.prod_skill
+        );
+
+        let mut capped_layout = (*abyssal_room.layout).clone();
+        capped_layout
+            .manu_tagged_count_sum
+            .insert("cc.g.abyssal".to_string(), 12);
+        abyssal_room.layout = Arc::new(capped_layout);
+        let capped = crate::manufacture::solver::solve_manufacture(&abyssal_room, &table).unwrap();
+        assert!(
+            (capped.prod_skill - 105.0).abs() < 0.01,
+            "tier_up cap 90 plus 芬15, got {}",
+            capped.prod_skill
         );
     }
 
