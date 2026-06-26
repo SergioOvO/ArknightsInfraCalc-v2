@@ -7,7 +7,9 @@ mod plan;
 mod select;
 
 pub use execute::{execute_plan, ExecuteResult};
-pub use plan::{ActivatedSystem, AssignmentPlan, SlotFill, SystemAnchor};
+pub use plan::{
+    ActivatedSystem, AssignmentPlan, ProducerSlot, SlotFill, SystemAnchor, SystemConstraint,
+};
 pub use select::build_plan;
 
 #[cfg(test)]
@@ -140,6 +142,16 @@ mod tests {
         assert!(
             !plan.degradations.is_empty(),
             "应含迷迭香降级阶梯档位"
+        );
+        // forbid-same-room 约束汇入 plan.constraints（迷迭香 ≠ 清流/温蒂同房）。
+        assert!(
+            plan.constraints.iter().any(|c| matches!(
+                c,
+                crate::layout::orchestrate::SystemConstraint::ForbidSameRoom { a, b }
+                    if a == "迷迭香" && (b == "清流" || b == "温蒂")
+            )),
+            "应含迷迭香≠清流/温蒂同房约束: {:?}",
+            plan.constraints
         );
     }
 

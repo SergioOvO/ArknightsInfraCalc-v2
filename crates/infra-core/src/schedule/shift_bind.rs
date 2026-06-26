@@ -1,38 +1,32 @@
 //! 班次绑定：指定干员组在 αβγ 轮换中 **同上同下**（上 N 休 M）。
 //!
+//! 绑定来源：统一 `AssignmentPlan.shift_binds`（由体系层 `evaluate_systems` 产出）。
 //! 消费方：`schedule_team_rotation`（非编排层、非 global effect）。
 
 use std::collections::HashSet;
 
-use crate::layout::{BaseAssignment, RoomId};
-use crate::operbox::OperBox;
+use crate::layout::{AssignmentPlan, BaseAssignment, RoomId};
 
 use super::team_rotation::{FacilityHalf, TeamLabel, TeamRotationReport};
 
-/// 一组须同队、同休的轮换干员。
-#[derive(Debug, Clone, Copy)]
-pub struct ShiftBindDef {
-    pub id: &'static str,
-    pub operators: &'static [&'static str],
+/// 一组须同队、同休的轮换干员（运行期，来自统一 plan）。
+#[derive(Debug, Clone)]
+pub struct RuntimeShiftBind {
+    pub operators: Vec<String>,
     /// αβγ 周期内上岗班次数（当前固定 12h+6h+6h → 2）。
     pub on_shifts: u8,
     pub off_shifts: u8,
 }
 
-pub const ROSEMARY_BLACKKEY_BIND: ShiftBindDef = ShiftBindDef {
-    id: "rosemary_blackkey",
-    operators: &["迷迭香", "黑键"],
-    on_shifts: 2,
-    off_shifts: 1,
-};
-
-const ALL_BINDS: &[ShiftBindDef] = &[ROSEMARY_BLACKKEY_BIND];
-
-/// operbox 满足全部成员时激活的绑定。
-pub fn active_shift_binds(operbox: &OperBox) -> Vec<&'static ShiftBindDef> {
-    ALL_BINDS
+/// 从统一 plan 提取运行期绑定组。plan 的 shift_binds 仅在体系激活时产出，已隐含 ownership gate。
+pub fn shift_binds_from_plan(plan: &AssignmentPlan) -> Vec<RuntimeShiftBind> {
+    plan.shift_binds
         .iter()
-        .filter(|b| b.operators.iter().all(|name| operbox.owns(name)))
+        .map(|b| RuntimeShiftBind {
+            operators: b.operators.clone(),
+            on_shifts: b.on_shifts,
+            off_shifts: b.off_shifts,
+        })
         .collect()
 }
 
@@ -53,11 +47,11 @@ fn half_contains_room(half: &FacilityHalf, room: &RoomId) -> bool {
 /// 绑定组跨 H1/H2 时，将 wanderer 所在房间换到 anchor 所在半区。
 pub fn align_shift_binds_in_halves(
     peak: &BaseAssignment,
-    operbox: &OperBox,
+    binds: &[RuntimeShiftBind],
     h1: &mut FacilityHalf,
     h2: &mut FacilityHalf,
 ) {
-    for bind in active_shift_binds(operbox) {
+    for bind in binds {
         if bind.operators.len() < 2 {
             continue;
         }
@@ -170,14 +164,15 @@ pub fn operator_in_shift(report: &TeamRotationReport, shift_idx: usize, name: &s
 /// 验证绑定组：同上同下 + 上2休1。
 pub fn verify_shift_binds(
     report: &TeamRotationReport,
-    operbox: &OperBox,
+    binds: &[RuntimeShiftBind],
     peak: &BaseAssignment,
 ) -> Result<(), String> {
-    for bind in active_shift_binds(operbox) {
+    for bind in binds {
+        let label = bind.operators.join("+");
         let present: Vec<&str> = bind
             .operators
             .iter()
-            .copied()
+            .map(String::as_str)
             .filter(|name| room_for_operator(peak, name).is_some())
             .collect();
         if present.len() < 2 {
@@ -193,20 +188,20 @@ pub fn verify_shift_binds(
             if !all_in && !all_out {
                 return Err(format!(
                     "{}: shift{} 绑定组 {:?} 未同上同下",
-                    bind.id,
+                    label,
                     shift.index + 1,
                     present
                 ));
             }
         }
         let team = team_of_operator(report, present[0])
-            .ok_or_else(|| format!("{}: 未找到 {} 所属队", bind.id, present[0]))?;
+            .ok_or_else(|| format!("{}: 未找到 {} 所属队", label, present[0]))?;
         let rest = resting_shift_index(team);
         for name in &present {
             if operator_in_shift(report, rest, name) {
                 return Err(format!(
                     "{}: {} 应在休息班 shift{} 缺席",
-                    bind.id,
+                    label,
                     name,
                     rest + 1
                 ));
@@ -224,23 +219,23 @@ pub fn verify_shift_binds(
         if active != bind.on_shifts as usize {
             return Err(format!(
                 "{}: 期望上岗 {} 班，实际 {}",
-                bind.id, bind.on_shifts, active
+                label, bind.on_shifts, active
             ));
         }
     }
     Ok(())
 }
 
-pub fn bound_operator_names(operbox: &OperBox, peak: &BaseAssignment) -> HashSet<String> {
+pub fn bound_operator_names(binds: &[RuntimeShiftBind], peak: &BaseAssignment) -> HashSet<String> {
     let mut names = HashSet::new();
-    for bind in active_shift_binds(operbox) {
+    for bind in binds {
         let all_in_peak = bind
             .operators
             .iter()
             .all(|n| room_for_operator(peak, n).is_some());
         if all_in_peak {
-            for n in bind.operators {
-                names.insert((*n).to_string());
+            for n in &bind.operators {
+                names.insert(n.clone());
             }
         }
     }

@@ -22,8 +22,8 @@ use super::control_fill::assign_control;
 use super::manufacture_fill::assign_manufacture_lines;
 use super::power_fill::assign_power_stations;
 use super::producer_fill::{
-    assign_dorm_producers, assign_perception_producers, assign_sphinx_urrbian_dorm_anchor,
-    place_system_anchors,
+    assign_dorm_producers, assign_sphinx_urrbian_dorm_anchor, place_system_anchors,
+    place_system_producers,
 };
 use super::run::{AssignmentRun, StageTimer};
 use super::trade_fill::{assign_trade_jie_remainder, assign_trade_remainder};
@@ -80,10 +80,17 @@ pub(super) fn run_shift_pipeline(
 
     // 感知 / 宿舍 producer（仅 Peak）。
     if mode == AssignShiftMode::Peak {
-        assign_perception_producers(blueprint, operbox, &mut run.assignment, &mut run.used)?;
+        // 感知链 producer（夕/絮雨/爱丽丝/车尔尼）：消费统一 plan 的 producers。
+        place_system_producers(
+            blueprint,
+            operbox,
+            &plan.producers,
+            &mut run.assignment,
+            &mut run.used,
+        );
         // 迷迭香感知链：消费统一 plan 的 anchor（迷迭香制造 anchor；黑键不锚定，
         // 走贸易贪心 + 上2休1 绑定）。anchor 由 build_plan 中 evaluate_systems 产出并
-        // 与 registry 汇合，pipeline 不再独立判定体系。producer 已由上行落位。
+        // 与 registry 汇合，pipeline 不再独立判定体系。
         place_system_anchors(blueprint, &plan.anchors, &mut run.assignment, &mut run.used);
         assign_sphinx_urrbian_dorm_anchor(blueprint, operbox, &mut run.assignment, &mut run.used);
         assign_dorm_producers(
@@ -120,6 +127,8 @@ pub(super) fn run_shift_pipeline(
         &mut manu_pool,
     );
     let gold_lines = blueprint.gold_manu_line_count();
+    // forbid-same-room 约束（迷迭香 ≠ 清流/温蒂同制造站）从统一 plan 提取，供 anchor 房搜索排除。
+    let forbid_same_room = forbid_same_room_pairs(plan);
     timer.mark("建池");
 
     match mode {
@@ -159,6 +168,7 @@ pub(super) fn run_shift_pipeline(
                 table,
                 &manu_layout,
                 options,
+                &forbid_same_room,
                 &mut run.assignment,
                 &mut run.used,
             )?;
@@ -183,6 +193,7 @@ pub(super) fn run_shift_pipeline(
                 table,
                 &layout,
                 options,
+                &forbid_same_room,
                 &mut run.assignment,
                 &mut run.used,
             )?;
@@ -202,4 +213,17 @@ pub(super) fn run_shift_pipeline(
 
     timer.report();
     Ok(run.assignment)
+}
+
+/// 从统一 plan 的 constraints 提取 forbid-same-room 名对，供制造 anchor 房搜索排除。
+fn forbid_same_room_pairs(plan: &AssignmentPlan) -> Vec<(String, String)> {
+    plan.constraints
+        .iter()
+        .filter_map(|c| match c {
+            crate::layout::orchestrate::SystemConstraint::ForbidSameRoom { a, b } => {
+                Some((a.clone(), b.clone()))
+            }
+            _ => None,
+        })
+        .collect()
 }

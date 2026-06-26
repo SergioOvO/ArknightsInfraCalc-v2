@@ -16,7 +16,7 @@ use crate::search::control_entry_plugin_fill;
 use crate::skill_table::SkillTable;
 
 use super::base_rotation::{score_base_assignment, ShiftScores};
-use super::shift_bind::align_shift_binds_in_halves;
+use super::shift_bind::{align_shift_binds_in_halves, shift_binds_from_plan};
 
 /// αβγ 三队标签。每班两队上岗、一队休息；设施每班全部满编（不空转）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
@@ -527,7 +527,9 @@ pub fn schedule_team_rotation(
     let control_pool = build_control_pool(&operbox.control_roster(instances), instances, table)?;
 
     let [mut h1, mut h2] = split_production_facilities(blueprint);
-    align_shift_binds_in_halves(&peak, operbox, &mut h1, &mut h2);
+    // 班次绑定（上2休1）来自统一 plan，不再硬编码 ROSEMARY_BLACKKEY_BIND。
+    let shift_binds = shift_binds_from_plan(&peak_plan);
+    align_shift_binds_in_halves(&peak, &shift_binds, &mut h1, &mut h2);
 
     // 3) α/β 从 peak 编制按 H1/H2 切半（保留编排已认领的 meta 锚点）；γ 走贸易 role 替补。
     let alpha = production_half_from_peak(&peak, &h1);
@@ -1437,7 +1439,10 @@ mod tests {
 
     #[test]
     fn team_rotation_rosemary_blackkey_shift_bind() {
-        use crate::schedule::shift_bind::{team_of_operator, verify_shift_binds};
+        use crate::layout::build_plan;
+        use crate::schedule::shift_bind::{
+            shift_binds_from_plan, team_of_operator, verify_shift_binds,
+        };
 
         let (blueprint, operbox, instances, table) = fixtures();
         if !operbox.owns("迷迭香") || !operbox.owns("黑键") {
@@ -1481,7 +1486,17 @@ mod tests {
         )
         .unwrap();
 
-        verify_shift_binds(&report, &operbox, &peak).expect("迷迭香+黑键 应同上同下、上2休1");
+        let binds = shift_binds_from_plan(
+            &build_plan(
+                &blueprint,
+                &operbox,
+                AssignShiftMode::Peak,
+                &BaseAssignment::default(),
+                &std::collections::HashSet::new(),
+            )
+            .unwrap(),
+        );
+        verify_shift_binds(&report, &binds, &peak).expect("迷迭香+黑键 应同上同下、上2休1");
         let team = team_of_operator(&report, "迷迭香").unwrap();
         assert_eq!(
             team_of_operator(&report, "黑键"),

@@ -10,59 +10,55 @@ const SENXI_DORM_CUISINE_BUFF: &str = "dorm_rec_bd_dungeon[000]";
 const SPHINX_NAME: &str = "深巡";
 const URRBIAN_NAME: &str = "乌尔比安";
 
-/// 感知链 producer 落位（非编排 System）：黑键/迷迭香在盒时堆感知源，供 resolve + 贪心消费。
-pub(super) fn assign_perception_producers(
+/// 落位统一 plan 的体系 producer（感知链：夕中枢 / 絮雨办公室 / 爱丽丝·车尔尼宿舍）。
+///
+/// producer 由 `build_plan` 经 `evaluate_systems` 产出为 `ProducerSlot`（仅在拥有且达练度时
+/// 出现），本函数按设施落位：中枢补位（满 5 跳过）、办公室/宿舍取首个空房。用真实 progress
+/// 落位以保持效率不变；不在此重复 owns/elite 判定（已由体系层 gate）。
+pub(super) fn place_system_producers(
     blueprint: &BaseBlueprint,
     operbox: &OperBox,
+    producers: &[crate::layout::orchestrate::ProducerSlot],
     assignment: &mut BaseAssignment,
     used: &mut HashSet<String>,
-) -> Result<()> {
-    if !operbox.owns("黑键") || !operbox.owns("迷迭香") {
-        return Ok(());
-    }
-    if operbox.owns("夕") && !used.contains("夕") {
-        let control = assignment.control_operators();
-        if control.len() < 5 {
-            let progress = operbox.progress_of("夕").unwrap_or_default();
-            let mut ops = control;
-            ops.push(AssignedOperator::from_progress("夕", progress));
-            used.insert("夕".into());
-            assignment.set_room(RoomId::from("control"), ops);
+) {
+    for producer in producers {
+        let name = producer.operator.as_str();
+        if used.contains(name) {
+            continue;
         }
-    }
-    if operbox.elite_of("絮雨").unwrap_or(0) >= 2 && !used.contains("絮雨") {
-        for room in blueprint.rooms_of(FacilityKind::Office) {
-            if !assignment.operators_in(&room.id).is_empty() {
-                continue;
+        match producer.facility {
+            FacilityKind::ControlCenter => {
+                let control = assignment.control_operators();
+                if control.len() >= 5 {
+                    continue;
+                }
+                let op = operbox
+                    .progress_of(name)
+                    .map(|p| AssignedOperator::from_progress(name, p))
+                    .unwrap_or_else(|| AssignedOperator::new(name, producer.elite));
+                let mut ops = control;
+                ops.push(op);
+                used.insert(name.into());
+                assignment.set_room(RoomId::from("control"), ops);
             }
-            used.insert("絮雨".into());
-            let op = operbox
-                .progress_of("絮雨")
-                .map(|progress| AssignedOperator::from_progress("絮雨", progress))
-                .unwrap_or_else(|| AssignedOperator::new("絮雨", 2));
-            assignment.set_room(room.id.clone(), vec![op]);
-            break;
+            facility => {
+                let Some(room) = blueprint
+                    .rooms_of(facility)
+                    .into_iter()
+                    .find(|r| assignment.operators_in(&r.id).is_empty())
+                else {
+                    continue;
+                };
+                let op = operbox
+                    .progress_of(name)
+                    .map(|p| AssignedOperator::from_progress(name, p))
+                    .unwrap_or_else(|| AssignedOperator::new(name, producer.elite));
+                used.insert(name.into());
+                assignment.set_room(room.id.clone(), vec![op]);
+            }
         }
     }
-    for name in ["爱丽丝", "车尔尼"] {
-        if operbox.elite_of(name).unwrap_or(0) < 2 || used.contains(name) {
-            continue;
-        }
-        let Some(room) = blueprint
-            .rooms_of(FacilityKind::Dormitory)
-            .into_iter()
-            .find(|r| assignment.operators_in(&r.id).is_empty())
-        else {
-            continue;
-        };
-        used.insert(name.into());
-        let op = operbox
-            .progress_of(name)
-            .map(|progress| AssignedOperator::from_progress(name, progress))
-            .unwrap_or_else(|| AssignedOperator::new(name, 2));
-        assignment.set_room(room.id.clone(), vec![op]);
-    }
-    Ok(())
 }
 
 pub(super) fn assign_dorm_producers(
@@ -92,7 +88,7 @@ pub(super) fn assign_dorm_producers(
 ///
 /// 代码化体系层（如迷迭香）与 registry 汇合到 `AssignmentPlan.anchors` 后由本函数消费：
 /// 迷迭香制造 anchor 落「首个空 factory」或指定 `room_id`；黑键不在此（走贸易贪心）。
-/// producer（夕/絮雨/爱丽丝/车尔尼）已由 `assign_perception_producers` 落位，不在此重复。
+/// producer（夕/絮雨/爱丽丝/车尔尼）已由 `place_system_producers` 落位，不在此重复。
 pub(super) fn place_system_anchors(
     blueprint: &BaseBlueprint,
     anchors: &[crate::layout::orchestrate::SystemAnchor],

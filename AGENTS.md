@@ -35,6 +35,14 @@
 
 用户说“继续下一步”“看准备实现的功能”时，先看 [docs/TODO/README.md](docs/TODO/README.md)；若无 ready TODO，不要自行发明综合权重。
 
+### 2.1 体系编排（ADR 0001）
+
+体系编排架构与分阶段进度的事实源是 [docs/ADR/0001-layout-assignment-decomposition.md](docs/ADR/0001-layout-assignment-decomposition.md)（含「实现进度」节）。当前状态：
+
+- **已落地**：assignment facade 拆分（`layout/assign/{run,pipeline,commit,*_fill}`）；plan 语义类型（`orchestrate/plan.rs` 的 anchor/producer/constraint/degradation/shift_bind）；迷迭香感知链走代码化体系层（`layout/system_integrity/`，**不进 registry**），经 `build_plan` 汇入统一 `AssignmentPlan`，由 pipeline / team_rotation 消费（anchor / producer / forbid-same-room / shift_bind 均已接线）。
+- **待实现（未来 agent 注意）**：ADR 决策 D 的 **execute_plan 三态（reserved/required/committed）尚未泛化**——迷迭香走的是「pipeline 内 anchor-then-search」等效路径，绕过了 `execute_plan` 的状态机。**触发条件**：出现第二个「在 registry 数据驱动声明、且需要 anchor + 搜索半固定」的体系时，才需要把三态抽象为通用机制（见 ADR §anchor 三态 / §迁移顺序 Phase 4）。在此之前不要为单一迷迭香造三态抽象。
+- 改迷迭香别回 `base_systems.json`；复杂降级体系走 `system_integrity` 代码化层，简单可声明组合走 registry。
+
 ## 3. 硬规则
 
 | 层 | 约束 |
@@ -53,7 +61,7 @@
 | 任务 | 先读 |
 |------|------|
 | 评分 / 排序口径 | [docs/SCORING_MODEL.md](docs/SCORING_MODEL.md)、[docs/SCORING_REFACTOR_PLAN.md](docs/SCORING_REFACTOR_PLAN.md)、[docs/ARCHIVE/done/SCORING_PHASE3.md](docs/ARCHIVE/done/SCORING_PHASE3.md) |
-| 编排 / 体系 / meta 组合 | [docs/ORCHESTRATION_LAYER.md](docs/ORCHESTRATION_LAYER.md)、[docs/BASE_ASSIGNMENT.md](docs/BASE_ASSIGNMENT.md) |
+| 编排 / 体系 / meta 组合 | [docs/ADR/0001-layout-assignment-decomposition.md](docs/ADR/0001-layout-assignment-decomposition.md)（体系编排架构与 Phase 进度）、[docs/ORCHESTRATION_LAYER.md](docs/ORCHESTRATION_LAYER.md)、[docs/BASE_ASSIGNMENT.md](docs/BASE_ASSIGNMENT.md) |
 | CLI / 前端调用 | [docs/INFRA_CLI.md](docs/INFRA_CLI.md)、[docs/FRONTEND_CLI.md](docs/FRONTEND_CLI.md) |
 | 贸易 L1/L2/L3 | [docs/EFFECT_ATOM_DESIGN.md](docs/EFFECT_ATOM_DESIGN.md)、[docs/INTERNAL/TRADE_INTERPRETER.md](docs/INTERNAL/TRADE_INTERPRETER.md)、[docs/INTERNAL/SHORTCUT_MATCHING.md](docs/INTERNAL/SHORTCUT_MATCHING.md) |
 | 制造站 | [docs/MANUFACTURE_STATUS.md](docs/MANUFACTURE_STATUS.md) |

@@ -158,6 +158,7 @@ pub(super) fn assign_manufacture_lines(
     table: &SkillTable,
     layout: &LayoutContext,
     options: &AssignBaseOptions,
+    forbid_same_room: &[(String, String)],
     assignment: &mut BaseAssignment,
     used: &mut HashSet<String>,
 ) -> Result<()> {
@@ -195,12 +196,27 @@ pub(super) fn assign_manufacture_lines(
                 .or_else(|_| pick_capacity_manu_hit(pool, table, layout, options, recipe, used))
         } else {
             let anchor = existing[0].name.clone();
-            pick_manu_hit_with_anchor(pool, table, opts, used, options.top_k, &anchor)
+            // forbid-same-room：anchor 房禁止纳入指定干员（迷迭香 ≠ 清流/温蒂同房）。
+            let forbidden = forbidden_teammates(&anchor, forbid_same_room);
+            pick_manu_hit_with_anchor(pool, table, opts, used, options.top_k, &anchor, &forbidden)
         }
         .map_err(|e| Error::msg(format!("manufacture {}: {e}", room.id.0)))?;
         commit_manu_room(assignment, &room.id, &hit, pool, used)?;
     }
     Ok(())
+}
+
+/// anchor 房按 forbid-same-room 约束收集禁止同房的队友名（双向匹配）。
+fn forbidden_teammates(anchor: &str, forbid_same_room: &[(String, String)]) -> HashSet<String> {
+    let mut out = HashSet::new();
+    for (a, b) in forbid_same_room {
+        if a == anchor {
+            out.insert(b.clone());
+        } else if b == anchor {
+            out.insert(a.clone());
+        }
+    }
+    out
 }
 
 pub(super) fn manufacture_candidate_pool_for_demand(
@@ -242,9 +258,14 @@ pub(super) fn pick_manu_hit_with_anchor(
     used: &HashSet<String>,
     top_k: usize,
     anchor: &str,
+    forbidden: &HashSet<String>,
 ) -> Result<ManuSearchHit> {
     let mut used_for_filter = used.clone();
     used_for_filter.remove(anchor);
+    // forbid-same-room：把禁止同房的干员当作「已占用」滤出候选池，搜索自然不会选中。
+    for name in forbidden {
+        used_for_filter.insert(name.clone());
+    }
     let sub = filter_manufacture_pool(pool, &used_for_filter);
     let mut search_opts = search_opts;
     search_opts.must_include_name = Some(anchor.to_string());
@@ -368,5 +389,26 @@ pub(super) fn manu_options(
         layout: Arc::new(layout.clone()),
         recipe_mode: ManuSearchRecipeMode::Single(recipe),
         ..ManuSearchOptions::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn forbidden_teammates_matches_both_directions() {
+        // forbid-same-room 名对双向匹配：迷迭香 anchor 房应排除清流/温蒂，反之亦然。
+        let pairs = vec![
+            ("迷迭香".to_string(), "清流".to_string()),
+            ("迷迭香".to_string(), "温蒂".to_string()),
+        ];
+        let f = forbidden_teammates("迷迭香", &pairs);
+        assert!(f.contains("清流") && f.contains("温蒂"));
+        // 反向：以清流为 anchor 时应排除迷迭香。
+        let f2 = forbidden_teammates("清流", &pairs);
+        assert!(f2.contains("迷迭香"));
+        // 无关 anchor 不受影响。
+        assert!(forbidden_teammates("砾", &pairs).is_empty());
     }
 }

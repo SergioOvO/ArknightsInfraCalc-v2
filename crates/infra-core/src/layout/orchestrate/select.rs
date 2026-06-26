@@ -12,7 +12,7 @@ use crate::operbox::OperBox;
 
 use super::plan::{
     registry_as_activated, AnchorFillPolicy, AssignmentPlan, DegradationLadder, ProducerSlot,
-    ShiftBind, SystemAnchor,
+    ShiftBind, SystemAnchor, SystemConstraint,
 };
 
 /// 根据 operbox / 蓝图 / 班次模式 / 种子编制构建编排计划。
@@ -35,9 +35,10 @@ pub fn build_plan(
     let activated = registry_claims.iter().map(registry_as_activated).collect();
 
     // 代码化体系层（system_integrity）与数据驱动 registry 汇合到统一 plan：
-    // 迷迭香感知链产出 anchor / producer / degradation / shift_bind 语义片段。
+    // 迷迭香感知链产出 anchor / producer / constraint / degradation / shift_bind 语义片段。
     let mut anchors = Vec::new();
     let mut producers = Vec::new();
+    let mut constraints = Vec::new();
     let mut degradations = Vec::new();
     let mut shift_binds = Vec::new();
     let ctx = EvaluateContext::new(blueprint, operbox, mode);
@@ -46,6 +47,7 @@ pub fn build_plan(
             &rplan,
             &mut anchors,
             &mut producers,
+            &mut constraints,
             &mut degradations,
             &mut shift_binds,
         );
@@ -57,7 +59,7 @@ pub fn build_plan(
         registry_claims,
         anchors,
         producers,
-        constraints: Vec::new(),
+        constraints,
         degradations,
         shift_binds,
     })
@@ -70,6 +72,7 @@ fn merge_rosemary_into_plan(
     rplan: &RosemaryPlan,
     anchors: &mut Vec<SystemAnchor>,
     producers: &mut Vec<ProducerSlot>,
+    constraints: &mut Vec<SystemConstraint>,
     degradations: &mut Vec<DegradationLadder>,
     shift_binds: &mut Vec<ShiftBind>,
 ) {
@@ -93,6 +96,18 @@ fn merge_rosemary_into_plan(
             optional: true,
         });
     }
+    // 迷迭香制造 anchor 禁与自动化组（清流 / 温蒂）同房——「各占一条赤金线」
+    // （ROSEMARY_PERCEPTION_CHAIN.md §3.3 / AUTOMATION_GROUP_CHAIN.md §2.4）。
+    for anchor in &rplan.anchors {
+        if anchor.operator == ROSEMARY_NAME {
+            for peer in AUTOMATION_PEERS {
+                constraints.push(SystemConstraint::ForbidSameRoom {
+                    a: ROSEMARY_NAME.to_string(),
+                    b: (*peer).to_string(),
+                });
+            }
+        }
+    }
     degradations.push(DegradationLadder {
         system_id: rplan.system_id.clone(),
         tier_label: rosemary_tier_label(rplan.tier).to_string(),
@@ -106,6 +121,9 @@ fn merge_rosemary_into_plan(
         off_shifts: rplan.shift_bind.off_shifts,
     });
 }
+
+const ROSEMARY_NAME: &str = "迷迭香";
+const AUTOMATION_PEERS: &[&str] = &["清流", "温蒂"];
 
 fn rosemary_tier_label(tier: RosemaryTier) -> &'static str {
     // 对齐 ROSEMARY_PERCEPTION_CHAIN.md §4 降级阶梯命名。
