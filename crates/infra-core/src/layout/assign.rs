@@ -674,6 +674,8 @@ const TRADE_ROLE_MANAGED_REGISTRY_SYSTEMS: [&str; 6] = [
 ];
 const GONGSUN_GOLD_MANU_ANCHORS: [&str; 2] = ["清流", "温蒂"];
 const GONGSUN_GOLD_MANU_THIRD_CHOICES: [&str; 2] = ["森蚺", "冬时"];
+const QINGLIU_RENEWABLE_ENERGY_BUFF: &str = "manu_prod_spd&trade[000]";
+const WENDY_BIONIC_SEADRAGON_BUFF: &str = "manu_prod_spd&power[020]";
 
 fn manu_recipe_fill_priority(recipe: RecipeKind) -> u8 {
     match recipe {
@@ -728,6 +730,10 @@ fn try_assign_gongsun_gold_manu_team(
     pool: &ManuPool,
     used: &mut HashSet<String>,
 ) -> Result<()> {
+    if !gongsun_gold_manu_anchors_ready(pool) {
+        return Ok(());
+    }
+
     // 优先：已有自动化组落位（清流+温蒂）的金房间，补齐第三人森蚺
     if let Some(room) = blueprint.rooms.iter().find(|r| {
         r.kind == FacilityKind::Factory
@@ -782,6 +788,20 @@ fn try_assign_gongsun_gold_manu_team(
         }
     }
     Ok(())
+}
+
+fn gongsun_gold_manu_anchors_ready(pool: &ManuPool) -> bool {
+    pool.entry("清流").is_some_and(|entry| {
+        entry
+            .buff_ids
+            .iter()
+            .any(|id| id == QINGLIU_RENEWABLE_ENERGY_BUFF)
+    }) && pool.entry("温蒂").is_some_and(|entry| {
+        entry
+            .buff_ids
+            .iter()
+            .any(|id| id == WENDY_BIONIC_SEADRAGON_BUFF)
+    })
 }
 
 fn trade_room_has_operator(assignment: &BaseAssignment, room_id: &RoomId, name: &str) -> bool {
@@ -1625,6 +1645,30 @@ mod tests {
             has_l2_delegate: false,
             tier: crate::layout::tier::OperatorTier::Standalone,
         }
+    }
+
+    #[test]
+    fn gongsun_gold_fixed_team_requires_wendy_tier_up() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let pool = ManuPool {
+            entries: vec![
+                manu_pool_entry("清流", &[QINGLIU_RENEWABLE_ENERGY_BUFF]),
+                manu_pool_entry("温蒂", &["manu_prod_spd&power[010]"]),
+                manu_pool_entry("冬时", &["manu_prod_spd&manu[000]"]),
+            ],
+            skipped: vec![],
+        };
+        let mut assignment = BaseAssignment::default();
+        let mut used = HashSet::new();
+
+        assert!(!gongsun_gold_manu_anchors_ready(&pool));
+        try_assign_gongsun_gold_manu_team(&blueprint, &mut assignment, &pool, &mut used).unwrap();
+
+        assert!(
+            assignment.rooms.is_empty(),
+            "温蒂未解锁仿生海龙时不应强制清流+温蒂+冬时金线: {:?}",
+            assignment.rooms
+        );
     }
 
     #[test]

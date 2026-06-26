@@ -354,21 +354,21 @@ fn best_abyssal_room_filler(
                 layout: std::sync::Arc::new(layout.clone()),
             };
             let score = solve_manufacture(&input, table).ok()?.prod_total;
-            Some((score, entry.name.clone(), entry.elite))
+            Some((score, entry.name.clone(), entry.progress))
         })
         .max_by(|a, b| {
             a.0.partial_cmp(&b.0)
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| b.1.cmp(&a.1))
         })
-        .map(|(_, name, elite)| AssignedOperator::new(name, elite))
+        .map(|(_, name, progress)| AssignedOperator::from_progress(name, progress))
 }
 
 fn assigned_to_manu_operator(
     op: &AssignedOperator,
     instances: &OperatorInstances,
 ) -> Option<ManuOperator> {
-    let tier = crate::tier::PromotionTier::from_elite(op.elite);
+    let tier = op.tier();
     let tags = instances
         .get(&op.name, tier)
         .map(|inst| inst.tags.clone())

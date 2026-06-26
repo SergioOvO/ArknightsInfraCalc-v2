@@ -435,7 +435,7 @@ fn to_trade_operator(
     op: &AssignedOperator,
 ) -> Result<TradeOperator> {
     const JIE_MARKET_BUFF: &str = "trade_ord_limit_count[000]";
-    let tier = PromotionTier::from_elite(op.elite);
+    let tier = op.tier();
     let mut buff_ids = resolve_buff_ids(instances, op, "trade")?;
     if op.name == "孑"
         && layout.global_inject.karlan_precision().is_some()
@@ -461,7 +461,7 @@ fn to_manu_operator(
     instances: Option<&OperatorInstances>,
     op: &AssignedOperator,
 ) -> Result<ManuOperator> {
-    let tier = PromotionTier::from_elite(op.elite);
+    let tier = op.tier();
     let buff_ids = resolve_buff_ids(instances, op, "manufacture")?;
     let tags = instance_tags(instances, &op.name, tier);
     Ok(ManuOperator {
@@ -484,7 +484,7 @@ fn to_control_operator(
     instances: &OperatorInstances,
     op: &AssignedOperator,
 ) -> Result<ControlOperator> {
-    let tier = PromotionTier::from_elite(op.elite);
+    let tier = op.tier();
     let buff_ids = instances.resolve_control_buff_ids(&op.name, tier);
     let tags = instances
         .get(&op.name, tier)
@@ -517,7 +517,7 @@ fn resolve_buff_ids(
     let Some(instances) = instances else {
         return Ok(Vec::new());
     };
-    let tier = PromotionTier::from_elite(op.elite);
+    let tier = op.tier();
     let ids = match facility {
         "trade" => instances.resolve_trade_buff_ids(&op.name, tier),
         "manufacture" => instances.resolve_manufacture_buff_ids(&op.name, tier),

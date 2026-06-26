@@ -58,7 +58,7 @@
     },
     {
       "id": "automation_group",
-      "label": "自动化组：温蒂E2+清流E2+承曦格雷伊E2（赤金专精，第三人贪心补齐）",
+      "label": "自动化组：温蒂E2+清流E1+承曦格雷伊E2（赤金专精，第三人贪心补齐）",
       "tier": "cross_station",
       "priority": 20,
       "shift_modes": ["peak"],
@@ -71,7 +71,7 @@
           "facility": "factory",
           "recipe": "gold",
           "operators": [
-            { "name": "清流", "elite": 2 },
+            { "name": "清流", "elite": 1 },
             { "name": "温蒂", "elite": 2 }
           ]
         }
