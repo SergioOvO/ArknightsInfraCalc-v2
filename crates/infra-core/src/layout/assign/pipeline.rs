@@ -11,9 +11,6 @@ use crate::layout::assignment::BaseAssignment;
 use crate::layout::blueprint::BaseBlueprint;
 use crate::layout::orchestrate::{execute_plan, AssignmentPlan};
 use crate::layout::shift::AssignShiftMode;
-use crate::layout::system_integrity::{
-    apply_rosemary_plan, evaluate_rosemary, EvaluateContext, RosemaryVerdict,
-};
 use crate::operbox::OperBox;
 use crate::pool::{
     add_jie_market_to_trade_pool, build_control_pool, build_manufacture_pool, build_power_pool,
@@ -26,6 +23,7 @@ use super::manufacture_fill::assign_manufacture_lines;
 use super::power_fill::assign_power_stations;
 use super::producer_fill::{
     assign_dorm_producers, assign_perception_producers, assign_sphinx_urrbian_dorm_anchor,
+    place_system_anchors,
 };
 use super::run::{AssignmentRun, StageTimer};
 use super::trade_fill::{assign_trade_jie_remainder, assign_trade_remainder};
@@ -83,13 +81,10 @@ pub(super) fn run_shift_pipeline(
     // 感知 / 宿舍 producer（仅 Peak）。
     if mode == AssignShiftMode::Peak {
         assign_perception_producers(blueprint, operbox, &mut run.assignment, &mut run.used)?;
-        // 迷迭香感知链：代码化体系层钉迷迭香制造 anchor（黑键不锚定，走贸易贪心 +
-        // 上2休1 绑定）。producer（夕/絮雨/爱丽丝/车尔尼）已由上行落位，
-        // apply_rosemary_plan 对已 used 的 producer 静默跳过，仅净新增迷迭香 anchor。
-        let ctx = EvaluateContext::new(blueprint, operbox, mode);
-        if let RosemaryVerdict::Activate(rplan) = evaluate_rosemary(&ctx) {
-            apply_rosemary_plan(blueprint, &rplan, &mut run.assignment, &mut run.used)?;
-        }
+        // 迷迭香感知链：消费统一 plan 的 anchor（迷迭香制造 anchor；黑键不锚定，
+        // 走贸易贪心 + 上2休1 绑定）。anchor 由 build_plan 中 evaluate_systems 产出并
+        // 与 registry 汇合，pipeline 不再独立判定体系。producer 已由上行落位。
+        place_system_anchors(blueprint, &plan.anchors, &mut run.assignment, &mut run.used);
         assign_sphinx_urrbian_dorm_anchor(blueprint, operbox, &mut run.assignment, &mut run.used);
         assign_dorm_producers(
             blueprint,

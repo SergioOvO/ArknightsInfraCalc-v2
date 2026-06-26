@@ -7,10 +7,7 @@ mod plan;
 mod select;
 
 pub use execute::{execute_plan, ExecuteResult};
-pub use plan::{ActivatedSystem, AssignmentPlan, SlotFill};
-// Phase 2 体系语义类型（SystemAnchor / ProducerSlot / SystemConstraint /
-// DegradationLadder / ShiftBind / AnchorFillPolicy）已在 `plan.rs` 定义为 `pub`，
-// 待后续 Phase 出现消费方时再在此 re-export，避免当前 unused 警告。
+pub use plan::{ActivatedSystem, AssignmentPlan, SlotFill, SystemAnchor};
 pub use select::build_plan;
 
 #[cfg(test)]
@@ -70,8 +67,8 @@ mod tests {
     #[test]
     fn build_plan_peak_ideal_e2_does_not_registry_claim_rosemary() {
         // 迷迭香感知链走代码化体系层（system_integrity），不再作为 registry 体系。
-        // build_plan 只产出 registry 选型；迷迭香 anchor 由 pipeline 的 evaluate_rosemary
-        // 落位，黑键走贸易贪心 + 上2休1 绑定，二者均不出现在 registry_claims 中。
+        // build_plan 把代码化产出汇合进统一 plan 的 anchors/degradations/shift_binds，
+        // 但不进 registry_claims；黑键走贸易贪心 + 上2休1 绑定。
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = OperBox::load(
             &crate::skill_table::data_path("schedule_243/operbox_ideal_e2.json").unwrap(),
@@ -93,6 +90,84 @@ mod tests {
             "迷迭香不应作为 registry 体系认领: {:?}",
             plan.registry_system_ids()
         );
+    }
+
+    #[test]
+    fn build_plan_peak_ideal_e2_converges_rosemary_into_unified_plan() {
+        // ADR 0001 决策 B：代码化体系层与 registry 汇合到统一 AssignmentPlan。
+        // 迷迭香满配应产出 迷迭香制造 anchor + 上2休1 绑定 + 降级阶梯档位。
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let operbox = OperBox::load(
+            &crate::skill_table::data_path("schedule_243/operbox_ideal_e2.json").unwrap(),
+        )
+        .unwrap();
+        if !operbox.owns("迷迭香") || !operbox.owns("黑键") {
+            return;
+        }
+        let plan = build_plan(
+            &blueprint,
+            &operbox,
+            AssignShiftMode::Peak,
+            &BaseAssignment::default(),
+            &std::collections::HashSet::new(),
+        )
+        .unwrap();
+        // 迷迭香制造 anchor 汇入 plan.anchors；黑键不锚定。
+        assert!(
+            plan.anchors
+                .iter()
+                .any(|a| a.operator == "迷迭香"
+                    && a.facility == crate::layout::blueprint::FacilityKind::Factory),
+            "应含迷迭香制造 anchor: {:?}",
+            plan.anchors
+        );
+        assert!(
+            !plan.anchors.iter().any(|a| a.operator == "黑键"),
+            "黑键不应锚定（走贸易贪心）"
+        );
+        // 上2休1 shift_bind 汇入 plan.shift_binds。
+        assert!(
+            plan.shift_binds.iter().any(|b| {
+                b.operators.iter().any(|o| o == "迷迭香")
+                    && b.operators.iter().any(|o| o == "黑键")
+                    && b.on_shifts == 2
+                    && b.off_shifts == 1
+            }),
+            "应含迷迭香+黑键上2休1绑定: {:?}",
+            plan.shift_binds
+        );
+        // 降级阶梯档位汇入 plan.degradations。
+        assert!(
+            !plan.degradations.is_empty(),
+            "应含迷迭香降级阶梯档位"
+        );
+    }
+
+    #[test]
+    fn build_plan_peak_without_rosemary_leaves_codeized_plan_empty() {
+        // 不拥有迷迭香/黑键时，代码化体系层不激活，统一 plan 的语义片段为空。
+        use crate::operbox::OperBoxEntry;
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let operbox = OperBox::from_entries(vec![OperBoxEntry {
+            id: "f".into(),
+            name: "芬".into(),
+            elite: 2,
+            level: 1,
+            own: true,
+            potential: 0,
+            rarity: 3,
+        }]);
+        let plan = build_plan(
+            &blueprint,
+            &operbox,
+            AssignShiftMode::Peak,
+            &BaseAssignment::default(),
+            &std::collections::HashSet::new(),
+        )
+        .unwrap();
+        assert!(plan.anchors.is_empty(), "无迷迭香不应有 anchor");
+        assert!(plan.shift_binds.is_empty(), "无迷迭香不应有 shift_bind");
+        assert!(plan.degradations.is_empty(), "无迷迭香不应有降级档位");
     }
 
     #[test]
