@@ -672,8 +672,8 @@ const TRADE_ROLE_MANAGED_REGISTRY_SYSTEMS: [&str; 6] = [
     "penguin_texlap_e0",
     "vina_lungmen",
 ];
-/// 公孙 243 金线固定 trio（`ideal_e2_saria_qingliu_weedy_gold_140`）。
-const GONGSUN_GOLD_MANU_TEAM: [&str; 3] = ["清流", "温蒂", "森蚺"];
+const GONGSUN_GOLD_MANU_ANCHORS: [&str; 2] = ["清流", "温蒂"];
+const GONGSUN_GOLD_MANU_THIRD_CHOICES: [&str; 2] = ["森蚺", "冬时"];
 
 fn manu_recipe_fill_priority(recipe: RecipeKind) -> u8 {
     match recipe {
@@ -742,15 +742,17 @@ fn try_assign_gongsun_gold_manu_team(
         let has_qingliu = existing.iter().any(|o| o.name == "清流");
         let has_wendy = existing.iter().any(|o| o.name == "温蒂");
         if has_qingliu && has_wendy && existing.len() < 3 {
-            let senxi_entry = pool.entry("森蚺");
-            if senxi_entry.is_some() && !used.contains("森蚺") {
+            for candidate in GONGSUN_GOLD_MANU_THIRD_CHOICES {
+                let Some(entry) = pool.entry(candidate) else {
+                    continue;
+                };
+                if used.contains(candidate) {
+                    continue;
+                }
                 let mut ops: Vec<AssignedOperator> = existing.to_vec();
-                ops.push(AssignedOperator::from_progress(
-                    "森蚺",
-                    senxi_entry.unwrap().progress,
-                ));
+                ops.push(AssignedOperator::from_progress(candidate, entry.progress));
                 assignment.set_room(room.id.clone(), ops);
-                used.insert("森蚺".to_string());
+                used.insert(candidate.to_string());
                 return Ok(());
             }
         }
@@ -769,14 +771,16 @@ fn try_assign_gongsun_gold_manu_team(
     }) else {
         return Ok(());
     };
-    let _ = try_commit_fixed_manu_team(
-        assignment,
-        &room.id,
-        &GONGSUN_GOLD_MANU_TEAM,
-        pool,
-        used,
-        &[],
-    )?;
+    for candidate in GONGSUN_GOLD_MANU_THIRD_CHOICES {
+        let team = [
+            GONGSUN_GOLD_MANU_ANCHORS[0],
+            GONGSUN_GOLD_MANU_ANCHORS[1],
+            candidate,
+        ];
+        if try_commit_fixed_manu_team(assignment, &room.id, &team, pool, used, &[])? {
+            break;
+        }
+    }
     Ok(())
 }
 
@@ -1577,8 +1581,12 @@ mod tests {
     use crate::instances::default_instances_path;
     use crate::layout::shift::AssignShiftMode;
     use crate::layout::BaseBlueprint;
-    use crate::operbox::{default_operbox_gongsun_path, OperBox, OperBoxEntry};
+    use crate::operbox::{
+        default_operbox_full_e2_path, default_operbox_gongsun_path, OperBox, OperBoxEntry,
+    };
     use crate::skill_table::{default_skill_table_path, SkillTable};
+
+    const GONGSUN_GOLD_MANU_TEAM: [&str; 3] = ["清流", "温蒂", "森蚺"];
 
     fn fixtures() -> (BaseBlueprint, OperBox, OperatorInstances, SkillTable) {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
@@ -2124,6 +2132,61 @@ mod tests {
         assert!(
             (gold_skill - 140.0).abs() <= 1.0,
             "清流金线纸面约 140，got {gold_skill:.1}"
+        );
+    }
+
+    #[test]
+    fn assign_peak_fills_automation_gold_line_with_dongshi_without_senxi() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let operbox = OperBox::load(&default_operbox_full_e2_path().unwrap()).unwrap();
+        let excluded = HashSet::from(["森蚺".to_string()]);
+        let operbox = operbox.excluding(&excluded);
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        if !operbox.owns("清流") || !operbox.owns("温蒂") || !operbox.owns("冬时") {
+            return;
+        }
+
+        let peak = assign_shift(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 30,
+                ..Default::default()
+            },
+            AssignShiftMode::Peak,
+            &BaseAssignment::default(),
+        )
+        .unwrap();
+
+        let gold_room = peak.rooms.iter().find(|r| {
+            blueprint.rooms.iter().any(|b| {
+                b.id == r.room_id
+                    && b.kind == FacilityKind::Factory
+                    && matches!(
+                        b.product.as_ref(),
+                        Some(RoomProduct::Factory {
+                            recipe: RecipeKind::Gold
+                        })
+                    )
+            }) && ["清流", "温蒂", "冬时"]
+                .iter()
+                .all(|n| r.operators.iter().any(|o| o.name == *n))
+        });
+        assert!(
+            gold_room.is_some(),
+            "无森蚺时金线应补冬时，实际制造编制: {:?}",
+            peak.rooms
+                .iter()
+                .filter(|r| {
+                    blueprint
+                        .rooms
+                        .iter()
+                        .any(|b| b.id == r.room_id && b.kind == FacilityKind::Factory)
+                })
+                .collect::<Vec<_>>()
         );
     }
 

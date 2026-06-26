@@ -69,7 +69,7 @@
         },
         {
           "facility": "factory",
-          "room_id": "manu_3",
+          "recipe": "gold",
           "operators": [
             { "name": "清流", "elite": 2 },
             { "name": "温蒂", "elite": 2 }

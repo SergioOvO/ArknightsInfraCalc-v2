@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 use crate::error::{Error, Result};
 use crate::layout::assignment::{AssignedOperator, BaseAssignment};
-use crate::layout::blueprint::{BaseBlueprint, FacilityKind, RoomId};
+use crate::layout::blueprint::{BaseBlueprint, FacilityKind, RoomId, RoomProduct};
 use crate::layout::tier::OperatorTier;
 use crate::operbox::OperBox;
 use crate::skill_table::{data_path, SkillTable};
@@ -78,6 +78,10 @@ pub struct SystemSlotDef {
     pub facility: String,
     #[serde(default)]
     pub room_id: Option<String>,
+    /// Optional factory recipe constraint. Used by production-line systems whose room ids differ
+    /// across frontend-generated layouts.
+    #[serde(default)]
+    pub recipe: Option<crate::types::RecipeKind>,
     #[serde(default)]
     pub trade_role: Option<String>,
     pub operators: Vec<SystemOperatorSpec>,
@@ -283,6 +287,9 @@ fn resolve_slot_room<'a>(
 ) -> Option<&'a crate::layout::blueprint::RoomBlueprint> {
     if let Some(id) = slot.room_id.as_deref() {
         let room = blueprint.rooms.iter().find(|r| r.id.0 == id)?;
+        if !slot_matches_room_product(slot, room) {
+            return None;
+        }
         if !assignment.operators_in(&room.id).is_empty() {
             return None;
         }
@@ -293,12 +300,30 @@ fn resolve_slot_room<'a>(
         if r.kind != kind {
             return false;
         }
+        if !slot_matches_room_product(slot, r) {
+            return false;
+        }
         if kind == FacilityKind::ControlCenter {
             assignment.operators_in(&r.id).len() < 5
         } else {
             assignment.operators_in(&r.id).is_empty()
         }
     })
+}
+
+fn slot_matches_room_product(
+    slot: &SystemSlotDef,
+    room: &crate::layout::blueprint::RoomBlueprint,
+) -> bool {
+    match slot.recipe {
+        Some(recipe) => matches!(
+            room.product,
+            Some(RoomProduct::Factory {
+                recipe: room_recipe
+            }) if room_recipe == recipe
+        ),
+        None => true,
+    }
 }
 
 /// 按 tier → priority 贪心选型：先跨站、后同站（不调 solve）。
@@ -619,7 +644,7 @@ mod tests {
     use super::*;
     use crate::instances::default_instances_path;
     use crate::layout::shift::AssignShiftMode;
-    use crate::layout::BaseBlueprint;
+    use crate::layout::{BaseBlueprint, RoomProduct};
     use crate::skill_table::default_skill_table_path;
 
     fn ideal_e2_operbox() -> OperBox {
@@ -1072,6 +1097,50 @@ mod tests {
         assert!(
             automation_claimed(&assignment),
             "自动化组应认领承曦格雷伊(发电) + 清流+温蒂(制造)"
+        );
+    }
+
+    #[test]
+    fn claim_automation_group_uses_gold_factory_when_room_ids_shift() {
+        let mut blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        for room in &mut blueprint.rooms {
+            if room.id.0 == "manu_3" {
+                room.product = Some(RoomProduct::Factory {
+                    recipe: crate::types::RecipeKind::BattleRecord,
+                });
+            } else if room.id.0 == "manu_1" {
+                room.product = Some(RoomProduct::Factory {
+                    recipe: crate::types::RecipeKind::Gold,
+                });
+            }
+        }
+        let operbox = ideal_e2_operbox();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+
+        let mut assignment = BaseAssignment::default();
+        let mut used = HashSet::new();
+        claim_base_systems(
+            &blueprint,
+            &operbox,
+            &table,
+            AssignShiftMode::Peak,
+            &mut assignment,
+            &mut used,
+            &HashSet::new(),
+        )
+        .unwrap();
+
+        let manu_1 = assignment.operators_in(&RoomId::from("manu_1"));
+        assert!(
+            manu_1.iter().any(|op| op.name == "清流") && manu_1.iter().any(|op| op.name == "温蒂"),
+            "自动化制造位应跟随赤金产线，而不是固定 manu_3: {manu_1:?}"
+        );
+        assert!(
+            assignment
+                .operators_in(&RoomId::from("manu_3"))
+                .iter()
+                .all(|op| op.name != "清流" && op.name != "温蒂"),
+            "manu_3 已是经验站，不应承接自动化组"
         );
     }
 

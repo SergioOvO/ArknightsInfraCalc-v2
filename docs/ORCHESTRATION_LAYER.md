@@ -108,6 +108,8 @@ crates/infra-core/src/layout/orchestrate/
 
 `pick_one` 候选默认继承 slot 级 `"elite"` 要求；需要按候选区分精英化门槛时可写对象，例如 `{ "name": "海沫", "elite": 2 }`。对象候选还支持 `"max_elite"`，用于保留少量 E0-only / E1-only 历史锚点。
 
+制造站 slot 可写 `"recipe": "gold" | "battle_record" | "originium"` 约束房间产物；用于自动化组这类“必须进赤金线”的体系。前端生成 layout 时房间编号可能与模板不同，优先使用 `recipe` 约束，不要把清流/温蒂等产线体系硬绑到固定 `room_id`。
+
 ### 4.3 与现有文件的关系
 
 | 文件 | 角色 |
