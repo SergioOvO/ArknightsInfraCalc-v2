@@ -24,6 +24,7 @@ summaries*.jsonl
 /release.zip
 /release/*.exe
 /release/**/*.exe
+/dist/
 
 # Personal / local data (not repo fixtures)
 *.xlsx

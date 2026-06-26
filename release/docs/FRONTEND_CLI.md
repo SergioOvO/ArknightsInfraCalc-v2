@@ -9,7 +9,8 @@
 
 ```
 release/
-├── infra-cli.exe              Windows x64 CLI（约 3 MB）
+├── infra-cli / infra-cli.exe  Linux / Windows x64 CLI
+├── data/                      Linux 独立部署包内置；Windows 旧包可放在 release 同级
 ├── layout-gen/
 │   └── index.html             基建 Layout 生成器（浏览器打开，无构建）
 ├── fixtures/
@@ -23,13 +24,17 @@ release/
 └── VERSION.txt
 ```
 
-另需从仓库拷贝 **`data/`**（CLI 机制数据，必需）。
-
 Linux / macOS CLI：
 
 ```bash
 cargo build --release -p infra-cli
 # layout-gen/index.html 跨平台通用，无需编译
+```
+
+Linux 发布包：
+
+```bash
+bash scripts/build_release_linux.sh
 ```
 
 ---
@@ -38,10 +43,11 @@ cargo build --release -p infra-cli
 
 ### 2.1 打开方式
 
-```powershell
-# 资源管理器双击，或：
-start release/layout-gen/index.html
+```bash
+xdg-open release/layout-gen/index.html
 ```
+
+Windows 可在资源管理器双击，或运行 `start release/layout-gen/index.html`。
 
 源码与 release 包同步：`tools/layout-gen/index.html`（单文件，内联 CSS/JS）。
 
@@ -71,12 +77,15 @@ infra-cli plan         ──→  --profile-out 账号画像 JSON + --maa-out MA
 
 ## 3. 运行前提：data 目录
 
-`layout team-rotation` 会加载机制数据，路径解析顺序：
+`plan` / `layout team-rotation` 会加载机制数据，路径解析顺序：
 
-1. 当前工作目录下的 `./data/operator_instances.json`、`./data/skill_table.json`（若存在）
-2. 否则使用**编译时**仓库内的 `data/`（开发机从 repo 根目录运行即可）
+1. `ARKNIGHTS_INFRA_DATA_DIR` 指向的目录（推荐用于 Linux systemd / Docker）。
+2. 当前工作目录下的 `./data/`。
+3. CLI 可执行文件旁边的 `data/`。
+4. CLI 可执行文件父目录旁边的 `data/`。
+5. 开发构建时的仓库 `data/`。
 
-**发给前端测试时，请一并提供整个 `data/` 目录**，或保证进程 `cwd` 下存在 `data/`。
+**发给前端测试时，请一并提供整个 `data/` 目录**，或设置 `ARKNIGHTS_INFRA_DATA_DIR`。
 
 最小必需文件：
 

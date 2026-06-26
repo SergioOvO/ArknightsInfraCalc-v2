@@ -107,7 +107,7 @@ crates/
   infra-cli/      命令行：plan / layout / verify / 输出
 data/             skill_table、干员实例、布局模板、回归用例（运行时真相源）
 docs/             文档入口、模块地图、TODO、归档、设计参考
-release/          前端发布包（infra-cli.exe、layout-gen、fixtures）
+release/          前端发布包（infra-cli/infra-cli.exe、layout-gen、fixtures）
 scripts/          Python：技能表构建、operbox 转换、数据审计
 tests/fixtures/   最小 JSON 夹具
 ```

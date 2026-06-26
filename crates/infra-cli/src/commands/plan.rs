@@ -53,6 +53,7 @@ pub fn plan_cmd(args: &[String]) -> Result<(), Error> {
 
     let profile_out = profile_out_path(args, &operbox_path);
     let profile_json = serde_json::to_string_pretty(&profile)?;
+    ensure_parent_dir(&profile_out)?;
     fs::write(&profile_out, format!("{profile_json}\n"))?;
     eprintln!("profile JSON → {}", profile_out.display());
 
@@ -166,4 +167,13 @@ fn profile_out_path(args: &[String], operbox_path: &Path) -> PathBuf {
             .and_then(|s| s.to_str())
             .unwrap_or("operbox")
     ))
+}
+
+fn ensure_parent_dir(path: &Path) -> Result<(), Error> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+    Ok(())
 }

@@ -8,7 +8,7 @@
 ## 一、命令总览
 
 ```
-infra-cli.exe
+infra-cli
 ├── plan                     ← 推荐：账号分析 + 排班 + MAA 一体
 ├── layout
 │   ├── team-rotation        ← 仅 αβγ 三队排班 + MAA

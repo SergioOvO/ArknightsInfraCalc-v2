@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
@@ -118,19 +118,69 @@ pub fn default_skill_table_path() -> Result<std::path::PathBuf> {
 }
 
 pub fn data_path(name: &str) -> Result<std::path::PathBuf> {
-    if let Ok(path) = data_path_from_cwd(name) {
+    if let Some(path) = data_path_from_env(name)? {
+        return Ok(path);
+    }
+    let mut searched = Vec::new();
+    for root in runtime_data_roots()? {
+        let path = root.join(name);
+        searched.push(path.clone());
         if path.exists() {
             return Ok(path);
         }
     }
-    Ok(workspace_root()?.join("data").join(name))
+    let fallback = workspace_root()?.join("data").join(name);
+    searched.push(fallback.clone());
+    if fallback.exists() {
+        Ok(fallback)
+    } else {
+        Err(Error::msg(format!(
+            "data file {name} not found; searched {}",
+            searched
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )))
+    }
 }
 
-fn data_path_from_cwd(name: &str) -> Result<std::path::PathBuf> {
-    let mut path = std::env::current_dir().map_err(Error::from)?;
-    path.push("data");
-    path.push(name);
-    Ok(path)
+fn data_path_from_env(name: &str) -> Result<Option<PathBuf>> {
+    let Some(root) = std::env::var_os("ARKNIGHTS_INFRA_DATA_DIR") else {
+        return Ok(None);
+    };
+    let path = PathBuf::from(root).join(name);
+    if path.exists() {
+        Ok(Some(path))
+    } else {
+        Err(Error::msg(format!(
+            "ARKNIGHTS_INFRA_DATA_DIR is set, but {} was not found",
+            path.display()
+        )))
+    }
+}
+
+fn runtime_data_roots() -> Result<Vec<PathBuf>> {
+    let mut roots = Vec::new();
+    push_unique(
+        &mut roots,
+        std::env::current_dir().map_err(Error::from)?.join("data"),
+    );
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            push_unique(&mut roots, exe_dir.join("data"));
+            if let Some(bundle_parent) = exe_dir.parent() {
+                push_unique(&mut roots, bundle_parent.join("data"));
+            }
+        }
+    }
+    Ok(roots)
+}
+
+fn push_unique(roots: &mut Vec<PathBuf>, path: PathBuf) {
+    if !roots.iter().any(|root| root == &path) {
+        roots.push(path);
+    }
 }
 
 pub fn workspace_root() -> Result<std::path::PathBuf> {

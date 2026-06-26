@@ -2,22 +2,25 @@ ArknightsInfraCalc beta release bundle
 Build date: 2026-06-25
 Backend commit: 9e52de9
 Frontend beta source commit: 3259eaa
-Platform: windows-x86_64
+Platform: windows-x86_64 / linux-x86_64
 
 Recommended CLI entry:
-  infra-cli.exe plan
+  infra-cli plan
 
 Use plan for the full user flow:
   profile JSON + alpha/beta/gamma team rotation + MAA JSON
 
 Recommended command:
+  ./release/infra-cli plan --layout release/fixtures/layout.json --operbox release/fixtures/operbox_full_e2.json --profile-out out/243_profile.json --maa-out out/243_maa.json
   .\release\infra-cli.exe plan --layout release\fixtures\layout.json --operbox release\fixtures\operbox_full_e2.json --profile-out out\243_profile.json --maa-out out\243_maa.json
 
 Use only when no profile JSON is needed:
+  ./release/infra-cli layout team-rotation --layout release/fixtures/layout.json --operbox release/fixtures/operbox_full_e2.json --maa-out out/243_maa.json
   .\release\infra-cli.exe layout team-rotation --layout release\fixtures\layout.json --operbox release\fixtures\operbox_full_e2.json --maa-out out\243_maa.json
 
 Bundle contents:
-  infra-cli.exe
+  infra-cli / infra-cli.exe
+  data/
   layout-gen/index.html
   fixtures/layout.json
   fixtures/operbox_full_e2.json
@@ -25,4 +28,4 @@ Bundle contents:
   plans/cli-format-reference.md
 
 Runtime requirement:
-  Run from a directory containing data/, or place data/ beside release/.
+  Set ARKNIGHTS_INFRA_DATA_DIR, run from a directory containing data/, or place data/ beside the CLI/release directory.
