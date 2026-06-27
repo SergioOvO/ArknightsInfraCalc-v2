@@ -37,6 +37,7 @@ crates/infra-cli/src/
 │   ├── mod.rs           # 子命令模块聚合；对外 re-export
 │   ├── bake.rs          # `bake`：生成贸易/制造 3/2/1 人单房候选索引表（运行时验证后优先读取）
 │   ├── plan.rs          # `plan`：box profile + αβγ 排班 + MAA
+│   ├── serve.rs         # `serve`：前端常驻 worker；stdin/stdout JSON line 协议
 │   ├── layout.rs        # `layout test` / `rotation` / `team-rotation` / `analyze` / `eval` 全部子命令
 │   ├── profile.rs       # `profile`：性能画像 / 分析链路对比辅助
 │   └── verify.rs        # `verify` 子命令：跑回归、汇总失败
@@ -65,6 +66,7 @@ crates/infra-cli/src/
 |------|------|--------|
 | `bake.rs` | `bake`：并行生成 `combo_table.json`、`operators.json`、`manifest.json`；`bake validate` 校验当前 CLI 指纹 | 贸易/制造效率公式；手写搜索排序 |
 | `plan.rs` | **`plan`**：box profile JSON + `schedule_team_rotation` + MAA；`--operbox` 支持 JSON/xlsx；布局默认 243 | 画像算法（`box_profile/`）；排班逻辑（`schedule/`） |
+| `serve.rs` | `serve`：常驻读取 stdin JSON line，复用加载好的机制数据，按请求写出前端指定路径 | 新业务公式；替代 core 求解 API |
 | `layout.rs` | `layout test` / `rotation` / `team-rotation` / `analyze` / `eval`：蓝图 JSON + operbox → `assign_shift` 宏观落位（或自定义 `--assignment`）→ `resolve_base` → 搜索/评分 | 蓝图格式定义（`infra-core::layout::blueprint`）；求解公式（在 `infra-core`） |
 | `profile.rs` | `profile layout-full` / `profile analyze-compare`：采集 CLI 热路径、搜索规模和分析链路耗时 | 业务求解公式；用户主流程输出契约 |
 | `verify.rs` | `verify_cmd`：遍历 `REGRESSION_CASES.csv`；按 `expect_shortcut` 选夹具；对比 trade%/gold%/shortcut；再跑 `UNIT_OUTPUT_ANCHORS.csv` | 夹具定义（在 `verify/fixtures.rs`）；CSV 列定义（在 `verify/cases.rs`） |
@@ -120,6 +122,7 @@ crates/infra-cli/src/
 | 用户命令 | 编排（当前） | 输出 | 数据 / 夹具 |
 |----------|--------------|------|-------------|
 | **`plan`** | `commands/plan.rs` | profile JSON 文件 + stdout 分析/排班表；可选 MAA | 必选 `--operbox`（JSON/xlsx）；布局默认 `data/fixtures/243/layout.json` |
+| `serve` | `commands/serve.rs` | stdout JSON response line；stderr 日志；前端指定输出文件 | 常驻 worker；当前支持 `method=plan` |
 | `bake` | `commands/bake.rs` | 本地 `data/baked` 目录 JSON + stderr progress/summary | `infra-core::bake`；生成运行时优先读取的 3/2/1 人候选索引表；克隆后本地生成，使用前应先 `bake validate` |
 | `verify` | `commands/verify.rs` | stdout/stderr 行文本 | `verify/cases.rs` + `verify/fixtures.rs` + `data/*.csv` |
 | `pool` | `main.rs` | `output::emit_pool` | operbox / roster → `infra-core::pool` |
