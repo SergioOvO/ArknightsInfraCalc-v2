@@ -124,6 +124,30 @@ pub fn build_box_profile(
     operbox_label: &str,
     options: &BoxProfileOptions,
 ) -> Result<BoxProfile> {
+    // current：用户练度 → solver 排班；baseline：公孙固定编制 + 顶配练度 eval。
+    let current = run_user_rotation_probe(blueprint, operbox, instances, table, options.top_k)?;
+    build_box_profile_from_current_probe(
+        &current,
+        blueprint,
+        operbox,
+        instances,
+        table,
+        layout_label,
+        operbox_label,
+        options,
+    )
+}
+
+pub fn build_box_profile_from_current_probe(
+    current: &LayoutProbe,
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+    layout_label: &str,
+    operbox_label: &str,
+    options: &BoxProfileOptions,
+) -> Result<BoxProfile> {
     let schedule_path = options
         .baseline_schedule
         .clone()
@@ -135,8 +159,6 @@ pub fn build_box_profile(
     let baseline_operbox = OperBox::load(&full_e2_path)?;
     let baseline_label = format!("{} (full_e2)", schedule_path.display());
 
-    // current：用户练度 → solver 排班；baseline：公孙固定编制 + 顶配练度 eval。
-    let current = run_user_rotation_probe(blueprint, operbox, instances, table, options.top_k)?;
     let baseline = run_schedule_eval_probe(
         blueprint,
         &baseline_operbox,
@@ -145,14 +167,34 @@ pub fn build_box_profile(
         &schedule_path,
     )?;
 
-    let domains = build_domains(&current, &baseline, options);
+    Ok(assemble_box_profile(
+        current,
+        &baseline,
+        operbox,
+        layout_label,
+        operbox_label,
+        baseline_label,
+        options,
+    ))
+}
+
+fn assemble_box_profile(
+    current: &LayoutProbe,
+    baseline: &LayoutProbe,
+    operbox: &OperBox,
+    layout_label: &str,
+    operbox_label: &str,
+    baseline_label: String,
+    options: &BoxProfileOptions,
+) -> BoxProfile {
+    let domains = build_domains(current, baseline, options);
     let actions = build_actions(operbox, &domains);
     let flags = build_flags(&domains);
-    let narration_hints = build_narration_hints(&domains, &current, &baseline);
-    let rotation = rotation_snapshot(&current);
-    let baseline_rotation = rotation_snapshot(&baseline);
+    let narration_hints = build_narration_hints(&domains, current, baseline);
+    let rotation = rotation_snapshot(current);
+    let baseline_rotation = rotation_snapshot(baseline);
 
-    Ok(BoxProfile {
+    BoxProfile {
         schema_version: 2,
         layout_label: layout_label.to_string(),
         operbox_label: operbox_label.to_string(),
@@ -169,7 +211,7 @@ pub fn build_box_profile(
         actions,
         flags,
         narration_hints,
-    })
+    }
 }
 
 pub(super) fn rotation_snapshot(probe: &LayoutProbe) -> RotationSnapshot {

@@ -3,12 +3,14 @@ use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use infra_core::box_profile::{baseline_path_or_default, build_box_profile, BoxProfileOptions};
+use infra_core::box_profile::{
+    baseline_path_or_default, build_box_profile_from_current_probe, run_user_rotation_probe,
+    BoxProfileOptions,
+};
 use infra_core::export::{build_from_team_rotation, MaaExportOptions};
 use infra_core::instances::{default_instances_path, OperatorInstances};
-use infra_core::layout::{AssignBaseOptions, BaseBlueprint};
+use infra_core::layout::BaseBlueprint;
 use infra_core::operbox::{default_layout_243_path, OperBox};
-use infra_core::schedule::schedule_team_rotation;
 use infra_core::skill_table::{default_skill_table_path, SkillTable};
 use infra_core::Error;
 use serde::{Deserialize, Serialize};
@@ -175,38 +177,12 @@ fn handle_plan(state: &ServeState, params: serde_json::Value) -> Result<serde_js
 
     let layout_label = layout_path.to_string_lossy().into_owned();
     let operbox_label = params.operbox.to_string_lossy().into_owned();
-    let profile = build_box_profile(
-        &blueprint,
-        &operbox,
-        &state.instances,
-        &state.table,
-        &layout_label,
-        &operbox_label,
-        &BoxProfileOptions {
-            top_k: top,
-            baseline_operbox: Some(baseline_path),
-            ..BoxProfileOptions::default()
-        },
-    )?;
-
-    if let Some(path) = params.profile_out.as_ref() {
-        write_pretty_json(path, &profile)?;
-    }
-
-    let rotation = schedule_team_rotation(
-        &blueprint,
-        &operbox,
-        &state.instances,
-        &state.table,
-        &AssignBaseOptions {
-            top_k: top,
-            ..AssignBaseOptions::default()
-        },
-    )?;
+    let current =
+        run_user_rotation_probe(&blueprint, &operbox, &state.instances, &state.table, top)?;
 
     if let Some(dir) = params.output_dir.as_ref() {
         fs::create_dir_all(dir)?;
-        for shift in &rotation.shifts {
+        for shift in &current.rotation.shifts {
             let path = dir.join(format!("team_shift_{}.json", shift.index + 1));
             shift.assignment.save(&path)?;
         }
@@ -217,8 +193,26 @@ fn handle_plan(state: &ServeState, params: serde_json::Value) -> Result<serde_js
         if let Some(title) = params.maa_title.clone() {
             maa_opts.title = title;
         }
-        let schedule = build_from_team_rotation(&blueprint, &rotation, &maa_opts)?;
+        let schedule = build_from_team_rotation(&blueprint, &current.rotation, &maa_opts)?;
         schedule.save(path)?;
+    }
+
+    if let Some(path) = params.profile_out.as_ref() {
+        let profile = build_box_profile_from_current_probe(
+            &current,
+            &blueprint,
+            &operbox,
+            &state.instances,
+            &state.table,
+            &layout_label,
+            &operbox_label,
+            &BoxProfileOptions {
+                top_k: top,
+                baseline_operbox: Some(baseline_path),
+                ..BoxProfileOptions::default()
+            },
+        )?;
+        write_pretty_json(path, &profile)?;
     }
 
     let result = PlanResult {
@@ -238,9 +232,9 @@ fn handle_plan(state: &ServeState, params: serde_json::Value) -> Result<serde_js
             .output_dir
             .as_ref()
             .map(|path| path.to_string_lossy().into_owned()),
-        daily_trade: rotation.daily.trade,
-        daily_manu: rotation.daily.manu,
-        daily_power: rotation.daily.power,
+        daily_trade: current.rotation.daily.trade,
+        daily_manu: current.rotation.daily.manu,
+        daily_power: current.rotation.daily.power,
     };
     serde_json::to_value(result).map_err(Error::from)
 }
