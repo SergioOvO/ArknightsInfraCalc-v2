@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -20,7 +20,7 @@ use crate::skill_table::{data_path, default_skill_table_path, SkillTable};
 use crate::trade::input::{TradeOrderKind, TradeSearchOrderMode};
 use crate::types::RecipeKind;
 
-pub const BAKE_SCHEMA_VERSION: u32 = 1;
+pub const BAKE_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone)]
 pub struct BakeOptions {
@@ -50,6 +50,7 @@ pub struct BakeReport {
     pub trade_hits: usize,
     pub manufacture_signatures: usize,
     pub manufacture_hits: usize,
+    pub combo_table_rows: usize,
     pub elapsed_ms: u128,
 }
 
@@ -83,6 +84,53 @@ struct BakedOperator {
     name: String,
     progress: OperatorProgressJson,
     facilities: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct BakedComboTable {
+    schema_version: u32,
+    operator_count: usize,
+    mask_words: usize,
+    indexes: Vec<BakedComboIndex>,
+    rows: Vec<BakedComboRow>,
+}
+
+#[derive(Debug, Serialize)]
+struct BakedComboIndex {
+    signature_key: String,
+    start: usize,
+    len: usize,
+}
+
+#[derive(Debug, Serialize)]
+struct BakedComboRow {
+    row_id: usize,
+    facility: &'static str,
+    signature_key: String,
+    room_level: u8,
+    operator_capacity: usize,
+    names: Vec<String>,
+    operator_indices: Vec<usize>,
+    operator_mask: Vec<u64>,
+    sort_score: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    order_kind: Option<TradeOrderKind>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    recipe: Option<RecipeKind>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    trade_pct: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    gold_pct: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shortcut: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    unit_trade_per_day: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    unit_gold_per_day: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    manu_prod_total: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    manu_storage_limit: Option<i32>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -146,21 +194,35 @@ pub fn bake_catalogs(options: &BakeOptions) -> Result<BakeReport> {
 
     let mut trade_signatures = 0usize;
     let mut trade_hits = 0usize;
-    if options.include_trade {
+    let trade_catalog = if options.include_trade {
         let catalog = bake_trade_catalog(&roster, &instances, &table, options)?;
         trade_signatures = catalog.signatures.len();
         trade_hits = catalog.signatures.iter().map(|s| s.hits.len()).sum();
         write_json(options.out_dir.join("trade_combos.json"), &catalog)?;
-    }
+        Some(catalog)
+    } else {
+        None
+    };
 
     let mut manufacture_signatures = 0usize;
     let mut manufacture_hits = 0usize;
-    if options.include_manufacture {
+    let manufacture_catalog = if options.include_manufacture {
         let catalog = bake_manufacture_catalog(&roster, &instances, &table, options)?;
         manufacture_signatures = catalog.signatures.len();
         manufacture_hits = catalog.signatures.iter().map(|s| s.hits.len()).sum();
         write_json(options.out_dir.join("manufacture_combos.json"), &catalog)?;
-    }
+        Some(catalog)
+    } else {
+        None
+    };
+
+    let combo_table = build_combo_table(
+        &operators,
+        trade_catalog.as_ref(),
+        manufacture_catalog.as_ref(),
+    );
+    let combo_table_rows = combo_table.rows.len();
+    write_json(options.out_dir.join("combo_table.json"), &combo_table)?;
 
     let manifest = BakeManifest {
         schema_version: BAKE_SCHEMA_VERSION,
@@ -185,10 +247,170 @@ pub fn bake_catalogs(options: &BakeOptions) -> Result<BakeReport> {
         trade_hits,
         manufacture_signatures,
         manufacture_hits,
+        combo_table_rows,
         elapsed_ms: start.elapsed().as_millis(),
     };
     write_json(options.out_dir.join("summary.json"), &report)?;
     Ok(report)
+}
+
+fn build_combo_table(
+    operators: &[BakedOperator],
+    trade_catalog: Option<&BakedTradeCatalog>,
+    manufacture_catalog: Option<&BakedManufactureCatalog>,
+) -> BakedComboTable {
+    let operator_index: HashMap<&str, usize> = operators
+        .iter()
+        .enumerate()
+        .map(|(idx, op)| (op.name.as_str(), idx))
+        .collect();
+    let mask_words = operators.len().div_ceil(64).max(1);
+    let mut rows = Vec::new();
+
+    if let Some(catalog) = trade_catalog {
+        for signature in &catalog.signatures {
+            let signature_key = trade_signature_key(signature);
+            for hit in &signature.hits {
+                let (operator_indices, operator_mask) =
+                    operator_index_and_mask(&hit.names, &operator_index, mask_words);
+                rows.push(BakedComboRow {
+                    row_id: 0,
+                    facility: "trade",
+                    signature_key: signature_key.clone(),
+                    room_level: signature.room_level,
+                    operator_capacity: signature.operator_capacity,
+                    names: hit.names.clone(),
+                    operator_indices,
+                    operator_mask,
+                    sort_score: hit.trade_pct,
+                    order_kind: Some(signature.order_kind),
+                    recipe: None,
+                    trade_pct: Some(hit.trade_pct),
+                    gold_pct: Some(hit.gold_pct),
+                    shortcut: hit.shortcut.clone(),
+                    unit_trade_per_day: Some(hit.unit_trade_per_day),
+                    unit_gold_per_day: Some(hit.unit_gold_per_day),
+                    manu_prod_total: None,
+                    manu_storage_limit: None,
+                });
+            }
+        }
+    }
+
+    if let Some(catalog) = manufacture_catalog {
+        for signature in &catalog.signatures {
+            let signature_key = manufacture_signature_key(signature);
+            for hit in &signature.hits {
+                let (operator_indices, operator_mask) =
+                    operator_index_and_mask(&hit.names, &operator_index, mask_words);
+                rows.push(BakedComboRow {
+                    row_id: 0,
+                    facility: "manufacture",
+                    signature_key: signature_key.clone(),
+                    room_level: signature.room_level,
+                    operator_capacity: signature.operator_capacity,
+                    names: hit.names.clone(),
+                    operator_indices,
+                    operator_mask,
+                    sort_score: hit.composite_score,
+                    order_kind: None,
+                    recipe: Some(signature.recipe),
+                    trade_pct: None,
+                    gold_pct: None,
+                    shortcut: None,
+                    unit_trade_per_day: None,
+                    unit_gold_per_day: None,
+                    manu_prod_total: Some(hit.breakdown.prod_total),
+                    manu_storage_limit: Some(hit.breakdown.storage_limit),
+                });
+            }
+        }
+    }
+
+    rows.sort_by(|a, b| {
+        a.facility
+            .cmp(b.facility)
+            .then_with(|| a.signature_key.cmp(&b.signature_key))
+            .then_with(|| b.operator_capacity.cmp(&a.operator_capacity))
+            .then_with(|| {
+                b.sort_score
+                    .partial_cmp(&a.sort_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| a.names.cmp(&b.names))
+    });
+    for (idx, row) in rows.iter_mut().enumerate() {
+        row.row_id = idx;
+    }
+
+    let indexes = build_combo_indexes(&rows);
+    BakedComboTable {
+        schema_version: BAKE_SCHEMA_VERSION,
+        operator_count: operators.len(),
+        mask_words,
+        indexes,
+        rows,
+    }
+}
+
+fn build_combo_indexes(rows: &[BakedComboRow]) -> Vec<BakedComboIndex> {
+    let mut indexes = Vec::new();
+    let mut start = 0usize;
+    while start < rows.len() {
+        let key = rows[start].signature_key.clone();
+        let mut end = start + 1;
+        while end < rows.len() && rows[end].signature_key == key {
+            end += 1;
+        }
+        indexes.push(BakedComboIndex {
+            signature_key: key,
+            start,
+            len: end - start,
+        });
+        start = end;
+    }
+    indexes
+}
+
+fn trade_signature_key(signature: &BakedTradeSignature) -> String {
+    format!(
+        "trade:level{}:cap{}:order_{:?}:gold_lines{}",
+        signature.room_level,
+        signature.operator_capacity,
+        signature.order_kind,
+        signature.gold_production_lines
+    )
+    .to_ascii_lowercase()
+}
+
+fn manufacture_signature_key(signature: &BakedManufactureSignature) -> String {
+    format!(
+        "manufacture:level{}:cap{}:recipe_{:?}",
+        signature.room_level, signature.operator_capacity, signature.recipe
+    )
+    .to_ascii_lowercase()
+}
+
+fn operator_index_and_mask(
+    names: &[String],
+    operator_index: &HashMap<&str, usize>,
+    mask_words: usize,
+) -> (Vec<usize>, Vec<u64>) {
+    let mut indices: Vec<_> = names
+        .iter()
+        .filter_map(|name| operator_index.get(name.as_str()).copied())
+        .collect();
+    indices.sort_unstable();
+
+    let mut mask = vec![0u64; mask_words];
+    for idx in &indices {
+        let word = idx / 64;
+        let bit = idx % 64;
+        if let Some(slot) = mask.get_mut(word) {
+            *slot |= 1u64 << bit;
+        }
+    }
+    (indices, mask)
 }
 
 fn bake_trade_catalog(

@@ -4,7 +4,6 @@ use infra_core::{bake_catalogs, BakeOptions, Error};
 
 pub fn bake_cmd(args: &[String]) -> Result<(), Error> {
     let mut options = BakeOptions::default();
-    options.limit_per_signature = Some(5_000);
     let mut mode = "all";
 
     let mut i = 0usize;
@@ -32,10 +31,6 @@ pub fn bake_cmd(args: &[String]) -> Result<(), Error> {
                         .map_err(|_| Error::msg("invalid --limit-per-signature value"))?,
                 );
                 i += 2;
-            }
-            "--all-hits" => {
-                options.limit_per_signature = None;
-                i += 1;
             }
             "--help" | "-h" => {
                 print_bake_usage();
@@ -79,8 +74,6 @@ pub fn bake_cmd(args: &[String]) -> Result<(), Error> {
 
 fn print_bake_usage() {
     eprintln!("Usage:");
-    eprintln!(
-        "  infra-cli bake [all|trade|manufacture] [--out <dir>] [--limit-per-signature <n>|--all-hits]"
-    );
-    eprintln!("      Generates baked single-room trade/manufacture candidate catalogs only.");
+    eprintln!("  infra-cli bake [all|trade|manufacture] [--out <dir>] [--limit-per-signature <n>]");
+    eprintln!("      Generates full baked 3/2/1-person single-room candidate tables by default.");
 }
