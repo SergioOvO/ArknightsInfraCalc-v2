@@ -7,8 +7,8 @@ use serde::Serialize;
 use crate::error::Result;
 use crate::layout::{LayoutContext, SharedLayout};
 use crate::pool::{
-    build_trade_combo_operators, combinations_triples, combinations_triples_with_anchor,
-    filter_standalone_exact_with, StandaloneFilter, TradePool,
+    build_trade_combo_operators_vec, combinations_indices, filter_standalone_exact_with,
+    StandaloneFilter, TradePool,
 };
 use crate::skill_table::SkillTable;
 use crate::trade::input::{
@@ -95,6 +95,7 @@ pub struct TradeSearchReport {
 #[derive(Debug, Clone)]
 pub struct TradeSearchOptions {
     pub trade_level: u8,
+    pub operator_capacity: usize,
     pub mood: f64,
     pub top_k: usize,
     /// 制造站赤金真实生产线数（公孙长乐基准常用 4）。
@@ -104,18 +105,23 @@ pub struct TradeSearchOptions {
     /// 上班时长（小时）；产量公式用 `eff × (shift/24) × 单位产出`。
     pub shift_hours: f64,
     pub order_mode: TradeSearchOrderMode,
+    pub use_baked: bool,
+    pub full_pool: bool,
 }
 
 impl Default for TradeSearchOptions {
     fn default() -> Self {
         Self {
             trade_level: 3,
+            operator_capacity: 3,
             mood: 24.0,
             top_k: 5,
             gold_production_lines: 4,
             layout: Arc::new(LayoutContext::search_baseline()),
             shift_hours: 24.0,
             order_mode: TradeSearchOrderMode::default(),
+            use_baked: true,
+            full_pool: false,
         }
     }
 }
@@ -142,10 +148,31 @@ pub fn search_trade_triples(
 pub struct SearchTripleFilter {
     /// Combo must include this operator name (e.g. `"孑"`).
     pub must_include_name: Option<String>,
+    /// Combo must include all of these operator names (e.g. anchored same-room pair).
+    pub must_include_names: Vec<String>,
     /// When set, that named slot uses this operator instead of pool entry (精0 孑摊贩).
     pub must_operator_override: Option<TradeOperator>,
     /// Keep only hits passing this predicate (e.g. witch / closure shortcut).
     pub hit_filter: Option<fn(&TradeSearchHit) -> bool>,
+}
+
+impl SearchTripleFilter {
+    pub fn must_include_names(&self) -> Vec<String> {
+        let mut names = Vec::new();
+        if let Some(name) = self.must_include_name.as_ref() {
+            names.push(name.clone());
+        }
+        for name in &self.must_include_names {
+            if !names.iter().any(|n| n == name) {
+                names.push(name.clone());
+            }
+        }
+        names
+    }
+
+    pub fn has_must_include(&self) -> bool {
+        self.must_include_name.is_some() || !self.must_include_names.is_empty()
+    }
 }
 
 pub fn search_trade_triples_filtered(
@@ -230,16 +257,27 @@ fn search_trade_single_order(
     order_kind: TradeOrderKind,
     filter: SearchTripleFilter,
 ) -> Result<TradeSearchReport> {
-    let sub = trade_search_pool_for_order(pool, order_kind, &filter);
+    let sub = trade_search_pool_for_order(pool, order_kind, options, &filter);
     let n = sub.entries.len();
-    if n < 3 {
-        return Err(crate::error::Error::msg(
-            "trade pool has fewer than 3 ready operators",
-        ));
+    let operator_capacity = options.operator_capacity.clamp(1, 3);
+    if n < operator_capacity {
+        return Err(crate::error::Error::msg(format!(
+            "trade pool has fewer than {operator_capacity} ready operators"
+        )));
     }
 
-    let must_idx = filter.must_include_name.as_ref().and_then(|name| {
-        sub.entries
+    let must_names = filter.must_include_names();
+    if must_names.len() > operator_capacity {
+        return Err(crate::error::Error::msg(format!(
+            "trade search requires {} operators but station capacity is {}",
+            must_names.len(),
+            operator_capacity
+        )));
+    }
+    let mut must_indices = Vec::with_capacity(must_names.len());
+    for name in &must_names {
+        let Some(idx) = sub
+            .entries
             .iter()
             .position(|e| e.name == *name)
             .or_else(|| {
@@ -253,53 +291,62 @@ fn search_trade_single_order(
                     None
                 }
             })
-    });
-
-    if filter.must_include_name.is_some() && must_idx.is_none() {
-        return Err(crate::error::Error::msg(format!(
-            "trade pool missing must-include operator {:?}",
-            filter.must_include_name
-        )));
+        else {
+            return Err(crate::error::Error::msg(format!(
+                "trade pool missing must-include operator {name:?}"
+            )));
+        };
+        if !must_indices.contains(&idx) {
+            must_indices.push(idx);
+        }
     }
 
-    let combo_count = if let Some(_) = must_idx {
-        crate::pool::n_choose_k_u64(n.saturating_sub(1), 2)
+    let combo_count = if must_indices.is_empty() {
+        crate::pool::n_choose_k_u64(n, operator_capacity)
     } else {
-        crate::pool::n_choose_k_u64(n, 3)
+        crate::pool::n_choose_k_u64(
+            n.saturating_sub(must_indices.len()),
+            operator_capacity.saturating_sub(must_indices.len()),
+        )
     };
 
     let start = Instant::now();
+    if options.use_baked {
+        if let Some(report) = crate::bake::try_baked_trade_search(
+            &sub,
+            options,
+            order_kind,
+            &filter,
+            combo_count,
+            start,
+        )? {
+            return Ok(report);
+        }
+    }
+
     let override_op = filter.must_operator_override.clone();
     let must_name = filter.must_include_name.clone();
     let hit_filter = filter.hit_filter;
 
-    let mut hits: Vec<TradeSearchHit> = if let Some(anchor) = must_idx {
-        combinations_triples_with_anchor(n, anchor)
-            .collect::<Vec<_>>()
-            .par_iter()
-            .filter_map(|combo| {
-                eval_combo_hit(
-                    &sub,
-                    table,
-                    options,
-                    order_kind,
-                    *combo,
-                    must_name.as_deref(),
-                    override_op.as_ref(),
-                )
-            })
-            .filter(|hit| hit_filter.is_none_or(|f| f(hit)))
-            .collect()
-    } else {
-        combinations_triples(n)
-            .collect::<Vec<_>>()
-            .par_iter()
-            .filter_map(|combo| {
-                eval_combo_hit(&sub, table, options, order_kind, *combo, None, None)
-            })
-            .filter(|hit| hit_filter.is_none_or(|f| f(hit)))
-            .collect()
-    };
+    let mut combos: Vec<_> = combinations_indices(n, operator_capacity).collect();
+    if !must_indices.is_empty() {
+        combos.retain(|combo| must_indices.iter().all(|idx| combo.contains(idx)));
+    }
+    let mut hits: Vec<TradeSearchHit> = combos
+        .par_iter()
+        .filter_map(|combo| {
+            eval_combo_hit(
+                &sub,
+                table,
+                options,
+                order_kind,
+                combo,
+                must_name.as_deref(),
+                override_op.as_ref(),
+            )
+        })
+        .filter(|hit| hit_filter.is_none_or(|f| f(hit)))
+        .collect();
 
     let evaluated = hits.len() as u64;
     hits.sort_by(|a, b| {
@@ -309,11 +356,12 @@ fn search_trade_single_order(
     });
     let best = hits.first().cloned().ok_or_else(|| {
         crate::error::Error::msg(
-            if filter.hit_filter.is_some() || filter.must_include_name.is_some() {
-                "no trade triple matched search filter"
+            if filter.hit_filter.is_some() || filter.has_must_include() {
+                "no trade combo matched search filter"
             } else {
-                "trade pool has fewer than 3 ready operators"
-            },
+                "trade pool has fewer ready operators than station capacity"
+            }
+            .to_string(),
         )
     })?;
     let top = hits.into_iter().take(options.top_k).collect();
@@ -333,9 +381,13 @@ fn search_trade_single_order(
 fn trade_search_pool_for_order(
     pool: &TradePool,
     order_kind: TradeOrderKind,
+    options: &TradeSearchOptions,
     filter: &SearchTripleFilter,
 ) -> TradePool {
-    if filter.must_include_name.is_some() || filter.hit_filter.is_some() {
+    if options.full_pool {
+        return pool.clone();
+    }
+    if filter.has_must_include() || filter.hit_filter.is_some() {
         return pool.clone();
     }
 
@@ -357,11 +409,11 @@ fn eval_combo_hit(
     table: &SkillTable,
     options: &TradeSearchOptions,
     order_kind: TradeOrderKind,
-    combo: [usize; 3],
+    combo: &[usize],
     must_name: Option<&str>,
     override_op: Option<&TradeOperator>,
 ) -> Option<TradeSearchHit> {
-    let ops = build_trade_combo_operators(pool, combo, must_name, override_op);
+    let ops = build_trade_combo_operators_vec(pool, combo, must_name, override_op);
     if trade_station_exclusive_violation(&ops, table) {
         return None;
     }
@@ -372,7 +424,7 @@ fn eval_combo_hit(
     };
     let input = TradeRoomInput {
         level: options.trade_level,
-        operators: ops.to_vec(),
+        operators: ops,
         order_count: None,
         mood: options.mood,
         gold_production_lines: Some(gold_lines),
@@ -463,6 +515,33 @@ mod tests {
             0.0
         );
         assert!(opts.layout.base_workforce.is_empty());
+    }
+
+    #[test]
+    fn level_two_trade_search_uses_two_operator_capacity() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            [("古米", 2), ("夜刀", 2), ("斑点", 1)]
+                .into_iter()
+                .map(|(name, elite)| (name.to_string(), elite))
+                .collect(),
+        );
+        let pool = build_trade_pool(&roster, &instances, &table).unwrap();
+        let report = search_trade_triples(
+            &pool,
+            &table,
+            &TradeSearchOptions {
+                trade_level: 2,
+                operator_capacity: 2,
+                order_mode: TradeSearchOrderMode::Single(TradeOrderKind::Gold),
+                ..TradeSearchOptions::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(report.best.names.len(), 2);
+        assert!(report.combinations > 0);
+        assert_eq!(report.best.breakdown.order_eff_base, 2.0);
     }
 
     #[test]

@@ -9,7 +9,7 @@ use crate::layout::{LayoutContext, SharedLayout};
 use crate::manufacture::input::{ManuRoomInput, ManuSearchRecipeMode};
 use crate::manufacture::solver::{solve_manufacture, ManuProdBreakdown, ManuStorageBreakdown};
 use crate::pool::{
-    combinations_triples, combinations_triples_with_anchor, filter_general_manufacture_search_pool,
+    combinations_indices, combinations_indices_with_anchor, filter_general_manufacture_search_pool,
     filter_standalone_exact_with, ManuPool, StandaloneFilter,
 };
 use crate::skill_table::SkillTable;
@@ -76,22 +76,28 @@ pub struct ManuSearchReport {
 #[derive(Debug, Clone)]
 pub struct ManuSearchOptions {
     pub level: u8,
+    pub operator_capacity: usize,
     pub recipe_mode: ManuSearchRecipeMode,
     pub mood: f64,
     pub top_k: usize,
     pub layout: SharedLayout,
     pub must_include_name: Option<String>,
+    pub use_baked: bool,
+    pub full_pool: bool,
 }
 
 impl Default for ManuSearchOptions {
     fn default() -> Self {
         Self {
             level: 3,
+            operator_capacity: 3,
             recipe_mode: ManuSearchRecipeMode::default(),
             mood: 24.0,
             top_k: 5,
             layout: Arc::new(LayoutContext::search_baseline()),
             must_include_name: None,
+            use_baked: true,
+            full_pool: false,
         }
     }
 }
@@ -174,7 +180,7 @@ fn search_manufacture_single_recipe(
             "search_manufacture_single_recipe requires Single recipe mode",
         ));
     };
-    let sub = if options.must_include_name.is_some() {
+    let sub = if options.full_pool || options.must_include_name.is_some() {
         pool.clone()
     } else {
         let sub = filter_standalone_exact_with(
@@ -183,11 +189,11 @@ fn search_manufacture_single_recipe(
             StandaloneFilter::for_recipe(recipe),
         )
         .unwrap_or_else(|| pool.clone());
-        if sub.entries.len() >= 3 {
+        if sub.entries.len() >= options.operator_capacity.clamp(1, 3) {
             sub
         } else {
             let fallback = filter_recipe_productive_pool(pool, table, recipe);
-            if fallback.entries.len() >= 3 {
+            if fallback.entries.len() >= options.operator_capacity.clamp(1, 3) {
                 fallback
             } else {
                 sub
@@ -205,13 +211,22 @@ fn search_manufacture_single_recipe(
             options.must_include_name
         )));
     }
-    let combos: Vec<[usize; 3]> = if let Some(anchor) = must_idx {
-        combinations_triples_with_anchor(n, anchor).collect()
+    let operator_capacity = options.operator_capacity.clamp(1, 3);
+    let combos: Vec<Vec<usize>> = if let Some(anchor) = must_idx {
+        combinations_indices_with_anchor(n, operator_capacity, anchor).collect()
     } else {
-        combinations_triples(n).collect()
+        combinations_indices(n, operator_capacity).collect()
     };
     let combinations = combos.len() as u64;
     let start = Instant::now();
+
+    if options.use_baked {
+        if let Some(report) =
+            crate::bake::try_baked_manufacture_search(&sub, options, recipe, combinations, start)?
+        {
+            return Ok(report);
+        }
+    }
 
     let mut hits: Vec<ManuSearchHit> = combos
         .par_iter()
@@ -566,6 +581,33 @@ mod tests {
         );
         assert!(report.gold_line.is_some());
         assert!(report.battle_record_line.is_some());
+    }
+
+    #[test]
+    fn level_one_manufacture_search_uses_one_operator_capacity() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = table();
+        let roster = Roster::from_elite_map(
+            [("芬", 2), ("克洛丝", 2), ("泡普卡", 2)]
+                .into_iter()
+                .map(|(name, elite)| (name.to_string(), elite))
+                .collect(),
+        );
+        let pool = build_manufacture_pool(&roster, &instances, &table).unwrap();
+        let report = search_manufacture_triples(
+            &pool,
+            &table,
+            &ManuSearchOptions {
+                level: 1,
+                operator_capacity: 1,
+                recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::Gold),
+                ..ManuSearchOptions::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(report.best.names.len(), 1);
+        assert_eq!(report.combinations, 3);
+        assert_eq!(report.best.breakdown.prod_base, 1.0);
     }
 
     #[test]

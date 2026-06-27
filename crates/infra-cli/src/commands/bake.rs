@@ -1,8 +1,9 @@
 use std::path::PathBuf;
-use std::{env, fs, hash::Hash, hash::Hasher};
+use std::{env, fs, hash::Hash, hash::Hasher, sync::Arc};
 
 use infra_core::{
-    bake_catalogs, validate_baked_catalog, BakeGeneratorFingerprint, BakeOptions, Error,
+    bake_catalogs, validate_baked_catalog, BakeGeneratorFingerprint, BakeOptions,
+    BakeProgressEvent, Error,
 };
 
 pub fn bake_cmd(args: &[String]) -> Result<(), Error> {
@@ -61,6 +62,7 @@ pub fn bake_cmd(args: &[String]) -> Result<(), Error> {
         return Ok(());
     }
     options.generator = Some(generator);
+    options.progress = Some(Arc::new(print_bake_progress));
 
     match mode {
         "all" => {
@@ -96,7 +98,54 @@ fn print_bake_usage() {
     eprintln!("Usage:");
     eprintln!("  infra-cli bake [all|trade|manufacture] [--out <dir>] [--limit-per-signature <n>]");
     eprintln!("  infra-cli bake validate [--out <dir>]");
-    eprintln!("      Generates full baked 3/2/1-person single-room candidate tables by default.");
+    eprintln!("      Generates indexed 3/2/1-person single-room combo_table.json by default.");
+}
+
+fn print_bake_progress(event: BakeProgressEvent) {
+    match event {
+        BakeProgressEvent::Started {
+            out_dir,
+            operator_count,
+            signature_count,
+            worker_count,
+        } => {
+            eprintln!(
+                "[bake] start operators={} signatures={} rayon_workers={} -> {}",
+                operator_count,
+                signature_count,
+                worker_count,
+                out_dir.display()
+            );
+        }
+        BakeProgressEvent::SignatureStarted {
+            facility,
+            signature_key,
+            combo_count,
+        } => {
+            eprintln!("[bake] {facility} {signature_key}: enumerating {combo_count} combos");
+        }
+        BakeProgressEvent::SignatureFinished {
+            facility,
+            signature_key,
+            rows,
+            elapsed_ms,
+        } => {
+            eprintln!("[bake] {facility} {signature_key}: rows={rows} elapsed={elapsed_ms}ms");
+        }
+        BakeProgressEvent::Writing { path, rows } => {
+            if let Some(rows) = rows {
+                eprintln!("[bake] write {} rows={rows}", path.display());
+            } else {
+                eprintln!("[bake] write {}", path.display());
+            }
+        }
+        BakeProgressEvent::Finished {
+            combo_table_rows,
+            elapsed_ms,
+        } => {
+            eprintln!("[bake] done combo_table_rows={combo_table_rows} elapsed={elapsed_ms}ms");
+        }
+    }
 }
 
 fn current_generator_fingerprint() -> Result<BakeGeneratorFingerprint, Error> {

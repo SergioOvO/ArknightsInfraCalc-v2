@@ -1,34 +1,48 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
+use std::io::BufWriter;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
+use std::time::Instant as StdInstant;
 
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 use crate::instances::{default_instances_path, OperatorInstances};
 use crate::layout::LayoutContext;
-use crate::manufacture::ManuSearchRecipeMode;
-use crate::pool::{build_manufacture_pool, build_trade_pool};
+use crate::manufacture::input::ManuRoomInput;
+use crate::manufacture::solver::solve_manufacture;
+use crate::pool::{
+    build_manufacture_pool, build_trade_combo_operators_vec, build_trade_pool,
+    combinations_indices, n_choose_k_u64,
+};
+use crate::pool::{ManuPool, TradePool};
 use crate::roster::{OperatorProgress, Roster};
 use crate::search::{
-    search_manufacture_triples, search_trade_triples, ManuSearchHit, ManuSearchOptions,
-    TradeSearchHit, TradeSearchOptions,
+    ManuScoreBreakdown, ManuSearchHit, ManuSearchOptions, ManuSearchReport, SearchTripleFilter,
+    TradeScoreBreakdown, TradeSearchHit, TradeSearchOptions, TradeSearchReport,
 };
 use crate::skill_table::{data_path, default_skill_table_path, SkillTable};
-use crate::trade::input::{TradeOrderKind, TradeSearchOrderMode};
+use crate::trade::input::{TradeOrderKind, TradeRoomInput, TradeSearchOrderMode};
+use crate::trade::shortcut::trade_station_exclusive_violation;
+use crate::trade::solver::solve_trade_with_shift_prevalidated;
 use crate::types::RecipeKind;
 
-pub const BAKE_SCHEMA_VERSION: u32 = 2;
+pub const BAKE_SCHEMA_VERSION: u32 = 3;
 
-#[derive(Debug, Clone)]
+pub type BakeProgressCallback = Arc<dyn Fn(BakeProgressEvent) + Send + Sync>;
+
+#[derive(Clone)]
 pub struct BakeOptions {
     pub out_dir: PathBuf,
     pub include_trade: bool,
     pub include_manufacture: bool,
     pub limit_per_signature: Option<usize>,
     pub generator: Option<BakeGeneratorFingerprint>,
+    pub progress: Option<BakeProgressCallback>,
 }
 
 impl Default for BakeOptions {
@@ -39,8 +53,51 @@ impl Default for BakeOptions {
             include_manufacture: true,
             limit_per_signature: None,
             generator: None,
+            progress: None,
         }
     }
+}
+
+impl std::fmt::Debug for BakeOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BakeOptions")
+            .field("out_dir", &self.out_dir)
+            .field("include_trade", &self.include_trade)
+            .field("include_manufacture", &self.include_manufacture)
+            .field("limit_per_signature", &self.limit_per_signature)
+            .field("generator", &self.generator)
+            .field("progress", &self.progress.as_ref().map(|_| "<callback>"))
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum BakeProgressEvent {
+    Started {
+        out_dir: PathBuf,
+        operator_count: usize,
+        signature_count: usize,
+        worker_count: usize,
+    },
+    SignatureStarted {
+        facility: &'static str,
+        signature_key: String,
+        combo_count: u64,
+    },
+    SignatureFinished {
+        facility: &'static str,
+        signature_key: String,
+        rows: usize,
+        elapsed_ms: u128,
+    },
+    Writing {
+        path: PathBuf,
+        rows: Option<usize>,
+    },
+    Finished {
+        combo_table_rows: usize,
+        elapsed_ms: u128,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,52 +157,87 @@ struct BakedOperator {
     facilities: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct BakedComboTable {
     schema_version: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     generator: Option<BakeGeneratorFingerprint>,
     operator_count: usize,
+    #[serde(default)]
+    operator_names: Vec<String>,
     mask_words: usize,
     indexes: Vec<BakedComboIndex>,
     rows: Vec<BakedComboRow>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
+struct RuntimeBakedComboTable {
+    table: BakedComboTable,
+    index_by_key: HashMap<String, (usize, usize)>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 struct BakedComboIndex {
     signature_key: String,
     start: usize,
     len: usize,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct BakedComboRow {
+    #[serde(default, skip_serializing)]
     row_id: usize,
-    facility: &'static str,
+    #[serde(rename = "f", default, skip_serializing)]
+    facility: String,
+    #[serde(default, skip_serializing)]
     signature_key: String,
+    #[serde(rename = "l")]
     room_level: u8,
+    #[serde(rename = "c")]
     operator_capacity: usize,
+    #[serde(default, skip_serializing)]
     names: Vec<String>,
+    #[serde(rename = "oi")]
     operator_indices: Vec<usize>,
+    #[serde(default, skip_serializing)]
     operator_mask: Vec<u64>,
+    #[serde(rename = "s")]
     sort_score: f64,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "ok", skip_serializing_if = "Option::is_none")]
     order_kind: Option<TradeOrderKind>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "r", skip_serializing_if = "Option::is_none")]
     recipe: Option<RecipeKind>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "tp", skip_serializing_if = "Option::is_none")]
     trade_pct: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "gp", skip_serializing_if = "Option::is_none")]
     gold_pct: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "sc", skip_serializing_if = "Option::is_none")]
     shortcut: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "utd", skip_serializing_if = "Option::is_none")]
     unit_trade_per_day: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "ugd", skip_serializing_if = "Option::is_none")]
     unit_gold_per_day: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "uod", default, skip_serializing_if = "Option::is_none")]
+    unit_originium_per_day: Option<f64>,
+    #[serde(rename = "out", default, skip_serializing_if = "Option::is_none")]
+    output_multiplier: Option<f64>,
+    #[serde(rename = "teb", default, skip_serializing_if = "Option::is_none")]
+    trade_order_eff_base: Option<f64>,
+    #[serde(rename = "tes", default, skip_serializing_if = "Option::is_none")]
+    trade_order_eff_skill: Option<f64>,
+    #[serde(rename = "teg", default, skip_serializing_if = "Option::is_none")]
+    trade_order_eff_global: Option<f64>,
+    #[serde(rename = "tem", default, skip_serializing_if = "Option::is_none")]
+    trade_effective_eff_multiplier: Option<f64>,
+    #[serde(rename = "mpt", skip_serializing_if = "Option::is_none")]
     manu_prod_total: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "mpb", skip_serializing_if = "Option::is_none")]
+    manu_prod_base: Option<f64>,
+    #[serde(rename = "mps", default, skip_serializing_if = "Option::is_none")]
+    manu_prod_skill: Option<f64>,
+    #[serde(rename = "mpg", default, skip_serializing_if = "Option::is_none")]
+    manu_prod_global: Option<f64>,
+    #[serde(rename = "msl", default, skip_serializing_if = "Option::is_none")]
     manu_storage_limit: Option<i32>,
 }
 
@@ -166,35 +258,6 @@ impl From<OperatorProgress> for OperatorProgressJson {
     }
 }
 
-#[derive(Debug, Serialize)]
-struct BakedTradeCatalog {
-    schema_version: u32,
-    signatures: Vec<BakedTradeSignature>,
-}
-
-#[derive(Debug, Serialize)]
-struct BakedTradeSignature {
-    room_level: u8,
-    operator_capacity: usize,
-    order_kind: TradeOrderKind,
-    gold_production_lines: u32,
-    hits: Vec<TradeSearchHit>,
-}
-
-#[derive(Debug, Serialize)]
-struct BakedManufactureCatalog {
-    schema_version: u32,
-    signatures: Vec<BakedManufactureSignature>,
-}
-
-#[derive(Debug, Serialize)]
-struct BakedManufactureSignature {
-    room_level: u8,
-    operator_capacity: usize,
-    recipe: RecipeKind,
-    hits: Vec<ManuSearchHit>,
-}
-
 pub fn bake_catalogs(options: &BakeOptions) -> Result<BakeReport> {
     let start = Instant::now();
     fs::create_dir_all(&options.out_dir)?;
@@ -205,46 +268,85 @@ pub fn bake_catalogs(options: &BakeOptions) -> Result<BakeReport> {
     let table = SkillTable::load(&skill_table_path)?;
     let roster = bake_roster(&instances);
     let operators = baked_operators(&instances, &roster);
+    let signature_count = expected_signature_count(options);
 
+    emit_progress(
+        options,
+        BakeProgressEvent::Started {
+            out_dir: options.out_dir.clone(),
+            operator_count: operators.len(),
+            signature_count,
+            worker_count: rayon::current_num_threads(),
+        },
+    );
+
+    emit_progress(
+        options,
+        BakeProgressEvent::Writing {
+            path: options.out_dir.join("operators.json"),
+            rows: Some(operators.len()),
+        },
+    );
     write_json(options.out_dir.join("operators.json"), &operators)?;
+    remove_stale_catalogs(&options.out_dir)?;
+
+    let operator_index: HashMap<&str, usize> = operators
+        .iter()
+        .enumerate()
+        .map(|(idx, op)| (op.name.as_str(), idx))
+        .collect();
+    let mask_words = operators.len().div_ceil(64).max(1);
 
     let mut trade_signatures = 0usize;
     let mut trade_hits = 0usize;
-    let trade_catalog = if options.include_trade {
-        let catalog = bake_trade_catalog(&roster, &instances, &table, options)?;
-        trade_signatures = catalog.signatures.len();
-        trade_hits = catalog.signatures.iter().map(|s| s.hits.len()).sum();
-        write_json(options.out_dir.join("trade_combos.json"), &catalog)?;
-        Some(catalog)
-    } else {
-        None
-    };
+    let mut rows = Vec::new();
+    if options.include_trade {
+        let baked = bake_trade_rows(
+            &roster,
+            &instances,
+            &table,
+            options,
+            &operator_index,
+            mask_words,
+        )?;
+        trade_signatures = baked.signatures;
+        trade_hits = baked.rows.len();
+        rows.extend(baked.rows);
+    }
 
     let mut manufacture_signatures = 0usize;
     let mut manufacture_hits = 0usize;
-    let manufacture_catalog = if options.include_manufacture {
-        let catalog = bake_manufacture_catalog(&roster, &instances, &table, options)?;
-        manufacture_signatures = catalog.signatures.len();
-        manufacture_hits = catalog.signatures.iter().map(|s| s.hits.len()).sum();
-        write_json(options.out_dir.join("manufacture_combos.json"), &catalog)?;
-        Some(catalog)
-    } else {
-        None
-    };
+    if options.include_manufacture {
+        let baked = bake_manufacture_rows(
+            &roster,
+            &instances,
+            &table,
+            options,
+            &operator_index,
+            mask_words,
+        )?;
+        manufacture_signatures = baked.signatures;
+        manufacture_hits = baked.rows.len();
+        rows.extend(baked.rows);
+    }
 
-    let combo_table = build_combo_table(
-        &operators,
-        trade_catalog.as_ref(),
-        manufacture_catalog.as_ref(),
-        options.generator.clone(),
-    );
+    let operator_names = operators.iter().map(|op| op.name.clone()).collect();
+    let combo_table =
+        build_combo_table_from_rows(operator_names, mask_words, rows, options.generator.clone());
     let combo_table_rows = combo_table.rows.len();
+    emit_progress(
+        options,
+        BakeProgressEvent::Writing {
+            path: options.out_dir.join("combo_table.json"),
+            rows: Some(combo_table_rows),
+        },
+    );
     write_json(options.out_dir.join("combo_table.json"), &combo_table)?;
 
     let manifest = BakeManifest {
         schema_version: BAKE_SCHEMA_VERSION,
         generated_by: "infra-core::bake".to_string(),
-        model: "baseline_tier_up_operator_catalog".to_string(),
+        model: "baseline_tier_up_parallel_combo_table".to_string(),
         generator: options.generator.clone(),
         inputs: bake_input_fingerprints()?,
         options: BakeManifestOptions {
@@ -256,6 +358,13 @@ pub fn bake_catalogs(options: &BakeOptions) -> Result<BakeReport> {
             layout_model: "LayoutContext::search_baseline".to_string(),
         },
     };
+    emit_progress(
+        options,
+        BakeProgressEvent::Writing {
+            path: options.out_dir.join("manifest.json"),
+            rows: None,
+        },
+    );
     write_json(options.out_dir.join("manifest.json"), &manifest)?;
 
     let report = BakeReport {
@@ -270,8 +379,340 @@ pub fn bake_catalogs(options: &BakeOptions) -> Result<BakeReport> {
         generator: options.generator.clone(),
         elapsed_ms: start.elapsed().as_millis(),
     };
+    emit_progress(
+        options,
+        BakeProgressEvent::Writing {
+            path: options.out_dir.join("summary.json"),
+            rows: None,
+        },
+    );
     write_json(options.out_dir.join("summary.json"), &report)?;
+    emit_progress(
+        options,
+        BakeProgressEvent::Finished {
+            combo_table_rows,
+            elapsed_ms: start.elapsed().as_millis(),
+        },
+    );
     Ok(report)
+}
+
+fn emit_progress(options: &BakeOptions, event: BakeProgressEvent) {
+    if let Some(callback) = &options.progress {
+        callback(event);
+    }
+}
+
+fn expected_signature_count(options: &BakeOptions) -> usize {
+    let trade = if options.include_trade { 3 * 2 } else { 0 };
+    let manufacture = if options.include_manufacture {
+        3 * 3
+    } else {
+        0
+    };
+    trade + manufacture
+}
+
+fn remove_stale_catalogs(out_dir: &Path) -> Result<()> {
+    for name in ["trade_combos.json", "manufacture_combos.json"] {
+        let path = out_dir.join(name);
+        match fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(())
+}
+
+struct BakedRows {
+    signatures: usize,
+    rows: Vec<BakedComboRow>,
+}
+
+fn bake_trade_rows(
+    roster: &Roster,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+    options: &BakeOptions,
+    operator_index: &HashMap<&str, usize>,
+    mask_words: usize,
+) -> Result<BakedRows> {
+    let pool = build_trade_pool(roster, instances, table)?;
+    let layout = Arc::new(LayoutContext::search_baseline());
+    let gold_lines = if layout.gold_manu_line_count > 0 {
+        layout.gold_manu_line_count
+    } else {
+        TradeSearchOptions::default().gold_production_lines
+    };
+    let mut all_rows = Vec::new();
+    let mut signatures = 0usize;
+
+    for room_level in 1..=3 {
+        for order_kind in [TradeOrderKind::Gold, TradeOrderKind::Originium] {
+            let operator_capacity = station_operator_capacity(room_level);
+            let signature_key =
+                trade_lookup_key(room_level, operator_capacity, order_kind, gold_lines);
+            let combo_count = n_choose_k_u64(pool.entries.len(), operator_capacity);
+            let sig_start = Instant::now();
+            emit_progress(
+                options,
+                BakeProgressEvent::SignatureStarted {
+                    facility: "trade",
+                    signature_key: signature_key.clone(),
+                    combo_count,
+                },
+            );
+
+            let mut rows: Vec<_> = combinations_indices(pool.entries.len(), operator_capacity)
+                .collect::<Vec<_>>()
+                .par_iter()
+                .filter_map(|combo| {
+                    trade_combo_row(
+                        &pool,
+                        table,
+                        room_level,
+                        operator_capacity,
+                        order_kind,
+                        gold_lines,
+                        &layout,
+                        combo,
+                        &signature_key,
+                        operator_index,
+                        mask_words,
+                    )
+                })
+                .collect();
+            sort_signature_rows(&mut rows);
+            if let Some(limit) = options.limit_per_signature {
+                rows.truncate(limit);
+            }
+            emit_progress(
+                options,
+                BakeProgressEvent::SignatureFinished {
+                    facility: "trade",
+                    signature_key,
+                    rows: rows.len(),
+                    elapsed_ms: sig_start.elapsed().as_millis(),
+                },
+            );
+            signatures += 1;
+            all_rows.extend(rows);
+        }
+    }
+
+    Ok(BakedRows {
+        signatures,
+        rows: all_rows,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn trade_combo_row(
+    pool: &TradePool,
+    table: &SkillTable,
+    room_level: u8,
+    operator_capacity: usize,
+    order_kind: TradeOrderKind,
+    gold_lines: u32,
+    layout: &Arc<LayoutContext>,
+    combo: &[usize],
+    signature_key: &str,
+    operator_index: &HashMap<&str, usize>,
+    mask_words: usize,
+) -> Option<BakedComboRow> {
+    let ops = build_trade_combo_operators_vec(pool, combo, None, None);
+    if trade_station_exclusive_violation(&ops, table) {
+        return None;
+    }
+    let input = TradeRoomInput {
+        level: room_level,
+        operators: ops,
+        order_count: None,
+        mood: 24.0,
+        gold_production_lines: Some(gold_lines),
+        durin_virtual_lines: None,
+        human_fireworks: None,
+        layout: Arc::clone(layout),
+        active_order_kind: order_kind,
+    };
+    let result = solve_trade_with_shift_prevalidated(&input, table, 24.0).ok()?;
+    let names: Vec<String> = input.operators.iter().map(|op| op.name.clone()).collect();
+    let (operator_indices, operator_mask) =
+        operator_index_and_mask(&names, operator_index, mask_words);
+    Some(BakedComboRow {
+        row_id: 0,
+        facility: "trade".to_string(),
+        signature_key: signature_key.to_string(),
+        room_level,
+        operator_capacity,
+        names,
+        operator_indices,
+        operator_mask,
+        sort_score: result.order_eff_total,
+        order_kind: Some(order_kind),
+        recipe: None,
+        trade_pct: Some(result.order_eff_total),
+        gold_pct: Some(result.order_mechanic.mechanic_equiv_eff_pct),
+        shortcut: result.trade_shortcut.clone(),
+        unit_trade_per_day: Some(result.production.unit.unit_trade_per_day),
+        unit_gold_per_day: Some(result.production.unit.unit_gold_per_day),
+        unit_originium_per_day: Some(result.production.unit.unit_originium_per_day),
+        output_multiplier: Some(result.production.unit.multiplier_vs_lv3_regular),
+        trade_order_eff_base: Some(result.order_eff_base),
+        trade_order_eff_skill: Some(result.order_eff_skill),
+        trade_order_eff_global: Some(
+            result.order_eff_total - result.order_eff_base - result.order_eff_skill,
+        ),
+        trade_effective_eff_multiplier: Some(result.effective_eff_multiplier),
+        manu_prod_total: None,
+        manu_prod_base: None,
+        manu_prod_skill: None,
+        manu_prod_global: None,
+        manu_storage_limit: None,
+    })
+}
+
+fn bake_manufacture_rows(
+    roster: &Roster,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+    options: &BakeOptions,
+    operator_index: &HashMap<&str, usize>,
+    mask_words: usize,
+) -> Result<BakedRows> {
+    let pool = build_manufacture_pool(roster, instances, table)?;
+    let layout = Arc::new(LayoutContext::search_baseline());
+    let mut all_rows = Vec::new();
+    let mut signatures = 0usize;
+
+    for room_level in 1..=3 {
+        for recipe in [
+            RecipeKind::Gold,
+            RecipeKind::BattleRecord,
+            RecipeKind::Originium,
+        ] {
+            let operator_capacity = station_operator_capacity(room_level);
+            let signature_key = manufacture_lookup_key(room_level, operator_capacity, recipe);
+            let combo_count = n_choose_k_u64(pool.entries.len(), operator_capacity);
+            let sig_start = Instant::now();
+            emit_progress(
+                options,
+                BakeProgressEvent::SignatureStarted {
+                    facility: "manufacture",
+                    signature_key: signature_key.clone(),
+                    combo_count,
+                },
+            );
+
+            let mut rows: Vec<_> = combinations_indices(pool.entries.len(), operator_capacity)
+                .collect::<Vec<_>>()
+                .par_iter()
+                .filter_map(|combo| {
+                    manufacture_combo_row(
+                        &pool,
+                        table,
+                        room_level,
+                        operator_capacity,
+                        recipe,
+                        &layout,
+                        combo,
+                        &signature_key,
+                        operator_index,
+                        mask_words,
+                    )
+                })
+                .collect();
+            sort_signature_rows(&mut rows);
+            if let Some(limit) = options.limit_per_signature {
+                rows.truncate(limit);
+            }
+            emit_progress(
+                options,
+                BakeProgressEvent::SignatureFinished {
+                    facility: "manufacture",
+                    signature_key,
+                    rows: rows.len(),
+                    elapsed_ms: sig_start.elapsed().as_millis(),
+                },
+            );
+            signatures += 1;
+            all_rows.extend(rows);
+        }
+    }
+
+    Ok(BakedRows {
+        signatures,
+        rows: all_rows,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn manufacture_combo_row(
+    pool: &ManuPool,
+    table: &SkillTable,
+    room_level: u8,
+    operator_capacity: usize,
+    recipe: RecipeKind,
+    layout: &Arc<LayoutContext>,
+    combo: &[usize],
+    signature_key: &str,
+    operator_index: &HashMap<&str, usize>,
+    mask_words: usize,
+) -> Option<BakedComboRow> {
+    let operators: Vec<_> = combo
+        .iter()
+        .map(|idx| pool.entries[*idx].to_manu_operator())
+        .collect();
+    let names: Vec<String> = operators.iter().map(|op| op.name.clone()).collect();
+    let input = ManuRoomInput {
+        level: room_level,
+        operators,
+        active_recipe: recipe,
+        mood: 24.0,
+        layout: Arc::clone(layout),
+    };
+    let result = solve_manufacture(&input, table).ok()?;
+    let (operator_indices, operator_mask) =
+        operator_index_and_mask(&names, operator_index, mask_words);
+    Some(BakedComboRow {
+        row_id: 0,
+        facility: "manufacture".to_string(),
+        signature_key: signature_key.to_string(),
+        room_level,
+        operator_capacity,
+        names,
+        operator_indices,
+        operator_mask,
+        sort_score: result.prod_total,
+        order_kind: None,
+        recipe: Some(recipe),
+        trade_pct: None,
+        gold_pct: None,
+        shortcut: None,
+        unit_trade_per_day: None,
+        unit_gold_per_day: None,
+        unit_originium_per_day: None,
+        output_multiplier: None,
+        trade_order_eff_base: None,
+        trade_order_eff_skill: None,
+        trade_order_eff_global: None,
+        trade_effective_eff_multiplier: None,
+        manu_prod_total: Some(result.prod_total),
+        manu_prod_base: Some(result.prod_base),
+        manu_prod_skill: Some(result.prod_skill),
+        manu_prod_global: Some(result.prod_total - result.prod_base - result.prod_skill),
+        manu_storage_limit: Some(result.storage_limit),
+    })
+}
+
+fn sort_signature_rows(rows: &mut [BakedComboRow]) {
+    rows.sort_by(|a, b| {
+        b.sort_score
+            .partial_cmp(&a.sort_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.names.cmp(&b.names))
+    });
 }
 
 pub fn validate_baked_catalog(out_dir: &Path, generator: &BakeGeneratorFingerprint) -> Result<()> {
@@ -308,85 +749,362 @@ pub fn validate_baked_catalog(out_dir: &Path, generator: &BakeGeneratorFingerpri
     Ok(())
 }
 
-fn build_combo_table(
-    operators: &[BakedOperator],
-    trade_catalog: Option<&BakedTradeCatalog>,
-    manufacture_catalog: Option<&BakedManufactureCatalog>,
+pub fn try_baked_trade_search(
+    pool: &TradePool,
+    options: &TradeSearchOptions,
+    order_kind: TradeOrderKind,
+    filter: &SearchTripleFilter,
+    combinations: u64,
+    start: StdInstant,
+) -> Result<Option<TradeSearchReport>> {
+    if !baked_trade_compatible(pool, options, filter) {
+        return Ok(None);
+    }
+    let Some(table) = load_runtime_baked_table()? else {
+        return Ok(None);
+    };
+    let gold_lines = if options.layout.gold_manu_line_count > 0 {
+        options.layout.gold_manu_line_count
+    } else {
+        options.gold_production_lines
+    };
+    let key = trade_lookup_key(
+        options.trade_level,
+        options.operator_capacity,
+        order_kind,
+        gold_lines,
+    );
+    let Some((start_idx, len)) = table.index_by_key.get(&key).copied() else {
+        return Ok(None);
+    };
+    let available: HashSet<&str> = pool
+        .entries
+        .iter()
+        .map(|entry| entry.name.as_str())
+        .collect();
+    let must_names = filter.must_include_names();
+    let mut hits = Vec::new();
+    for row in &table.table.rows[start_idx..start_idx + len] {
+        if row
+            .names
+            .iter()
+            .any(|name| !available.contains(name.as_str()))
+        {
+            continue;
+        }
+        if must_names
+            .iter()
+            .any(|name| !row.names.iter().any(|row_name| row_name == name))
+        {
+            continue;
+        }
+        let Some(hit) = row_to_trade_hit(row) else {
+            continue;
+        };
+        if filter.hit_filter.is_some_and(|f| !f(&hit)) {
+            continue;
+        }
+        hits.push(hit);
+        if hits.len() >= options.top_k.max(1) {
+            break;
+        }
+    }
+    if hits.is_empty() {
+        return Ok(None);
+    }
+    let best = hits[0].clone();
+    let evaluated = hits.len() as u64;
+    Ok(Some(TradeSearchReport {
+        order_mode: TradeSearchOrderMode::Single(order_kind),
+        best,
+        top: hits,
+        combinations,
+        evaluated,
+        elapsed: start.elapsed(),
+        gold_order_line: None,
+        originium_order_line: None,
+    }))
+}
+
+pub fn try_baked_manufacture_search(
+    pool: &ManuPool,
+    options: &ManuSearchOptions,
+    recipe: RecipeKind,
+    combinations: u64,
+    start: StdInstant,
+) -> Result<Option<ManuSearchReport>> {
+    if !baked_manufacture_compatible(pool, options) {
+        return Ok(None);
+    }
+    let Some(table) = load_runtime_baked_table()? else {
+        return Ok(None);
+    };
+    let key = manufacture_lookup_key(options.level, options.operator_capacity, recipe);
+    let Some((start_idx, len)) = table.index_by_key.get(&key).copied() else {
+        return Ok(None);
+    };
+    let available: HashSet<&str> = pool
+        .entries
+        .iter()
+        .map(|entry| entry.name.as_str())
+        .collect();
+    let mut hits = Vec::new();
+    for row in &table.table.rows[start_idx..start_idx + len] {
+        if row
+            .names
+            .iter()
+            .any(|name| !available.contains(name.as_str()))
+        {
+            continue;
+        }
+        if options
+            .must_include_name
+            .as_ref()
+            .is_some_and(|name| !row.names.iter().any(|row_name| row_name == name))
+        {
+            continue;
+        }
+        let Some(hit) = row_to_manu_hit(row) else {
+            continue;
+        };
+        hits.push(hit);
+        if hits.len() >= options.top_k.max(1) {
+            break;
+        }
+    }
+    if hits.is_empty() {
+        return Ok(None);
+    }
+    let best = hits[0].clone();
+    let evaluated = hits.len() as u64;
+    Ok(Some(ManuSearchReport {
+        recipe_mode: options.recipe_mode,
+        best,
+        top: hits,
+        combinations,
+        evaluated,
+        elapsed: start.elapsed(),
+        gold_line: None,
+        battle_record_line: None,
+    }))
+}
+
+fn load_runtime_baked_table() -> Result<Option<&'static RuntimeBakedComboTable>> {
+    static CACHE: OnceLock<Result<Option<RuntimeBakedComboTable>>> = OnceLock::new();
+    match CACHE.get_or_init(load_runtime_baked_table_inner) {
+        Ok(Some(table)) => Ok(Some(table)),
+        Ok(None) => Ok(None),
+        Err(e) => Err(Error::msg(e.to_string())),
+    }
+}
+
+fn load_runtime_baked_table_inner() -> Result<Option<RuntimeBakedComboTable>> {
+    let Ok(manifest_path) = data_path("baked/manifest.json") else {
+        return Ok(None);
+    };
+    let out_dir = manifest_path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("data/baked"));
+    let generator = current_exe_generator_fingerprint()?;
+    validate_baked_catalog(&out_dir, &generator)?;
+    let combo_path = out_dir.join("combo_table.json");
+    let raw = fs::read_to_string(&combo_path)?;
+    let mut table: BakedComboTable = serde_json::from_str(&raw)?;
+    let mut index_by_key = HashMap::new();
+    for index in &table.indexes {
+        index_by_key.insert(index.signature_key.clone(), (index.start, index.len));
+        for row in &mut table.rows[index.start..index.start + index.len] {
+            row.signature_key = index.signature_key.clone();
+            row.facility = row_facility_from_signature(&index.signature_key).to_string();
+        }
+    }
+    for (idx, row) in table.rows.iter_mut().enumerate() {
+        row.row_id = idx;
+        if row.names.is_empty() && !table.operator_names.is_empty() {
+            row.names = row
+                .operator_indices
+                .iter()
+                .filter_map(|idx| table.operator_names.get(*idx).cloned())
+                .collect();
+        }
+        if row.operator_mask.is_empty() {
+            row.operator_mask = operator_mask_from_indices(&row.operator_indices, table.mask_words);
+        }
+    }
+    Ok(Some(RuntimeBakedComboTable {
+        table,
+        index_by_key,
+    }))
+}
+
+fn trade_lookup_key(
+    room_level: u8,
+    operator_capacity: usize,
+    order_kind: TradeOrderKind,
+    gold_lines: u32,
+) -> String {
+    format!(
+        "trade:level{}:cap{}:order_{:?}:gold_lines{}",
+        room_level, operator_capacity, order_kind, gold_lines
+    )
+    .to_ascii_lowercase()
+}
+
+fn manufacture_lookup_key(room_level: u8, operator_capacity: usize, recipe: RecipeKind) -> String {
+    format!(
+        "manufacture:level{}:cap{}:recipe_{:?}",
+        room_level, operator_capacity, recipe
+    )
+    .to_ascii_lowercase()
+}
+
+fn current_exe_generator_fingerprint() -> Result<BakeGeneratorFingerprint> {
+    let path = std::env::current_exe()?;
+    let bytes = fs::read(&path)?;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    Ok(BakeGeneratorFingerprint {
+        kind: "infra-cli-exe".to_string(),
+        path: path.to_string_lossy().to_string(),
+        bytes: bytes.len() as u64,
+        hash64: format!("{:016x}", hasher.finish()),
+    })
+}
+
+fn baked_trade_compatible(
+    pool: &TradePool,
+    options: &TradeSearchOptions,
+    filter: &SearchTripleFilter,
+) -> bool {
+    filter.must_operator_override.is_none()
+        && (options.mood - 24.0).abs() < f64::EPSILON
+        && (options.shift_hours - 24.0).abs() < f64::EPSILON
+        && baked_layout_compatible(&options.layout)
+        && pool.entries.iter().all(|entry| entry.progress.elite >= 2)
+}
+
+fn baked_manufacture_compatible(pool: &ManuPool, options: &ManuSearchOptions) -> bool {
+    (options.mood - 24.0).abs() < f64::EPSILON
+        && baked_layout_compatible(&options.layout)
+        && pool.entries.iter().all(|entry| entry.progress.elite >= 2)
+}
+
+fn baked_layout_compatible(layout: &LayoutContext) -> bool {
+    let baseline = LayoutContext::search_baseline();
+    layout.meeting_max_level == baseline.meeting_max_level
+        && layout.dorm_level_sum == baseline.dorm_level_sum
+        && layout.manu_recipe_kinds == baseline.manu_recipe_kinds
+        && layout.dorm_occupant_count == baseline.dorm_occupant_count
+        && layout.trade_station_count == baseline.trade_station_count
+        && layout.power_station_count == baseline.power_station_count
+        && layout.manufacture_station_count == baseline.manufacture_station_count
+        && layout.gold_manu_line_count == baseline.gold_manu_line_count
+        && layout.base_workforce.is_empty()
+        && layout.trade_workforce.is_empty()
+        && layout.manu_workforce.is_empty()
+        && layout.control_workforce.is_empty()
+        && layout.power_workforce.is_empty()
+}
+
+fn row_to_trade_hit(row: &BakedComboRow) -> Option<TradeSearchHit> {
+    if row.facility != "trade" {
+        return None;
+    }
+    let trade_pct = row.trade_pct?;
+    let gold_pct = row.gold_pct?;
+    let unit_trade_per_day = row.unit_trade_per_day.unwrap_or(0.0);
+    let unit_gold_per_day = row.unit_gold_per_day.unwrap_or(0.0);
+    let output_multiplier = row.output_multiplier.unwrap_or(0.0);
+    let eff_factor = 1.0 + trade_pct / 100.0;
+    let mech_factor = 1.0 + gold_pct / 100.0;
+    Some(TradeSearchHit {
+        names: row.names.clone(),
+        gold_names: vec![],
+        originium_names: vec![],
+        score: trade_pct,
+        trade_pct,
+        gold_pct,
+        shortcut: row.shortcut.clone(),
+        unit_trade_per_day,
+        unit_gold_per_day,
+        unit_originium_per_day: row.unit_originium_per_day.unwrap_or(0.0),
+        output_multiplier,
+        breakdown: TradeScoreBreakdown {
+            order_eff_base: row
+                .trade_order_eff_base
+                .unwrap_or(row.operator_capacity as f64),
+            order_eff_skill: row.trade_order_eff_skill.unwrap_or(0.0),
+            order_eff_global: row.trade_order_eff_global.unwrap_or(0.0),
+            order_eff_total_pct: trade_pct,
+            mechanic_equiv_eff_pct: gold_pct,
+            eff_factor,
+            mech_factor,
+            effective_eff_multiplier: row
+                .trade_effective_eff_multiplier
+                .unwrap_or(output_multiplier),
+            unit_trade_per_day,
+            unit_gold_per_day,
+            shortcut_id: row.shortcut.clone(),
+        },
+    })
+}
+
+fn row_to_manu_hit(row: &BakedComboRow) -> Option<ManuSearchHit> {
+    if row.facility != "manufacture" {
+        return None;
+    }
+    let recipe = row.recipe?;
+    let prod_total = row.manu_prod_total?;
+    let storage_limit = row.manu_storage_limit.unwrap_or(0);
+    let mut per_station = crate::manufacture::ManuProdBreakdown::default();
+    let mut storage = crate::manufacture::ManuStorageBreakdown::default();
+    let recipe_label = match recipe {
+        RecipeKind::Gold => {
+            per_station.gold = prod_total;
+            storage.gold = storage_limit;
+            "gold"
+        }
+        RecipeKind::BattleRecord => {
+            per_station.battle_record = prod_total;
+            storage.battle_record = storage_limit;
+            "battle_record"
+        }
+        RecipeKind::Originium => {
+            per_station.originium = prod_total;
+            storage.originium = storage_limit;
+            "originium"
+        }
+        RecipeKind::All => "all",
+    };
+    Some(ManuSearchHit {
+        names: row.names.clone(),
+        gold_names: vec![],
+        battle_record_names: vec![],
+        composite_score: prod_total,
+        per_station,
+        storage,
+        breakdown: ManuScoreBreakdown {
+            prod_base: row.manu_prod_base.unwrap_or(row.operator_capacity as f64),
+            prod_skill: row.manu_prod_skill.unwrap_or(0.0),
+            prod_global: row.manu_prod_global.unwrap_or(0.0),
+            prod_total,
+            storage_limit,
+            recipe: recipe_label.to_string(),
+        },
+    })
+}
+
+fn build_combo_table_from_rows(
+    operator_names: Vec<String>,
+    mask_words: usize,
+    mut rows: Vec<BakedComboRow>,
     generator: Option<BakeGeneratorFingerprint>,
 ) -> BakedComboTable {
-    let operator_index: HashMap<&str, usize> = operators
-        .iter()
-        .enumerate()
-        .map(|(idx, op)| (op.name.as_str(), idx))
-        .collect();
-    let mask_words = operators.len().div_ceil(64).max(1);
-    let mut rows = Vec::new();
-
-    if let Some(catalog) = trade_catalog {
-        for signature in &catalog.signatures {
-            let signature_key = trade_signature_key(signature);
-            for hit in &signature.hits {
-                let (operator_indices, operator_mask) =
-                    operator_index_and_mask(&hit.names, &operator_index, mask_words);
-                rows.push(BakedComboRow {
-                    row_id: 0,
-                    facility: "trade",
-                    signature_key: signature_key.clone(),
-                    room_level: signature.room_level,
-                    operator_capacity: signature.operator_capacity,
-                    names: hit.names.clone(),
-                    operator_indices,
-                    operator_mask,
-                    sort_score: hit.trade_pct,
-                    order_kind: Some(signature.order_kind),
-                    recipe: None,
-                    trade_pct: Some(hit.trade_pct),
-                    gold_pct: Some(hit.gold_pct),
-                    shortcut: hit.shortcut.clone(),
-                    unit_trade_per_day: Some(hit.unit_trade_per_day),
-                    unit_gold_per_day: Some(hit.unit_gold_per_day),
-                    manu_prod_total: None,
-                    manu_storage_limit: None,
-                });
-            }
-        }
-    }
-
-    if let Some(catalog) = manufacture_catalog {
-        for signature in &catalog.signatures {
-            let signature_key = manufacture_signature_key(signature);
-            for hit in &signature.hits {
-                let (operator_indices, operator_mask) =
-                    operator_index_and_mask(&hit.names, &operator_index, mask_words);
-                rows.push(BakedComboRow {
-                    row_id: 0,
-                    facility: "manufacture",
-                    signature_key: signature_key.clone(),
-                    room_level: signature.room_level,
-                    operator_capacity: signature.operator_capacity,
-                    names: hit.names.clone(),
-                    operator_indices,
-                    operator_mask,
-                    sort_score: hit.composite_score,
-                    order_kind: None,
-                    recipe: Some(signature.recipe),
-                    trade_pct: None,
-                    gold_pct: None,
-                    shortcut: None,
-                    unit_trade_per_day: None,
-                    unit_gold_per_day: None,
-                    manu_prod_total: Some(hit.breakdown.prod_total),
-                    manu_storage_limit: Some(hit.breakdown.storage_limit),
-                });
-            }
-        }
-    }
-
     rows.sort_by(|a, b| {
         a.facility
-            .cmp(b.facility)
+            .cmp(&b.facility)
             .then_with(|| a.signature_key.cmp(&b.signature_key))
-            .then_with(|| b.operator_capacity.cmp(&a.operator_capacity))
             .then_with(|| {
                 b.sort_score
                     .partial_cmp(&a.sort_score)
@@ -402,7 +1120,8 @@ fn build_combo_table(
     BakedComboTable {
         schema_version: BAKE_SCHEMA_VERSION,
         generator,
-        operator_count: operators.len(),
+        operator_count: operator_names.len(),
+        operator_names,
         mask_words,
         indexes,
         rows,
@@ -428,25 +1147,6 @@ fn build_combo_indexes(rows: &[BakedComboRow]) -> Vec<BakedComboIndex> {
     indexes
 }
 
-fn trade_signature_key(signature: &BakedTradeSignature) -> String {
-    format!(
-        "trade:level{}:cap{}:order_{:?}:gold_lines{}",
-        signature.room_level,
-        signature.operator_capacity,
-        signature.order_kind,
-        signature.gold_production_lines
-    )
-    .to_ascii_lowercase()
-}
-
-fn manufacture_signature_key(signature: &BakedManufactureSignature) -> String {
-    format!(
-        "manufacture:level{}:cap{}:recipe_{:?}",
-        signature.room_level, signature.operator_capacity, signature.recipe
-    )
-    .to_ascii_lowercase()
-}
-
 fn operator_index_and_mask(
     names: &[String],
     operator_index: &HashMap<&str, usize>,
@@ -469,79 +1169,26 @@ fn operator_index_and_mask(
     (indices, mask)
 }
 
-fn bake_trade_catalog(
-    roster: &Roster,
-    instances: &OperatorInstances,
-    table: &SkillTable,
-    options: &BakeOptions,
-) -> Result<BakedTradeCatalog> {
-    let pool = build_trade_pool(roster, instances, table)?;
-    let mut signatures = Vec::new();
-
-    for room_level in 1..=3 {
-        for order_kind in [TradeOrderKind::Gold, TradeOrderKind::Originium] {
-            let search_opts = TradeSearchOptions {
-                trade_level: room_level,
-                operator_capacity: station_operator_capacity(room_level),
-                top_k: options.limit_per_signature.unwrap_or(usize::MAX),
-                layout: std::sync::Arc::new(LayoutContext::search_baseline()),
-                order_mode: TradeSearchOrderMode::Single(order_kind),
-                ..TradeSearchOptions::default()
-            };
-            let report = search_trade_triples(&pool, table, &search_opts)?;
-            signatures.push(BakedTradeSignature {
-                room_level,
-                operator_capacity: search_opts.operator_capacity,
-                order_kind,
-                gold_production_lines: search_opts.gold_production_lines,
-                hits: report.top,
-            });
+fn operator_mask_from_indices(indices: &[usize], mask_words: usize) -> Vec<u64> {
+    let mut mask = vec![0u64; mask_words];
+    for idx in indices {
+        let word = idx / 64;
+        let bit = idx % 64;
+        if let Some(slot) = mask.get_mut(word) {
+            *slot |= 1u64 << bit;
         }
     }
-
-    Ok(BakedTradeCatalog {
-        schema_version: BAKE_SCHEMA_VERSION,
-        signatures,
-    })
+    mask
 }
 
-fn bake_manufacture_catalog(
-    roster: &Roster,
-    instances: &OperatorInstances,
-    table: &SkillTable,
-    options: &BakeOptions,
-) -> Result<BakedManufactureCatalog> {
-    let pool = build_manufacture_pool(roster, instances, table)?;
-    let mut signatures = Vec::new();
-
-    for room_level in 1..=3 {
-        for recipe in [
-            RecipeKind::Gold,
-            RecipeKind::BattleRecord,
-            RecipeKind::Originium,
-        ] {
-            let search_opts = ManuSearchOptions {
-                level: room_level,
-                operator_capacity: station_operator_capacity(room_level),
-                recipe_mode: ManuSearchRecipeMode::Single(recipe),
-                top_k: options.limit_per_signature.unwrap_or(usize::MAX),
-                layout: std::sync::Arc::new(LayoutContext::search_baseline()),
-                ..ManuSearchOptions::default()
-            };
-            let report = search_manufacture_triples(&pool, table, &search_opts)?;
-            signatures.push(BakedManufactureSignature {
-                room_level,
-                operator_capacity: search_opts.operator_capacity,
-                recipe,
-                hits: report.top,
-            });
-        }
+fn row_facility_from_signature(signature_key: &str) -> &'static str {
+    if signature_key.starts_with("trade:") {
+        "trade"
+    } else if signature_key.starts_with("manufacture:") {
+        "manufacture"
+    } else {
+        ""
     }
-
-    Ok(BakedManufactureCatalog {
-        schema_version: BAKE_SCHEMA_VERSION,
-        signatures,
-    })
 }
 
 fn bake_roster(instances: &OperatorInstances) -> Roster {
@@ -631,6 +1278,14 @@ fn fingerprint_file(path: &Path) -> Result<BakeInputFingerprint> {
 
 fn write_json(path: PathBuf, value: &impl Serialize) -> Result<()> {
     let file = File::create(&path)?;
-    serde_json::to_writer_pretty(file, value)
-        .map_err(|e| Error::msg(format!("write {}: {e}", path.display())))
+    let writer = BufWriter::new(file);
+    let result = if path
+        .file_name()
+        .is_some_and(|name| name == "combo_table.json")
+    {
+        serde_json::to_writer(writer, value)
+    } else {
+        serde_json::to_writer_pretty(writer, value)
+    };
+    result.map_err(|e| Error::msg(format!("write {}: {e}", path.display())))
 }
