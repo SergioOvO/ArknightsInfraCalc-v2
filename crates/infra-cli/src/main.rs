@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use std::path::PathBuf;
 
-use commands::{layout_cmd, plan_cmd, profile_cmd, verify_cmd};
+use commands::{bake_cmd, layout_cmd, plan_cmd, profile_cmd, verify_cmd};
 use infra_core::instances::{default_instances_path, OperatorInstances};
 use infra_core::layout::LayoutContext;
 use infra_core::manufacture::ManuSearchRecipeMode;
@@ -55,6 +55,7 @@ fn run() -> Result<(), Error> {
         "schedule" => schedule_cmd(&args[2..])?,
         "trade" => trade_cmd(&args[2..])?,
         "bench" => bench_cmd(&args[2..])?,
+        "bake" => bake_cmd(&args[2..])?,
         "layout" => layout_cmd(&args[2..])?,
         "profile" => profile_cmd(&args[2..])?,
         _ => print_usage(),
@@ -75,6 +76,7 @@ fn print_usage() {
     eprintln!("  infra-cli search trade [--roster <path>] [--operbox <path>] [--top <n>] [-o <file.csv>] [--text|--json]");
     eprintln!("  infra-cli bench --operbox <path> [--recipe gold|battle_record|originium] [--top <n>] [-o <file.csv>] [--text]");
     eprintln!("      (default manufacture: 4 lines = 2 gold + 2 battle_record; --recipe = single-line debug)");
+    eprintln!("  infra-cli bake [all|trade|manufacture] [--out <dir>] [--limit-per-signature <n>|--all-hits]");
     eprintln!("  infra-cli schedule rotation --operbox <path> [--layout-baseline] [-o <file.csv>] [--text|--json]");
     eprintln!("  infra-cli layout test --layout <path> --operbox <path> [--assignment <path>] [--top <n>] [-o <file.csv>] [--text]");
     eprintln!("  infra-cli layout analyze --layout <path> --operbox <path> [--baseline <operbox>] [--top <n>] [-o profile.json] [--json]");

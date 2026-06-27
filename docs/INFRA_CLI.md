@@ -35,6 +35,7 @@ crates/infra-cli/src/
 ├── main.rs              # 进程入口 + 子命令路由（其余子命令暂留此处，见「待拆」）
 ├── commands/
 │   ├── mod.rs           # 子命令模块聚合；对外 re-export
+│   ├── bake.rs          # `bake`：生成贸易/制造单房候选烘焙目录（不接入运行时）
 │   ├── plan.rs          # `plan`：box profile + αβγ 排班 + MAA
 │   ├── layout.rs        # `layout test` / `rotation` / `team-rotation` / `analyze` / `eval` 全部子命令
 │   ├── profile.rs       # `profile`：性能画像 / 分析链路对比辅助
@@ -62,6 +63,7 @@ crates/infra-cli/src/
 
 | 模块 | 职责 | 不负责 |
 |------|------|--------|
+| `bake.rs` | `bake`：生成 `operators.json`、`trade_combos.json`、`manufacture_combos.json`、`manifest.json` | 改变 `plan` / `layout` / `search` 的运行时取数路径 |
 | `plan.rs` | **`plan`**：box profile JSON + `schedule_team_rotation` + MAA；`--operbox` 支持 JSON/xlsx；布局默认 243 | 画像算法（`box_profile/`）；排班逻辑（`schedule/`） |
 | `layout.rs` | `layout test` / `rotation` / `team-rotation` / `analyze` / `eval`：蓝图 JSON + operbox → `assign_shift` 宏观落位（或自定义 `--assignment`）→ `resolve_base` → 搜索/评分 | 蓝图格式定义（`infra-core::layout::blueprint`）；求解公式（在 `infra-core`） |
 | `profile.rs` | `profile layout-full` / `profile analyze-compare`：采集 CLI 热路径、搜索规模和分析链路耗时 | 业务求解公式；用户主流程输出契约 |
@@ -118,6 +120,7 @@ crates/infra-cli/src/
 | 用户命令 | 编排（当前） | 输出 | 数据 / 夹具 |
 |----------|--------------|------|-------------|
 | **`plan`** | `commands/plan.rs` | profile JSON 文件 + stdout 分析/排班表；可选 MAA | 必选 `--operbox`（JSON/xlsx）；布局默认 `data/fixtures/243/layout.json` |
+| `bake` | `commands/bake.rs` | `data/baked` 目录 JSON + stderr summary | `infra-core::bake`；当前只生成候选目录，不被运行时自动读取 |
 | `verify` | `commands/verify.rs` | stdout/stderr 行文本 | `verify/cases.rs` + `verify/fixtures.rs` + `data/*.csv` |
 | `pool` | `main.rs` | `output::emit_pool` | operbox / roster → `infra-core::pool` |
 | `search trade` | `main.rs` | `output::emit_trade_search` | roster / operbox |

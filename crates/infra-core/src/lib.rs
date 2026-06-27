@@ -1,3 +1,4 @@
+pub mod bake;
 pub mod box_profile;
 pub mod cross_facility;
 pub mod eff_ramp;
@@ -23,6 +24,7 @@ pub mod office;
 pub mod power;
 pub mod trade;
 
+pub use bake::{bake_catalogs, BakeOptions, BakeReport, BAKE_SCHEMA_VERSION};
 pub use box_profile::{
     baseline_path_or_default, build_box_profile, render_box_profile_narrative, ActionKind,
     BoxProfile, BoxProfileOptions, GapSeverity, ProfileAction,

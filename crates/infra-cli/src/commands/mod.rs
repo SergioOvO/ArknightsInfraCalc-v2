@@ -1,8 +1,10 @@
+mod bake;
 mod layout;
 mod plan;
 mod profile;
 mod verify;
 
+pub use bake::bake_cmd;
 pub use layout::layout_cmd;
 pub use plan::plan_cmd;
 pub use profile::profile_cmd;
