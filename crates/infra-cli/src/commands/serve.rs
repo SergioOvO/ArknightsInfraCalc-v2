@@ -5,8 +5,8 @@ use std::thread;
 use std::time::Instant;
 
 use infra_core::bake::{
-    bake_catalogs, validate_baked_catalog, warm_runtime_baked_table, BakeGeneratorFingerprint,
-    BakeOptions, BakeProgressEvent,
+    bake_catalogs, default_baked_out_dir, validate_baked_catalog, warm_runtime_baked_table,
+    BakeGeneratorFingerprint, BakeOptions, BakeProgressEvent,
 };
 use infra_core::box_profile::{
     baseline_path_or_default, build_box_profile_from_current_probe, run_user_rotation_probe,
@@ -72,7 +72,7 @@ struct ServeState {
 }
 
 fn spawn_background_bake() -> Option<thread::JoinHandle<()>> {
-    let out_dir = PathBuf::from("data/baked");
+    let out_dir = default_baked_out_dir().ok()?;
     let generator = current_generator_fingerprint().ok()?;
     if validate_baked_catalog(&out_dir, &generator).is_ok() {
         return None;

@@ -2,12 +2,13 @@ use std::path::PathBuf;
 use std::{env, fs, hash::Hash, hash::Hasher, sync::Arc};
 
 use infra_core::{
-    bake_catalogs, validate_baked_catalog, BakeGeneratorFingerprint, BakeOptions,
-    BakeProgressEvent, Error,
+    bake_catalogs, default_baked_out_dir, validate_baked_catalog, BakeGeneratorFingerprint,
+    BakeOptions, BakeProgressEvent, Error,
 };
 
 pub fn bake_cmd(args: &[String]) -> Result<(), Error> {
     let mut options = BakeOptions::default();
+    options.out_dir = default_baked_out_dir()?;
     let mut mode = "all";
     let mut validate_only = false;
 

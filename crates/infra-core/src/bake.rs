@@ -73,6 +73,47 @@ impl std::fmt::Debug for BakeOptions {
     }
 }
 
+pub fn default_baked_out_dir() -> Result<PathBuf> {
+    let roots = default_baked_data_roots()?;
+    for root in &roots {
+        let out_dir = root.join("baked");
+        if out_dir.join("manifest.json").exists() {
+            return Ok(out_dir);
+        }
+    }
+    Ok(roots
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| PathBuf::from("data"))
+        .join("baked"))
+}
+
+fn default_baked_data_roots() -> Result<Vec<PathBuf>> {
+    let mut roots = Vec::new();
+    if let Some(root) = std::env::var_os("ARKNIGHTS_INFRA_DATA_DIR") {
+        push_unique_path(&mut roots, PathBuf::from(root));
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            push_unique_path(&mut roots, exe_dir.join("data"));
+            if let Some(bundle_parent) = exe_dir.parent() {
+                push_unique_path(&mut roots, bundle_parent.join("data"));
+            }
+        }
+    }
+    push_unique_path(
+        &mut roots,
+        std::env::current_dir().map_err(Error::from)?.join("data"),
+    );
+    Ok(roots)
+}
+
+fn push_unique_path(paths: &mut Vec<PathBuf>, path: PathBuf) {
+    if !paths.iter().any(|candidate| candidate == &path) {
+        paths.push(path);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum BakeProgressEvent {
     Started {

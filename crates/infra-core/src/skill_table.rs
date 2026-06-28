@@ -162,10 +162,6 @@ fn data_path_from_env(name: &str) -> Result<Option<PathBuf>> {
 
 fn runtime_data_roots() -> Result<Vec<PathBuf>> {
     let mut roots = Vec::new();
-    push_unique(
-        &mut roots,
-        std::env::current_dir().map_err(Error::from)?.join("data"),
-    );
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
             push_unique(&mut roots, exe_dir.join("data"));
@@ -174,6 +170,10 @@ fn runtime_data_roots() -> Result<Vec<PathBuf>> {
             }
         }
     }
+    push_unique(
+        &mut roots,
+        std::env::current_dir().map_err(Error::from)?.join("data"),
+    );
     Ok(roots)
 }
 
