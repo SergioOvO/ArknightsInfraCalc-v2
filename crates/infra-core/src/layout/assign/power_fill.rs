@@ -181,7 +181,7 @@ mod tests {
             entries: vec![
                 power_entry("承曦格雷伊", "power_rec_drone[000]", 0.0),
                 power_entry("格雷伊", "power_rec_spd[020]", 20.0),
-                power_entry("阿消", "power_rec_spd[010]", 10.0),
+                power_entry("Friston-3", "power_rec_spd[000]", 10.0),
             ],
             skipped: vec![],
         };
@@ -203,6 +203,57 @@ mod tests {
 
         assert_eq!(assignment.rooms.len(), 3);
         assert_eq!(used.len(), 3);
-        assert!(used.contains("阿消"));
+        assert!(used.contains("Friston-3"));
+    }
+
+    #[test]
+    fn power_filter_prefers_ordinary_chargers_before_friston() {
+        let blueprint = BaseBlueprint {
+            template: Some("test_243_power".to_string()),
+            drone_cap: 135,
+            scenario: Default::default(),
+            rooms: vec![RoomBlueprint {
+                id: RoomId::from("power_1"),
+                kind: FacilityKind::PowerPlant,
+                level: 3,
+                product: None,
+                dorm_beds: None,
+                dorm_ambience_level: None,
+            }],
+        };
+        let mut friston = power_entry("Friston-3", "power_rec_spd[000]", 10.0);
+        friston.buff_ids.push("power_rec_spd_P[000]".to_string());
+        let pool = PowerPool {
+            entries: vec![
+                friston,
+                power_entry("阿消", "power_rec_spd[010]", 15.0),
+                power_entry("布丁", "power_rec_spd[010]", 15.0),
+            ],
+            skipped: vec![],
+        };
+        let table =
+            SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
+        let mut layout = LayoutContext::default();
+        layout.base_workforce = vec!["凯尔希".to_string()];
+        let mut assignment = BaseAssignment::default();
+        let mut used = HashSet::new();
+
+        assign_power_stations(
+            &blueprint,
+            &pool,
+            &table,
+            &layout,
+            &AssignBaseOptions::default(),
+            &mut assignment,
+            &mut used,
+        )
+        .unwrap();
+
+        let ops = assignment.operators_in(&RoomId::from("power_1"));
+        assert_eq!(ops.len(), 1);
+        assert_ne!(
+            ops[0].name, "Friston-3",
+            "Friston-3 + 凯尔希只有 15%，常规发电补位应优先普通 15% 散件"
+        );
     }
 }

@@ -63,6 +63,27 @@ fn power_efficiency_sort_key(hit: &PowerSearchHit) -> f64 {
     hit.score
 }
 
+fn low_priority_power_name(name: &str) -> bool {
+    matches!(
+        name,
+        "Castle-3" | "Friston-3" | "Lancet-2" | "PhonoR-0" | "THRM-EX" | "正义骑士号"
+    )
+}
+
+fn power_hit_precedes(a: &PowerSearchHit, b: &PowerSearchHit) -> bool {
+    match power_efficiency_sort_key(a)
+        .partial_cmp(&power_efficiency_sort_key(b))
+        .unwrap_or(std::cmp::Ordering::Equal)
+    {
+        std::cmp::Ordering::Greater => true,
+        std::cmp::Ordering::Less => false,
+        std::cmp::Ordering::Equal => low_priority_power_name(&a.name)
+            .cmp(&low_priority_power_name(&b.name))
+            .then_with(|| a.name.cmp(&b.name))
+            .is_lt(),
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct PowerStationAssignment {
     pub station_index: usize,
@@ -140,10 +161,7 @@ pub fn search_power_assignment(
                     score,
                 },
             };
-            if best
-                .as_ref()
-                .is_none_or(|b| power_efficiency_sort_key(&hit) > power_efficiency_sort_key(b))
-            {
+            if best.as_ref().is_none_or(|b| power_hit_precedes(&hit, b)) {
                 best = Some(hit);
             }
         }
@@ -208,6 +226,7 @@ pub fn search_power_top(
         power_efficiency_sort_key(b)
             .partial_cmp(&power_efficiency_sort_key(a))
             .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| low_priority_power_name(&a.name).cmp(&low_priority_power_name(&b.name)))
             .then_with(|| a.name.cmp(&b.name))
     });
     hits.truncate(top_k);
@@ -241,7 +260,8 @@ mod tests {
     use crate::layout::resolve_search_baseline_layout;
     use crate::operbox::default_operbox_full_e2_path;
     use crate::operbox::OperBox;
-    use crate::pool::build_power_pool;
+    use crate::pool::{build_power_pool, PowerPool, PowerPoolEntry};
+    use crate::roster::OperatorProgress;
     use crate::skill_table::default_skill_table_path;
     use crate::skill_table::SkillTable;
 
@@ -300,5 +320,42 @@ mod tests {
             names.iter().all(|n| *n != "承曦格雷伊"),
             "承曦格雷伊(13.5%) 不应进前 3 站 (vpower 在制造 resolve 体现): {names:?}"
         );
+    }
+
+    fn power_entry(name: &str, buff_ids: &[&str]) -> PowerPoolEntry {
+        PowerPoolEntry {
+            name: name.to_string(),
+            elite: 2,
+            progress: OperatorProgress::elite_only(2),
+            buff_ids: buff_ids.iter().map(|id| id.to_string()).collect(),
+            tags: vec![],
+            flat_charge_hint: 0.0,
+            has_l2_delegate: false,
+            tier: crate::layout::tier::OperatorTier::Standalone,
+        }
+    }
+
+    #[test]
+    fn power_assignment_tie_prefers_plain_charger_over_friston_combo() {
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let pool = PowerPool {
+            entries: vec![
+                power_entry("Friston-3", &["power_rec_spd[000]", "power_rec_spd_P[000]"]),
+                power_entry("协律", &["power_rec_spd[009]"]),
+            ],
+            skipped: vec![],
+        };
+        let mut layout = LayoutContext::search_baseline();
+        layout.base_workforce = vec!["凯尔希".to_string()];
+        let opts = PowerSearchOptions {
+            station_count: 1,
+            layout,
+            ..Default::default()
+        };
+
+        let report = search_power_assignment(&pool, &table, &opts).unwrap();
+
+        assert_eq!(report.assignments[0].hit.name, "协律");
+        assert_eq!(report.assignments[0].hit.charge_speed_pct, 15.0);
     }
 }

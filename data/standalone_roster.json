@@ -410,12 +410,10 @@
         "min_tier": "tier_up"
       },
       {
-        "name": "格雷伊",
-        "min_tier": "tier_up"
+        "name": "格雷伊"
       },
       {
-        "name": "雷蛇",
-        "min_tier": "tier_up"
+        "name": "雷蛇"
       },
       {
         "name": "澄闪",
@@ -430,8 +428,7 @@
         "min_tier": "tier_up"
       },
       {
-        "name": "海霓",
-        "min_tier": "tier_up"
+        "name": "海霓"
       },
       {
         "name": "天空盒",
@@ -439,6 +436,35 @@
       },
       {
         "name": "菲莱",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "清流"
+      },
+      {
+        "name": "阿消"
+      },
+      {
+        "name": "布丁"
+      },
+      {
+        "name": "伊芙利特",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "格劳克斯",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "异客",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "深靛",
+        "min_tier": "tier_up"
+      },
+      {
+        "name": "空构",
         "min_tier": "tier_up"
       }
     ],
