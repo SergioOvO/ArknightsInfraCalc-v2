@@ -22,7 +22,7 @@
 | 字段 | 含义 |
 |------|------|
 | `segments[]` | producer 条件 + `consumer` 种类 + `shortcut_id` + `priority` |
-| `roles[].pick_steps` | meta 站落位顺序：`segment` / `shortcut` / `filtered` / `unfiltered`；可带 `must_include_name` |
+| `roles[].pick_steps` | meta 站落位顺序：`segment` / `shortcut` / `filtered` / `unfiltered`；可带 `must_include_name` 或 `must_include_names` |
 
 **Producer**（`GlobalInjectManifest`）：`haru_e2_in_control`、`daifeen_e2_in_control` 等；`karlan_precision` 仍是全局注入，但喀兰市井孑已改走 L1 自然计算，不再注册 active L3 segment。
 
@@ -32,7 +32,9 @@
 
 - `docus`：`segment/docus_syracusa`（仅 `haru_e2_in_control` 时尝试）→ `gsl_docus_syracusa`，再 `gsl_docus_solo`，最后 `unfiltered + must_include_name=但书`。无但书时 role 失败，由调用方进入下一个 role 或 plain；不会把无但书 plain 误报为 docus。
 - `closure`：`gsl_blackkey_closure` 优先，再 `closure` 分档，最后 `unfiltered + must_include_name=可露希尔`。黑键缺失不影响可露希尔核心上站。
-- `witch`：`filtered hit_filter=witch + must_include_name=巫恋`，由 `classify_witch_room` 覆盖龙舌兰精二 + 裁缝 β / α / 空白第三人等 fallback。
+- `witch`：`filtered hit_filter=witch + must_include_names=[巫恋, 龙舌兰]`，只表示高优先级龙巫；由 `classify_witch_room` 覆盖龙舌兰精二 + 裁缝 β / α / 空白第三人等 fallback。
+- `meta_vina`：仅 `segment/vina_lungmen`，且必须由 `daifeen_e2_in_control` producer 激活；无 producer 时失败，不 fallback 成 plain。推进之王以 0% 贸易触发器入池，用于触发摩根/格拉斯哥同站技能；优先级高于无龙舌兰巫恋兜底。
+- `witch_fallback`：`filtered hit_filter=witch + must_include_name=巫恋`，只做无龙舌兰时的低优先兜底。
 
 `resolve_trade_shortcut` 在巫恋/可露之前调用 `match_registered_trade_segment`（按 `priority`）。
 

@@ -2,14 +2,16 @@ use std::collections::HashSet;
 
 use crate::error::{Error, Result};
 use crate::layout::assignment::{AssignedOperator, BaseAssignment};
-use crate::layout::blueprint::{FacilityKind, RoomId};
+use crate::layout::blueprint::{BaseBlueprint, FacilityKind, RoomId, RoomProduct};
 use crate::layout::context::LayoutContext;
+use crate::operbox::OperBox;
 use crate::pool::{try_filter_standalone, ControlPool};
 use crate::search::{
     control_entry_plugin_fill, search_control_combos, ControlFillPolicy, ControlSearchOptions,
     MATATABI_CONSUMER_NAME,
 };
 use crate::skill_table::SkillTable;
+use crate::trade::input::TradeOrderKind;
 
 use super::AssignBaseOptions;
 
@@ -18,6 +20,87 @@ fn assignment_has_matatabi_consumer(assignment: &BaseAssignment) -> bool {
         room.operators
             .iter()
             .any(|op| op.name == MATATABI_CONSUMER_NAME)
+    })
+}
+
+const DOCUS: &str = "但书";
+const CLOSURE: &str = "可露希尔";
+const WITCH: &str = "巫恋";
+const LONGSPRING: &str = "龙舌兰";
+const DAIFEEN: &str = "戴菲恩";
+const SIEGE: &str = "推进之王";
+const MORGAN: &str = "摩根";
+const VINA: &str = "维娜·维多利亚";
+
+pub(super) fn pin_daifeen_for_vina_priority(
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    assignment: &mut BaseAssignment,
+    used: &mut HashSet<String>,
+) {
+    if used.contains(DAIFEEN)
+        || assignment
+            .control_operators()
+            .iter()
+            .any(|o| o.name == DAIFEEN)
+    {
+        return;
+    }
+    if !vina_priority_active(blueprint, operbox, assignment) {
+        return;
+    }
+    let Some(progress) = operbox.progress_of(DAIFEEN) else {
+        return;
+    };
+    let mut control = assignment.control_operators();
+    if control.len() >= 5 {
+        let Some(idx) = control
+            .iter()
+            .position(|op| op.name == "诗怀雅")
+            .or_else(|| control.iter().position(|op| op.name == "斩业星熊"))
+        else {
+            return;
+        };
+        let removed = control.remove(idx);
+        used.remove(&removed.name);
+    }
+    control.push(AssignedOperator::from_progress(DAIFEEN, progress));
+    assignment.set_room(RoomId::from("control"), control);
+    used.insert(DAIFEEN.to_string());
+}
+
+fn vina_priority_active(
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    assignment: &BaseAssignment,
+) -> bool {
+    !higher_trade_core_available(operbox)
+        && [DAIFEEN, SIEGE, MORGAN, VINA]
+            .iter()
+            .all(|name| operbox.elite_of(name).is_some_and(|elite| elite >= 2))
+        && has_available_lv3_gold_trade_room(blueprint, assignment)
+}
+
+fn higher_trade_core_available(operbox: &OperBox) -> bool {
+    operbox.owns(DOCUS)
+        || operbox.owns(CLOSURE)
+        || (operbox.owns(WITCH) && operbox.owns(LONGSPRING))
+}
+
+fn has_available_lv3_gold_trade_room(
+    blueprint: &BaseBlueprint,
+    assignment: &BaseAssignment,
+) -> bool {
+    blueprint.rooms.iter().any(|room| {
+        room.kind == FacilityKind::TradePost
+            && room.level == 3
+            && matches!(
+                room.product,
+                Some(RoomProduct::Trade {
+                    order: TradeOrderKind::Gold
+                })
+            )
+            && assignment.operators_in(&room.id).len() < room.operator_capacity()
     })
 }
 

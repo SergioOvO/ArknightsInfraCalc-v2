@@ -11,7 +11,7 @@
 
 - `witch_long_beta` 被写成 fixed same-station registry，但实际应是“巫恋核心 + 龙舌兰优先 + 裁缝 beta/alpha/普通工具人 fallback”。
 - `blackkey_closure` 被写成 fixed same-station registry，但实际应是“可露希尔核心 + 黑键/高效工具人优先”，黑键自己的感知链是 global resource，不应被等同为可露固定搭配。
-- `docus_syracusa` 的完整形态是跨站体系：中枢八幡海铃 + 贸易但书/伺夜/贝洛内；但“但书必须优先上”本身是贸易核心优先策略，不应只在完整叙拉古 fixed 组合存在时才生效。
+- `syracusa_pair` 的真实跨同站 meta 是中枢八幡海铃 + 贸易伺夜/贝洛内；但书核心优先是独立贸易策略，`但书+伺夜+贝洛内` 只是在三级贸易站同房时命中的 shortcut。
 - `企鹅 / 推王 / 龙巫 / 可露` 这类同站或 producer-gated 组合不应在普通排班中抢在更高优先级核心前认领房间。
 - `感知、人间烟火、木天蓼、魔物料理、情报储备、乌萨斯特饮、虚拟电站` 是全局资源或中间产物，不是“组合”；它们的归属应是 `skill_table scope=global` + `cross_facility/` + `resolve_base`。
 
@@ -85,7 +85,7 @@
 |------|----------|----------|------|
 | 但书叙拉古完整链 | 八幡海铃 76；贝洛内 441/505/506；伺夜 478；但书 433/434/436 | `cross_station_meta` | 八幡海铃、伺夜、贝洛内是跨站体系的一部分；但书核心优先不应依赖完整链存在 |
 | 灵知孑喀兰 | 灵知 78；孑 444/445；银灰/讯使/崖心 466-468；琳琅诗怀雅 512 | control producer + L1 自然搜索 | 不应 active L3；`gsl_ling_jie_yaxin` 只做参考锚点 |
-| 推王格拉斯哥 | 戴菲恩 79；摩根 507；维娜 482/483 | producer-gated station role | 可以有 segment，但优先级低于但书/可露/龙巫核心 |
+| 推王格拉斯哥 | 戴菲恩 79；摩根 507；维娜 482/483 | producer-gated station role | 已有 `meta_vina` segment role；推进之王作为 0% 贸易触发器入池；优先级为第 4，低于但书/可露/龙巫，高于灵知孑 |
 | 怪猎木天蓼 | 火龙S黑角 29/75；麒麟R夜刀 35/72 | global resource/inject | 不是贸易 meta_chain |
 | 自动化金线 | 承曦格雷伊 391；森蚺 65；温蒂/森蚺自动化 278-280；清流 281 | production-line system | 是制造/发电闭环，不是 same-station trade registry |
 
@@ -117,7 +117,7 @@
 
 | id | 当前归类 | 建议归类 | 问题 / 动作 |
 |----|----------|----------|-------------|
-| `docus_syracusa` | `cross_station` fixed | `cross_station_meta` + `docus_core` role | 完整叙拉古链可保留，但但书核心优先应独立；缺伺夜/贝洛内时也要上但书配最高效率工具人 |
+| `syracusa_pair` | `cross_station` pair anchor | `cross_same_station_meta` + independent `docus_core` role | registry 只锚定八幡海铃 + 伺夜/贝洛内；但书核心优先独立，三级同站时才命中 `gsl_docus_syracusa` |
 | `automation_group` | `cross_station` | `production_line_system` | 方向正确，但应标明这是制造/发电闭环，不与贸易 meta 同 schema |
 | `ling_jie_karlan` | `cross_station` control-only | `control_producer + natural_search` | 方向正确；继续保持 L1 自然搜索，不 active L3 |
 | `witch_long_beta` | `same_station` fixed | `core_priority` / `witch_role` | 当前 fixed 错位；应支持 beta/alpha/blank fallback |
@@ -128,17 +128,17 @@
 | `penguin_exusiai_lemuen` | `same_station` fixed-ish | `same_station_bond` | 二人 bond + 第三工具人；不应在高优先贸易核心前抢站 |
 | `penguin_texangel_e2` | `same_station` fixed-ish | `same_station_bond` | 同上 |
 | `penguin_texlap_e0` | `same_station` fixed-ish | `same_station_bond` | id 名称历史兼容；德克萨斯 E2 不应被 id 误导 |
-| `vina_lungmen` | `cross_station` fixed | `producer_gated_bond/tag_role` | 戴菲恩 producer + 格拉斯哥同站加成；可保留 segment，但低优先 |
+| `vina_lungmen` | legacy `cross_station` fixed | `producer_gated_bond/tag_role` | 主路径跳过 registry fixed；戴菲恩 producer + `meta_vina` role 命中 `gsl_vina_lungmen` |
 | `snhunt_monhun_control` | `cross_station` + `meta_chain` | `global_resource_producer` | 木天蓼/全局注入不是贸易 meta_chain；应从 `meta_chain` 互斥语义中移出 |
 
 ### 4.2 `trade_segments.json`
 
 | segment / role | 当前用途 | 建议 |
 |----------------|----------|------|
-| `docus_syracusa` | producer-gated shortcut | 保留，但作为但书 role 的“完整链优先 step” |
+| `docus_syracusa` | producer-gated shortcut | 保留，但只作为但书 role 的三级同站 shortcut step，不代表 registry fixed 体系 |
 | `blackkey_closure` | producer 空、consumer fixed | 降级为可露核心搜索的 preferred shortcut，不应代表 fixed system |
 | `penguin_*` | active segment | 保留 L3 锚点，但不要让 registry 早于核心优先抢站 |
-| `vina_lungmen` | 戴菲恩 producer-gated | 保留，但归低优先 role |
+| `vina_lungmen` | 戴菲恩 producer-gated | 已归 `meta_vina` 第 4 优先 role；无 producer 时不 fallback plain |
 | `roles.docus` | segment -> docus solo -> unfiltered | 方向正确，但 `unfiltered` 不应导致无但书时误选 plain；应增加 `must_include=但书` fallback 或显式 core role |
 | 缺失 `roles.closure` | 可露核心优先目前在 `assign.rs` 临时代码 | 应补角色链 |
 | 缺失 `roles.witch` | 巫恋核心优先目前在 `assign.rs` 临时代码 | 应补角色链，支持 `gsl_witch_*` fallback |
@@ -149,7 +149,7 @@
 |----------|----------|------|
 | `gsl_witch_*` | 巫恋核分档 | 正确；不应只拿 `gsl_witch_long_beta` 进编 |
 | `gsl_closure_tier*` | 可露希尔分档 | 正确；应由 closure role 选择 |
-| `gsl_docus_syracusa` | 完整叙拉古链 | 正确；跨站 segment 命中 |
+| `gsl_docus_syracusa` | 但书+伺夜+贝洛内三级站 shortcut | 正确；producer-gated segment 命中，但不是 registry fixed 体系 |
 | `gsl_docus_solo` | 但书单走 | 正确；但排班 role 要强制包含但书 |
 | `gsl_ling_jie_yaxin` | 参考锚点 | 正确；不 active 匹配 |
 | `gsl_blackkey_closure` | 可露+黑键高配锚 | 可保留为 closure preferred shortcut，不能代表唯一固定组合 |
@@ -203,11 +203,11 @@
 
 目标排序：
 
-1. `docus`：完整叙拉古链优先；否则但书单走，强制包含但书；否则失败，不退化成无但书 plain。
+1. `docus`：三级站自然同房时命中但书+伺夜+贝洛内 shortcut；否则但书单走，强制包含但书；否则失败，不退化成无但书 plain。
 2. `closure`：强制包含可露希尔；优先黑键/高效工具人；按 `gsl_closure_tier*` 分档。
 3. `witch`：强制包含巫恋；龙舌兰优先；裁缝 beta/alpha/blank fallback。
-4. `same_station_bond`：企鹅、推王等低优先 bond。
-5. plain：散件 C(n,3)。
+4. `meta_vina`：戴菲恩 producer + 推王/摩根/维娜，优先于灵知孑。
+5. `karlan` / `same_station_bond` / plain：灵知孑、企鹅等 bond、散件 C(n,3)。
 
 动作：
 
@@ -253,7 +253,7 @@
 
 必须覆盖：
 
-- 全精2 243：完整叙拉古链仍能命中 `gsl_docus_syracusa`。
+- 全精2 243：三级贸易站同房时仍能命中 `gsl_docus_syracusa`；252 中但书优先二级站、伺夜+贝洛内保留三级同站 meta。
 - 小饼类缺件账号：但书/可露/龙巫核心都能上。
 - 无但书账号：不因 `roles.docus` unfiltered 误称为 docus。
 - 缺 beta 裁缝账号：巫恋 fallback 正确。

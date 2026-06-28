@@ -73,8 +73,10 @@ fn flush_csv(mut wtr: Writer<Box<dyn Write>>) -> Result<(), Error> {
 fn role_label(role: TradeStationRole) -> &'static str {
     match role {
         TradeStationRole::Witch => "巫恋核",
+        TradeStationRole::WitchFallback => "巫恋兜底",
         TradeStationRole::Closure => "可露希尔",
         TradeStationRole::Docus => "但书",
+        TradeStationRole::Vina => "推王组",
         TradeStationRole::JieE0Lead => "孑带队",
         TradeStationRole::Plain => "常规",
     }

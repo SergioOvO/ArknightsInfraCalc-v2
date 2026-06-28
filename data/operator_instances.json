@@ -2246,7 +2246,9 @@
     "推进之王@tier_up": {
       "name": "推进之王",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.glasgow"
+      ],
       "facilities": {
         "dorm": {
           "buff_ids": [
@@ -2254,6 +2256,12 @@
             "dorm_rec_all[022]"
           ],
           "stepwise": true
+        },
+        "trade": {
+          "buff_ids": [
+            "trade_vina_anchor[000]"
+          ],
+          "stepwise": false
         }
       }
     },

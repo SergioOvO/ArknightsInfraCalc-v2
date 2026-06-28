@@ -25,8 +25,8 @@ use crate::layout::shift::AssignShiftMode;
 use crate::layout::system::{explain_registry_systems, SlotFillMode, SystemExplainReport};
 use crate::operbox::OperBox;
 use crate::pool::{compile_operator_atoms, ManuPoolEntry, TradePoolEntry};
-use crate::tier::PromotionTier;
 use crate::skill_table::SkillTable;
+use crate::tier::PromotionTier;
 
 #[derive(Debug, Clone)]
 pub struct AssignBaseOptions {
@@ -461,7 +461,7 @@ mod tests {
             ],
             skipped: vec![],
         };
-        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 1);
+        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 3);
         assert!(
             candidate_pool.entries.len() < pool.entries.len(),
             "manufacture candidate extension should not fall back to the full pool"
@@ -504,7 +504,7 @@ mod tests {
             skipped: vec![],
         };
 
-        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 1);
+        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 3);
         assert!(candidate_pool.entry("槐琥").is_some());
         assert!(candidate_pool.entry("雪猎").is_some());
         assert!(candidate_pool.entry("至简").is_some());
@@ -526,7 +526,7 @@ mod tests {
             skipped: vec![],
         };
 
-        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 2);
+        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 6);
         assert_eq!(candidate_pool.entries.len(), pool.entries.len());
         assert!(candidate_pool.entry("低效非候选A").is_some());
         assert!(candidate_pool.entry("低效非候选B").is_some());
@@ -547,7 +547,7 @@ mod tests {
             skipped: vec![],
         };
 
-        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 2);
+        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 6);
         assert!(pool.entry("冬时").is_some(), "自动化组仍可从原池显式取冬时");
         assert!(pool.entry("温蒂").is_some(), "自动化组仍可从原池显式取温蒂");
         assert!(
@@ -624,7 +624,7 @@ mod tests {
     }
 
     #[test]
-    fn assign_ideal_e2_peak_claims_docus_syracusa_system() {
+    fn assign_ideal_e2_peak_claims_syracusa_pair_system() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = OperBox::load(
             &crate::skill_table::data_path("schedule_243/operbox_ideal_e2.json").unwrap(),
@@ -650,13 +650,12 @@ mod tests {
             },
         )
         .unwrap();
-        // 但书链 meta（registry）；迷迭香/黑键感知链不在编排层进编（Phase 4 global effect）。
-        let docus_room = assignment.rooms.iter().find(|r| {
-            r.operators.iter().any(|o| o.name == "但书")
-                && r.operators.iter().any(|o| o.name == "伺夜")
+        // 叙拉古同站 meta 由 registry 锚定；但书同站三级组合只作为 shortcut 命中。
+        let syracusa_room = assignment.rooms.iter().find(|r| {
+            r.operators.iter().any(|o| o.name == "伺夜")
                 && r.operators.iter().any(|o| o.name == "贝洛内")
         });
-        assert!(docus_room.is_some(), "但书三人组应独占一站");
+        assert!(syracusa_room.is_some(), "伺夜+贝洛内应锚定同一贸易站");
 
         let control_ops = assignment.control_operators();
         let control: HashSet<_> = control_ops.iter().map(|o| o.name.as_str()).collect();
@@ -680,6 +679,119 @@ mod tests {
             !control.contains("火龙S黑角") && !control.contains("麒麟R夜刀"),
             "高峰无调查团时不应因木天蓼选怪猎中枢: {:?}",
             control
+        );
+    }
+
+    #[test]
+    fn assign_252_keeps_syracusa_pair_and_puts_docus_in_lv2_trade() {
+        let blueprint =
+            BaseBlueprint::load(&crate::skill_table::data_path("layout/252.json").unwrap())
+                .unwrap();
+        let operbox = OperBox::load(
+            &crate::skill_table::data_path("fixtures/243/operbox_full_e2.json").unwrap(),
+        )
+        .unwrap();
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        for name in ["八幡海铃", "但书", "伺夜", "贝洛内"] {
+            if !operbox.owns(name) {
+                return;
+            }
+        }
+
+        let assignment = assign_base_greedy(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 10,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let docus_room = assignment
+            .rooms
+            .iter()
+            .find(|r| r.operators.iter().any(|o| o.name == "但书"))
+            .expect("但书应被排入贸易站");
+        let docus_blueprint = blueprint.room(&docus_room.room_id).unwrap();
+        assert_eq!(docus_blueprint.kind, FacilityKind::TradePost);
+        assert_eq!(
+            docus_blueprint.level, 2,
+            "但书应优先进入二级贸易站: {:?}",
+            docus_room
+        );
+
+        let syracusa_room = assignment
+            .rooms
+            .iter()
+            .find(|r| {
+                r.operators.iter().any(|o| o.name == "伺夜")
+                    && r.operators.iter().any(|o| o.name == "贝洛内")
+            })
+            .expect("伺夜+贝洛内应同站");
+        let syracusa_blueprint = blueprint.room(&syracusa_room.room_id).unwrap();
+        assert_eq!(syracusa_blueprint.kind, FacilityKind::TradePost);
+        assert_eq!(
+            syracusa_blueprint.level, 3,
+            "伺夜+贝洛内应保留在三级贸易站: {:?}",
+            syracusa_room
+        );
+        assert!(
+            !syracusa_room.operators.iter().any(|o| o.name == "但书"),
+            "252 中但书不应抢占伺夜+贝洛内三级站: {:?}",
+            syracusa_room
+        );
+    }
+
+    #[test]
+    fn assign_full_e2_without_top_three_trade_cores_uses_vina_before_karlan() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let operbox = OperBox::load(&default_operbox_full_e2_path().unwrap()).unwrap();
+        let operbox = operbox.excluding(&HashSet::from([
+            "龙舌兰".to_string(),
+            "可露希尔".to_string(),
+            "但书".to_string(),
+        ]));
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        for name in ["戴菲恩", "推进之王", "摩根", "维娜·维多利亚", "灵知", "孑"]
+        {
+            if !operbox.owns(name) {
+                return;
+            }
+        }
+
+        let assignment = assign_base_greedy(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 10,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let control: HashSet<_> = assignment
+            .control_operators()
+            .into_iter()
+            .map(|o| o.name)
+            .collect();
+        assert!(control.contains("戴菲恩"), "control: {:?}", control);
+
+        let vina_room = assignment.rooms.iter().find(|r| {
+            ["推进之王", "摩根", "维娜·维多利亚"]
+                .iter()
+                .all(|name| r.operators.iter().any(|o| o.name == *name))
+        });
+        assert!(
+            vina_room.is_some(),
+            "推王摩根维娜应优先于灵知孑上站: {:?}",
+            assignment.rooms
         );
     }
 

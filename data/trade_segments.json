@@ -95,6 +95,19 @@
         {
           "kind": "filtered",
           "hit_filter": "witch",
+          "must_include_names": [
+            "巫恋",
+            "龙舌兰"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "witch_fallback",
+      "pick_steps": [
+        {
+          "kind": "filtered",
+          "hit_filter": "witch",
           "must_include_name": "巫恋"
         }
       ]
@@ -133,9 +146,6 @@
           "kind": "segment",
           "segment_id": "vina_lungmen",
           "only_if_producer": true
-        },
-        {
-          "kind": "unfiltered"
         }
       ]
     }

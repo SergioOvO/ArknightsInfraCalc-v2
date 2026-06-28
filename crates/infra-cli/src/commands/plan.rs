@@ -8,7 +8,7 @@ use infra_core::box_profile::{baseline_path_or_default, build_box_profile, BoxPr
 use infra_core::export::{build_from_team_rotation, MaaExportOptions};
 use infra_core::instances::{default_instances_path, OperatorInstances};
 use infra_core::layout::{AssignBaseOptions, BaseBlueprint};
-use infra_core::operbox::{default_layout_243_path, OperBox};
+use infra_core::operbox::{default_layout_243_path, default_operbox_full_e2_path, OperBox};
 use infra_core::schedule::schedule_team_rotation;
 use infra_core::skill_table::{default_skill_table_path, SkillTable};
 use infra_core::Error;
@@ -117,12 +117,11 @@ pub fn plan_cmd(args: &[String]) -> Result<(), Error> {
 }
 
 fn operbox_path_from_args(args: &[String]) -> Result<PathBuf, Error> {
-    args.windows(2)
+    Ok(args
+        .windows(2)
         .find(|w| w[0] == "--operbox")
         .map(|w| PathBuf::from(&w[1]))
-        .ok_or_else(|| {
-            Error::msg("plan requires --operbox <path.json|.xlsx> (一图流练度表 xlsx 可直接传入)")
-        })
+        .unwrap_or(default_operbox_full_e2_path()?))
 }
 
 fn layout_path_from_args(args: &[String]) -> Option<PathBuf> {

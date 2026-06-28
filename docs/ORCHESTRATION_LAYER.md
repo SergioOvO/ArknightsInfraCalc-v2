@@ -100,7 +100,7 @@ crates/infra-core/src/layout/orchestrate/
 
 | 值 | 含义 | Executor |
 |----|------|----------|
-| `fixed` | 整包落位 | 直接 `set_room`（例：但书+伺夜+贝洛内） |
+| `fixed` | 整包落位 | 直接 `set_room`（例：伺夜+贝洛内同站 meta；但书三人组只作为三级站 shortcut 命中） |
 | `bond` | 二人锁死 + 第三人 | 固定 A+B，`pick_one` 填第三（例：德 E0+拉普兰德 **或** 能天使+蕾缪安；同干员不同 tier 须分叉 System） |
 | `core` | 单人锚 + segment 池补满 | 仅用于未来非感知散件锚点；**黑键不走此路径** |
 | `pick_one` | 列表选一 | 第一个可用干员 |
@@ -128,23 +128,24 @@ crates/infra-core/src/layout/orchestrate/
 
 | id / role | 类型 | L3 shortcut | 当前运行时 |
 |-----------|------|-------------|------------|
-| `docus_syracusa` / role `docus` | 跨站 meta + 但书核心优先 | `gsl_docus_syracusa` / `gsl_docus_solo` | 完整叙拉古链优先；缺伺夜/贝洛内时仍强制包含但书配最高可用工具人 |
+| `syracusa_pair` + role `docus` | 跨站同房 meta + 但书核心优先 | `gsl_docus_syracusa` / `gsl_docus_solo` | registry 锚定八幡海铃 + 伺夜/贝洛内；但书在三级站自然同房才命中 `gsl_docus_syracusa` shortcut，缺链时仍强制包含但书配最高可用工具人 |
 | `closure` | 可露希尔核心优先 | `gsl_blackkey_closure` / `gsl_closure_*` | 强制包含可露希尔；优先黑键可露锚点，缺黑键仍保留可露 |
-| `witch` | 巫恋核心优先 | `gsl_witch_*` | 强制包含精二巫恋；龙舌兰优先，裁缝 β / α / 空白第三人 fallback |
+| `witch` / `witch_fallback` | 龙巫 / 巫恋兜底 | `gsl_witch_*` | `witch` 强制包含精二巫恋 + 龙舌兰；无龙舌兰时 `witch_fallback` 低于推王组，只做巫恋兜底 |
 | `ling_jie_karlan` | control producer + L1 自然搜索 | `gsl_ling_jie_yaxin` 仅参考 | 只认领灵知 E2 中枢；精1孑由贸易搜索注入 |
-| `vina_lungmen` / `penguin_*` | 低优先 bond / segment 锚点 | `gsl_vina_lungmen` / `gsl_penguin_*` | 保留 L3 锚点和旧测试；普通排班不早于但书/可露/巫恋核心抢站 |
+| `meta_vina` / `penguin_*` | bond / segment 锚点 | `gsl_vina_lungmen` / `gsl_penguin_*` | 推王组是第 4 优先贸易站（但书/可露/龙巫之后、灵知孑之前）；企鹅低于灵知孑 |
 | `rosemary_perception*` | **global effect** | — | 已移出编排；`assign_perception_producers` + scope=global |
 
 #### 贸易核心 role 顺序
 
 贸易金单余站按 `pick_trade_meta_then_plain` 尝试：
 
-1. `docus`：完整叙拉古链优先；否则 `gsl_docus_solo`；否则仍只搜索包含但书的三人组；无但书则失败，不退化成“无但书 plain”。
+1. `docus`：三级站若自然包含但书+伺夜+贝洛内则命中 `gsl_docus_syracusa`；否则 `gsl_docus_solo`；否则仍只搜索包含但书的三人组；无但书则失败，不退化成“无但书 plain”。在有二级金单贸易站时，但书优先去二级站，伺夜+贝洛内保留三级同站 meta。
 2. `closure`：`gsl_blackkey_closure` 优先；否则 `gsl_closure_*`；否则包含可露希尔的最高可用三人组。
-3. `witch`：`gsl_witch_*`；支持龙舌兰精二 + 裁缝 β / α / 空白第三人等 fallback。
-4. plain：散件工具人三人组，且排除黑键与巫恋同房冲突。
+3. `witch`：`gsl_witch_*`；必须同时包含精二巫恋与龙舌兰，支持裁缝 β / α / 空白第三人等龙巫 fallback。
+4. `meta_vina`：戴菲恩 producer 激活时命中推王 + 摩根 + 维娜，优先级高于灵知孑与无龙舌兰巫恋兜底。
+5. `witch_fallback` / `karlan` / `penguin` / plain：无龙舌兰巫恋兜底、灵知孑、企鹅、散件工具人三人组，且排除黑键与巫恋同房冲突。
 
-这条顺序是核心优先策略，不是固定三人组优先级。完整叙拉古链仍是跨站 meta；八幡海铃、伺夜、贝洛内不是普通贸易散件。
+这条顺序是核心优先策略，不是固定三人组优先级。八幡海铃 + 伺夜/贝洛内是跨同站 meta；但书+伺夜+贝洛内是三级贸易站 shortcut。
 
 #### Phase 2 待建（贸易 bond）
 
@@ -162,7 +163,7 @@ crates/infra-core/src/layout/orchestrate/
 | 机制 | CSV | 原因 |
 |------|-----|------|
 | 新约能天使「同城加急单」 | 同站每名拉特兰 +15% | tag 叠层，非固定二人 bond |
-| 维娜「外贸决议」 | 同站 GSG 干员 +10% | 已含于推王 fixed 三人组纸面 |
+| 维娜「外贸决议」 | 同站 GSG 干员 +10% | L1 tag 搜索自然结算；推王组只作为戴菲恩 producer-gated shortcut |
 | 孑「市井之道」 | 站内含义依赖订单上限与技能顺序 | 灵知线由 L1 搜索自然上浮，非固定 trade slot / active L3 |
 
 Producer 前提（跨房，非 global pool）：
@@ -218,15 +219,16 @@ Producer 前提（跨房，非 global pool）：
 
 - [x] registry `fixed` / `bond` 落位（`execute_plan`）；贸易余站 `assign_trade_remainder` 贪心
 - [x] **已移除 / 不再存在**：`apply_blackkey_colocate_rule`、`assign_trade_meta`、`complete_trade_anchor_rooms`（旧黑键贸锚）
-- [x] 贸易核心 role：`docus` / `closure` / `witch` 写入 `trade_segments.json`，由 `search/role_pick.rs` 统一执行
+- [x] 贸易核心 role：`docus` / `closure` / `witch` / `witch_fallback` 写入 `trade_segments.json`，由 `search/role_pick.rs` 统一执行
 - [x] `assign_shift` 主路径跳过 `witch_long_beta`、`blackkey_closure`、企鹅、推王等旧 registry 早占站条目，改由 role policy 选择
 - [x] **验收**：缺伺夜/贝洛内时但书仍进站；缺黑键时可露仍进站；缺裁缝 β 时巫恋走 α / blank fallback；小饼类账号保留但书、可露、龙巫
 
 #### 巫恋 role
 
-- **核心**：精二巫恋；龙舌兰精二优先。
-- **fallback**：裁缝 β → 裁缝 α → 空白第三人；对应 `gsl_witch_long_beta` / `gsl_witch_long_alpha` / `gsl_witch_long_blank` 等。
-- **编排**：不再把 `witch_long_beta` 当固定三人组早占站；由 role policy 在贸易余站搜索里强制包含巫恋。
+- **核心**：`witch` 是龙巫，强制包含精二巫恋 + 龙舌兰。
+- **fallback**：龙巫内部裁缝 β → 裁缝 α → 空白第三人；对应 `gsl_witch_long_beta` / `gsl_witch_long_alpha` / `gsl_witch_long_blank` 等。
+- **兜底**：无龙舌兰时走 `witch_fallback`，只强制包含巫恋，优先级低于推王组。
+- **编排**：不再把 `witch_long_beta` 当固定三人组早占站；由 role policy 在贸易余站搜索里强制包含龙巫锚点。
 
 ### Phase 4 — global effect 收拢（与编排并行）
 
@@ -242,7 +244,7 @@ Producer 前提（跨房，非 global pool）：
 
 ### Phase 5 — team-rotation 对齐
 
-- [x] α/β 从 peak 切半保留编排已认领贸易 meta；γ 走 `assign_team_gamma_half`（同样使用 docus → closure → witch → plain 的贸易 role 顺序）
+- [x] α/β 从 peak 切半保留编排已认领贸易 meta；γ 走 `assign_team_gamma_half`（同样使用 docus → closure → witch → meta_vina → witch_fallback → plain 的贸易 role 顺序）
 - [x] `assign_shift_with_plan` + `TeamRotationReport.peak_plan` 供轮换层只读编排计划
 
 ---

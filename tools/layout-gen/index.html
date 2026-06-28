@@ -157,6 +157,13 @@
     }
     .hint { color: var(--muted); font-size: 0.85rem; }
     .status { color: #9ece6a; font-size: 0.85rem; min-height: 1.2em; }
+    .room-meta {
+      width: 100%;
+      margin-top: 6px;
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
@@ -199,7 +206,7 @@
     <div class="panel" id="roomEditor" hidden>
       <h2 id="roomEditorTitle">房间设置</h2>
       <div class="field-grid">
-        <div><label>等级 level</label><input type="number" id="roomLevel" min="1" max="3" value="3" /></div>
+        <div><label>等级 level（贸易/制造岗位数：一级1人、二级2人、三级3人）</label><input type="number" id="roomLevel" min="1" max="3" value="3" /></div>
         <div id="productField" hidden>
           <label id="productLabel">产物</label>
           <select id="roomProduct"></select>
@@ -332,6 +339,11 @@
       return "";
     }
 
+    function productionCapacity(room) {
+      if (room.kind !== "trading" && room.kind !== "manufacture") return null;
+      return Math.min(3, Math.max(1, Number(room.level) || 1));
+    }
+
     function renderRoomWrap() {
       const wrap = document.getElementById("roomWrap");
       const mkRoom = (kind, index, labelSuffix = "") => {
@@ -343,6 +355,7 @@
           state.selected.index === index;
         const cls = selected ? `${kind}-selected` : "";
         const badge = productBadge(room);
+        const capacity = productionCapacity(room);
         const num = index + 1;
         const label = `${ROOM_LABELS[kind]}#${num}${labelSuffix}`;
         return `<div class="room-template ${kind} ${cls}" data-kind="${kind}" data-index="${index}">
@@ -350,6 +363,7 @@
             <span>${label}</span>
             ${badge ? `<span class="room-product-badge">${badge}</span>` : ""}
           </div>
+          ${capacity ? `<div class="room-meta">Lv.${room.level} · ${capacity}人</div>` : `<div class="room-meta">Lv.${room.level}</div>`}
         </div>`;
       };
 
@@ -397,7 +411,10 @@
       const key = roomKey(state.selected.kind, state.selected.index);
       const room = state.rooms[key];
       panel.hidden = false;
-      status.textContent = `当前选中：${ROOM_LABELS[room.kind]} #${room.index + 1}`;
+      const capacity = productionCapacity(room);
+      status.textContent = `当前选中：${ROOM_LABELS[room.kind]} #${room.index + 1}${
+        capacity ? `，可进驻 ${capacity} 人` : ""
+      }`;
       document.getElementById("roomEditorTitle").textContent =
         `${ROOM_LABELS[room.kind]} #${room.index + 1} 设置`;
       document.getElementById("roomLevel").value = room.level;
@@ -607,7 +624,7 @@
       if (!state.selected) return;
       const key = roomKey(state.selected.kind, state.selected.index);
       state.rooms[key].level = Number(e.target.value);
-      renderPreview();
+      render();
     });
 
     document.getElementById("roomProduct").addEventListener("change", (e) => {

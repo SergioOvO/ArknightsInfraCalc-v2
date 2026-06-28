@@ -33,7 +33,7 @@ pub fn execute_plan(
 
     if plan.mode == AssignShiftMode::Peak {
         for claim in &plan.registry_claims {
-            apply_registry_system_claim(claim, &mut assignment, &mut used)?;
+            apply_registry_system_claim(blueprint, claim, &mut assignment, &mut used)?;
         }
     }
 

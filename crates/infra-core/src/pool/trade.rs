@@ -164,6 +164,28 @@ impl TradePoolEntry {
 /// 向后兼容别名：`TradePool` = `PoolCore<TradePoolEntry>`
 pub type TradePool = PoolCore<TradePoolEntry>;
 
+/// 从池索引组装干员组（保留进驻顺序）；孑 E0 override 由调用方注入。
+pub fn build_trade_combo_operators_vec(
+    pool: &TradePool,
+    combo: &[usize],
+    must_name: Option<&str>,
+    override_op: Option<&TradeOperator>,
+) -> Vec<TradeOperator> {
+    combo
+        .iter()
+        .map(|idx| {
+            let entry = &pool.entries[*idx];
+            if must_name.is_some_and(|n| entry.name == n) {
+                override_op
+                    .cloned()
+                    .unwrap_or_else(|| entry.to_trade_operator())
+            } else {
+                entry.to_trade_operator()
+            }
+        })
+        .collect()
+}
+
 /// 从池索引组装三人组（保留进驻顺序）；孑 E0 override 由调用方注入。
 pub fn build_trade_combo_operators(
     pool: &TradePool,
@@ -338,6 +360,14 @@ pub fn combinations_indices(n: usize, k: usize) -> impl Iterator<Item = Vec<usiz
         }
         None
     })
+}
+
+pub fn combinations_indices_with_anchor(
+    n: usize,
+    k: usize,
+    anchor: usize,
+) -> impl Iterator<Item = Vec<usize>> {
+    combinations_indices(n, k).filter(move |combo| combo.contains(&anchor))
 }
 
 /// `C(n,3)` 零堆分配枚举（`k=3` 热路径专用）。

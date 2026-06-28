@@ -775,6 +775,24 @@
       ]
     },
     {
+      "id": "trade_vina_anchor[000]",
+      "skill_name": "推进之王格拉斯哥贸易触发器",
+      "facility": "trade",
+      "tier": "tier_up",
+      "atoms": [
+        {
+          "action": {
+            "kind": "add_flat_eff",
+            "params": {
+              "value": 0.0
+            }
+          },
+          "phase": "constant",
+          "phase_order": 20
+        }
+      ]
+    },
+    {
       "id": "trade_ord_spd[020]",
       "skill_name": "物流专家",
       "facility": "trade",

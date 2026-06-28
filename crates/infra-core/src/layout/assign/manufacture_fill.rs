@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use crate::error::{Error, Result};
 use crate::layout::assignment::{AssignedOperator, BaseAssignment};
-use crate::layout::blueprint::{BaseBlueprint, FacilityKind, RoomId, RoomProduct};
+use crate::layout::blueprint::{
+    station_operator_capacity, BaseBlueprint, FacilityKind, RoomId, RoomProduct,
+};
 use crate::layout::context::LayoutContext;
 use crate::manufacture::input::ManuSearchRecipeMode;
 use crate::pool::{
@@ -95,7 +97,7 @@ pub(super) fn try_assign_gongsun_gold_manu_team(
         let existing = assignment.operators_in(&room.id);
         let has_qingliu = existing.iter().any(|o| o.name == "清流");
         let has_wendy = existing.iter().any(|o| o.name == "温蒂");
-        if has_qingliu && has_wendy && existing.len() < 3 {
+        if has_qingliu && has_wendy && existing.len() < room.operator_capacity() {
             for candidate in GONGSUN_GOLD_MANU_THIRD_CHOICES {
                 let Some(entry) = pool.entry(candidate) else {
                     continue;
@@ -174,26 +176,29 @@ pub(super) fn assign_manufacture_lines(
         _ => 99,
     });
 
-    let room_count = rooms
+    let required_slots = rooms
         .iter()
         .filter(|room| assignment.operators_in(&room.id).is_empty())
-        .count();
-    let candidate_pool = manufacture_candidate_pool_for_demand(pool, used, room_count);
+        .map(|room| room.operator_capacity())
+        .sum();
+    let candidate_pool = manufacture_candidate_pool_for_demand(pool, used, required_slots);
 
     for room in rooms {
-        if assignment.operators_in(&room.id).len() >= 3 {
+        if assignment.operators_in(&room.id).len() >= room.operator_capacity() {
             continue;
         }
         let recipe = match room.product.as_ref() {
             Some(RoomProduct::Factory { recipe }) => *recipe,
             _ => continue,
         };
-        let opts = manu_options(layout, options, recipe);
+        let opts = manu_options(layout, options, recipe, room.level);
         let existing = assignment.operators_in(&room.id);
         let hit = if existing.is_empty() {
             pick_manu_hit(&candidate_pool, table, opts.clone(), used, options.top_k)
                 .or_else(|_| pick_manu_hit(pool, table, opts, used, options.top_k))
-                .or_else(|_| pick_capacity_manu_hit(pool, table, layout, options, recipe, used))
+                .or_else(|_| {
+                    pick_capacity_manu_hit(pool, table, layout, options, recipe, used, room.level)
+                })
         } else {
             let anchor = existing[0].name.clone();
             // forbid-same-room：anchor 房禁止纳入指定干员（迷迭香 ≠ 清流/温蒂同房）。
@@ -222,18 +227,17 @@ fn forbidden_teammates(anchor: &str, forbid_same_room: &[(String, String)]) -> H
 pub(super) fn manufacture_candidate_pool_for_demand(
     pool: &ManuPool,
     used: &HashSet<String>,
-    room_count: usize,
+    required_slots: usize,
 ) -> ManuPool {
     let full_sub = filter_general_manufacture_search_pool(&filter_manufacture_pool(pool, used));
     let Some(primary_sub) = filter_standalone_exact(&full_sub, FacilityKind::Factory) else {
         return full_sub;
     };
-    let required = room_count.saturating_mul(3);
-    if required == 0 || primary_sub.entries.len() >= required {
+    if required_slots == 0 || primary_sub.entries.len() >= required_slots {
         return primary_sub;
     }
     let expanded = expand_manufacture_candidate_pool(&primary_sub, &full_sub);
-    if expanded.entries.len() >= required {
+    if expanded.entries.len() >= required_slots {
         expanded
     } else {
         full_sub
@@ -269,7 +273,14 @@ pub(super) fn pick_manu_hit_with_anchor(
     let sub = filter_manufacture_pool(pool, &used_for_filter);
     let mut search_opts = search_opts;
     search_opts.must_include_name = Some(anchor.to_string());
-    search_manu_hit_in_pool(&sub, table, search_opts, &used_for_filter, top_k, "anchor pool")
+    search_manu_hit_in_pool(
+        &sub,
+        table,
+        search_opts,
+        &used_for_filter,
+        top_k,
+        "anchor pool",
+    )
 }
 
 pub(super) fn pick_capacity_manu_hit(
@@ -279,18 +290,20 @@ pub(super) fn pick_capacity_manu_hit(
     options: &AssignBaseOptions,
     recipe: RecipeKind,
     used: &HashSet<String>,
+    room_level: u8,
 ) -> Result<ManuSearchHit> {
+    let capacity = station_operator_capacity(room_level);
     let entries: Vec<_> = pool
         .entries
         .iter()
         .filter(|entry| !used.contains(&entry.name))
-        .take(3)
+        .take(capacity)
         .cloned()
         .collect();
-    if entries.len() < 3 {
+    if entries.len() < capacity {
         return Err(Error::msg(format!(
-            "manufacture capacity fallback has {} ready operators (need 3)",
-            entries.len()
+            "manufacture capacity fallback has {} ready operators (need {capacity})",
+            entries.len(),
         )));
     }
     let operators = entries
@@ -298,7 +311,7 @@ pub(super) fn pick_capacity_manu_hit(
         .map(|entry| entry.to_manu_operator())
         .collect();
     let input = crate::manufacture::ManuRoomInput {
-        level: 3,
+        level: room_level,
         operators,
         active_recipe: recipe,
         mood: options.mood,
@@ -353,10 +366,11 @@ fn search_manu_hit_in_pool(
     top_k: usize,
     label: &str,
 ) -> Result<ManuSearchHit> {
-    if pool.entries.len() < 3 {
+    let capacity = search_opts.operator_capacity.clamp(1, 3);
+    if pool.entries.len() < capacity {
         return Err(Error::msg(format!(
-            "{label} has {} ready operators (need 3)",
-            pool.entries.len()
+            "{label} has {} ready operators (need {capacity})",
+            pool.entries.len(),
         )));
     }
     let mut opts = search_opts;
@@ -382,8 +396,11 @@ pub(super) fn manu_options(
     layout: &LayoutContext,
     options: &AssignBaseOptions,
     recipe: RecipeKind,
+    room_level: u8,
 ) -> ManuSearchOptions {
     ManuSearchOptions {
+        level: room_level,
+        operator_capacity: station_operator_capacity(room_level),
         top_k: options.top_k,
         mood: options.mood,
         layout: Arc::new(layout.clone()),

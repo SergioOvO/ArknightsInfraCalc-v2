@@ -33,8 +33,8 @@
   ],
   "systems": [
     {
-      "id": "docus_syracusa",
-      "label": "叙拉古组：但书+伺夜+贝洛内（中枢八幡海铃E2，200%贸+55%金）",
+      "id": "syracusa_pair",
+      "label": "叙拉古同站 meta：伺夜+贝洛内（中枢八幡海铃E2；但书三级同站仅作为 shortcut 命中）",
       "tier": "cross_station",
       "priority": 20,
       "segment_id": "docus_syracusa",
@@ -47,9 +47,7 @@
         },
         {
           "facility": "trade_post",
-          "trade_role": "meta_docus",
           "operators": [
-            { "name": "但书", "elite": 2 },
             { "name": "伺夜", "elite": 2 },
             { "name": "贝洛内", "elite": 2 }
           ]

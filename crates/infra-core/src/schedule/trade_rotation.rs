@@ -25,12 +25,16 @@ pub const WORKERS_PER_SHIFT: usize = TRADE_STATIONS_PER_SHIFT * WORKERS_PER_STAT
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TradeStationRole {
-    /// 巫恋核 / 龙舌兰（`gsl_witch_*`）
+    /// 巫恋 + 龙舌兰（`gsl_witch_long_*`）
     Witch,
+    /// 巫恋兜底（无龙舌兰时低于推王组）
+    WitchFallback,
     /// 可露希尔特别订单（`gsl_closure_*`）
     Closure,
     /// 但书单走（`gsl_docus_solo`）
     Docus,
+    /// 推王格拉斯哥（`gsl_vina_lungmen`）
+    Vina,
     /// 精0 孑摊贩带队（余量班）
     JieE0Lead,
     Plain,
@@ -76,7 +80,7 @@ fn pick_station(
             hit: report.best,
             role: preferred_role,
         }),
-        Err(_) if filter.hit_filter.is_some() || filter.must_include_name.is_some() => {
+        Err(_) if filter.hit_filter.is_some() || filter.has_must_include() => {
             let report = search_trade_triples(pool, table, options)?;
             Ok(StationPick {
                 hit: report.best,
@@ -108,7 +112,7 @@ fn commit_station(
     })
 }
 
-/// Shift A：但书 → 可露 → 龙巫，再按 score 贪心填满（通常正好三站）。
+/// Shift A：但书 → 可露 → 龙巫 → 推王 → 巫恋兜底，再按 score 贪心填满（通常正好三站）。
 pub fn schedule_meta_shift_from_pool(
     pool: &TradePool,
     table: &SkillTable,
@@ -124,7 +128,7 @@ pub fn schedule_meta_shift_from_pool(
         )));
     }
 
-    // Meta 站（但书 → 可露 → 龙巫）按单站金条订单搜；Stations 模式会同时过滤源石线，
+    // Meta 站（但书 → 可露 → 龙巫 → 推王 → 巫恋兜底）按单站金条订单搜；Stations 模式会同时过滤源石线，
     // 而 gsl_witch 等 shortcut 仅出现在金条订单，导致过滤失败并 fallback 为 Plain。
     let mut search_opts = per_station_search_options(options);
     search_opts.top_k = 1;
@@ -133,13 +137,18 @@ pub fn schedule_meta_shift_from_pool(
     let mut stations = Vec::with_capacity(TRADE_STATIONS_PER_SHIFT);
     let mut total_score = 0.0;
 
-    let meta_slots: [(TradeStationRole, &str); 3] = [
+    let meta_slots: [(TradeStationRole, &str); 5] = [
         (TradeStationRole::Docus, "docus"),
         (TradeStationRole::Closure, "closure"),
         (TradeStationRole::Witch, "witch"),
+        (TradeStationRole::Vina, "meta_vina"),
+        (TradeStationRole::WitchFallback, "witch_fallback"),
     ];
 
     for (role, role_id) in meta_slots {
+        if stations.len() >= TRADE_STATIONS_PER_SHIFT {
+            break;
+        }
         let station_index = stations.len();
         let sub = filter_trade_pool(pool, &used);
         if sub.entries.len() < WORKERS_PER_STATION {
@@ -387,7 +396,7 @@ fn assert_disjoint(a: &HashSet<String>, b: &HashSet<String>, label: &str) -> Res
     }
 }
 
-/// Three-shift A-B-A: shift1 但书/可露/龙巫；shift2 精0孑带队 + 余量；shift3 复用 shift1。
+/// Three-shift A-B-A: shift1 但书/可露/龙巫/推王/巫恋兜底；shift2 精0孑带队 + 余量；shift3 复用 shift1。
 pub fn schedule_trade_rotation_a_b_a(
     operbox: &OperBox,
     instances: &OperatorInstances,
@@ -466,12 +475,16 @@ mod tests {
         assert_eq!(report.shifts[0].stations.len(), 3);
         assert_eq!(report.shifts[2].workers, report.shifts[0].workers);
 
-        // meta 顺序：但书 → 可露 → 龙巫；缺高优先核心时跳过，最后 plain 补满。
+        // meta 顺序：但书 → 可露 → 龙巫 → 推王 → 巫恋兜底；缺高优先核心时跳过，最后 plain 补满。
         assert_eq!(report.shifts[0].stations.len(), TRADE_STATIONS_PER_SHIFT);
         assert!(
             report.shifts[0].stations.iter().any(|s| matches!(
                 s.role,
-                TradeStationRole::Docus | TradeStationRole::Closure | TradeStationRole::Witch
+                TradeStationRole::Docus
+                    | TradeStationRole::Closure
+                    | TradeStationRole::Witch
+                    | TradeStationRole::WitchFallback
+                    | TradeStationRole::Vina
             )),
             "shift1 should keep the highest available meta role before plain fallback: {:?}",
             report.shifts[0]

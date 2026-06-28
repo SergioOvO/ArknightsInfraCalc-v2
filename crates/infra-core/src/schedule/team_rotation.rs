@@ -184,6 +184,8 @@ fn merge_rooms(target: &mut BaseAssignment, source: &BaseAssignment) {
 
 const ABYSSAL_GLADIIA: &str = "歌蕾蒂娅";
 const ABYSSAL_HUNTERS: [&str; 4] = ["乌尔比安", "斯卡蒂", "幽灵鲨", "安哲拉"];
+const DAIFEEN: &str = "戴菲恩";
+const VINA_TRADE_GROUP: [&str; 3] = ["推进之王", "摩根", "维娜·维多利亚"];
 
 struct AbyssalCandidate {
     assignment: BaseAssignment,
@@ -672,6 +674,15 @@ pub fn schedule_team_rotation(
             move_control_operator_to_team(&mut team_ctrl, "灵知", jie_team);
         }
     }
+    let vina_team = VINA_TRADE_GROUP
+        .iter()
+        .filter_map(|name| production_team_by_name.get(*name).copied())
+        .next();
+    if let Some(team) = vina_team {
+        if operbox.owns(DAIFEEN) {
+            move_control_operator_to_team(&mut team_ctrl, DAIFEEN, team);
+        }
+    }
     for entry in &control_pool.entries {
         if team_ctrl.values().any(|names| names.contains(&entry.name)) {
             continue;
@@ -821,6 +832,18 @@ pub fn schedule_team_rotation(
                     .unwrap_or_else(|| AssignedOperator::new("灵知", 2));
                 ops.push(op);
                 room_names.insert("灵知".to_string());
+            }
+            let requires_vina_control = VINA_TRADE_GROUP
+                .iter()
+                .all(|name| assigned_names.contains(*name))
+                && operbox.owns(DAIFEEN);
+            if requires_vina_control && !room_names.contains(DAIFEEN) && ops.len() < 5 {
+                let op = operbox
+                    .progress_of(DAIFEEN)
+                    .map(|progress| AssignedOperator::from_progress(DAIFEEN, progress))
+                    .unwrap_or_else(|| AssignedOperator::new(DAIFEEN, 2));
+                ops.push(op);
+                room_names.insert(DAIFEEN.to_string());
             }
             for name in active_names
                 .iter()
@@ -1421,13 +1444,13 @@ mod tests {
         )
         .unwrap();
         assert_eq!(report.peak_plan.mode, AssignShiftMode::Peak);
-        if operbox.owns("但书") {
+        if operbox.owns("伺夜") && operbox.owns("贝洛内") {
             assert!(
                 report
                     .peak_plan
                     .registry_system_ids()
-                    .contains(&"docus_syracusa"),
-                "peak_plan 应含但书链: {:?}",
+                    .contains(&"syracusa_pair"),
+                "peak_plan 应含叙拉古同站 meta: {:?}",
                 report.peak_plan.registry_system_ids()
             );
         }
@@ -1629,6 +1652,59 @@ mod tests {
             "12h 班应包含可露希尔黑键吉星站: {:?}",
             trade_rooms
         );
+    }
+
+    #[test]
+    fn team_rotation_vina_trade_shift_pins_daifeen_control() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let base = OperBox::load(&default_operbox_full_e2_path().unwrap()).unwrap();
+        let operbox = base.excluding(&HashSet::from([
+            "龙舌兰".to_string(),
+            "可露希尔".to_string(),
+            "但书".to_string(),
+        ]));
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        for name in [DAIFEEN, "推进之王", "摩根", "维娜·维多利亚"] {
+            if !operbox.owns(name) {
+                return;
+            }
+        }
+
+        let report = schedule_team_rotation(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 20,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let mut checked = 0;
+        for shift in &report.shifts {
+            let has_vina_trade = trade_room_contains(
+                &shift.assignment,
+                &blueprint,
+                &["推进之王", "摩根", "维娜·维多利亚"],
+            );
+            if has_vina_trade {
+                checked += 1;
+                assert!(
+                    shift
+                        .assignment
+                        .control_operators()
+                        .iter()
+                        .any(|op| op.name == DAIFEEN),
+                    "shift {} 推王组上站时中枢必须同步戴菲恩: {:?}",
+                    shift.index + 1,
+                    shift.assignment.control_operators()
+                );
+            }
+        }
+        assert!(checked > 0, "ban 三核心后轮换应至少出现一班推王组");
     }
 
     #[test]

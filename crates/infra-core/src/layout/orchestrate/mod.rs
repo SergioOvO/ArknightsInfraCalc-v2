@@ -116,10 +116,8 @@ mod tests {
         .unwrap();
         // 迷迭香制造 anchor 汇入 plan.anchors；黑键不锚定。
         assert!(
-            plan.anchors
-                .iter()
-                .any(|a| a.operator == "迷迭香"
-                    && a.facility == crate::layout::blueprint::FacilityKind::Factory),
+            plan.anchors.iter().any(|a| a.operator == "迷迭香"
+                && a.facility == crate::layout::blueprint::FacilityKind::Factory),
             "应含迷迭香制造 anchor: {:?}",
             plan.anchors
         );
@@ -139,10 +137,7 @@ mod tests {
             plan.shift_binds
         );
         // 降级阶梯档位汇入 plan.degradations。
-        assert!(
-            !plan.degradations.is_empty(),
-            "应含迷迭香降级阶梯档位"
-        );
+        assert!(!plan.degradations.is_empty(), "应含迷迭香降级阶梯档位");
         // forbid-same-room 约束汇入 plan.constraints（迷迭香 ≠ 清流/温蒂同房）。
         assert!(
             plan.constraints.iter().any(|c| matches!(
@@ -210,13 +205,13 @@ mod tests {
         assert!(
             plan.registry_claims
                 .iter()
-                .any(|c| c.system_id == "docus_syracusa"),
-            "peak plan 应与但书链共存"
+                .any(|c| c.system_id == "syracusa_pair"),
+            "peak plan 应与叙拉古同站 meta 共存"
         );
     }
 
     #[test]
-    fn build_plan_peak_ideal_e2_activates_docus() {
+    fn build_plan_peak_ideal_e2_activates_syracusa_pair() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = OperBox::load(
             &crate::skill_table::data_path("schedule_243/operbox_ideal_e2.json").unwrap(),
@@ -236,8 +231,8 @@ mod tests {
         assert!(
             plan.registry_claims
                 .iter()
-                .any(|c| c.system_id == "docus_syracusa"),
-            "应选型叙拉古链: {:?}",
+                .any(|c| c.system_id == "syracusa_pair"),
+            "应选型叙拉古同站 meta: {:?}",
             plan.registry_claims
                 .iter()
                 .map(|c| &c.system_id)

@@ -75,23 +75,14 @@ infra-cli plan         ──→  --profile-out 账号画像 JSON + --maa-out MA
 
 ---
 
-## 3. 运行前提：data 目录
+## 3. 运行前提：内置数据
 
-`plan` / `layout team-rotation` 会加载机制数据，路径解析顺序：
+`plan` / `layout team-rotation` 使用程序内置机制数据；前端只需要传入 `--layout` 和 `--operbox`。
 
-1. `ARKNIGHTS_INFRA_DATA_DIR` 指向的目录（推荐用于 Linux systemd / Docker）。
-2. 当前工作目录下的 `./data/`。
-3. CLI 可执行文件旁边的 `data/`。
-4. CLI 可执行文件父目录旁边的 `data/`。
-5. 开发构建时的仓库 `data/`。
+默认布局：243。
+默认练度盒：full_e2。
 
-**发给前端测试时，请一并提供整个 `data/` 目录**，或设置 `ARKNIGHTS_INFRA_DATA_DIR`。
-
-最小必需文件：
-
-- `data/operator_instances.json`
-- `data/skill_table.json`
-- （间接）`data/base_systems.json` 等布局体系锚点
+`data/baked/` 仍然是本地 bake 缓存，不属于程序内置真源。
 
 ---
 
@@ -309,6 +300,8 @@ MAA 排班 JSON 已写入: out/243_maa.json
 
 贸易 `order`：`gold` | `originium` → MAA 导出为 `LMD` | `Orundum`。  
 制造 `recipe`：`gold` | `battle_record` | `originium` → `Pure Gold` | `Battle Record` | `Originium Shard`。
+
+生产站岗位数由 `level` 推导：贸易站 / 制造站一级 1 人、二级 2 人、三级 3 人。
 
 宿舍字段：
 

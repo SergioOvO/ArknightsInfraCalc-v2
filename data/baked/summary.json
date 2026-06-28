@@ -1,0 +1,17 @@
+{
+  "out_dir": "/home/knightcode/Projects/ArknightsInfraCalc-v2/data/baked",
+  "schema_version": 5,
+  "operator_count": 109,
+  "trade_signatures": 6,
+  "trade_hits": 140330,
+  "manufacture_signatures": 9,
+  "manufacture_hits": 2711,
+  "combo_table_rows": 143041,
+  "generator": {
+    "kind": "infra-cli-exe",
+    "path": "/home/knightcode/Projects/ArknightsInfraCalc-v2/target/release/infra-cli",
+    "bytes": 5283656,
+    "hash64": "1a9fb5cf8dbd7098"
+  },
+  "elapsed_ms": 1350
+}

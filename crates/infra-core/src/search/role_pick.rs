@@ -76,7 +76,7 @@ pub fn pick_trade_role_hit(
                     table,
                     &opts,
                     Some(hit_filter),
-                    step.must_include_name.as_deref(),
+                    step_must_include_names(step),
                     used,
                 ) {
                     return Ok(hit);
@@ -94,7 +94,7 @@ pub fn pick_trade_role_hit(
                     table,
                     &opts,
                     Some(hit_filter),
-                    step.must_include_name.as_deref(),
+                    step_must_include_names(step),
                     used,
                 ) {
                     return Ok(hit);
@@ -112,7 +112,7 @@ pub fn pick_trade_role_hit(
                     table,
                     &opts,
                     Some(hit_filter),
-                    step.must_include_name.as_deref(),
+                    step_must_include_names(step),
                     used,
                 ) {
                     return Ok(hit);
@@ -124,7 +124,7 @@ pub fn pick_trade_role_hit(
                     table,
                     &opts,
                     None,
-                    step.must_include_name.as_deref(),
+                    step_must_include_names(step),
                     used,
                 ) {
                     return Ok(hit);
@@ -156,10 +156,10 @@ fn pick_with_step_filter(
     table: &SkillTable,
     search_opts: &TradeSearchOptions,
     hit_filter: Option<fn(&TradeSearchHit) -> bool>,
-    must_include_name: Option<&str>,
+    must_include_names: Vec<String>,
     used: &HashSet<String>,
 ) -> Result<TradeSearchHit> {
-    if hit_filter.is_none() && must_include_name.is_none() {
+    if hit_filter.is_none() && must_include_names.is_empty() {
         let report = search_trade_triples(pool, table, search_opts)?;
         return pick_disjoint_trade_hit(report.best, report.top, used);
     }
@@ -168,12 +168,25 @@ fn pick_with_step_filter(
         table,
         search_opts,
         SearchTripleFilter {
-            must_include_name: must_include_name.map(str::to_string),
+            must_include_names,
             hit_filter,
             ..SearchTripleFilter::default()
         },
     )?;
     pick_disjoint_trade_hit(report.best, report.top, used)
+}
+
+fn step_must_include_names(step: &crate::trade::segment::RolePickStep) -> Vec<String> {
+    let mut names = Vec::new();
+    if let Some(name) = step.must_include_name.as_ref() {
+        names.push(name.clone());
+    }
+    for name in &step.must_include_names {
+        if !names.iter().any(|n| n == name) {
+            names.push(name.clone());
+        }
+    }
+    names
 }
 
 fn shortcut_hit_filter(shortcut_id: &str) -> Option<fn(&TradeSearchHit) -> bool> {
@@ -344,6 +357,39 @@ mod tests {
     }
 
     #[test]
+    fn witch_role_requires_tequila_while_fallback_keeps_witch() {
+        let (pool, table, layout) = fixtures(&[("巫恋", 2), ("柏喙", 2), ("古米", 2), ("夜刀", 2)]);
+
+        let err = pick_trade_role_hit(
+            "witch",
+            &pool,
+            &table,
+            gold_opts(&layout),
+            &layout,
+            &HashSet::new(),
+            20,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("witch"),
+            "dragon-witch role should fail without Tequila: {err}"
+        );
+
+        let hit = pick_trade_role_hit(
+            "witch_fallback",
+            &pool,
+            &table,
+            gold_opts(&layout),
+            &layout,
+            &HashSet::new(),
+            20,
+        )
+        .unwrap();
+        assert!(hit.names.iter().any(|n| n == "巫恋"), "{hit:?}");
+        assert_eq!(hit.shortcut.as_deref(), Some("gsl_witch_beta_blank"));
+    }
+
+    #[test]
     fn karlan_role_requires_market_jie_and_karlan_peer() {
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
@@ -393,6 +439,49 @@ mod tests {
         assert!(hit.names.iter().any(|n| n == "德克萨斯"), "{hit:?}");
         assert!(hit.names.iter().any(|n| n == "拉普兰德"), "{hit:?}");
         assert_eq!(hit.shortcut.as_deref(), Some("gsl_penguin_texlap_e0"));
+    }
+
+    #[test]
+    fn vina_role_requires_daifeen_and_picks_glasgow_trio() {
+        let (pool, table, mut layout) = fixtures(&[
+            ("推进之王", 2),
+            ("摩根", 2),
+            ("维娜·维多利亚", 2),
+            ("古米", 2),
+        ]);
+
+        let err = pick_trade_role_hit(
+            "meta_vina",
+            &pool,
+            &table,
+            gold_opts(&layout),
+            &layout,
+            &HashSet::new(),
+            20,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("meta_vina"),
+            "meta_vina should fail without Daifeen producer instead of returning plain: {err}"
+        );
+
+        layout.global_inject.record_daifeen_e2_in_control();
+        let hit = pick_trade_role_hit(
+            "meta_vina",
+            &pool,
+            &table,
+            gold_opts(&layout),
+            &layout,
+            &HashSet::new(),
+            20,
+        )
+        .unwrap();
+
+        for name in ["推进之王", "摩根", "维娜·维多利亚"] {
+            assert!(hit.names.iter().any(|n| n == name), "{hit:?}");
+        }
+        assert_eq!(hit.shortcut.as_deref(), Some("gsl_vina_lungmen"));
+        assert!((hit.trade_pct - 135.0).abs() < 0.01, "{hit:?}");
     }
 
     #[test]

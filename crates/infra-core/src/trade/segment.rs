@@ -63,6 +63,8 @@ pub struct RolePickStep {
     #[serde(default)]
     pub must_include_name: Option<String>,
     #[serde(default)]
+    pub must_include_names: Vec<String>,
+    #[serde(default)]
     pub only_if_producer: bool,
 }
 

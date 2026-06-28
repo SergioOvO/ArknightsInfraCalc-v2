@@ -18,7 +18,7 @@ use crate::pool::{
 };
 use crate::skill_table::SkillTable;
 
-use super::control_fill::assign_control;
+use super::control_fill::{assign_control, pin_daifeen_for_vina_priority};
 use super::manufacture_fill::assign_manufacture_lines;
 use super::power_fill::assign_power_stations;
 use super::producer_fill::{
@@ -62,7 +62,11 @@ pub(super) fn run_shift_pipeline(
     let producer_layout = run.resolve_snapshot(false)?;
     timer.mark("resolve(1st)");
 
-    // 中枢补位（仅 Peak，且未满 5 人）。
+    // 中枢补位（仅 Peak）。推王组第 4 优先需要戴菲恩 producer；中枢已满时也允许
+    // 用戴菲恩替换低优先龙门制造注入位，然后普通搜索补齐剩余空位。
+    if mode == AssignShiftMode::Peak {
+        pin_daifeen_for_vina_priority(blueprint, operbox, &mut run.assignment, &mut run.used);
+    }
     if mode == AssignShiftMode::Peak && run.assignment.control_operators().len() < 5 {
         let mut control_pool =
             build_control_pool(&operbox.control_roster(instances), instances, table)?;

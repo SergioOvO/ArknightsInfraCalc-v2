@@ -4,7 +4,9 @@ use std::sync::Arc;
 use crate::error::{Error, Result};
 use crate::instances::OperatorInstances;
 use crate::layout::assignment::BaseAssignment;
-use crate::layout::blueprint::{BaseBlueprint, FacilityKind, RoomBlueprint, RoomId, RoomProduct};
+use crate::layout::blueprint::{
+    station_operator_capacity, BaseBlueprint, FacilityKind, RoomBlueprint, RoomId, RoomProduct,
+};
 use crate::layout::context::LayoutContext;
 use crate::pool::{
     filter_trade_pool, jie_e0_trade_operator, karlan_precision_active, try_filter_standalone,
@@ -27,7 +29,7 @@ const CLOSURE_TRADE_NAME: &str = "可露希尔";
 const KARLAN_JIE_TRADE_NAME: &str = "孑";
 /// 这些 `base_systems` 条目是 L3/兼容锚点或贸易 role 目录，不再由 registry fixed 早占岗位。
 /// 主路径改由 `trade_segments.roles` 的核心优先策略落位：
-/// 但书 -> 可露希尔 -> 巫恋 -> 喀兰 -> 企鹅。
+/// 但书 -> 可露希尔 -> 巫恋 -> 推王 -> 喀兰 -> 企鹅。
 const TRADE_ROLE_MANAGED_REGISTRY_SYSTEMS: [&str; 7] = [
     "blackkey_closure",
     "witch_long_beta",
@@ -107,10 +109,16 @@ pub(super) fn assign_trade_jie_remainder(
             .find(|r| assignment.operators_in(&r.id).is_empty())
         {
             let sub = filter_trade_pool(pool, used);
-            if sub.entries.len() >= 3 {
+            let capacity = room.operator_capacity();
+            if sub.entries.len() >= capacity {
                 if let Some(jie_op) = jie_e0_trade_operator(instances, table) {
-                    let search_opts =
-                        trade_room_options(layout, gold_lines, options, TradeOrderKind::Gold);
+                    let search_opts = trade_room_options(
+                        layout,
+                        gold_lines,
+                        options,
+                        TradeOrderKind::Gold,
+                        room.level,
+                    );
                     if let Ok(report) = search_trade_triples_filtered(
                         &sub,
                         table,
@@ -136,7 +144,7 @@ pub(super) fn assign_trade_jie_remainder(
         let hit = pick_trade_hit(
             pool,
             table,
-            trade_room_options(layout, gold_lines, options, order),
+            trade_room_options(layout, gold_lines, options, order, room.level),
             SearchTripleFilter::default(),
             used,
             options.top_k,
@@ -157,26 +165,31 @@ pub(super) fn assign_trade_remainder(
     assignment: &mut BaseAssignment,
     used: &mut HashSet<String>,
 ) -> Result<()> {
-    for room in blueprint
+    let mut rooms: Vec<_> = blueprint
         .rooms
         .iter()
         .filter(|r| r.kind == FacilityKind::TradePost)
-    {
-        if assignment.operators_in(&room.id).len() >= 3 {
+        .collect();
+    prioritize_docus_trade_rooms(&mut rooms, assignment, used);
+
+    for room in rooms {
+        if assignment.operators_in(&room.id).len() >= room.operator_capacity() {
             continue;
         }
         let order = trade_order_from_room(room)?;
         let existing = assignment.operators_in(&room.id);
         let hit = if existing.is_empty() {
-            pick_trade_meta_then_plain(pool, table, layout, gold_lines, options, order, used)
+            pick_trade_meta_then_plain(
+                pool, table, layout, gold_lines, options, order, room.level, used,
+            )
         } else {
-            let anchor = existing[0].name.clone();
+            let anchors: Vec<_> = existing.iter().map(|op| op.name.clone()).collect();
             pick_trade_hit(
                 pool,
                 table,
-                trade_room_options(layout, gold_lines, options, order),
+                trade_room_options(layout, gold_lines, options, order, room.level),
                 SearchTripleFilter {
-                    must_include_name: Some(anchor),
+                    must_include_names: anchors,
                     hit_filter: Some(trade_hit_ok_for_greedy),
                     ..SearchTripleFilter::default()
                 },
@@ -188,6 +201,26 @@ pub(super) fn assign_trade_remainder(
         commit_trade_room(assignment, &room.id, &hit, pool, used)?;
     }
     Ok(())
+}
+
+pub(super) fn prioritize_docus_trade_rooms(
+    rooms: &mut Vec<&RoomBlueprint>,
+    assignment: &BaseAssignment,
+    used: &HashSet<String>,
+) {
+    if used.contains(DOCUS_TRADE_NAME) {
+        return;
+    }
+    rooms.sort_by_key(|room| {
+        let is_empty_lv2_gold = assignment.operators_in(&room.id).is_empty()
+            && room.level == 2
+            && trade_order_from_room(room).ok() == Some(TradeOrderKind::Gold);
+        if is_empty_lv2_gold {
+            0
+        } else {
+            1
+        }
+    });
 }
 
 pub(super) fn trade_order_from_room(room: &RoomBlueprint) -> Result<TradeOrderKind> {
@@ -210,7 +243,7 @@ pub(super) fn skip_trade_core_registry_systems(skip: &mut HashSet<String>) {
     }
 }
 
-/// 团队贸易站取人：但书 -> 可露希尔 -> 龙巫 -> 喀兰 -> 企鹅 -> 普通散件。
+/// 团队贸易站取人：但书 -> 可露希尔 -> 龙巫 -> 推王 -> 巫恋兜底 -> 喀兰 -> 企鹅 -> 普通散件。
 ///
 /// 这些 meta 是核心优先级，不是固定三人组；每个核心站内部仍由贸易搜索选择最优队友。
 pub(super) fn pick_trade_meta_then_plain(
@@ -220,13 +253,20 @@ pub(super) fn pick_trade_meta_then_plain(
     gold_lines: u32,
     options: &AssignBaseOptions,
     order: TradeOrderKind,
+    room_level: u8,
     used: &mut HashSet<String>,
 ) -> Result<TradeSearchHit> {
     if order == TradeOrderKind::Gold && !used.contains(DOCUS_TRADE_NAME) {
         if let Ok(hit) = pick_docus_trade_hit(
             pool,
             table,
-            trade_room_options(layout, gold_lines, options, TradeOrderKind::Gold),
+            trade_room_options(
+                layout,
+                gold_lines,
+                options,
+                TradeOrderKind::Gold,
+                room_level,
+            ),
             layout,
             used,
             options.top_k,
@@ -241,7 +281,13 @@ pub(super) fn pick_trade_meta_then_plain(
             "closure",
             pool,
             table,
-            trade_room_options(layout, gold_lines, options, TradeOrderKind::Gold),
+            trade_room_options(
+                layout,
+                gold_lines,
+                options,
+                TradeOrderKind::Gold,
+                room_level,
+            ),
             layout,
             used,
             options.top_k,
@@ -256,7 +302,53 @@ pub(super) fn pick_trade_meta_then_plain(
             "witch",
             pool,
             table,
-            trade_room_options(layout, gold_lines, options, TradeOrderKind::Gold),
+            trade_room_options(
+                layout,
+                gold_lines,
+                options,
+                TradeOrderKind::Gold,
+                room_level,
+            ),
+            layout,
+            used,
+            options.top_k,
+        ) {
+            if hit.names.iter().any(|n| n == WITCH_TRADE_NAME) {
+                return Ok(hit);
+            }
+        }
+    }
+    if order == TradeOrderKind::Gold {
+        if let Ok(hit) = pick_trade_role_hit(
+            "meta_vina",
+            pool,
+            table,
+            trade_room_options(
+                layout,
+                gold_lines,
+                options,
+                TradeOrderKind::Gold,
+                room_level,
+            ),
+            layout,
+            used,
+            options.top_k,
+        ) {
+            return Ok(hit);
+        }
+    }
+    if order == TradeOrderKind::Gold && !used.contains(WITCH_TRADE_NAME) {
+        if let Ok(hit) = pick_trade_role_hit(
+            "witch_fallback",
+            pool,
+            table,
+            trade_room_options(
+                layout,
+                gold_lines,
+                options,
+                TradeOrderKind::Gold,
+                room_level,
+            ),
             layout,
             used,
             options.top_k,
@@ -274,7 +366,13 @@ pub(super) fn pick_trade_meta_then_plain(
             "karlan",
             pool,
             table,
-            trade_room_options(layout, gold_lines, options, TradeOrderKind::Gold),
+            trade_room_options(
+                layout,
+                gold_lines,
+                options,
+                TradeOrderKind::Gold,
+                room_level,
+            ),
             layout,
             used,
             options.top_k,
@@ -289,7 +387,13 @@ pub(super) fn pick_trade_meta_then_plain(
             "penguin",
             pool,
             table,
-            trade_room_options(layout, gold_lines, options, TradeOrderKind::Gold),
+            trade_room_options(
+                layout,
+                gold_lines,
+                options,
+                TradeOrderKind::Gold,
+                room_level,
+            ),
             layout,
             used,
             options.top_k,
@@ -300,7 +404,7 @@ pub(super) fn pick_trade_meta_then_plain(
     pick_trade_hit(
         pool,
         table,
-        trade_room_options(layout, gold_lines, options, order),
+        trade_room_options(layout, gold_lines, options, order, room_level),
         SearchTripleFilter {
             hit_filter: Some(trade_hit_ok_for_greedy),
             ..SearchTripleFilter::default()
@@ -319,31 +423,32 @@ pub(super) fn pick_trade_hit(
     top_k: usize,
 ) -> Result<TradeSearchHit> {
     let mut used_for_filter = used.clone();
-    if let Some(anchor) = filter.must_include_name.as_deref() {
-        used_for_filter.remove(anchor);
+    for anchor in filter.must_include_names() {
+        used_for_filter.remove(&anchor);
     }
     let sub = filter_trade_pool(pool, &used_for_filter);
     // anchor 搜索（must_include）下不做 standalone 收窄：anchor 干员（如黑键这类
     // 机械/订单速度 buffer）通常不是 standalone，收窄会把 anchor 本身滤掉，
     // 触发 "missing must-include"。standalone 收窄仅用于无 anchor 的常规余站搜索。
-    let sub = if filter.must_include_name.is_some() {
+    let sub = if filter.has_must_include() {
         sub
     } else if karlan_precision_active(&search_opts.layout.global_inject) {
         sub
     } else {
-        try_filter_standalone(&sub, FacilityKind::TradePost, 3)
+        try_filter_standalone(&sub, FacilityKind::TradePost, search_opts.operator_capacity)
     };
-    if sub.entries.len() < 3 {
+    if sub.entries.len() < search_opts.operator_capacity {
         return Err(Error::msg(format!(
-            "trade pool has {} ready operators (need 3)",
-            sub.entries.len()
+            "trade pool has {} ready operators (need {})",
+            sub.entries.len(),
+            search_opts.operator_capacity
         )));
     }
     let mut opts = search_opts;
     opts.top_k = top_k;
     let report = match search_trade_triples_filtered(&sub, table, &opts, filter.clone()) {
         Ok(r) => r,
-        Err(_) if filter.hit_filter.is_some() && filter.must_include_name.is_none() => {
+        Err(_) if filter.hit_filter.is_some() && !filter.has_must_include() => {
             search_trade_triples(&sub, table, &opts)?
         }
         Err(e) => return Err(e),
@@ -362,8 +467,11 @@ pub(super) fn trade_room_options(
     gold_lines: u32,
     options: &AssignBaseOptions,
     order: TradeOrderKind,
+    room_level: u8,
 ) -> TradeSearchOptions {
     TradeSearchOptions {
+        trade_level: room_level,
+        operator_capacity: station_operator_capacity(room_level),
         top_k: options.top_k,
         mood: options.mood,
         shift_hours: options.shift_hours,
@@ -371,5 +479,103 @@ pub(super) fn trade_room_options(
         gold_production_lines: gold_lines,
         order_mode: TradeSearchOrderMode::Single(order),
         ..TradeSearchOptions::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::instances::{default_instances_path, OperatorInstances};
+    use crate::pool::{add_jie_market_to_trade_pool, build_trade_pool};
+    use crate::roster::Roster;
+    use crate::skill_table::{default_skill_table_path, SkillTable};
+    use std::collections::HashMap;
+
+    #[test]
+    fn vina_role_is_fourth_before_karlan_jie() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            [
+                ("推进之王", 2),
+                ("摩根", 2),
+                ("维娜·维多利亚", 2),
+                ("孑", 2),
+                ("银灰", 2),
+                ("崖心", 2),
+            ]
+            .into_iter()
+            .map(|(name, elite)| (name.to_string(), elite))
+            .collect::<HashMap<_, _>>(),
+        );
+        let mut pool = build_trade_pool(&roster, &instances, &table).unwrap();
+        add_jie_market_to_trade_pool(&mut pool, &instances, &table);
+
+        let mut layout = LayoutContext::search_baseline();
+        layout.global_inject.record_daifeen_e2_in_control();
+        layout.global_inject.record_karlan_precision(-15.0, 6);
+
+        let hit = pick_trade_meta_then_plain(
+            &pool,
+            &table,
+            &layout,
+            4,
+            &AssignBaseOptions {
+                top_k: 20,
+                ..Default::default()
+            },
+            TradeOrderKind::Gold,
+            3,
+            &mut HashSet::new(),
+        )
+        .unwrap();
+
+        assert_eq!(hit.shortcut.as_deref(), Some("gsl_vina_lungmen"));
+        for name in ["推进之王", "摩根", "维娜·维多利亚"] {
+            assert!(hit.names.iter().any(|n| n == name), "{hit:?}");
+        }
+        assert!(!hit.names.iter().any(|n| n == "孑"), "{hit:?}");
+    }
+
+    #[test]
+    fn vina_role_precedes_witch_fallback_without_tequila() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            [
+                ("推进之王", 2),
+                ("摩根", 2),
+                ("维娜·维多利亚", 2),
+                ("巫恋", 2),
+                ("贝娜", 2),
+                ("古米", 2),
+                ("夜刀", 2),
+            ]
+            .into_iter()
+            .map(|(name, elite)| (name.to_string(), elite))
+            .collect::<HashMap<_, _>>(),
+        );
+        let pool = build_trade_pool(&roster, &instances, &table).unwrap();
+
+        let mut layout = LayoutContext::search_baseline();
+        layout.global_inject.record_daifeen_e2_in_control();
+
+        let hit = pick_trade_meta_then_plain(
+            &pool,
+            &table,
+            &layout,
+            4,
+            &AssignBaseOptions {
+                top_k: 20,
+                ..Default::default()
+            },
+            TradeOrderKind::Gold,
+            3,
+            &mut HashSet::new(),
+        )
+        .unwrap();
+
+        assert_eq!(hit.shortcut.as_deref(), Some("gsl_vina_lungmen"));
+        assert!(!hit.names.iter().any(|n| n == "巫恋"), "{hit:?}");
     }
 }

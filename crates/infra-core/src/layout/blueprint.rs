@@ -70,6 +70,17 @@ impl RoomBlueprint {
             .unwrap_or(self.level)
             .min(5)
     }
+
+    pub fn operator_capacity(&self) -> usize {
+        match self.kind {
+            FacilityKind::TradePost | FacilityKind::Factory => {
+                station_operator_capacity(self.level)
+            }
+            FacilityKind::PowerPlant => 1,
+            FacilityKind::ControlCenter => 5,
+            _ => usize::MAX,
+        }
+    }
 }
 
 /// 场景假设：无法从物理蓝图单独推出的聚合量（宿管精二设施数等）。
@@ -336,6 +347,10 @@ pub fn default_dorm_beds(level: u8) -> u8 {
         3 => 5,
         _ => 4,
     }
+}
+
+pub fn station_operator_capacity(level: u8) -> usize {
+    level.clamp(1, 3) as usize
 }
 
 #[cfg(test)]

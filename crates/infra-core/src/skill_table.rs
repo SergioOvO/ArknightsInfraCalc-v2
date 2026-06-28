@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -118,16 +119,19 @@ pub fn default_skill_table_path() -> Result<std::path::PathBuf> {
 }
 
 pub fn data_path(name: &str) -> Result<std::path::PathBuf> {
+    let mut searched = Vec::new();
     if let Some(path) = data_path_from_env(name)? {
         return Ok(path);
     }
-    let mut searched = Vec::new();
     for root in runtime_data_roots()? {
         let path = root.join(name);
         searched.push(path.clone());
         if path.exists() {
             return Ok(path);
         }
+    }
+    if let Some((embedded_name, bytes)) = embedded_data(name) {
+        return materialize_embedded_data(name, embedded_name, bytes);
     }
     let fallback = workspace_root()?.join("data").join(name);
     searched.push(fallback.clone());
@@ -181,6 +185,207 @@ fn push_unique(roots: &mut Vec<PathBuf>, path: PathBuf) {
     if !roots.iter().any(|root| root == &path) {
         roots.push(path);
     }
+}
+
+fn materialize_embedded_data(
+    requested_name: &str,
+    embedded_name: &'static str,
+    bytes: &'static [u8],
+) -> Result<PathBuf> {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    embedded_name.hash(&mut hasher);
+    bytes.hash(&mut hasher);
+    let root = std::env::temp_dir()
+        .join("arknights-infra-calc-v2")
+        .join(format!("embedded-{:016x}", hasher.finish()));
+    let path = root.join(requested_name);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let needs_write = match std::fs::metadata(&path) {
+        Ok(meta) => meta.len() != bytes.len() as u64,
+        Err(_) => true,
+    };
+    if needs_write {
+        std::fs::write(&path, bytes)?;
+    }
+    Ok(path)
+}
+
+fn embedded_data(name: &str) -> Option<(&'static str, &'static [u8])> {
+    exact_embedded_data(name).or_else(|| {
+        if is_layout_json(name) {
+            exact_embedded_data("fixtures/243/layout.json")
+        } else if is_operbox_json(name) {
+            exact_embedded_data("fixtures/243/operbox_full_e2.json")
+        } else {
+            None
+        }
+    })
+}
+
+fn is_layout_json(name: &str) -> bool {
+    name.starts_with("layout/") && name.ends_with(".json")
+}
+
+fn is_operbox_json(name: &str) -> bool {
+    let Some(file_name) = Path::new(name).file_name().and_then(|s| s.to_str()) else {
+        return false;
+    };
+    file_name.ends_with(".json")
+        && (file_name == "operbox.json"
+            || file_name.starts_with("operbox_")
+            || file_name.ends_with("_operbox.json"))
+}
+
+fn exact_embedded_data(name: &str) -> Option<(&'static str, &'static [u8])> {
+    let bytes = match name {
+        "operator_instances.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/operator_instances.json"
+        )) as &[u8],
+        "skill_table.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/skill_table.json"
+        )) as &[u8],
+        "standalone_roster.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/standalone_roster.json"
+        )) as &[u8],
+        "base_systems.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/base_systems.json"
+        )) as &[u8],
+        "trade_segments.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/trade_segments.json"
+        )) as &[u8],
+        "trade_shortcuts.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/trade_shortcuts.json"
+        )) as &[u8],
+        "fixtures/243/layout.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/fixtures/243/layout.json"
+        )) as &[u8],
+        "fixtures/243/operbox_full_e2.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/fixtures/243/operbox_full_e2.json"
+        )) as &[u8],
+        "fixtures/243/schedule_export.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/fixtures/243/schedule_export.json"
+        )) as &[u8],
+        "roster.csv" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/roster.csv"
+        )) as &[u8],
+        "roster_gongsun.csv" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/roster_gongsun.csv"
+        )) as &[u8],
+        "operbox_gongsun.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/operbox_gongsun.json"
+        )) as &[u8],
+        "layout/153.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/layout/153.json"
+        )) as &[u8],
+        "layout/243.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/layout/243.json"
+        )) as &[u8],
+        "layout/243_use_this_.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/layout/243_use_this_.json"
+        )) as &[u8],
+        "layout/252.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/layout/252.json"
+        )) as &[u8],
+        "layout/333.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/layout/333.json"
+        )) as &[u8],
+        "layout/342.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/layout/342.json"
+        )) as &[u8],
+        "layout/snhunt.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/layout/snhunt.json"
+        )) as &[u8],
+        "REGRESSION_CASES.csv" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/REGRESSION_CASES.csv"
+        )) as &[u8],
+        "UNIT_OUTPUT_ANCHORS.csv" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/UNIT_OUTPUT_ANCHORS.csv"
+        )) as &[u8],
+        "schedule_243/operbox_ideal_e2.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/schedule_243/operbox_ideal_e2.json"
+        )) as &[u8],
+        "schedule_243/assignment_automation_trio_e2.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/schedule_243/assignment_automation_trio_e2.json"
+        )) as &[u8],
+        "schedule_243/assignment_gongsun_closure_docus.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/schedule_243/assignment_gongsun_closure_docus.json"
+        )) as &[u8],
+        "schedule_243/assignment_greedy_witch_closure.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/schedule_243/assignment_greedy_witch_closure.json"
+        )) as &[u8],
+        "schedule_243/assignment_ideal_witch_docus.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/schedule_243/assignment_ideal_witch_docus.json"
+        )) as &[u8],
+        _ => return None,
+    };
+    Some((
+        match name {
+            "operator_instances.json" => "operator_instances.json",
+            "skill_table.json" => "skill_table.json",
+            "standalone_roster.json" => "standalone_roster.json",
+            "base_systems.json" => "base_systems.json",
+            "trade_segments.json" => "trade_segments.json",
+            "trade_shortcuts.json" => "trade_shortcuts.json",
+            "fixtures/243/layout.json" => "fixtures/243/layout.json",
+            "fixtures/243/operbox_full_e2.json" => "fixtures/243/operbox_full_e2.json",
+            "fixtures/243/schedule_export.json" => "fixtures/243/schedule_export.json",
+            "roster.csv" => "roster.csv",
+            "roster_gongsun.csv" => "roster_gongsun.csv",
+            "operbox_gongsun.json" => "operbox_gongsun.json",
+            "layout/153.json" => "layout/153.json",
+            "layout/243.json" => "layout/243.json",
+            "layout/243_use_this_.json" => "layout/243_use_this_.json",
+            "layout/252.json" => "layout/252.json",
+            "layout/333.json" => "layout/333.json",
+            "layout/342.json" => "layout/342.json",
+            "layout/snhunt.json" => "layout/snhunt.json",
+            "REGRESSION_CASES.csv" => "REGRESSION_CASES.csv",
+            "UNIT_OUTPUT_ANCHORS.csv" => "UNIT_OUTPUT_ANCHORS.csv",
+            "schedule_243/operbox_ideal_e2.json" => "schedule_243/operbox_ideal_e2.json",
+            "schedule_243/assignment_automation_trio_e2.json" => {
+                "schedule_243/assignment_automation_trio_e2.json"
+            }
+            "schedule_243/assignment_gongsun_closure_docus.json" => {
+                "schedule_243/assignment_gongsun_closure_docus.json"
+            }
+            "schedule_243/assignment_greedy_witch_closure.json" => {
+                "schedule_243/assignment_greedy_witch_closure.json"
+            }
+            "schedule_243/assignment_ideal_witch_docus.json" => {
+                "schedule_243/assignment_ideal_witch_docus.json"
+            }
+            _ => unreachable!(),
+        },
+        bytes,
+    ))
 }
 
 pub fn workspace_root() -> Result<std::path::PathBuf> {

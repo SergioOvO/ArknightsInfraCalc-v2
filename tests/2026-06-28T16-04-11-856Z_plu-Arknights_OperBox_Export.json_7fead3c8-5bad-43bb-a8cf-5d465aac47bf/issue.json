@@ -1,0 +1,12 @@
+{
+  "type": "room_issue",
+  "sourceName": "plu-Arknights_OperBox_Export.json",
+  "room": {
+    "title": "发电站 3",
+    "group": "power",
+    "operators": [],
+    "inferredRule": "发电效率"
+  },
+  "command": "/root/ArknightsInfraCalc-v2_beta_test_frontend-main/bin/infra-cli serve < server/storage/cli-runs/2026-06-28T16-02-40-755Z_plu-Arknights_OperBox_Export.json_6a5f4b76-4313-46c1-86db-00c780b1702c/serve-request.jsonl",
+  "note": "发电站候选不足：当前布局有 3 个发电站，但 infra-cli 只生成了 2 组发电站排班。 CLI 日志显示当前 box 筛选后只有 2 名可用于发电站的候选干员。 处理方式：切换到 252/342 等 2 发电站布局，或补足可用于发电站的干员后重新导出 box。 原始错误：power: expected 3 assignments, got 2 profile.json 未生成 maa.json 未生成 [工具人表] 发电站: 过滤 20→2 人 (最低需要1人)"
+}

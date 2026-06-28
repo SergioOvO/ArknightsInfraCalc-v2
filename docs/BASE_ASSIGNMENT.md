@@ -41,7 +41,7 @@ operbox + blueprint
 │ 阶段 A：编排 + producer 落位 + 分设施搜索           │
 │  · System → Plan → Execute 先认领 registry 体系     │
 │  · 中枢  C(n,k)  k∈[1,5]（search_control_combos）   │
-│  · 贸易  余站按 docus/closure/witch role 后 C(n,3) │
+│  · 贸易  余站按 docus/closure/witch/meta_vina/witch_fallback role 后 C(n,3) │
 │  · 制造  每产线类型 C(n,3)（同 243c split-line）   │
 │  · 发电  每站 1 人贪心（已有 search_power_*）      │
 │  · 宿舍   producer 房（森西等）按 assignment 定人   │
@@ -74,12 +74,12 @@ operbox + blueprint
 2. **控制中枢补位** `control`（木天蓼 / 全局贸易·制造 % 等；不足 5 人时用 `search_control_combos` 补满）
 3. **宿舍 / 感知 producer**（如森西、迷迭香感知源；先落位再 `resolve_base`）
 4. **发电各站**（每站 1 人，`search_power_assignment` 同款 `used`）
-5. **贸易余站**（未被 registry 占用的金单贸易站先走 `docus → closure → witch → plain` role；源石单走 plain）
+5. **贸易余站**（未被 registry 占用的金单贸易站先走 `docus → closure → witch → meta_vina → witch_fallback → karlan → penguin → plain` role；源石单走 plain）
 6. **制造各产线**（按蓝图 `manu_line_scenario`：赤金线、经验线等同组三人）
 
 同类型多房间：按蓝图 `rooms` 数组顺序或稳定 `room_id` 字典序。
 
-**贸易 core priority**：但书、可露希尔、巫恋不是固定三人组。`assign_shift` 会跳过 `witch_long_beta`、`blackkey_closure`、企鹅、推王等旧 registry 早占站条目，改在贸易余站调用 `trade_segments.roles`。完整叙拉古链仍优先；缺链时但书仍配最高可用工具人。可露缺黑键仍上可露；巫恋缺裁缝 β 时走 α / 空白第三人 fallback。
+**贸易 core priority**：但书、可露希尔、龙巫不是固定三人组。`assign_shift` 会跳过 `witch_long_beta`、`blackkey_closure`、企鹅、推王等旧 registry 早占站条目，改在贸易余站调用 `trade_segments.roles`。叙拉古 registry 只锚定八幡海铃 + 伺夜/贝洛内同站 meta；但书若在三级站自然与伺夜/贝洛内同房才命中 `gsl_docus_syracusa` shortcut，缺链时但书仍配最高可用工具人。可露缺黑键仍上可露；龙巫必须同时包含巫恋 + 龙舌兰，缺裁缝 β 时走 α / 空白第三人 fallback；无龙舌兰的巫恋兜底低于推王组。
 
 ---
 
@@ -104,8 +104,8 @@ operbox + blueprint
 | 设施 | 每房人数 | 搜索入口（现有） | 编制备注 |
 |------|----------|------------------|----------|
 | 控制中枢 | 1～5 | `search_control_combos` | `ControlFillPolicy` 控制 HR / 心情补位 |
-| 贸易站 | 3 | `search_trade_triples` / `search_trade_triples_filtered` | 同房互斥：`trade_station_exclusive_violation` |
-| 制造站 | 3 | `search_manufacture_triples` | 同类产线共用三人（`ManuSearchRecipeMode::Lines`） |
+| 贸易站 | 按等级 1/2/3 | `search_trade_triples` / `search_trade_triples_filtered` | 同房互斥：`trade_station_exclusive_violation` |
+| 制造站 | 按等级 1/2/3 | `search_manufacture_triples` | 同类产线共用同容量组合（`ManuSearchRecipeMode::Lines`） |
 | 发电站 | 1 | `search_power_assignment` | 站内不重复 |
 | 宿舍 | 1～N | 暂无 search；编制驱动 `resolve` 内 producer | 森西大食堂等 |
 
@@ -200,7 +200,7 @@ operbox + blueprint
 | `schedule/base_rotation.rs` | `schedule_base_rotation_a_b_a`（A-B-A legacy）+ `score_base_assignment` |
 | `schedule/team_rotation.rs` | `schedule_team_rotation`：αβγ 三队轮换 |
 | `search/control.rs` | `search_control_combos`：中枢 C(n,k) + `ControlFillPolicy` |
-| `search/role_pick.rs` | 贸易 core role：`docus` / `closure` / `witch` fallback 链 |
+| `search/role_pick.rs` | 贸易 core role：`docus` / `closure` / `witch` / `witch_fallback` fallback 链 |
 | `search/trade.rs` / `manufacture.rs` / `power.rs` | 分设施搜索 |
 | `pool/trade.rs` | `filter_trade_pool` |
 | `pool/base.rs` | 泛型 `PoolCore<T>`、`filter_pool` |

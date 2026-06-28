@@ -257,7 +257,7 @@ struct BaseSystemsCache {
 
 static BASE_SYSTEMS_CACHE: OnceLock<Option<BaseSystemsCache>> = OnceLock::new();
 
-const DOCUS_SYRACUSA_SYSTEM: &str = "docus_syracusa";
+const SYRACUSA_PAIR_SYSTEM: &str = "syracusa_pair";
 const BLACKKEY_CLOSURE_SYSTEM: &str = "blackkey_closure";
 const ROSEMARY: &str = "迷迭香";
 const BLACKKEY: &str = "黑键";
@@ -443,7 +443,9 @@ fn explain_slot_room<'a>(
     let mut has_facility = false;
     let mut has_product = false;
     let mut blocked_by_capacity = false;
-    for room in &blueprint.rooms {
+    let mut rooms: Vec<_> = blueprint.rooms.iter().collect();
+    prioritize_registry_slot_rooms(&mut rooms, slot);
+    for room in rooms {
         if room.kind != kind {
             continue;
         }
@@ -484,6 +486,30 @@ fn explain_slot_room<'a>(
         "room_unavailable",
         format!("no available {:?} room", kind),
     ))
+}
+
+fn prioritize_registry_slot_rooms<'a>(
+    rooms: &mut Vec<&'a crate::layout::blueprint::RoomBlueprint>,
+    slot: &SystemSlotDef,
+) {
+    if slot.trade_role.as_deref() != Some("meta_docus") {
+        return;
+    }
+    rooms.sort_by_key(|room| {
+        let is_lv2_gold_trade = room.kind == FacilityKind::TradePost
+            && room.level == 2
+            && matches!(
+                room.product,
+                Some(RoomProduct::Trade {
+                    order: crate::trade::input::TradeOrderKind::Gold
+                })
+            );
+        if is_lv2_gold_trade {
+            0
+        } else {
+            1
+        }
+    });
 }
 
 fn slot_matches_room_product(
@@ -775,7 +801,7 @@ fn contextual_same_station_priority(system: &BaseSystemDef, docus_closure_long_s
     system.priority
 }
 
-/// Legacy registry 兼容路径：若直接调用 `claim_base_systems`，且但书链长班已认领、
+/// Legacy registry 兼容路径：若直接调用 `claim_base_systems`，且叙拉古同站 meta 已认领、
 /// 迷迭香/黑键绑定链可用，则旧 fixed registry 会优先认领可露希尔+黑键+吉星。
 ///
 /// 主路径 `assign_shift` 已跳过这些 role-managed 贸易 registry，由 `trade_segments.roles`
@@ -783,7 +809,8 @@ fn contextual_same_station_priority(system: &BaseSystemDef, docus_closure_long_s
 fn docus_closure_long_shift_active(operbox: &OperBox, selected: &[RegistrySystemClaim]) -> bool {
     selected
         .iter()
-        .any(|claim| claim.system_id == DOCUS_SYRACUSA_SYSTEM)
+        .any(|claim| claim.system_id == SYRACUSA_PAIR_SYSTEM)
+        && owns_e2(operbox, "但书")
         && owns_e2(operbox, ROSEMARY)
         && owns_e2(operbox, BLACKKEY)
         && owns_e2(operbox, CLOSURE)
@@ -799,6 +826,7 @@ fn owns_e2(operbox: &OperBox, name: &str) -> bool {
 
 /// 将 `RegistrySystemClaim` 写入编制。
 pub fn apply_registry_system_claim(
+    blueprint: &BaseBlueprint,
     claim: &RegistrySystemClaim,
     assignment: &mut BaseAssignment,
     used: &mut HashSet<String>,
@@ -820,10 +848,30 @@ pub fn apply_registry_system_claim(
 
         if slot.facility == FacilityKind::ControlCenter {
             let mut existing = assignment.control_operators();
+            if existing.len() + ops.len() > 5 {
+                return Err(Error::msg(format!(
+                    "system {} control capacity exceeded",
+                    claim.system_id
+                )));
+            }
             existing.extend(ops);
             assignment.set_room(RoomId::from("control"), existing);
         } else {
-            assignment.set_room(slot.room_id.clone(), ops);
+            let room = blueprint.room(&slot.room_id).ok_or_else(|| {
+                Error::msg(format!(
+                    "system {} room {} not in blueprint",
+                    claim.system_id, slot.room_id.0
+                ))
+            })?;
+            let mut existing = assignment.operators_in(&slot.room_id).to_vec();
+            if existing.len() + ops.len() > room.operator_capacity() {
+                return Err(Error::msg(format!(
+                    "system {} room {} capacity exceeded",
+                    claim.system_id, slot.room_id.0
+                )));
+            }
+            existing.extend(ops);
+            assignment.set_room(slot.room_id.clone(), existing);
         }
     }
     Ok(())
@@ -843,7 +891,7 @@ pub fn claim_base_systems(
     let selected =
         select_registry_systems(blueprint, operbox, mode, assignment, used, skip_system_ids);
     for claim in selected {
-        apply_registry_system_claim(&claim, assignment, used)?;
+        apply_registry_system_claim(blueprint, &claim, assignment, used)?;
     }
     Ok(())
 }
@@ -946,6 +994,21 @@ fn plan_registry_slot(
                 ),
             ));
         }
+    } else {
+        let current = assignment.operators_in(&room.id).len();
+        let capacity = room.operator_capacity();
+        if current + resolved.len() > capacity {
+            return Err(SystemExplainReason::new(
+                "room_capacity",
+                format!(
+                    "room {} capacity exceeded: current {} + slot {} > {}",
+                    room.id.0,
+                    current,
+                    resolved.len(),
+                    capacity
+                ),
+            ));
+        }
     }
     let room_id = if slot_def.facility == "control" {
         RoomId::from("control")
@@ -1034,7 +1097,7 @@ mod tests {
     fn base_systems_registry_loads_curated_groups() {
         let cache = base_systems_cache().expect("base_systems loaded");
         let ids: HashSet<_> = cache.systems.iter().map(|s| s.id.as_str()).collect();
-        assert!(ids.contains("docus_syracusa"));
+        assert!(ids.contains("syracusa_pair"));
         assert!(
             !ids.contains("rosemary_perception"),
             "迷迭香感知链走代码化体系层（system_integrity），不进 registry"
@@ -1109,7 +1172,7 @@ mod tests {
     }
 
     #[test]
-    fn claim_docus_syracusa_on_ideal_e2_peak() {
+    fn claim_syracusa_pair_on_ideal_e2_peak() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = ideal_e2_operbox();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
@@ -1141,16 +1204,16 @@ mod tests {
             control
         );
 
-        let docus_room = assignment.rooms.iter().any(|r| {
-            r.operators.iter().any(|o| o.name == "但书")
+        let syracusa_room = assignment.rooms.iter().any(|r| {
+            !r.operators.iter().any(|o| o.name == "但书")
                 && r.operators.iter().any(|o| o.name == "伺夜")
                 && r.operators.iter().any(|o| o.name == "贝洛内")
         });
-        assert!(docus_room, "但书三人组应认领一个贸易站");
+        assert!(syracusa_room, "伺夜+贝洛内应作为叙拉古同站 meta 被认领");
     }
 
     #[test]
-    fn exclusive_meta_chain_prefers_docus_over_ling_jie() {
+    fn exclusive_meta_chain_prefers_syracusa_over_ling_jie() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = ideal_e2_operbox();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
@@ -1169,14 +1232,15 @@ mod tests {
         .unwrap();
 
         assert!(!used.contains("灵知"));
-        let has_docus_trade = assignment.rooms.iter().any(|r| {
+        let has_syracusa_trade = assignment.rooms.iter().any(|r| {
             blueprint
                 .rooms
                 .iter()
                 .any(|b| b.id == r.room_id && b.kind == FacilityKind::TradePost)
-                && r.operators.iter().any(|o| o.name == "但书")
+                && r.operators.iter().any(|o| o.name == "伺夜")
+                && r.operators.iter().any(|o| o.name == "贝洛内")
         });
-        assert!(has_docus_trade, "但书链应认领某一贸易站");
+        assert!(has_syracusa_trade, "叙拉古同站 meta 应认领某一贸易站");
     }
 
     #[test]
@@ -1455,10 +1519,8 @@ mod tests {
         // manu_1 红松三线落位。修复前缺这些队友会使 manu_4 非 optional 槽失败，
         // 整链 all-or-nothing 被拒，导致中枢无焰尾、水月等低 priority 体系反占。
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let operbox = operbox_without_names(
-            &ideal_e2_operbox(),
-            &["迷迭香", "阿罗玛", "断罪者", "槐琥"],
-        );
+        let operbox =
+            operbox_without_names(&ideal_e2_operbox(), &["迷迭香", "阿罗玛", "断罪者", "槐琥"]);
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
 
         let mut assignment = BaseAssignment::default();
