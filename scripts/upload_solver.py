@@ -23,6 +23,8 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 import textwrap
 from pathlib import Path
 
@@ -32,8 +34,13 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SSH_TARGET = "arkinfra-server"
 DEFAULT_LOCAL_ELF = ROOT / "target" / "release" / "infra-cli"
 DEFAULT_REMOTE_TMP = "/root/infra-cli.new"
+DEFAULT_REMOTE_DATA_TMP = "/root/infra-data.new.tar.gz"
 DEFAULT_APP_DIR = "/root/ArknightsInfraCalc-v2_beta_test_frontend-main"
 DEFAULT_PORT = 4174
+
+DATA_DIR = ROOT / "data"
+SKIP_DATA_DIRS = {"baked"}
+SKIP_DATA_SUFFIXES = (":Zone.Identifier",)
 
 
 def sha256(path: Path) -> str:
@@ -73,7 +80,64 @@ def run(cmd: list[str], *, password: str, stdin: str | None = None) -> None:
     subprocess.run(cmd, input=stdin, text=True, env=env, check=True)
 
 
-def remote_update_script(app: str, new_cli: str, port: int, restart: bool) -> str:
+def should_bundle_data(path: Path) -> bool:
+    rel = path.relative_to(DATA_DIR)
+    if any(part in SKIP_DATA_DIRS for part in rel.parts):
+        return False
+    if any(path.name.endswith(suffix) for suffix in SKIP_DATA_SUFFIXES):
+        return False
+    return path.is_file()
+
+
+def create_data_bundle() -> Path:
+    if not DATA_DIR.is_dir():
+        raise SystemExit(f"data directory does not exist: {DATA_DIR}")
+
+    tmp = tempfile.NamedTemporaryFile(prefix="infra-data-", suffix=".tar.gz", delete=False)
+    tmp_path = Path(tmp.name)
+    tmp.close()
+    try:
+        with tarfile.open(tmp_path, "w:gz") as tar:
+            for path in sorted(DATA_DIR.rglob("*")):
+                if should_bundle_data(path):
+                    tar.add(path, arcname=Path("data") / path.relative_to(DATA_DIR))
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    return tmp_path
+
+
+def remote_update_script(
+    app: str,
+    new_cli: str,
+    data_archive: str | None,
+    port: int,
+    restart: bool,
+) -> str:
+    data_block = ""
+    if data_archive:
+        data_block = f"""
+        data_archive={shlex.quote(data_archive)}
+        test -f "$data_archive"
+        rm -rf "bin/data.tmp-$ts" "bin/data.new-$ts"
+        mkdir -p "bin/data.tmp-$ts"
+        tar -xzf "$data_archive" -C "bin/data.tmp-$ts"
+        test -f "bin/data.tmp-$ts/data/skill_table.json"
+        test -f "bin/data.tmp-$ts/data/operator_instances.json"
+        test -f "bin/data.tmp-$ts/data/standalone_roster.json"
+        mv "bin/data.tmp-$ts/data" "bin/data.new-$ts"
+        rm -rf "bin/data.tmp-$ts"
+        rm -rf "bin/data.backup-$ts"
+        if [ -d bin/data ]; then
+          mv bin/data "bin/data.backup-$ts"
+        fi
+        mv "bin/data.new-$ts" bin/data
+        rm -f "$data_archive"
+
+        echo "Installed data:"
+        sha256sum bin/data/skill_table.json bin/data/operator_instances.json bin/data/standalone_roster.json || true
+        """
+
     restart_block = ""
     if restart:
         restart_block = f"""
@@ -153,6 +217,8 @@ def remote_update_script(app: str, new_cli: str, port: int, restart: bool) -> st
             """
         ).strip()
         + "\n"
+        + textwrap.dedent(data_block).strip()
+        + "\n"
         + textwrap.dedent(restart_block).strip()
         + "\n"
     )
@@ -168,8 +234,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="local Linux infra-cli ELF to upload",
     )
     parser.add_argument("--remote-tmp", default=DEFAULT_REMOTE_TMP, help="remote temp path")
+    parser.add_argument(
+        "--remote-data-tmp",
+        default=DEFAULT_REMOTE_DATA_TMP,
+        help="remote temp path for bundled runtime data",
+    )
     parser.add_argument("--app-dir", default=DEFAULT_APP_DIR, help="remote frontend app dir")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="frontend port to restart")
+    parser.add_argument(
+        "--no-data",
+        action="store_true",
+        help="upload solver only; do not sync data into app/bin/data",
+    )
     parser.add_argument(
         "--no-restart",
         action="store_true",
@@ -201,14 +277,30 @@ def main(argv: list[str] | None = None) -> int:
     )
     run(scp_cmd, password=password)
 
-    script = remote_update_script(
-        app=args.app_dir,
-        new_cli=args.remote_tmp,
-        port=args.port,
-        restart=not args.no_restart,
-    )
-    ssh_cmd = with_password_tool(["ssh", args.target, "bash", "-s"], password)
-    run(ssh_cmd, password=password, stdin=script)
+    data_bundle: Path | None = None
+    try:
+        if not args.no_data:
+            data_bundle = create_data_bundle()
+            print(f"Data bundle: {data_bundle}")
+            data_scp_cmd = with_password_tool(
+                ["scp", str(data_bundle), f"{args.target}:{args.remote_data_tmp}"],
+                password,
+            )
+            run(data_scp_cmd, password=password)
+
+        data_archive = None if args.no_data else args.remote_data_tmp
+        script = remote_update_script(
+            app=args.app_dir,
+            new_cli=args.remote_tmp,
+            data_archive=data_archive,
+            port=args.port,
+            restart=not args.no_restart,
+        )
+        ssh_cmd = with_password_tool(["ssh", args.target, "bash", "-s"], password)
+        run(ssh_cmd, password=password, stdin=script)
+    finally:
+        if data_bundle is not None:
+            data_bundle.unlink(missing_ok=True)
 
     return 0
 
