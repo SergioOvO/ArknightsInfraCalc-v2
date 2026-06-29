@@ -209,6 +209,8 @@ const TAG_ABYSSAL: &str = "cc.g.abyssal";
 const DAIFEEN: &str = "戴菲恩";
 const VINA_TRADE_GROUP: [&str; 3] = ["推进之王", "摩根", "维娜·维多利亚"];
 const WARMUP_STICKY_TRADE_OPERATORS: [&str; 2] = ["巫恋", "龙舌兰"];
+const WARMUP_MANU_BUFF_PREFIX: &str = "manu_prod_spd_addition[";
+const WARMUP_TRADE_BUFF_PREFIX: &str = "trade_ord_wt&cost[";
 
 fn room_has_all(room: &RoomAssignment, names: &[&str]) -> bool {
     names
@@ -216,7 +218,12 @@ fn room_has_all(room: &RoomAssignment, names: &[&str]) -> bool {
         .all(|name| room.operators.iter().any(|op| op.name == *name))
 }
 
-fn trade_rooms_compatible_for_swap(blueprint: &BaseBlueprint, a: &RoomId, b: &RoomId) -> bool {
+fn rooms_compatible_for_swap(
+    blueprint: &BaseBlueprint,
+    a: &RoomId,
+    b: &RoomId,
+    kind: FacilityKind,
+) -> bool {
     if a == b {
         return true;
     }
@@ -226,11 +233,11 @@ fn trade_rooms_compatible_for_swap(blueprint: &BaseBlueprint, a: &RoomId, b: &Ro
     let Some(room_b) = blueprint.room(b) else {
         return false;
     };
-    room_a.kind == FacilityKind::TradePost
-        && room_b.kind == FacilityKind::TradePost
+    room_a.kind == kind
+        && room_b.kind == kind
         && room_a.level == room_b.level
         && room_a.product == room_b.product
-        && matches!(room_a.product, Some(RoomProduct::Trade { .. }))
+        && room_a.product.is_some()
 }
 
 fn trade_room_containing_group(
@@ -245,7 +252,7 @@ fn trade_room_containing_group(
     })
 }
 
-fn swap_trade_room_assignments(assignment: &mut BaseAssignment, a: &RoomId, b: &RoomId) -> bool {
+fn swap_room_assignments(assignment: &mut BaseAssignment, a: &RoomId, b: &RoomId) -> bool {
     let Some(ai) = assignment.rooms.iter().position(|room| &room.room_id == a) else {
         return false;
     };
@@ -264,26 +271,81 @@ fn swap_trade_room_assignments(assignment: &mut BaseAssignment, a: &RoomId, b: &
     true
 }
 
-/// 巫恋/龙舌兰订单体系有暖机成本；跨短班连续上岗时保持同一贸易站。
-fn align_trade_warmup_room(
+fn room_containing_operator(
+    assignment: &BaseAssignment,
     blueprint: &BaseBlueprint,
-    assignment: &mut BaseAssignment,
-    sticky_room: &mut Option<RoomId>,
-) {
-    let Some(current_room) =
-        trade_room_containing_group(assignment, blueprint, &WARMUP_STICKY_TRADE_OPERATORS)
-    else {
-        return;
-    };
-    let Some(anchor_room) = sticky_room.clone() else {
-        *sticky_room = Some(current_room);
-        return;
-    };
-    if current_room == anchor_room {
-        return;
+    name: &str,
+    kind: FacilityKind,
+) -> Option<RoomId> {
+    assignment.rooms.iter().find_map(|room| {
+        let bp_room = blueprint.room(&room.room_id)?;
+        (bp_room.kind == kind && room.operators.iter().any(|op| op.name == name))
+            .then(|| room.room_id.clone())
+    })
+}
+
+fn is_warmup_operator(
+    name: &str,
+    tier: PromotionTier,
+    kind: FacilityKind,
+    instances: &OperatorInstances,
+) -> bool {
+    match kind {
+        FacilityKind::TradePost => {
+            if WARMUP_STICKY_TRADE_OPERATORS.contains(&name) {
+                return true;
+            }
+            instances
+                .resolve_trade_buff_ids(name, tier)
+                .iter()
+                .any(|buff_id| buff_id.starts_with(WARMUP_TRADE_BUFF_PREFIX))
+        }
+        FacilityKind::Factory => instances
+            .resolve_manufacture_buff_ids(name, tier)
+            .iter()
+            .any(|buff_id| buff_id.starts_with(WARMUP_MANU_BUFF_PREFIX)),
+        _ => false,
     }
-    if trade_rooms_compatible_for_swap(blueprint, &current_room, &anchor_room) {
-        swap_trade_room_assignments(assignment, &current_room, &anchor_room);
+}
+
+/// 暖机类技能跨短班连续上岗时保持同一房间；只能在同设施/同等级/同产物房间之间交换。
+fn align_warmup_rooms(
+    blueprint: &BaseBlueprint,
+    instances: &OperatorInstances,
+    assignment: &mut BaseAssignment,
+    sticky_rooms: &mut HashMap<String, RoomId>,
+) {
+    let ops: Vec<(String, FacilityKind)> = assignment
+        .rooms
+        .iter()
+        .filter_map(|room| {
+            blueprint
+                .room(&room.room_id)
+                .map(|bp_room| (bp_room.kind, room.operators.as_slice()))
+        })
+        .filter(|(kind, _)| matches!(kind, FacilityKind::TradePost | FacilityKind::Factory))
+        .flat_map(|(kind, ops)| ops.iter().map(move |op| (op.name.clone(), op.tier(), kind)))
+        .filter(|(name, tier, kind)| is_warmup_operator(name, *tier, *kind, instances))
+        .map(|(name, _, kind)| (name, kind))
+        .collect();
+
+    for (name, kind) in ops {
+        let Some(current_room) = room_containing_operator(assignment, blueprint, &name, kind) else {
+            continue;
+        };
+        let Some(anchor_room) = sticky_rooms.get(&name).cloned() else {
+            sticky_rooms.insert(name, current_room);
+            continue;
+        };
+        if current_room == anchor_room {
+            continue;
+        }
+        if rooms_compatible_for_swap(blueprint, &current_room, &anchor_room, kind) {
+            if swap_room_assignments(assignment, &current_room, &anchor_room) {
+                clear_room_efficiency(assignment, &current_room);
+                clear_room_efficiency(assignment, &anchor_room);
+            }
+        }
     }
 }
 
@@ -370,8 +432,6 @@ fn build_abyssal_s2_candidates(ctx: &AbyssalBuildCtx<'_>) -> Vec<AbyssalCandidat
     merge_rooms(&mut base, ctx.beta);
     merge_rooms(&mut base, ctx.gamma_h1);
 
-    let gamma_original: HashSet<String> = operators_of(ctx.gamma_h1).into_iter().collect();
-    let hunter_names: HashSet<String> = hunters.iter().cloned().collect();
     let hunter_entries: Vec<ManuPoolEntry> = hunters
         .iter()
         .filter_map(|name| abyssal_manu_entry(name, ctx.operbox, ctx.instances, ctx.table))
@@ -441,7 +501,6 @@ fn build_abyssal_s2_candidates(ctx: &AbyssalBuildCtx<'_>) -> Vec<AbyssalCandidat
             .iter()
             .filter(|room| ctx.mutable_manu_rooms.contains(&room.room_id))
             .flat_map(|room| room.operators.iter())
-            .filter(|op| gamma_original.contains(&op.name) || hunter_names.contains(&op.name))
             .map(|op| op.name.clone())
             .collect();
         gamma_ops.sort();
@@ -1146,7 +1205,7 @@ pub fn schedule_team_rotation(
     let mut daily = DailyTotals::default();
     let mut control_options = options.clone();
     control_options.skip_standalone_control = true;
-    let mut warmup_sticky_trade_room: Option<RoomId> = None;
+    let mut warmup_sticky_rooms: HashMap<String, RoomId> = HashMap::new();
     for (index, (hours, active, resting, parts)) in shift_specs.into_iter().enumerate() {
         // 活跃两队的中枢干员名册
         let active_names: HashSet<String> = active
@@ -1312,8 +1371,8 @@ pub fn schedule_team_rotation(
             clear_room(&mut base, "control");
             let mut base_used = base.operator_names();
             assign_ctrl(&mut base, &mut base_used, &[])?;
-            let mut base_warmup_room = warmup_sticky_trade_room.clone();
-            align_trade_warmup_room(blueprint, &mut base, &mut base_warmup_room);
+            let mut base_warmup_rooms = warmup_sticky_rooms.clone();
+            align_warmup_rooms(blueprint, instances, &mut base, &mut base_warmup_rooms);
             let score_base =
                 score_base_assignment(blueprint, &base, instances, table, hours, Some(durin_plan))?;
 
@@ -1334,16 +1393,21 @@ pub fn schedule_team_rotation(
                 gamma_h1: &gamma_h1,
                 mutable_manu_rooms: &h1.manu,
             });
-            let mut best_abyssal: Option<(AbyssalCandidate, ShiftScores, Option<RoomId>)> = None;
+            let mut best_abyssal: Option<(
+                AbyssalCandidate,
+                ShiftScores,
+                HashMap<String, RoomId>,
+            )> = None;
             for mut candidate in abyssal_candidates {
                 clear_room(&mut candidate.assignment, "control");
                 let mut aby_used = candidate.assignment.operator_names();
                 assign_ctrl(&mut candidate.assignment, &mut aby_used, &[ABYSSAL_GLADIIA])?;
-                let mut candidate_warmup_room = warmup_sticky_trade_room.clone();
-                align_trade_warmup_room(
+                let mut candidate_warmup_rooms = warmup_sticky_rooms.clone();
+                align_warmup_rooms(
                     blueprint,
+                    instances,
                     &mut candidate.assignment,
-                    &mut candidate_warmup_room,
+                    &mut candidate_warmup_rooms,
                 );
                 if !candidate
                     .assignment
@@ -1368,11 +1432,11 @@ pub fn schedule_team_rotation(
                     .as_ref()
                     .is_none_or(|(_, best, _)| score_aby.manu_prod_sum > best.manu_prod_sum);
                 if replace {
-                    best_abyssal = Some((candidate, score_aby, candidate_warmup_room));
+                    best_abyssal = Some((candidate, score_aby, candidate_warmup_rooms));
                 }
             }
-            let (best_assignment, best_scores, best_warmup_room) =
-                if let Some((candidate, score_aby, candidate_warmup_room)) = best_abyssal {
+            let (best_assignment, best_scores, best_warmup_rooms) =
+                if let Some((candidate, score_aby, candidate_warmup_rooms)) = best_abyssal {
                     if score_aby.manu_prod_sum > score_base.manu_prod_sum {
                         let alpha_beta: HashSet<String> = teams
                             .iter()
@@ -1390,16 +1454,16 @@ pub fn schedule_team_rotation(
                             ops.retain(|name| !alpha_beta.contains(name));
                             team.operators = ops;
                         }
-                        (candidate.assignment, score_aby, candidate_warmup_room)
+                        (candidate.assignment, score_aby, candidate_warmup_rooms)
                     } else {
-                        (base, score_base, base_warmup_room)
+                        (base, score_base, base_warmup_rooms)
                     }
                 } else {
-                    (base, score_base, base_warmup_room)
+                    (base, score_base, base_warmup_rooms)
                 };
             assignment = best_assignment;
             let scores = best_scores;
-            warmup_sticky_trade_room = best_warmup_room;
+            warmup_sticky_rooms = best_warmup_rooms;
             let weighted_trade = scores.weighted_trade(hours);
             let weighted_manu = scores.weighted_manu(hours);
             let weighted_power = scores.weighted_power(hours);
@@ -1426,7 +1490,12 @@ pub fn schedule_team_rotation(
             clear_room(&mut assignment, "control");
             let mut s13_used = assignment.operator_names();
             assign_ctrl(&mut assignment, &mut s13_used, &[])?;
-            align_trade_warmup_room(blueprint, &mut assignment, &mut warmup_sticky_trade_room);
+            align_warmup_rooms(
+                blueprint,
+                instances,
+                &mut assignment,
+                &mut warmup_sticky_rooms,
+            );
             let scores = score_base_assignment(
                 blueprint,
                 &assignment,
@@ -2712,6 +2781,50 @@ mod tests {
         assert!(
             witch_rooms.iter().all(|(_, room)| *room == first_room),
             "巫恋/龙舌兰组跨班不应变更贸易站: {witch_rooms:?}"
+        );
+    }
+
+    #[test]
+    fn team_rotation_warmup_manu_operator_keeps_factory_room() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let operbox = OperBox::load(&default_operbox_full_e2_path().unwrap()).unwrap();
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        if !operbox.owns("阿罗玛") {
+            return;
+        }
+
+        let report = schedule_team_rotation(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 20,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let mut aroma_rooms = Vec::new();
+        for shift in &report.shifts {
+            if let Some(room_id) = room_containing_operator(
+                &shift.assignment,
+                &blueprint,
+                "阿罗玛",
+                FacilityKind::Factory,
+            ) {
+                aroma_rooms.push((shift.index, room_id));
+            }
+        }
+        assert!(
+            aroma_rooms.len() >= 2,
+            "full E2 rotation should schedule 阿罗玛 in multiple shifts: {aroma_rooms:?}"
+        );
+        let first_room = aroma_rooms[0].1.clone();
+        assert!(
+            aroma_rooms.iter().all(|(_, room)| *room == first_room),
+            "阿罗玛例行清扫跨班不应变更制造站: {aroma_rooms:?}"
         );
     }
 
