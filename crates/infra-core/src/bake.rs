@@ -33,7 +33,7 @@ use crate::trade::solver::solve_trade_with_shift_prevalidated;
 use crate::types::RecipeKind;
 use crate::FacilityKind;
 
-pub const BAKE_SCHEMA_VERSION: u32 = 5;
+pub const BAKE_SCHEMA_VERSION: u32 = 6;
 
 pub type BakeProgressCallback = Arc<dyn Fn(BakeProgressEvent) + Send + Sync>;
 
@@ -952,6 +952,35 @@ pub fn validate_baked_catalog(out_dir: &Path, generator: &BakeGeneratorFingerpri
             out_dir.display()
         )));
     }
+    validate_baked_input_fingerprints(&manifest, out_dir)?;
+    Ok(())
+}
+
+fn validate_baked_input_fingerprints(manifest: &BakeManifest, out_dir: &Path) -> Result<()> {
+    let expected = bake_input_fingerprints()?;
+    for current in expected {
+        let Some(name) = Path::new(&current.path).file_name() else {
+            continue;
+        };
+        let Some(baked) = manifest
+            .inputs
+            .iter()
+            .find(|input| Path::new(&input.path).file_name() == Some(name))
+        else {
+            return Err(Error::msg(format!(
+                "baked input mismatch: {} missing from manifest; rerun `infra-cli bake --out {}`",
+                name.to_string_lossy(),
+                out_dir.display()
+            )));
+        };
+        if baked.bytes != current.bytes || baked.hash64 != current.hash64 {
+            return Err(Error::msg(format!(
+                "baked input mismatch: {} changed; rerun `infra-cli bake --out {}`",
+                name.to_string_lossy(),
+                out_dir.display()
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -970,6 +999,12 @@ pub fn try_baked_trade_search(
     let Some(table) = load_runtime_baked_table()? else {
         return Ok(None);
     };
+    if !baked_table_covers_pool_names(
+        &table.operator_index_by_name,
+        pool.entries.iter().map(|entry| entry.name.as_str()),
+    ) {
+        return Ok(None);
+    }
     let gold_lines = if options.layout.gold_manu_line_count > 0 {
         options.layout.gold_manu_line_count
     } else {
@@ -1042,6 +1077,12 @@ pub fn try_baked_manufacture_search(
     let Some(table) = load_runtime_baked_table()? else {
         return Ok(None);
     };
+    if !baked_table_covers_pool_names(
+        &table.operator_index_by_name,
+        pool.entries.iter().map(|entry| entry.name.as_str()),
+    ) {
+        return Ok(None);
+    }
     let key = manufacture_lookup_key(options.level, options.operator_capacity, recipe);
     let Some((start_idx, len)) = table.index_by_key.get(&key).copied() else {
         return Ok(None);
@@ -1108,6 +1149,7 @@ fn load_runtime_baked_table() -> Result<Option<&'static RuntimeBakedComboTable>>
                 || msg.contains("No such file or directory")
                 || msg.contains("baked schema mismatch")
                 || msg.contains("baked generator mismatch")
+                || msg.contains("baked input mismatch")
             {
                 Ok(None)
             } else {
@@ -1227,6 +1269,13 @@ fn baked_manufacture_compatible(pool: &ManuPool, options: &ManuSearchOptions) ->
 fn baked_layout_search_compatible(layout: &LayoutContext) -> bool {
     let _ = layout;
     true
+}
+
+fn baked_table_covers_pool_names<'a>(
+    operator_index_by_name: &HashMap<String, usize>,
+    mut names: impl Iterator<Item = &'a str>,
+) -> bool {
+    names.all(|name| operator_index_by_name.contains_key(name))
 }
 
 fn available_operator_mask<'a>(
@@ -1558,4 +1607,30 @@ fn write_binary(path: PathBuf, value: &impl Serialize) -> Result<()> {
     let bytes = bincode::serialize(value)
         .map_err(|e| Error::msg(format!("encode {}: {e}", path.display())))?;
     fs::write(&path, bytes).map_err(|e| Error::msg(format!("write {}: {e}", path.display())))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn baked_table_must_cover_every_candidate_name() {
+        let operator_index_by_name = HashMap::from([
+            ("Miss.Christine".to_string(), 0usize),
+            ("酒神".to_string(), 1usize),
+            ("弑君者".to_string(), 2usize),
+        ]);
+
+        assert!(baked_table_covers_pool_names(
+            &operator_index_by_name,
+            ["Miss.Christine", "酒神"].into_iter()
+        ));
+        assert!(
+            !baked_table_covers_pool_names(
+                &operator_index_by_name,
+                ["Miss.Christine", "酒神", "红云"].into_iter()
+            ),
+            "baked search must fall back when a stale catalog omits a live candidate"
+        );
+    }
 }
