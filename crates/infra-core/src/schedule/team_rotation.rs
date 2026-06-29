@@ -186,6 +186,16 @@ fn clear_room(assignment: &mut BaseAssignment, room_id: &str) {
     assignment.rooms.retain(|room| room.room_id.0 != room_id);
 }
 
+fn clear_room_efficiency(assignment: &mut BaseAssignment, room_id: &RoomId) {
+    if let Some(room) = assignment
+        .rooms
+        .iter_mut()
+        .find(|room| room.room_id == *room_id)
+    {
+        room.efficiency = None;
+    }
+}
+
 // ── 深海链 S2 短班入口 ──
 
 const ABYSSAL_GLADIIA: &str = "歌蕾蒂娅";
@@ -1343,6 +1353,9 @@ pub fn schedule_team_rotation(
                 {
                     return Err(Error::msg("abyssal S2 candidate lost Gladiia control pin"));
                 }
+                for room_id in &h1.manu {
+                    clear_room_efficiency(&mut candidate.assignment, room_id);
+                }
                 let score_aby = score_base_assignment(
                     blueprint,
                     &candidate.assignment,
@@ -1360,22 +1373,27 @@ pub fn schedule_team_rotation(
             }
             let (best_assignment, best_scores, best_warmup_room) =
                 if let Some((candidate, score_aby, candidate_warmup_room)) = best_abyssal {
-                    let alpha_beta: HashSet<String> = teams
-                        .iter()
-                        .filter(|team| matches!(team.label, TeamLabel::Alpha | TeamLabel::Beta))
-                        .flat_map(|team| team.operators.iter().cloned())
-                        .collect();
-                    if let Some(team) = teams.iter_mut().find(|team| team.label == TeamLabel::Gamma)
-                    {
-                        let mut ops = team.operators.clone();
-                        ops.extend(candidate.gamma_ops.clone());
-                        ops.push(ABYSSAL_GLADIIA.to_string());
-                        ops.sort();
-                        ops.dedup();
-                        ops.retain(|name| !alpha_beta.contains(name));
-                        team.operators = ops;
+                    if score_aby.manu_prod_sum > score_base.manu_prod_sum {
+                        let alpha_beta: HashSet<String> = teams
+                            .iter()
+                            .filter(|team| matches!(team.label, TeamLabel::Alpha | TeamLabel::Beta))
+                            .flat_map(|team| team.operators.iter().cloned())
+                            .collect();
+                        if let Some(team) =
+                            teams.iter_mut().find(|team| team.label == TeamLabel::Gamma)
+                        {
+                            let mut ops = team.operators.clone();
+                            ops.extend(candidate.gamma_ops.clone());
+                            ops.push(ABYSSAL_GLADIIA.to_string());
+                            ops.sort();
+                            ops.dedup();
+                            ops.retain(|name| !alpha_beta.contains(name));
+                            team.operators = ops;
+                        }
+                        (candidate.assignment, score_aby, candidate_warmup_room)
+                    } else {
+                        (base, score_base, base_warmup_room)
                     }
-                    (candidate.assignment, score_aby, candidate_warmup_room)
                 } else {
                     (base, score_base, base_warmup_room)
                 };
@@ -2196,6 +2214,11 @@ mod tests {
             if has_abyssal_manu {
                 shifts_with_abyssal_manu.push(shift.index);
                 assert_eq!(shift.index, 1, "深海链只允许 S2 6h 短班");
+                assert!(
+                    shift.scores.manu_prod_sum > 500.0,
+                    "S2 深海候选应使用带歌蕾蒂娅和深海 tag 的最终布局重算制造分，got {}",
+                    shift.scores.manu_prod_sum
+                );
                 assert!(
                     shift
                         .assignment
