@@ -652,6 +652,53 @@ mod tests {
     }
 
     #[test]
+    fn full_e2_trade_search_excludes_eureka_mechanic() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let operbox =
+            crate::operbox::OperBox::load(&crate::operbox::default_operbox_full_e2_path().unwrap())
+                .unwrap();
+        assert!(operbox.owns("U-Official"));
+
+        let pool = build_trade_pool(&operbox.trade_roster(&instances), &instances, &table).unwrap();
+        assert!(
+            pool.entry("U-Official").is_none(),
+            "U-Official/eureka should not enter automatic trade scheduling pool"
+        );
+        assert!(
+            pool.skipped.iter().any(|(name, _, reason)| {
+                name == "U-Official"
+                    && matches!(
+                        reason,
+                        crate::pool::PoolSkip::ExcludedMechanic(id)
+                            if id == "trade_ord_spd&wt[000]"
+                    )
+            }),
+            "expected explicit excluded-mechanic skip, got {:?}",
+            pool.skipped
+        );
+
+        let report = search_trade_triples(
+            &pool,
+            &table,
+            &TradeSearchOptions {
+                top_k: 50,
+                order_mode: TradeSearchOrderMode::Single(TradeOrderKind::Gold),
+                ..TradeSearchOptions::default()
+            },
+        )
+        .unwrap();
+        assert!(
+            report
+                .top
+                .iter()
+                .all(|hit| !hit.names.iter().any(|name| name == "U-Official")),
+            "U-Official appeared in trade search top hits: {:?}",
+            report.top
+        );
+    }
+
+    #[test]
     fn karlan_precision_search_finds_ling_jie_by_l1() {
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();

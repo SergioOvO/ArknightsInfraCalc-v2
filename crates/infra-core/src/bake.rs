@@ -33,7 +33,7 @@ use crate::trade::solver::solve_trade_with_shift_prevalidated;
 use crate::types::RecipeKind;
 use crate::FacilityKind;
 
-pub const BAKE_SCHEMA_VERSION: u32 = 6;
+pub const BAKE_SCHEMA_VERSION: u32 = 7;
 
 pub type BakeProgressCallback = Arc<dyn Fn(BakeProgressEvent) + Send + Sync>;
 

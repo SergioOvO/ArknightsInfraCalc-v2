@@ -209,6 +209,7 @@ pub fn build_trade_combo_operators(
 pub enum PoolSkip {
     NoTradeBinding,
     UnmodeledBuff(String),
+    ExcludedMechanic(String),
 }
 
 #[derive(Debug, Clone)]
@@ -259,6 +260,9 @@ fn try_entry(
         let Some(skill) = table.get(bid) else {
             return Err(PoolSkip::UnmodeledBuff(bid.clone()));
         };
+        if is_excluded_trade_search_mechanic(skill) {
+            return Err(PoolSkip::ExcludedMechanic(bid.clone()));
+        }
         let (flat, mech) = trade_skill_hints(skill);
         flat_eff_hint += flat;
         is_mechanic |= mech;
@@ -276,6 +280,15 @@ fn try_entry(
         flat_eff_hint,
         is_mechanic,
         tier: OperatorTier::Standalone,
+    })
+}
+
+fn is_excluded_trade_search_mechanic(skill: &SkillDef) -> bool {
+    skill.atoms.iter().any(|atom| {
+        matches!(
+            &atom.action,
+            Action::TagOrder { tag } if tag == "eureka"
+        )
     })
 }
 

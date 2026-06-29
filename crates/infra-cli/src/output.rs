@@ -86,6 +86,7 @@ fn skip_reason_label(reason: &PoolSkip) -> String {
     match reason {
         PoolSkip::NoTradeBinding => "无技能绑定".to_string(),
         PoolSkip::UnmodeledBuff(id) => format!("未建模:{id}"),
+        PoolSkip::ExcludedMechanic(id) => format!("排除机制:{id}"),
     }
 }
 
@@ -222,6 +223,7 @@ fn write_pool_text(
         let detail = match reason {
             PoolSkip::NoTradeBinding => "no binding".to_string(),
             PoolSkip::UnmodeledBuff(id) => format!("unmodeled {id}"),
+            PoolSkip::ExcludedMechanic(id) => format!("excluded mechanic {id}"),
         };
         eprintln!("  skip   {name} e{elite}: {detail}");
     }
