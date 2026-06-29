@@ -49,9 +49,15 @@ pub struct ControlScoreBreakdown {
     pub mood_penalty: f64,
     /// -mood × 2.0（HrAndMood 策略时为 ×3.0）
     pub mood_penalty_score: f64,
-    /// HrAndMood 策略固定加分（公招/心情技能）
+    /// 体系外散件分（单走八幡海铃等；与 +7/+2 同层比较）。
+    pub loose_piece_score: f64,
+    /// 心情补位分（EW / 玛恩纳等；低于效率散件）。
+    pub mood_fill_score: f64,
+    /// 线索补位分（低于心情）。
+    pub clue_fill_score: f64,
+    /// 兼容字段：体系外补位分总和。
     pub ancillary_score: f64,
-    /// 搜索排序分；`Efficiency` 为 `inject_subtotal`，`HrAndMood` 为 `ancillary_score`。
+    /// 搜索排序分；中枢补位按 组合体系(pinned) → 散件 → 心情 → 线索。
     pub total_score: f64,
 }
 
@@ -65,11 +71,13 @@ pub struct ControlSearchHit {
     pub breakdown: ControlScoreBreakdown,
 }
 
-/// 中枢补位策略：`base_systems` 钉死后剩余席位按公孙「公招 + 心情」填，而非热情贸易链。
+/// 中枢补位策略：`base_systems` 钉死组合体系后，剩余席位按
+/// 散件（单走八幡海铃 / +7 / +2）→ 心情 → 线索填，而非热情贸易链。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ControlFillPolicy {
     #[default]
     Efficiency,
+    /// Legacy name retained for API compatibility; now means 公孙分层补位。
     HrAndMood,
 }
 
@@ -129,30 +137,56 @@ fn control_efficiency_inject_buff(buff_id: &str) -> bool {
     buff_id.starts_with("control_prod_spd")
         || buff_id.starts_with("control_tra_spd")
         || buff_id.starts_with("control_token_prod_spd")
+        || buff_id.starts_with("control_tra_limit&spd")
+        || buff_id.starts_with("control_bd_spd")
         || matches!(
             buff_id,
-            "control_token_tra_spd[000]"
-                | "control_prod_tra_spd[000]"
-                | "control_tra_limit&spd[010]"
+            "control_token_tra_spd[000]" | "control_prod_tra_spd[000]"
         )
+}
+
+pub fn control_efficiency_fill_sort_weight(entry: &crate::pool::ControlPoolEntry) -> f64 {
+    let mut weight = 0.0;
+    for bid in &entry.buff_ids {
+        if bid.starts_with("control_tra_spd") || bid == "control_token_tra_spd[000]" {
+            weight += 100.0;
+        } else if bid.starts_with("control_prod_spd")
+            || bid.starts_with("control_token_prod_spd")
+            || bid == "control_bd_spd[000]"
+        {
+            weight += 80.0;
+        } else if bid.starts_with("control_tra_limit&spd") || bid == "control_prod_tra_spd[000]" {
+            weight += 60.0;
+        } else if bid == "control_hire_spd&bd[000]" {
+            weight += 10.0;
+        }
+    }
+    weight
 }
 
 fn control_mood_cost_buff(buff_id: &str) -> bool {
     buff_id == "control_mp_psk[000]"
+        || buff_id == "control_mp_lonely[000]"
+        || buff_id == "control_mp_expand_double[000]"
         || (buff_id.starts_with("control_mp_cost[") && !buff_id.contains('&'))
         || buff_id.starts_with("control_mp_cost&faction")
 }
 
-fn control_hr_mood_buff(buff_id: &str) -> bool {
+fn control_loose_piece_buff(buff_id: &str) -> bool {
     matches!(
         buff_id,
-        "control_hire_spd&bd[000]"
-            | "control_dorm_rec2[000]"
-            | "control_mp_cost[007]"
-            | "control_mp_cost[010]"
-            | "control_mp_cost[012]"
-            | "control_mp_psk[000]"
-    ) || (buff_id.starts_with("control_mp_cost[") && !buff_id.contains('&'))
+        "control_hire_spd&bd[000]" | "control_tra_limit&spd[000]"
+    )
+}
+
+fn control_clue_buff(_buff_id: &str) -> bool {
+    false
+}
+
+fn control_layered_fill_buff(buff_id: &str) -> bool {
+    control_loose_piece_buff(buff_id)
+        || control_mood_cost_buff(buff_id)
+        || control_clue_buff(buff_id)
 }
 
 fn control_inject_sort_key(hit: &ControlSearchHit) -> f64 {
@@ -160,6 +194,9 @@ fn control_inject_sort_key(hit: &ControlSearchHit) -> f64 {
 }
 
 pub fn control_entry_core_inject_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
+    if entry.name == "琴柳" {
+        return false;
+    }
     entry
         .buff_ids
         .iter()
@@ -167,6 +204,9 @@ pub fn control_entry_core_inject_fill(entry: &crate::pool::ControlPoolEntry) -> 
 }
 
 pub fn control_entry_mood_cost_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
+    if entry.name == "琴柳" {
+        return false;
+    }
     if entry
         .buff_ids
         .iter()
@@ -178,6 +218,9 @@ pub fn control_entry_mood_cost_fill(entry: &crate::pool::ControlPoolEntry) -> bo
 }
 
 pub fn control_entry_plugin_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
+    if entry.name == "琴柳" {
+        return false;
+    }
     if entry
         .buff_ids
         .iter()
@@ -189,6 +232,9 @@ pub fn control_entry_plugin_fill(entry: &crate::pool::ControlPoolEntry) -> bool 
 }
 
 pub fn control_entry_hr_mood_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
+    if entry.name == "琴柳" {
+        return false;
+    }
     if entry
         .buff_ids
         .iter()
@@ -196,24 +242,49 @@ pub fn control_entry_hr_mood_fill(entry: &crate::pool::ControlPoolEntry) -> bool
     {
         return false;
     }
-    entry.buff_ids.iter().any(|b| control_hr_mood_buff(b))
+    entry.buff_ids.iter().any(|b| control_layered_fill_buff(b))
 }
 
-/// 公招 / 心情类中枢技能（`atoms: []` 挡池条目）的补位加分。
-fn control_hr_mood_ancillary(operators: &[ControlOperator], table: &SkillTable) -> f64 {
-    let mut score = 0.0;
+#[derive(Debug, Clone, Copy, Default)]
+struct ControlFillTierScores {
+    loose_piece: f64,
+    mood: f64,
+    clue: f64,
+}
+
+impl ControlFillTierScores {
+    fn ancillary(self) -> f64 {
+        self.loose_piece + self.mood + self.clue
+    }
+
+    fn layered_sort_bonus(self) -> f64 {
+        // 散件与 +7/+2 同层按数值比较；心情和线索只在高层同分时补空。
+        self.loose_piece + self.mood * 0.01 + self.clue * 0.0001
+    }
+}
+
+/// 体系外中枢补位分层：散件（单走八幡海铃）→ 心情（EW / 玛恩纳）→ 线索。
+fn control_layered_fill_scores(
+    operators: &[ControlOperator],
+    table: &SkillTable,
+) -> ControlFillTierScores {
+    let mut scores = ControlFillTierScores::default();
     for op in operators {
         for bid in &op.buff_ids {
-            score += match bid.as_str() {
-                // 八幡海铃·可靠伙伴：人脉联络 +10%（skill_table 仅建模热情，补位单独计分）
-                "control_hire_spd&bd[000]" => 10.0,
-                // 中枢内全员心情 +0.05/h
+            match bid.as_str() {
+                // 喀兰贸易路线入口：单独放中枢时本身不产数值，但会解锁孑/银灰路线。
+                "control_tra_limit&spd[000]" => scores.loose_piece += 8.0,
+                // 八幡海铃·可靠伙伴：单走时按散件层处理，但低于直接 +2/+7 产能。
+                "control_hire_spd&bd[000]" => scores.loose_piece += 1.0,
+                // 中枢内全员心情 +0.05/h；EW / 玛恩纳等也归心情层。
                 "control_mp_cost[007]"
                 | "control_mp_cost[010]"
                 | "control_mp_cost[012]"
-                | "control_mp_psk[000]" => 5.0,
+                | "control_mp_psk[000]"
+                | "control_mp_lonely[000]"
+                | "control_mp_expand_double[000]" => scores.mood += 5.0,
                 // 宿舍全员心情 +0.05/h（低于中枢内恢复）
-                "control_dorm_rec2[000]" => 2.0,
+                "control_dorm_rec2[000]" => scores.mood += 2.0,
                 _ => {
                     let Some(skill) = table.get(bid) else {
                         continue;
@@ -222,15 +293,15 @@ fn control_hr_mood_ancillary(operators: &[ControlOperator], table: &SkillTable) 
                         continue;
                     }
                     if bid.starts_with("control_mp_cost[") && !bid.contains('&') {
-                        5.0
-                    } else {
-                        0.0
+                        scores.mood += 5.0;
+                    } else if control_clue_buff(bid) {
+                        scores.clue += 1.0;
                     }
                 }
             };
         }
     }
-    score
+    scores
 }
 
 /// 中枢搜索排序：当前为贸易/制造注入%之和。
@@ -256,7 +327,7 @@ fn score_control_result(
         .sum();
 
     if options.fill_policy == ControlFillPolicy::HrAndMood {
-        let ancillary = control_hr_mood_ancillary(operators, table);
+        let fill_scores = control_layered_fill_scores(operators, table);
         let trade_inject = result.inject.trade_eff_pct();
         let manu_gold = result.inject.manu_eff_for(RecipeKind::Gold);
         let manu_br = result.inject.manu_eff_for(RecipeKind::BattleRecord);
@@ -276,10 +347,13 @@ fn score_control_result(
             manu_gold_inject_pct: manu_gold,
             manu_br_inject_pct: manu_br,
             inject_subtotal: component_score.sort_key_pct,
-            ancillary_score: ancillary,
+            loose_piece_score: fill_scores.loose_piece,
+            mood_fill_score: fill_scores.mood,
+            clue_fill_score: fill_scores.clue,
+            ancillary_score: fill_scores.ancillary(),
             mood_penalty,
             mood_penalty_score: 0.0,
-            total_score: component_score.sort_key_pct + ancillary,
+            total_score: component_score.sort_key_pct + fill_scores.layered_sort_bonus(),
             ..ControlScoreBreakdown::default()
         };
     }
@@ -517,5 +591,55 @@ mod tests {
                 "{name} is a system producer and should not be inserted as standalone control fill"
             );
         }
+    }
+
+    #[test]
+    fn control_layered_fill_prefers_efficiency_piece_over_mood() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            [("Mon3tr", 2), ("玛恩纳", 2)]
+                .into_iter()
+                .map(|(n, e)| (n.to_string(), e))
+                .collect(),
+        );
+        let pool = build_control_pool(&roster, &instances, &table).unwrap();
+        assert!(control_entry_plugin_fill(pool.entry("Mon3tr").unwrap()));
+        assert!(control_entry_plugin_fill(pool.entry("玛恩纳").unwrap()));
+
+        let hits = search_control_combos(
+            &pool,
+            &table,
+            &ControlSearchOptions {
+                max_operators: 1,
+                top_k: 1,
+                fill_policy: ControlFillPolicy::HrAndMood,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(hits[0].names, vec!["Mon3tr".to_string()]);
+        assert!(
+            hits[0].breakdown.inject_subtotal > hits[0].breakdown.mood_fill_score * 0.01,
+            "efficiency pieces should outrank pure mood fill: {:?}",
+            hits[0].breakdown
+        );
+    }
+
+    #[test]
+    fn control_layered_fill_allows_haru_as_loose_piece_but_not_resource_producer() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            [("八幡海铃", 0), ("三角初华", 2)]
+                .into_iter()
+                .map(|(n, e)| (n.to_string(), e))
+                .collect(),
+        );
+        let pool = build_control_pool(&roster, &instances, &table).unwrap();
+
+        assert!(control_entry_plugin_fill(pool.entry("八幡海铃").unwrap()));
+        assert!(!control_entry_plugin_fill(pool.entry("三角初华").unwrap()));
     }
 }

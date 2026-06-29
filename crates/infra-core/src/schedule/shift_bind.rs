@@ -84,7 +84,7 @@ fn swap_room_across_halves(
 ) -> bool {
     let (target, source) = if anchor_in_h1 { (h1, h2) } else { (h2, h1) };
 
-    if source.trade.iter().any(|r| r == wanderer) && target.trade.iter().any(|r| r == anchor) {
+    if source.trade.iter().any(|r| r == wanderer) && !target.trade.is_empty() {
         let Some(wi) = source.trade.iter().position(|r| r == wanderer) else {
             return false;
         };
@@ -100,7 +100,7 @@ fn swap_room_across_halves(
         source.trade.push(t);
         return true;
     }
-    if source.manu.iter().any(|r| r == wanderer) && target.manu.iter().any(|r| r == anchor) {
+    if source.manu.iter().any(|r| r == wanderer) && !target.manu.is_empty() {
         let Some(wi) = source.manu.iter().position(|r| r == wanderer) else {
             return false;
         };
@@ -116,7 +116,7 @@ fn swap_room_across_halves(
         source.manu.push(t);
         return true;
     }
-    if source.power.iter().any(|r| r == wanderer) && target.power.iter().any(|r| r == anchor) {
+    if source.power.iter().any(|r| r == wanderer) && !target.power.is_empty() {
         let Some(wi) = source.power.iter().position(|r| r == wanderer) else {
             return false;
         };

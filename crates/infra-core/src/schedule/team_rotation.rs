@@ -16,7 +16,7 @@ use crate::pool::{
     add_jie_market_to_trade_pool, build_control_pool, build_manufacture_pool, build_power_pool,
     build_trade_pool, karlan_precision_active,
 };
-use crate::search::control_entry_plugin_fill;
+use crate::search::{control_efficiency_fill_sort_weight, control_entry_plugin_fill};
 use crate::skill_table::SkillTable;
 
 use super::base_rotation::{score_base_assignment, ShiftScores};
@@ -429,6 +429,17 @@ fn enumerate_abyssal_counts(
 fn system_control_operators(plan: &AssignmentPlan) -> HashSet<String> {
     let mut names = HashSet::new();
     for sys in &plan.activated {
+        let has_production_slot = sys.slots.iter().any(|slot| {
+            let facility = match slot {
+                SlotFill::Fixed { facility, .. }
+                | SlotFill::PickOne { facility, .. }
+                | SlotFill::OptionalFixed { facility, .. } => facility,
+            };
+            matches!(facility, FacilityKind::TradePost | FacilityKind::Factory)
+        });
+        if !has_production_slot {
+            continue;
+        }
         for slot in &sys.slots {
             let facility = match slot {
                 SlotFill::Fixed { facility, .. }
@@ -549,6 +560,201 @@ fn control_rotation_candidate(
     _mood: f64,
 ) -> bool {
     control_entry_plugin_fill(entry)
+}
+
+fn control_entry_trade_inject(entry: &crate::pool::ControlPoolEntry) -> bool {
+    entry
+        .buff_ids
+        .iter()
+        .any(|bid| bid.starts_with("control_tra_spd") || bid == "control_token_tra_spd[000]")
+}
+
+fn control_entry_manu_inject(entry: &crate::pool::ControlPoolEntry) -> bool {
+    entry.buff_ids.iter().any(|bid| {
+        bid.starts_with("control_prod_spd")
+            || bid.starts_with("control_token_prod_spd")
+            || bid == "control_bd_spd[000]"
+            || bid == "control_prod_tra_spd[000]"
+    })
+}
+
+fn team_control_class_count(
+    team_ctrl: &HashMap<TeamLabel, Vec<String>>,
+    entry_by_name: &HashMap<String, crate::pool::ControlPoolEntry>,
+    team: TeamLabel,
+    class: fn(&crate::pool::ControlPoolEntry) -> bool,
+) -> usize {
+    team_ctrl
+        .get(&team)
+        .into_iter()
+        .flatten()
+        .filter(|name| entry_by_name.get(*name).is_some_and(class))
+        .count()
+}
+
+fn pick_control_plugin_team(
+    entry: &crate::pool::ControlPoolEntry,
+    team_ctrl: &HashMap<TeamLabel, Vec<String>>,
+    entry_by_name: &HashMap<String, crate::pool::ControlPoolEntry>,
+) -> TeamLabel {
+    let class = if control_entry_manu_inject(entry) {
+        Some(control_entry_manu_inject as fn(&crate::pool::ControlPoolEntry) -> bool)
+    } else if control_entry_trade_inject(entry) {
+        Some(control_entry_trade_inject as fn(&crate::pool::ControlPoolEntry) -> bool)
+    } else {
+        None
+    };
+    TeamLabel::ALL
+        .iter()
+        .min_by_key(|team| {
+            let class_count = class
+                .map(|c| team_control_class_count(team_ctrl, entry_by_name, **team, c))
+                .unwrap_or(0);
+            let total_count = team_ctrl.get(team).map(|v| v.len()).unwrap_or(0);
+            (class_count, total_count)
+        })
+        .copied()
+        .unwrap()
+}
+
+fn balance_control_plugin_class(
+    team_ctrl: &mut HashMap<TeamLabel, Vec<String>>,
+    entry_by_name: &HashMap<String, crate::pool::ControlPoolEntry>,
+    class: fn(&crate::pool::ControlPoolEntry) -> bool,
+) {
+    loop {
+        let uncovered: Vec<_> = TeamLabel::ALL
+            .into_iter()
+            .filter(|team| team_control_class_count(team_ctrl, entry_by_name, *team, class) == 0)
+            .collect();
+        if uncovered.is_empty() {
+            break;
+        }
+        let Some(from_team) = TeamLabel::ALL
+            .into_iter()
+            .filter(|team| team_control_class_count(team_ctrl, entry_by_name, *team, class) > 1)
+            .max_by_key(|team| {
+                (
+                    team_control_class_count(team_ctrl, entry_by_name, *team, class),
+                    team_ctrl.get(team).map(|names| names.len()).unwrap_or(0),
+                )
+            })
+        else {
+            break;
+        };
+        let to_team = *uncovered
+            .iter()
+            .min_by_key(|team| team_ctrl.get(team).map(|names| names.len()).unwrap_or(0))
+            .unwrap();
+        let Some(move_idx) = team_ctrl.get(&from_team).and_then(|names| {
+            names
+                .iter()
+                .enumerate()
+                .filter(|(_, name)| entry_by_name.get(*name).is_some_and(class))
+                .max_by(|(_, a), (_, b)| {
+                    let aw = entry_by_name
+                        .get(*a)
+                        .map(control_efficiency_fill_sort_weight)
+                        .unwrap_or(0.0);
+                    let bw = entry_by_name
+                        .get(*b)
+                        .map(control_efficiency_fill_sort_weight)
+                        .unwrap_or(0.0);
+                    aw.partial_cmp(&bw)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| b.cmp(a))
+                })
+                .map(|(idx, _)| idx)
+        }) else {
+            break;
+        };
+        let moved = team_ctrl.get_mut(&from_team).unwrap().remove(move_idx);
+        team_ctrl.entry(to_team).or_default().push(moved);
+    }
+}
+
+fn control_room_has_class(
+    ops: &[AssignedOperator],
+    entry_by_name: &HashMap<String, crate::pool::ControlPoolEntry>,
+    class: fn(&crate::pool::ControlPoolEntry) -> bool,
+) -> bool {
+    ops.iter()
+        .any(|op| entry_by_name.get(&op.name).is_some_and(class))
+}
+
+fn control_replace_rank(
+    op: &AssignedOperator,
+    system_ctrl_names: &HashSet<String>,
+    entry_by_name: &HashMap<String, crate::pool::ControlPoolEntry>,
+) -> i32 {
+    if op.name == ABYSSAL_GLADIIA || op.name == DAIFEEN {
+        return -1;
+    }
+    if op.name == "八幡海铃" {
+        return 3;
+    }
+    if system_ctrl_names.contains(&op.name) {
+        return -1;
+    }
+    let Some(entry) = entry_by_name.get(&op.name) else {
+        return 0;
+    };
+    if control_entry_trade_inject(entry) || control_entry_manu_inject(entry) {
+        1
+    } else {
+        3
+    }
+}
+
+fn ensure_control_inject_coverage(
+    assignment: &mut BaseAssignment,
+    final_pool: &crate::pool::ControlPool,
+    system_ctrl_names: &HashSet<String>,
+    entry_by_name: &HashMap<String, crate::pool::ControlPoolEntry>,
+) {
+    let mut ops = assignment.control_operators();
+    let assigned = assignment.operator_names();
+    for class in [
+        control_entry_trade_inject as fn(&crate::pool::ControlPoolEntry) -> bool,
+        control_entry_manu_inject as fn(&crate::pool::ControlPoolEntry) -> bool,
+    ] {
+        if control_room_has_class(&ops, entry_by_name, class) {
+            continue;
+        }
+        let Some(candidate) = final_pool
+            .entries
+            .iter()
+            .filter(|entry| class(entry))
+            .filter(|entry| {
+                !assigned.contains(&entry.name) || ops.iter().any(|op| op.name == entry.name)
+            })
+            .max_by(|a, b| {
+                control_efficiency_fill_sort_weight(a)
+                    .partial_cmp(&control_efficiency_fill_sort_weight(b))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| b.name.cmp(&a.name))
+            })
+        else {
+            continue;
+        };
+        if ops.iter().any(|op| op.name == candidate.name) {
+            continue;
+        }
+        let Some(drop_idx) = ops
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, op)| {
+                let rank = control_replace_rank(op, system_ctrl_names, entry_by_name);
+                (rank >= 0).then_some((idx, rank))
+            })
+            .max_by_key(|(_, rank)| *rank)
+            .map(|(idx, _)| idx)
+        else {
+            continue;
+        };
+        ops[drop_idx] = AssignedOperator::from_progress(&candidate.name, candidate.progress);
+    }
+    assignment.set_room(RoomId::from("control"), ops);
 }
 
 fn move_control_operator_to_team(
@@ -762,25 +968,35 @@ pub fn schedule_team_rotation(
             move_control_operator_to_team(&mut team_ctrl, DAIFEEN, team);
         }
     }
-    for entry in &control_pool.entries {
+    let entry_by_name: HashMap<String, crate::pool::ControlPoolEntry> = control_pool
+        .entries
+        .iter()
+        .map(|entry| (entry.name.clone(), entry.clone()))
+        .collect();
+    let mut plugin_entries: Vec<_> = control_pool
+        .entries
+        .iter()
+        .filter(|entry| !team_ctrl.values().any(|names| names.contains(&entry.name)))
+        .filter(|entry| control_rotation_candidate(entry, table, &layout, options.mood))
+        .collect();
+    plugin_entries.sort_by(|a, b| {
+        control_efficiency_fill_sort_weight(b)
+            .partial_cmp(&control_efficiency_fill_sort_weight(a))
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    for entry in plugin_entries {
         if team_ctrl.values().any(|names| names.contains(&entry.name)) {
-            continue;
-        }
-        if !control_rotation_candidate(entry, table, &layout, options.mood) {
             continue;
         }
         let team = production_team_by_name
             .get(&entry.name)
             .copied()
-            .unwrap_or_else(|| {
-                TeamLabel::ALL
-                    .iter()
-                    .min_by_key(|t| team_ctrl.get(t).map(|v| v.len()).unwrap_or(0))
-                    .copied()
-                    .unwrap()
-            });
+            .unwrap_or_else(|| pick_control_plugin_team(entry, &team_ctrl, &entry_by_name));
         team_ctrl.entry(team).or_default().push(entry.name.clone());
     }
+    balance_control_plugin_class(&mut team_ctrl, &entry_by_name, control_entry_trade_inject);
+    balance_control_plugin_class(&mut team_ctrl, &entry_by_name, control_entry_manu_inject);
     for names in team_ctrl.values_mut() {
         names.sort();
         names.dedup();
@@ -968,12 +1184,20 @@ pub fn schedule_team_rotation(
                 });
             }
             assign_control(a, &final_pool, table, &layout, &control_options, used)?;
+            ensure_control_inject_coverage(a, &final_pool, &system_ctrl_names, &entry_by_name);
 
             let mut ops = a.control_operators();
             if ops.len() < 5 {
                 let mut names: HashSet<String> = ops.iter().map(|o| o.name.clone()).collect();
                 let assigned = a.operator_names();
-                for entry in &final_pool.entries {
+                let mut entries = final_pool.entries.iter().collect::<Vec<_>>();
+                entries.sort_by(|a, b| {
+                    control_efficiency_fill_sort_weight(b)
+                        .partial_cmp(&control_efficiency_fill_sort_weight(a))
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| a.name.cmp(&b.name))
+                });
+                for entry in entries {
                     if ops.len() >= 5 {
                         break;
                     }
@@ -1049,19 +1273,20 @@ pub fn schedule_team_rotation(
             let (best_assignment, best_scores, best_warmup_room) =
                 if let Some((candidate, score_aby, candidate_warmup_room)) = best_abyssal {
                     if score_aby.manu_prod_sum > score_base.manu_prod_sum {
+                        let alpha_beta: HashSet<String> = teams
+                            .iter()
+                            .filter(|team| matches!(team.label, TeamLabel::Alpha | TeamLabel::Beta))
+                            .flat_map(|team| team.operators.iter().cloned())
+                            .collect();
                         if let Some(team) =
                             teams.iter_mut().find(|team| team.label == TeamLabel::Gamma)
                         {
-                            let mut ops = candidate.gamma_ops.clone();
+                            let mut ops = team.operators.clone();
+                            ops.extend(candidate.gamma_ops.clone());
                             ops.push(ABYSSAL_GLADIIA.to_string());
-                            ops.extend(
-                                team_ctrl
-                                    .get(&TeamLabel::Gamma)
-                                    .cloned()
-                                    .unwrap_or_default(),
-                            );
                             ops.sort();
                             ops.dedup();
+                            ops.retain(|name| !alpha_beta.contains(name));
                             team.operators = ops;
                         }
                         (candidate.assignment, score_aby, candidate_warmup_room)

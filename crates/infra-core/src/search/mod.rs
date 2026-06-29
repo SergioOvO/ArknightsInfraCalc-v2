@@ -5,9 +5,10 @@ mod role_pick;
 mod trade;
 
 pub use control::{
-    control_entry_core_inject_fill, control_entry_hr_mood_fill, control_entry_mood_cost_fill,
-    control_entry_plugin_fill, search_control_combos, ControlFillPolicy, ControlScoreBreakdown,
-    ControlSearchHit, ControlSearchOptions, MATATABI_CONSUMER_NAME,
+    control_efficiency_fill_sort_weight, control_entry_core_inject_fill,
+    control_entry_hr_mood_fill, control_entry_mood_cost_fill, control_entry_plugin_fill,
+    search_control_combos, ControlFillPolicy, ControlScoreBreakdown, ControlSearchHit,
+    ControlSearchOptions, MATATABI_CONSUMER_NAME,
 };
 pub use manufacture::{
     search_manufacture_triples, ManuScoreBreakdown, ManuSearchHit, ManuSearchOptions,

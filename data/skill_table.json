@@ -5566,6 +5566,27 @@
       "atoms": []
     },
     {
+      "id": "control_mp_cost[008]",
+      "skill_name": "解脱",
+      "facility": "control",
+      "tier": "tier_0",
+      "atoms": []
+    },
+    {
+      "id": "control_mp_lonely[000]",
+      "skill_name": "游侠",
+      "facility": "control",
+      "tier": "tier_up",
+      "atoms": []
+    },
+    {
+      "id": "control_mp_expand_double[000]",
+      "skill_name": "同类相识",
+      "facility": "control",
+      "tier": "tier_up",
+      "atoms": []
+    },
+    {
       "id": "control_mp_aegir2[000]",
       "skill_name": "集群狩猎·α",
       "facility": "control",
