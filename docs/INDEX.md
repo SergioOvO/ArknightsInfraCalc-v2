@@ -2,7 +2,9 @@
 
 本文是人类和 AI 进入项目文档的总入口。不要从 `docs/` 全量通读；按任务路由到对应文档。
 
-项目已进入**收尾 / bug 修复期**。默认不再推进历史 TODO Phase；先复现、最小修复、补回归。维护流程见 [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)。
+项目默认仍按**收尾 / bug 修复期**处理普通问题：先复现、最小修复、补回归。维护流程见 [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)。
+
+2026-06-30 起，用户已明确启动“90 → 95 质量提升”方向；这是收尾期的主动质量提升例外，不等同于恢复历史 Phase。相关工作从 [TODO/QUALITY_90_TO_95_PLAN.md](TODO/QUALITY_90_TO_95_PLAN.md) 进入。
 
 ## 首读
 
@@ -13,6 +15,7 @@
 | [PROJECT_MAP.md](PROJECT_MAP.md) | 项目结构、模块索引、数据真源 |
 | [GONGSUN_RUNTIME_OVERVIEW.md](GONGSUN_RUNTIME_OVERVIEW.md) | 给懂基建但不懂代码的公孙长乐解释项目运行流程 |
 | [TODO/README.md](TODO/README.md) | 历史建设期 TODO；默认冻结，除非用户明确要求继续 |
+| [TODO/QUALITY_90_TO_95_PLAN.md](TODO/QUALITY_90_TO_95_PLAN.md) | 当前 90 → 95 质量提升主计划：候选架构、机制分析、体系烘焙、trace、回归 |
 | [ARCHIVE/README.md](ARCHIVE/README.md) | 已完成、废弃或历史设计材料 |
 
 ## 按任务阅读
@@ -23,6 +26,7 @@
 | 改评分 / 排序 / 分量口径 | [SCORING_REFACTOR_PLAN.md](SCORING_REFACTOR_PLAN.md)、[SCORING_MODEL.md](SCORING_MODEL.md) |
 | 改编排 / 体系 / meta 组合 | [ADR/0001-layout-assignment-decomposition.md](ADR/0001-layout-assignment-decomposition.md)、[ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md)、[BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md) |
 | 用户明确要求继续历史体系 Phase | [TODO/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md](TODO/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md)、[TODO/SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md](TODO/SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md) |
+| 推进 90 → 95 质量提升 / 体系烘焙 / 候选架构 / 机制注册表分析 | [TODO/QUALITY_90_TO_95_PLAN.md](TODO/QUALITY_90_TO_95_PLAN.md)、[MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)、[ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md)、[INTERNAL/CROSS_FACILITY.md](INTERNAL/CROSS_FACILITY.md) |
 | 给基建策略作者解释程序运行过程 | [GONGSUN_RUNTIME_OVERVIEW.md](GONGSUN_RUNTIME_OVERVIEW.md) |
 | 改排班轮换 / MAA 导出 | [SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md)、[INFRA_CLI.md](INFRA_CLI.md) |
 | 改 CLI / 前端集成 | [INFRA_CLI.md](INFRA_CLI.md)、[FRONTEND_CLI.md](FRONTEND_CLI.md) |

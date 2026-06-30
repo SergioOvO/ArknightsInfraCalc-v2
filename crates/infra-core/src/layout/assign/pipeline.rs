@@ -173,6 +173,7 @@ pub(super) fn run_shift_pipeline(
             timer.mark("resolve(4th)");
             assign_manufacture_lines(
                 blueprint,
+                operbox,
                 &manu_pool,
                 table,
                 &manu_layout,
@@ -180,6 +181,7 @@ pub(super) fn run_shift_pipeline(
                 &forbid_same_room,
                 &mut run.assignment,
                 &mut run.used,
+                None,
             )?;
             timer.mark("制造");
         }
@@ -198,6 +200,7 @@ pub(super) fn run_shift_pipeline(
             timer.mark("trade孑余站");
             assign_manufacture_lines(
                 blueprint,
+                operbox,
                 &manu_pool,
                 table,
                 &layout,
@@ -205,6 +208,7 @@ pub(super) fn run_shift_pipeline(
                 &forbid_same_room,
                 &mut run.assignment,
                 &mut run.used,
+                None,
             )?;
             timer.mark("制造");
             assign_power_stations(

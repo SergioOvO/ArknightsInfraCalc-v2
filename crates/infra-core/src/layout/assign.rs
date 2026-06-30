@@ -309,7 +309,8 @@ mod tests {
     use super::commit::{commit_manu_room, manu_hit_names};
     use super::manufacture_fill::{
         gongsun_gold_manu_anchors_ready, manufacture_candidate_pool_for_demand, pick_manu_hit,
-        try_assign_gongsun_gold_manu_team, QINGLIU_RENEWABLE_ENERGY_BUFF,
+        trace_gongsun_gold_windflit_candidate, try_assign_gongsun_gold_manu_team,
+        QINGLIU_RENEWABLE_ENERGY_BUFF,
     };
     use super::producer_fill::{
         assign_sphinx_urrbian_dorm_anchor, cleanup_unused_sphinx_urrbian_dorm_anchor,
@@ -326,7 +327,9 @@ mod tests {
         default_operbox_full_e2_path, default_operbox_gongsun_path, OperBox, OperBoxEntry,
     };
     use crate::pool::ManuPool;
-    use crate::search::{ManuSearchOptions, MATATABI_CONSUMER_NAME};
+    use crate::search::{
+        ManuScoreBreakdown, ManuSearchHit, ManuSearchOptions, MATATABI_CONSUMER_NAME,
+    };
     use crate::skill_table::{default_skill_table_path, SkillTable};
     use crate::types::RecipeKind;
 
@@ -492,6 +495,140 @@ mod tests {
             "温蒂未解锁仿生海龙时不应强制清流+温蒂+冬时金线: {:?}",
             assignment.rooms
         );
+    }
+
+    #[test]
+    fn gongsun_gold_windflit_trace_records_low_progress_rejection() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let operbox = operbox_from_names(&[
+            ("清流", 2, 4),
+            ("温蒂", 1, 6),
+            ("冬时", 0, 5),
+            ("承曦格雷伊", 0, 5),
+        ]);
+        let pool = ManuPool {
+            entries: vec![
+                manu_pool_entry_with_progress(
+                    "清流",
+                    &[QINGLIU_RENEWABLE_ENERGY_BUFF],
+                    crate::roster::OperatorProgress::new(2, 1, 4),
+                ),
+                manu_pool_entry_with_progress(
+                    "温蒂",
+                    &["manu_prod_spd&power[010]"],
+                    crate::roster::OperatorProgress::new(1, 80, 6),
+                ),
+                manu_pool_entry_with_progress(
+                    "冬时",
+                    &["manu_prod_spd&manu[000]"],
+                    crate::roster::OperatorProgress::new(0, 1, 5),
+                ),
+            ],
+            skipped: vec![],
+        };
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let layout = crate::layout::context::LayoutContext::search_baseline();
+        let room = blueprint
+            .rooms
+            .iter()
+            .find(|room| room.id.0 == "manu_2")
+            .expect("manu_2 should exist");
+        let trace = trace_gongsun_gold_windflit_candidate(
+            room,
+            &BaseAssignment::default(),
+            &HashSet::new(),
+            &pool,
+            &table,
+            &layout,
+            &AssignBaseOptions::default(),
+            &operbox,
+            None,
+        )
+        .expect("trace candidate should be generated");
+
+        assert_eq!(trace.room, "manu_2");
+        assert_eq!(trace.recipe, "gold");
+        assert_eq!(trace.operators, vec!["清流", "温蒂", "冬时"]);
+        assert_eq!(trace.source_system, "automation_group");
+        assert_eq!(trace.source, "manual-system-candidate");
+        assert!(!trace.selected);
+        assert!(trace.rejected);
+        assert_eq!(trace.rejection_reason.as_deref(), Some("tier_gate_not_met"));
+        assert!(
+            trace.raw_score.is_some(),
+            "low-progress candidate can still be evaluated"
+        );
+        let linked = trace
+            .linked_producers
+            .iter()
+            .find(|producer| producer.operator == "承曦格雷伊")
+            .expect("linked producer should be present");
+        assert_eq!(linked.required_elite, Some(2));
+        assert_eq!(linked.current_elite, Some(0));
+        assert!(!linked.satisfied);
+    }
+
+    #[test]
+    fn gongsun_gold_windflit_trace_treats_matching_selected_hit_as_selected() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let operbox = operbox_from_names(&[
+            ("清流", 2, 4),
+            ("温蒂", 2, 6),
+            ("冬时", 2, 5),
+            ("承曦格雷伊", 2, 5),
+        ]);
+        let pool = ManuPool {
+            entries: vec![
+                manu_pool_entry_with_progress(
+                    "清流",
+                    &[QINGLIU_RENEWABLE_ENERGY_BUFF],
+                    crate::roster::OperatorProgress::new(2, 1, 4),
+                ),
+                manu_pool_entry_with_progress(
+                    "温蒂",
+                    &["manu_prod_spd&power[020]"],
+                    crate::roster::OperatorProgress::new(2, 1, 6),
+                ),
+                manu_pool_entry_with_progress(
+                    "冬时",
+                    &["manu_prod_spd&manu[100]"],
+                    crate::roster::OperatorProgress::new(2, 1, 5),
+                ),
+            ],
+            skipped: vec![],
+        };
+        let selected_hit = ManuSearchHit {
+            names: vec!["清流".to_string(), "温蒂".to_string(), "冬时".to_string()],
+            gold_names: vec![],
+            battle_record_names: vec![],
+            composite_score: 430.0,
+            per_station: crate::manufacture::ManuProdBreakdown::default(),
+            storage: crate::manufacture::ManuStorageBreakdown::default(),
+            breakdown: ManuScoreBreakdown::default(),
+        };
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let layout = crate::layout::context::LayoutContext::search_baseline();
+        let room = blueprint
+            .rooms
+            .iter()
+            .find(|room| room.id.0 == "manu_1")
+            .expect("manu_1 should exist");
+        let trace = trace_gongsun_gold_windflit_candidate(
+            room,
+            &BaseAssignment::default(),
+            &HashSet::new(),
+            &pool,
+            &table,
+            &layout,
+            &AssignBaseOptions::default(),
+            &operbox,
+            Some(&selected_hit),
+        )
+        .expect("trace candidate should be generated");
+
+        assert!(trace.selected);
+        assert!(!trace.rejected);
+        assert!(trace.rejection_reason.is_none());
     }
 
     #[test]

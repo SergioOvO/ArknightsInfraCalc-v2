@@ -2,44 +2,95 @@
   "schema": "feedback_regression_seed_v0",
   "name": "purestream-weedy-windflit-gold-automation",
   "source_feedback": "feedback/2026-06-29/010315-推荐调整成清流温蒂冬时-挂钩发电承曦格雷伊-130",
-  "status": "draft",
+  "status": "draft_manual_reviewed",
   "scope": "manufacture_candidate_selection",
   "input": {
     "layout_from_debug_bundle": "feedback/2026-06-29/010315-推荐调整成清流温蒂冬时-挂钩发电承曦格雷伊-130/debug-bundle.json#/layout",
     "operbox": "feedback/2026-06-29/010315-推荐调整成清流温蒂冬时-挂钩发电承曦格雷伊-130/operbox.json"
   },
+  "feedback_facts": {
+    "layout": {
+      "type": "243",
+      "trade_rooms": 2,
+      "manufacture_rooms": 4,
+      "power_rooms": 3,
+      "gold_manufacture_rooms": ["manu_1", "manu_2"]
+    },
+    "operator_levels": [
+      {"operator": "清流", "owned": true, "elite": 2, "level": 1},
+      {"operator": "温蒂", "owned": true, "elite": 1, "level": 80},
+      {"operator": "冬时", "owned": true, "elite": 0, "level": 1},
+      {"operator": "承曦格雷伊", "owned": true, "elite": 0, "level": 1}
+    ]
+  },
   "observed": {
-    "room": "manufacture_1",
+    "room": "manu_1",
+    "display_room": "制造站 1",
     "product": "gold",
     "operators": ["斑点", "清流", "至简"],
-    "inferred_rule": "急性子/慢性子回退池"
-  },
-  "preferred_patterns": [
-    {
-      "station": "manufacture",
-      "recipe": "gold",
-      "operators": ["清流", "温蒂", "冬时"],
-      "source": "SystemBaked",
-      "system_tags": ["automation_group", "gold_line"],
-      "max_regret": 0.03
+    "metrics": {
+      "manu_prod_total": 105,
+      "manu_prod_skill": 100,
+      "manu_storage_limit": 20,
+      "manu_gold_current_score": 110.25
     }
-  ],
-  "linked_producers": [
-    {
+  },
+  "user_expectation": {
+    "preferred_pattern": {
+      "station": "manufacture",
+      "room": "manu_1",
+      "recipe": "gold",
+      "operators": ["清流", "温蒂", "冬时"]
+    },
+    "linked_producer": {
       "station": "power",
       "operators": ["承曦格雷伊"],
-      "reason": "automation effective power support"
-    }
+      "reason": "用户期望挂钩承曦格雷伊"
+    },
+    "user_claim_pct": 130,
+    "user_claim_status": "unverified_by_solver"
+  },
+  "manual_review_consensus": {
+    "method": "six read-only subagents; each material block read independently by at least two agents; only cross-agent consistent facts recorded here",
+    "facts": [
+      "清流 + 温蒂 + 冬时 有人工机制依据，但不是当前 base_systems.json 显式固定三人组。",
+      "当前 automation_group 固定的是发电：承曦格雷伊 E2；赤金制造：清流 E1 + 温蒂 E2。",
+      "冬时是自动化金线第三人补位/候选；文档中描述无森蚺时用冬时补，但不是 registry system slot。",
+      "承曦格雷伊应作为 linked producer / 解释项 / 高档候选前提，不是制造三人同房前提。",
+      "普通制造搜索会排除温蒂/冬时这类体系专用干员；不应把它们塞回普通制造搜索。",
+      "manufacture/solver.rs 只计算 raw score；不应为该 case 修改 solver。"
+    ]
+  },
+  "future_expectations": {
+    "candidate_source_visibility": ["SystemBaked", "system-candidate", "manual-system-candidate"],
+    "preferred_pattern_should_be_considered": true,
+    "expected_trace_properties": [
+      "candidate source is visible",
+      "best raw alternative is visible",
+      "preferred system candidate is either selected or rejected by explicit raw-score gap/operator conflict/level gate",
+      "linked power producer is visible when present"
+    ]
+  },
+  "implementation_hints": {
+    "candidate_source": "SystemBaked or equivalent explicit system-candidate source",
+    "candidate_tags": ["automation_group", "gold_line"],
+    "suggested_area": "layout/assign/manufacture_fill.rs around assign_manufacture_lines / try_assign_gongsun_gold_manu_team",
+    "avoid": [
+      "do not move 温蒂/冬时 into ordinary manufacture search pool",
+      "do not modify manufacture/solver.rs for preference behavior",
+      "do not treat 130% as solver-verified for this operbox",
+      "do not treat preferred pattern as a hard constraint"
+    ]
+  },
+  "uncertainties": [
+    "当前 operbox 中温蒂/冬时/承曦格雷伊未达到人工复核中高档候选所需练度；实际 raw score 可能不等于用户 note 的 130%。",
+    "max regret / near-optimal tolerance 尚未确定，不能从本 seed 直接推出。",
+    "清流 + 温蒂 + 冬时 应作为 system candidate、third-member candidate 还是 trace-only candidate，需要 Phase C 实现设计决定。"
   ],
   "forbidden_patterns": [],
-  "explanation_expectations": [
-    "candidate source is visible",
-    "best raw alternative is visible",
-    "system candidate selected within tolerance or rejected by explicit raw-score gap/operator conflict",
-    "linked power producer is visible when present"
-  ],
   "notes": [
-    "Draft seed only; it does not drive runtime or tests yet.",
-    "The expected operators come from user feedback note, not from automatic parsing of game text."
+    "This seed records feedback facts and manual-review consensus only; it does not drive runtime or tests yet.",
+    "The preferred operators come from user feedback and cross-agent manual review, not from automatic keyword tagging.",
+    "Implementation-specific fields are intentionally kept under future_expectations / implementation_hints rather than feedback facts."
   ]
 }
