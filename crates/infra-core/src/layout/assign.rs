@@ -855,6 +855,75 @@ mod tests {
     }
 
     #[test]
+    fn feedback_seed_purestream_weedy_windflit_trace_is_visible() {
+        let root = crate::skill_table::workspace_root().unwrap();
+        let seed_path = root
+            .join("data/feedback_regression_seeds/purestream_weedy_windflit_gold_automation.json");
+        let seed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&seed_path).unwrap()).unwrap();
+        assert_eq!(
+            seed["status"].as_str(),
+            Some("draft_manual_reviewed"),
+            "seed should remain a manually reviewed evidence record"
+        );
+
+        let source_feedback = seed["source_feedback"].as_str().unwrap();
+        let preferred = &seed["user_expectation"]["preferred_pattern"];
+        let expected_ops: Vec<String> = preferred["operators"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value.as_str().unwrap().to_string())
+            .collect();
+        let linked_operator = seed["user_expectation"]["linked_producer"]["operators"][0]
+            .as_str()
+            .unwrap();
+
+        let debug_bundle_path = root.join(source_feedback).join("debug-bundle.json");
+        let debug_bundle: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&debug_bundle_path).unwrap()).unwrap();
+        let blueprint: BaseBlueprint =
+            serde_json::from_value(debug_bundle["layout"].clone()).unwrap();
+        let operbox = OperBox::load(&root.join(source_feedback).join("operbox.json")).unwrap();
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+
+        let result = assign_shift_with_plan_and_trace(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions::default(),
+            AssignShiftMode::Peak,
+            &BaseAssignment::default(),
+        )
+        .unwrap();
+        let trace = result
+            .manufacture_traces
+            .iter()
+            .find(|trace| trace.operators == expected_ops)
+            .expect("feedback seed preferred manufacture trio should be visible in trace");
+
+        assert_eq!(trace.source, "manual-system-candidate");
+        assert_eq!(trace.source_system, "automation_group");
+        assert!(trace.rejected, "low-progress seed should be trace-only/rejected");
+        assert!(
+            trace.rejection_reason.is_some() || trace.evaluation_failed.is_some(),
+            "rejected seed candidate should explain why it was not selected: {trace:?}"
+        );
+        assert!(
+            trace
+                .linked_producers
+                .iter()
+                .any(|producer| producer.operator == linked_operator
+                    && producer.station == "power"
+                    && producer.role == "linked_virtual_power"),
+            "linked producer from seed should be visible: {:?}",
+            trace.linked_producers
+        );
+    }
+
+    #[test]
     fn commit_manu_room_stores_efficiency_snapshot_and_progress() {
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let progress = crate::roster::OperatorProgress::new(1, 55, 3);
