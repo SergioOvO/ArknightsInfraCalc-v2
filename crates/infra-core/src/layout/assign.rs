@@ -12,6 +12,7 @@ mod trade_fill;
 
 pub(crate) use control_fill::assign_control;
 pub(crate) use manufacture_fill::assign_manu_room_with_anchors;
+pub use manufacture_fill::{ManufactureLinkedProducer, ManufactureSystemCandidateTrace};
 pub use power_fill::{assign_power_rooms, assign_power_stations};
 pub use team_fill::{assign_team_gamma_half, assign_team_producer_rooms};
 pub use trade_fill::blackkey_witch_same_trade_room;
@@ -73,6 +74,7 @@ pub fn assign_base_greedy(
 pub struct AssignShiftResult {
     pub assignment: BaseAssignment,
     pub plan: AssignmentPlan,
+    pub manufacture_traces: Vec<ManufactureSystemCandidateTrace>,
 }
 
 /// 单班进驻；`seed` 非空时保留已钉死房间（中枢/宿舍），仅补贸易/制造/发电。
@@ -233,6 +235,65 @@ pub fn assign_shift_with_plan(
     )
 }
 
+/// 同 [`assign_shift_with_plan`]，并额外返回制造站体系候选 trace。
+pub fn assign_shift_with_plan_and_trace(
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+    options: &AssignBaseOptions,
+    mode: AssignShiftMode,
+    seed: &BaseAssignment,
+) -> Result<AssignShiftResult> {
+    assign_shift_with_plan_skip_and_trace(
+        blueprint,
+        operbox,
+        instances,
+        table,
+        options,
+        mode,
+        seed,
+        &HashSet::new(),
+    )
+}
+
+/// 同 [`assign_shift_with_plan_skip`]，并额外返回制造站体系候选 trace。
+pub fn assign_shift_with_plan_skip_and_trace(
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+    options: &AssignBaseOptions,
+    mode: AssignShiftMode,
+    seed: &BaseAssignment,
+    skip_system_ids: &HashSet<String>,
+) -> Result<AssignShiftResult> {
+    blueprint.validate()?;
+
+    let mut skip_system_ids = skip_system_ids.clone();
+    skip_trade_core_registry_systems(&mut skip_system_ids);
+    let plan = build_plan(blueprint, operbox, mode, seed, &skip_system_ids)?;
+    let mut manufacture_traces = Vec::new();
+
+    let assignment = pipeline::run_shift_pipeline(
+        blueprint,
+        operbox,
+        instances,
+        table,
+        options,
+        mode,
+        seed,
+        &plan,
+        Some(&mut manufacture_traces),
+    )?;
+
+    Ok(AssignShiftResult {
+        assignment,
+        plan,
+        manufacture_traces,
+    })
+}
+
 /// 同 [`assign_shift_with_plan`]，额外允许跳过指定体系。
 pub fn assign_shift_with_plan_skip(
     blueprint: &BaseBlueprint,
@@ -251,10 +312,14 @@ pub fn assign_shift_with_plan_skip(
     let plan = build_plan(blueprint, operbox, mode, seed, &skip_system_ids)?;
 
     let assignment = pipeline::run_shift_pipeline(
-        blueprint, operbox, instances, table, options, mode, seed, &plan,
+        blueprint, operbox, instances, table, options, mode, seed, &plan, None,
     )?;
 
-    Ok(AssignShiftResult { assignment, plan })
+    Ok(AssignShiftResult {
+        assignment,
+        plan,
+        manufacture_traces: Vec::new(),
+    })
 }
 
 /// 编制内所有上岗干员。
@@ -745,6 +810,48 @@ mod tests {
         );
         assert!(candidate_pool.entry("低效非候选A").is_some());
         assert!(candidate_pool.entry("低效非候选B").is_some());
+    }
+
+    #[test]
+    fn assign_shift_with_plan_and_trace_exposes_manufacture_candidate_trace() {
+        let (blueprint, operbox, instances, table) = fixtures();
+
+        let default_result = assign_shift_with_plan(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions::default(),
+            AssignShiftMode::Peak,
+            &BaseAssignment::default(),
+        )
+        .unwrap();
+        assert!(
+            default_result.manufacture_traces.is_empty(),
+            "default assignment API should not collect manufacture traces"
+        );
+
+        let traced_result = assign_shift_with_plan_and_trace(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions::default(),
+            AssignShiftMode::Peak,
+            &BaseAssignment::default(),
+        )
+        .unwrap();
+        assert!(traced_result
+            .manufacture_traces
+            .iter()
+            .any(|trace| trace.source == "manual-system-candidate"
+                && trace.source_system == "automation_group"
+                && trace.operators == ["清流", "温蒂", "冬时"]));
+        assert_eq!(
+            serde_json::to_value(&default_result.assignment).unwrap(),
+            serde_json::to_value(&traced_result.assignment).unwrap(),
+            "trace collection must not change the final assignment"
+        );
     }
 
     #[test]

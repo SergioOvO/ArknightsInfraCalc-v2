@@ -19,7 +19,7 @@ use crate::pool::{
 use crate::skill_table::SkillTable;
 
 use super::control_fill::{assign_control, pin_daifeen_for_vina_priority};
-use super::manufacture_fill::assign_manufacture_lines;
+use super::manufacture_fill::{assign_manufacture_lines, ManufactureSystemCandidateTrace};
 use super::power_fill::assign_power_stations;
 use super::producer_fill::{
     assign_dorm_producers, assign_sphinx_urrbian_dorm_anchor,
@@ -42,6 +42,7 @@ pub(super) fn run_shift_pipeline(
     mode: AssignShiftMode,
     seed: &BaseAssignment,
     plan: &AssignmentPlan,
+    mut manufacture_trace_sink: Option<&mut Vec<ManufactureSystemCandidateTrace>>,
 ) -> Result<BaseAssignment> {
     let mut timer = StageTimer::new("单班");
 
@@ -181,7 +182,7 @@ pub(super) fn run_shift_pipeline(
                 &forbid_same_room,
                 &mut run.assignment,
                 &mut run.used,
-                None,
+                manufacture_trace_sink.as_deref_mut(),
             )?;
             timer.mark("制造");
         }
@@ -208,7 +209,7 @@ pub(super) fn run_shift_pipeline(
                 &forbid_same_room,
                 &mut run.assignment,
                 &mut run.used,
-                None,
+                manufacture_trace_sink.as_deref_mut(),
             )?;
             timer.mark("制造");
             assign_power_stations(

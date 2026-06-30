@@ -14,10 +14,11 @@ pub(crate) use assign::assign_control;
 pub(crate) use assign::assign_manu_room_with_anchors;
 pub use assign::{
     assign_base_greedy, assign_power_rooms, assign_power_stations, assign_shift,
-    assign_shift_with_plan, assign_shift_with_plan_skip, assign_team_gamma_half,
-    assign_team_producer_rooms, assignment_operator_names, blackkey_witch_same_trade_room,
-    explain_assignment_systems, pinned_assignment, rotating_workers, AssignBaseOptions,
-    AssignShiftResult,
+    assign_shift_with_plan, assign_shift_with_plan_and_trace, assign_shift_with_plan_skip,
+    assign_shift_with_plan_skip_and_trace, assign_team_gamma_half, assign_team_producer_rooms,
+    assignment_operator_names, blackkey_witch_same_trade_room, explain_assignment_systems,
+    pinned_assignment, rotating_workers, AssignBaseOptions, AssignShiftResult,
+    ManufactureLinkedProducer, ManufactureSystemCandidateTrace,
 };
 pub use assignment::{AssignedOperator, BaseAssignment, RoomAssignment, RoomEfficiencySnapshot};
 pub use blueprint::{

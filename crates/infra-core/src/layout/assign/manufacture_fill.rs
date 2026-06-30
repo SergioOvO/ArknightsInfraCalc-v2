@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use serde::Serialize;
+
 use crate::error::{Error, Result};
 use crate::layout::assignment::{AssignedOperator, BaseAssignment};
 use crate::layout::blueprint::{
@@ -30,8 +32,8 @@ pub(super) const QINGLIU_RENEWABLE_ENERGY_BUFF: &str = "manu_prod_spd&trade[000]
 pub(super) const WENDY_BIONIC_SEADRAGON_BUFF: &str = "manu_prod_spd&power[020]";
 const DONGSHI_FLOW_OPTIMIZATION_BUFF: &str = "manu_prod_spd&manu[100]";
 
-#[derive(Debug, Clone, PartialEq)]
-pub(super) struct ManufactureLinkedProducer {
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ManufactureLinkedProducer {
     pub station: String,
     pub operator: String,
     pub required_elite: Option<u8>,
@@ -40,8 +42,8 @@ pub(super) struct ManufactureLinkedProducer {
     pub role: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub(super) struct ManufactureSystemCandidateTrace {
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ManufactureSystemCandidateTrace {
     pub room: String,
     pub recipe: String,
     pub operators: Vec<String>,

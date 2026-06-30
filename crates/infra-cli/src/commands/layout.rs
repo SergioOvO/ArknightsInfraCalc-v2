@@ -13,8 +13,8 @@ use infra_core::export::{
 };
 use infra_core::instances::{default_instances_path, OperatorInstances};
 use infra_core::layout::{
-    assign_base_greedy, explain_assignment_systems, resolve_base, AssignBaseOptions,
-    AssignShiftMode, BaseAssignment, BaseBlueprint,
+    assign_base_greedy, assign_shift_with_plan_and_trace, explain_assignment_systems, resolve_base,
+    AssignBaseOptions, AssignShiftMode, BaseAssignment, BaseBlueprint,
 };
 use infra_core::manufacture::input::ManuRoomInput;
 use infra_core::manufacture::solve_manufacture;
@@ -39,7 +39,7 @@ pub fn layout_cmd(args: &[String]) -> Result<(), Error> {
         Some("team-rotation") => layout_team_rotation_cmd(&args[1..]),
         _ => {
             eprintln!(
-                "usage: infra-cli layout test --layout <path> --operbox <path> [--assignment <path>] [--top <n>] [-o <file.csv>] [--text] [--explain-systems]"
+                "usage: infra-cli layout test --layout <path> --operbox <path> [--assignment <path>] [--top <n>] [-o <file.csv>] [--text] [--explain-systems] [--debug-manufacture-trace]"
             );
             eprintln!(
                 "       infra-cli layout analyze --layout <path> --operbox <path> [--baseline <operbox>] [--top <n>] [-o profile.json] [--json]"
@@ -88,6 +88,42 @@ fn maa_out_from_args(args: &[String]) -> Option<PathBuf> {
     args.windows(2)
         .find(|w| w[0] == "--maa-out")
         .map(|w| PathBuf::from(&w[1]))
+}
+
+fn debug_manufacture_trace_path_from_args(args: &[String]) -> Option<Option<PathBuf>> {
+    args.iter()
+        .position(|arg| arg == "--debug-manufacture-trace")
+        .map(|idx| {
+            let next = args.get(idx + 1);
+            if let Some(value) = next {
+                if !value.starts_with('-') {
+                    return Some(PathBuf::from(value));
+                }
+            }
+            None
+        })
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ManufactureTraceDebugReport<'a> {
+    schema: &'static str,
+    layout: &'a str,
+    operbox: &'a str,
+    manufacture_traces: &'a [infra_core::layout::ManufactureSystemCandidateTrace],
+}
+
+fn emit_manufacture_trace_debug_report(
+    path: Option<&Path>,
+    report: &ManufactureTraceDebugReport<'_>,
+) -> Result<(), Error> {
+    let json = serde_json::to_string_pretty(report)?;
+    if let Some(path) = path {
+        fs::write(path, json + "\n")?;
+        eprintln!("manufacture trace JSON → {}", path.display());
+    } else {
+        println!("{json}");
+    }
+    Ok(())
 }
 
 fn maa_export_options(args: &[String], blueprint: &BaseBlueprint) -> MaaExportOptions {
@@ -337,6 +373,7 @@ fn layout_test_cmd(args: &[String]) -> Result<(), Error> {
     let layout_path = layout_path_from_args(args)?;
     let operbox_path = operbox_path_from_args(args)?;
     let explain_systems = args.iter().any(|a| a == "--explain-systems");
+    let debug_manufacture_trace = debug_manufacture_trace_path_from_args(args);
     let top_k = args
         .windows(2)
         .find(|w| w[0] == "--top")
@@ -354,6 +391,12 @@ fn layout_test_cmd(args: &[String]) -> Result<(), Error> {
         None
     };
 
+    if debug_manufacture_trace.is_some() && seed_assignment.is_some() {
+        return Err(Error::msg(
+            "--debug-manufacture-trace requires generating a fresh assignment; omit --assignment",
+        ));
+    }
+
     if explain_systems {
         let empty_seed = BaseAssignment::default();
         let seed = seed_assignment.as_ref().unwrap_or(&empty_seed);
@@ -365,23 +408,47 @@ fn layout_test_cmd(args: &[String]) -> Result<(), Error> {
         print_system_explain_report(&report);
     }
 
+    let options = AssignBaseOptions {
+        top_k,
+        ..AssignBaseOptions::default()
+    };
+    let mut manufacture_trace_report = None;
     let assignment = if let Some(path) = assignment_path_from_args(args) {
         match seed_assignment {
             Some(assignment) => assignment,
             None => BaseAssignment::load(&path)?,
         }
-    } else {
-        assign_base_greedy(
+    } else if debug_manufacture_trace.is_some() {
+        let result = assign_shift_with_plan_and_trace(
             &blueprint,
             &operbox,
             &instances,
             &table,
-            &AssignBaseOptions {
-                top_k,
-                ..AssignBaseOptions::default()
-            },
-        )?
+            &options,
+            AssignShiftMode::Peak,
+            &BaseAssignment::default(),
+        )?;
+        manufacture_trace_report = Some(result.manufacture_traces);
+        result.assignment
+    } else {
+        assign_base_greedy(&blueprint, &operbox, &instances, &table, &options)?
     };
+
+    if let Some(path) = debug_manufacture_trace {
+        let layout_str = layout_path.to_string_lossy();
+        let operbox_str = operbox_path.to_string_lossy();
+        let traces = manufacture_trace_report.unwrap_or_default();
+        let report = ManufactureTraceDebugReport {
+            schema: "manufacture_trace_debug_v0",
+            layout: layout_str.as_ref(),
+            operbox: operbox_str.as_ref(),
+            manufacture_traces: &traces,
+        };
+        emit_manufacture_trace_debug_report(path.as_deref(), &report)?;
+        if path.is_none() {
+            return Ok(());
+        }
+    }
 
     let durin_plan = operbox.durin_dorm_planning_count(&instances);
     let resolved = resolve_base(
