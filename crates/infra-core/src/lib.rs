@@ -1,5 +1,6 @@
 pub mod bake;
 pub mod box_profile;
+pub mod candidate;
 pub mod cross_facility;
 pub mod eff_ramp;
 pub mod error;
@@ -31,6 +32,9 @@ pub use bake::{
 pub use box_profile::{
     baseline_path_or_default, build_box_profile, render_box_profile_narrative, ActionKind,
     BoxProfile, BoxProfileOptions, GapSeverity, ProfileAction,
+};
+pub use candidate::{
+    CandidateScore, CandidateSource, CandidateStationKind, TeamCandidate, TeamColumn,
 };
 pub use control::{
     apply_control_to_layout, solve_control, ControlCenterResult, ControlOperator, ControlRoomInput,

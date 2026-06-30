@@ -234,6 +234,10 @@ decision_score = raw_score + soft preferences，用于排序 / 选择
 
 禁止把体系偏好直接写入真实效率。
 
+### 5.4 当前 v0 状态
+
+已引入 shadow `TeamCandidate` / `TeamColumn` 模型，并提供从当前 manufacture / trade search hit 与 manual manufacture system trace 的 adapter。该模型暂不参与默认选择；`decision_score` 暂等于 `raw_score`，不触发 near-optimal preference。
+
 ## 6. Phase C：制造站体系烘焙候选注入
 
 这是当前最高优先级的业务收益点。
@@ -552,7 +556,7 @@ trace 至少能解释：
 ### Milestone 2：制造站候选注入 pilot
 
 - [x] trace-only `manual-system-candidate` pilot：覆盖“清流 + 温蒂 + 冬时”与 linked producer “承曦格雷伊”，并能解释低练度 / 占用等拒绝原因；
-- [ ] 定义最小 `CandidateSource` / candidate metadata；
+- [x] 定义最小 `CandidateSource` / candidate metadata；
 - [ ] system baked manufacture row 草案；
 - [ ] runtime 合并 system baked + generic baked + dynamic search；
 - [ ] raw_score / decision_score 分离；
