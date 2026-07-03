@@ -1,8 +1,9 @@
 # Trust Recovery Plan: Feedback, Repro, Trace, Regression
 
-> 状态：active
+> 状态：closure-audit
 > 启动日期：2026-07-03
 > 替代范围：暂停 `QUALITY_90_TO_95_PLAN.md` 的大架构推进，先恢复结果可信度与排错速度。
+> 收口修正：2026-07-03 用户确认 `feedback/` 中本批 bug 已修复；当前任务从“继续修反馈”切换为“固化关闭证据与防回归矩阵”。
 
 ## 0. 判断
 
@@ -10,7 +11,7 @@
 
 > 结果错时，很难快速判断错在数据、机制、搜索、编排、排班、导出还是展示。
 
-因此当前主线从“继续做候选架构”切换为“生产反馈闭环”。目标是让每个线上反馈都能被追踪、复现、定位、修复和回归保护。
+因此当前主线从“继续做候选架构”切换为“生产反馈闭环”。本批 `feedback/` bug 修复完成后，目标进一步收敛为：把关闭状态、修复证据和 smoke matrix 留在仓库里，避免后续 agent 误以为这些反馈仍是开放队列。
 
 ## 1. 非目标
 
@@ -36,7 +37,7 @@
 
 ## 3. 工作流
 
-每个反馈按同一条闭环处理：
+新反馈按同一条闭环处理：
 
 1. `intake`：从 `issue.json` / `meta.json` / `debug-bundle.json` 记录反馈 id、房间、用户期望和线上命令。
 2. `reproduced`：用本地 CLI 复现，优先复用 debug bundle 中的 layout 与 operbox。
@@ -46,6 +47,8 @@
 6. `closed`：在 `feedback/TRACKING.md` 写清 commit、验证命令和确认层。
 
 不能复现时标记 `blocked`，写明已跑命令和缺失材料，不猜公式。
+
+本批历史反馈已经进入 closed / duplicate-covered 状态；不要再把它们当作默认待修队列。
 
 ## 4. Trace v0 原则
 
@@ -64,24 +67,34 @@ Trace v0 不是完整解释系统，只补关键边界的可观测点。
 
 Trace 默认应是 debug-only，不能改变推荐结果。
 
-## 5. 优先级
+## 5. 防回归矩阵
 
-先处理会破坏导出或结构完整性的反馈：
+本批反馈收口后，主要依靠以下矩阵守住回归：
 
-| Priority | Examples |
-|----------|----------|
-| P0 | 发电站数量不足导致 MAA/profile 不生成；会客室/办公室空置 |
-| P1 | 制造/贸易/中枢/发电明确推荐错误 |
-| P2 | 宿舍 filler、解释、展示质量 |
+```bash
+cargo test -p infra-core --quiet
+cargo run -q -p infra-cli -- verify --all
+cargo run -q -p infra-cli -- plan \
+  --operbox data/fixtures/243/operbox_full_e2.json \
+  --maa-out out/243_maa.json
+```
 
-制造站体系建议很多，但不要从制造站开始重构。先复现 2 到 3 个反馈，确认它们到底是 raw score 错、候选缺失、占用冲突、room level 误判，还是体系偏好缺失。
+重点覆盖：
+
+| Family | Guard |
+|--------|-------|
+| 发电站候选不足 / 小车优先级 | power assignment / search targeted tests |
+| 贸易 Vina / 巫恋换站 / U-Official | trade role and schedule binding tests |
+| 制造红云克里斯汀 / 槐琥 / 清流温蒂冬时 | manufacture search tests and trace seed |
+| 中枢重复 / filler 机会成本 | control layered-fill tests |
+| 宿舍等级 / 无效宿舍锚点 | layout metadata and dorm semantics tests |
 
 ## 6. 验收
 
 本阶段完成的标志不是“推荐变聪明”，而是：
 
-- 每条生产反馈都在 `feedback/TRACKING.md` 有状态；
-- P0 反馈都有本地复现或明确 blocked 原因；
-- 每修一个 bug 都有最小回归；
+- 每条生产反馈都在 `feedback/TRACKING.md` 有 closed / duplicate-covered 状态；
+- 已知修复提交和测试入口能从 tracking 找到；
+- smoke matrix 写在 tracking 和本文档里；
 - 后续 agent 不需要全仓库通读，就能从 feedback id 进入对应层；
 - `QUALITY_90_TO_95_PLAN.md` 不再被默认当作下一步实现路线。
