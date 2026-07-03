@@ -1,6 +1,6 @@
-# Agent 引导（收尾 / bug 修复期首读）
+# Agent 引导（正常维护 / bug 修复期首读）
 
-> 本项目已接近收尾。默认工作模式从“继续实现架构计划”切换为“复现 bug、定位边界、最小修复、补回归、保持口径稳定”。
+> 本项目已进入正常维护期。默认工作模式是“复现 bug、定位边界、最小修复、补回归、保持口径稳定”，不是继续推进架构计划。
 
 ## 0. 当前状态
 
@@ -9,25 +9,25 @@
 - `infra-core`：机制解释、搜索、编排、排班、导出数据结构。
 - `infra-cli`：命令入口、文件加载、输出格式化、回归验证壳。
 - `data/`：技能、干员实例、体系、shortcut、标准夹具等运行时真源。
-- `docs/`：当前事实、收尾期流程、任务路由和历史归档。
+- `docs/`：当前事实、维护期流程、任务路由和历史归档。
 
-现阶段普通问题的默认目标仍是稳定，不是扩张。除非用户明确要求新增功能，否则不要主动推进 `docs/TODO/` 里的历史 Phase 计划。
+现阶段普通问题的默认目标是稳定维护，不是扩张。除非用户明确要求新增功能，否则不要主动推进 `docs/TODO/` 里的历史 Phase 计划。
 
-2026-07-03 用户确认“90 → 95 质量提升”方案过度设计；该方向已暂停作为默认主线。当前主动方向是信任恢复，入口为 [`docs/TODO/TRUST_RECOVERY_PLAN.md`](docs/TODO/TRUST_RECOVERY_PLAN.md) 与 [`feedback/TRACKING.md`](feedback/TRACKING.md)：从生产反馈出发做 tracking、复现、分层定位、最小修复和回归保护。[`docs/TODO/QUALITY_90_TO_95_PLAN.md`](docs/TODO/QUALITY_90_TO_95_PLAN.md) 只作为历史参考，除非用户明确要求恢复。
+2026-07-03 用户确认“90 → 95 质量提升”方案过度设计；该方向已暂停作为默认主线。同日用户确认 `feedback/` 本批线上反馈 bug 已修复，项目进入正常维护期。当前没有默认主动 TODO 队列；[`docs/TODO/TRUST_RECOVERY_PLAN.md`](docs/TODO/TRUST_RECOVERY_PLAN.md) 与 [`feedback/TRACKING.md`](feedback/TRACKING.md) 只作为维护参考、关闭审计和防回归矩阵使用。[`docs/TODO/QUALITY_90_TO_95_PLAN.md`](docs/TODO/QUALITY_90_TO_95_PLAN.md) 只作为历史参考，除非用户明确要求恢复。
 
 非目标仍然是：心情排班、宿管恢复、全基建连续时间最优化。
 
 ## 1. 首读顺序
 
 1. 本文。
-2. [docs/MAINTENANCE_MODE.md](docs/MAINTENANCE_MODE.md)：收尾期 bug 修复流程、分层定位、验收矩阵。
+2. [docs/MAINTENANCE_MODE.md](docs/MAINTENANCE_MODE.md)：维护期 bug 修复流程、分层定位、验收矩阵。
 3. [docs/INDEX.md](docs/INDEX.md)：文档入口和任务路由。
 4. [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)：当前代码地图、模块边界、数据真源。
 5. 按 bug 类型读取对应领域文档；不要全仓库通读 Markdown。
 
 `plans/` 和 `docs/TODO/` 默认是历史建设期材料。只有用户明确要求继续某个 TODO，或 bug 定位需要理解当时设计，才读取它们。
 
-## 2. 收尾期默认动作
+## 2. 维护期默认动作
 
 用户报告 bug / “结果不对” / “跑一下看看”时，按以下顺序：
 

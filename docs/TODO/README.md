@@ -1,6 +1,6 @@
 # 历史建设期 TODO
 
-> 项目已进入收尾 / bug 修复期。本目录不再代表 agent 的默认下一步工作队列。
+> 项目已进入正常维护 / bug 修复期。本目录不再代表 agent 的默认下一步工作队列。
 
 ## 当前规则
 
@@ -11,18 +11,18 @@
 3. 不用“顺手完成 TODO”解释与当前 bug 无关的大改。
 4. 只有用户明确说“继续某个 TODO / 继续 Phase / 做历史计划”时，才读取对应文件并恢复功能建设模式。
 
-## 当前主动方向
+## 当前状态
 
-2026-07-03 用户确认 `QUALITY_90_TO_95_PLAN.md` 过度设计。当前主动方向切换为“信任恢复”：围绕生产反馈建立 tracking、复现、分层定位、最小修复和回归保护。
+2026-07-03 用户确认 `QUALITY_90_TO_95_PLAN.md` 过度设计，且 `feedback/` 本批线上反馈 bug 已修复。项目现在处于正常维护期：没有默认主动 TODO 队列。新问题按 [../MAINTENANCE_MODE.md](../MAINTENANCE_MODE.md) 处理；已关闭反馈从 [../../feedback/TRACKING.md](../../feedback/TRACKING.md) 查证。
 
 | 文件 | 状态 | 用途 |
 |------|------|------|
-| [TRUST_RECOVERY_PLAN.md](TRUST_RECOVERY_PLAN.md) | active | 当前主计划；从 `feedback/` 进入生产反馈闭环 |
+| [TRUST_RECOVERY_PLAN.md](TRUST_RECOVERY_PLAN.md) | maintenance-reference | 已修复反馈的关闭审计、防回归矩阵、新反馈处理规则 |
 | [QUALITY_90_TO_95_PLAN.md](QUALITY_90_TO_95_PLAN.md) | paused | 历史质量提升方案；只作为参考，不默认继续推进大架构 |
 
 ## 冻结的历史计划
 
-| 文件 | 原状态 | 收尾期处理 |
+| 文件 | 原状态 | 维护期处理 |
 |------|--------|------------|
 | [SYSTEM_REGISTRY_NORMALIZATION_REPORT.md](SYSTEM_REGISTRY_NORMALIZATION_REPORT.md) | doing | 冻结；只在相关 bug 需要理解 registry 语义时读取 |
 | [SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md](SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md) | ready | 冻结；不要为单一 bug 泛化 anchor 三态 |
@@ -32,7 +32,7 @@
 
 ## 新 bug 记录模板
 
-收尾期不建议为每个 bug 新建 TODO。若 bug 需要跨会话跟踪，可在本目录新建 `BUG_*.md`，使用以下模板：
+维护期不建议为每个 bug 新建 TODO。若 bug 需要跨会话跟踪，可在本目录新建 `BUG_*.md`，使用以下模板：
 
 ```markdown
 # BUG: 简短标题

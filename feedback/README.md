@@ -4,6 +4,8 @@ This directory stores production feedback bundles copied from the deployed beta/
 
 Treat each feedback folder as raw evidence. Do not edit `issue.json`, `meta.json`, `debug-bundle.json`, or `operbox.json` while triaging. Add investigation state in [TRACKING.md](TRACKING.md) instead.
 
+The imported 2026-06-27 to 2026-06-30 batch is closed as of 2026-07-03. [TRACKING.md](TRACKING.md) is now a closure audit and regression guard, not an open bug queue. Reopen a row only if the same symptom is reported again.
+
 ## Folder Shape
 
 Each case normally contains:
@@ -27,6 +29,7 @@ Each case normally contains:
 | `closed` | Fix and regression are verified |
 | `blocked` | Missing input, unclear expectation, or cannot reproduce |
 | `duplicate` | Tracked through another case id |
+| `duplicate-covered` | Closed through another feedback case in the same root-cause family |
 
 ## Triage Rule
 

@@ -2,20 +2,20 @@
 
 本文是人类和 AI 进入项目文档的总入口。不要从 `docs/` 全量通读；按任务路由到对应文档。
 
-项目默认仍按**收尾 / bug 修复期**处理普通问题：先复现、最小修复、补回归。维护流程见 [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)。
+项目默认按**正常维护 / bug 修复期**处理普通问题：先复现、最小修复、补回归。维护流程见 [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)。
 
-2026-07-03 起，用户确认“90 → 95 质量提升”方案过度设计；该方向已暂停作为默认主线。当前主动方向是信任恢复：从生产反馈出发做 tracking、复现、分层定位、最小修复和回归保护，入口为 [TODO/TRUST_RECOVERY_PLAN.md](TODO/TRUST_RECOVERY_PLAN.md) 和 [../feedback/TRACKING.md](../feedback/TRACKING.md)。
+2026-07-03 起，用户确认“90 → 95 质量提升”方案过度设计，且 `feedback/` 本批线上反馈 bug 已修复。项目进入正常维护期：没有默认主动 TODO 队列；新问题按维护流程处理，旧反馈从 [../feedback/TRACKING.md](../feedback/TRACKING.md) 和 [TODO/TRUST_RECOVERY_PLAN.md](TODO/TRUST_RECOVERY_PLAN.md) 查看关闭审计与防回归矩阵。
 
 ## 首读
 
 | 文档 | 用途 |
 |------|------|
-| [../AGENTS.md](../AGENTS.md) | Agent 操作规则、收尾期默认动作、验证命令 |
+| [../AGENTS.md](../AGENTS.md) | Agent 操作规则、维护期默认动作、验证命令 |
 | [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md) | bug 修复流程、分层定位、回归与验收矩阵 |
 | [PROJECT_MAP.md](PROJECT_MAP.md) | 项目结构、模块索引、数据真源 |
 | [GONGSUN_RUNTIME_OVERVIEW.md](GONGSUN_RUNTIME_OVERVIEW.md) | 给懂基建但不懂代码的公孙长乐解释项目运行流程 |
 | [TODO/README.md](TODO/README.md) | 历史建设期 TODO；默认冻结，除非用户明确要求继续 |
-| [TODO/TRUST_RECOVERY_PLAN.md](TODO/TRUST_RECOVERY_PLAN.md) | 当前主动主线：生产反馈 tracking、复现、trace v0、最小修复、回归 |
+| [TODO/TRUST_RECOVERY_PLAN.md](TODO/TRUST_RECOVERY_PLAN.md) | 维护参考：已修复反馈的关闭审计、防回归矩阵、新反馈处理规则 |
 | [TODO/QUALITY_90_TO_95_PLAN.md](TODO/QUALITY_90_TO_95_PLAN.md) | 已暂停的 90 → 95 质量提升方案；只作参考，不默认推进 |
 | [ARCHIVE/README.md](ARCHIVE/README.md) | 已完成、废弃或历史设计材料 |
 
@@ -27,7 +27,7 @@
 | 改评分 / 排序 / 分量口径 | [SCORING_REFACTOR_PLAN.md](SCORING_REFACTOR_PLAN.md)、[SCORING_MODEL.md](SCORING_MODEL.md) |
 | 改编排 / 体系 / meta 组合 | [ADR/0001-layout-assignment-decomposition.md](ADR/0001-layout-assignment-decomposition.md)、[ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md)、[BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md) |
 | 用户明确要求继续历史体系 Phase | [TODO/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md](TODO/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md)、[TODO/SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md](TODO/SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md) |
-| 处理生产反馈 / 建立可信闭环 | [TODO/TRUST_RECOVERY_PLAN.md](TODO/TRUST_RECOVERY_PLAN.md)、[../feedback/TRACKING.md](../feedback/TRACKING.md)、[MAINTENANCE_MODE.md](MAINTENANCE_MODE.md) |
+| 新生产反馈 / 已关闭反馈回归 | [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)、[../feedback/TRACKING.md](../feedback/TRACKING.md)、[TODO/TRUST_RECOVERY_PLAN.md](TODO/TRUST_RECOVERY_PLAN.md) |
 | 用户明确要求恢复 90 → 95 / 体系烘焙 / 候选架构 | [TODO/QUALITY_90_TO_95_PLAN.md](TODO/QUALITY_90_TO_95_PLAN.md)、[MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)、[ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md)、[INTERNAL/CROSS_FACILITY.md](INTERNAL/CROSS_FACILITY.md) |
 | 给基建策略作者解释程序运行过程 | [GONGSUN_RUNTIME_OVERVIEW.md](GONGSUN_RUNTIME_OVERVIEW.md) |
 | 改排班轮换 / MAA 导出 | [SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md)、[INFRA_CLI.md](INFRA_CLI.md) |
@@ -43,7 +43,7 @@
 |------|------|------|
 | 入口 | `README.md`、`AGENTS.md`、本文 | 只放路由、维护期规则、常用命令 |
 | 架构参考 | `PROJECT_MAP.md`、`*_STATUS.md`、`*_MODEL.md` | 记录当前事实，不写长篇历史推演 |
-| 历史计划 | `docs/TODO/` | 收尾期默认冻结；只在用户明确要求继续功能建设时读取 |
+| 历史计划 | `docs/TODO/` | 维护期默认冻结；只在用户明确要求继续功能建设时读取 |
 | 架构决策 | `docs/ADR/` | 已接受的结构性决策；记录为什么这样拆，不放执行清单 |
 | 细节地图 | `docs/INTERNAL/` | 给千行级文件做函数段导航 |
 | 理论参考 | `docs/公孙长乐的体系分析文档/`、`SYSTEM_CHAINS.md` | 记录体系理论和锚点，不作为代码入口 |

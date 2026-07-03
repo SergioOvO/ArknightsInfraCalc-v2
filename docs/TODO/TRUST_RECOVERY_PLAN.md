@@ -1,9 +1,10 @@
-# Trust Recovery Plan: Feedback, Repro, Trace, Regression
+# Feedback Maintenance Reference: Closure Audit, Repro, Trace, Regression
 
-> 状态：closure-audit
+> 状态：maintenance-reference
 > 启动日期：2026-07-03
 > 替代范围：暂停 `QUALITY_90_TO_95_PLAN.md` 的大架构推进，先恢复结果可信度与排错速度。
 > 收口修正：2026-07-03 用户确认 `feedback/` 中本批 bug 已修复；当前任务从“继续修反馈”切换为“固化关闭证据与防回归矩阵”。
+> 维护修正：2026-07-03 用户确认项目已经足够好，进入正常维护期；本文不再是主动计划，只是维护参考。
 
 ## 0. 判断
 
@@ -11,7 +12,7 @@
 
 > 结果错时，很难快速判断错在数据、机制、搜索、编排、排班、导出还是展示。
 
-因此当前主线从“继续做候选架构”切换为“生产反馈闭环”。本批 `feedback/` bug 修复完成后，目标进一步收敛为：把关闭状态、修复证据和 smoke matrix 留在仓库里，避免后续 agent 误以为这些反馈仍是开放队列。
+因此当前口径从“继续做候选架构”切换为“正常维护”。本批 `feedback/` bug 修复完成后，本文的作用是把关闭状态、修复证据和 smoke matrix 留在仓库里，避免后续 agent 误以为这些反馈仍是开放队列。
 
 ## 1. 非目标
 
@@ -89,9 +90,9 @@ cargo run -q -p infra-cli -- plan \
 | 中枢重复 / filler 机会成本 | control layered-fill tests |
 | 宿舍等级 / 无效宿舍锚点 | layout metadata and dorm semantics tests |
 
-## 6. 验收
+## 6. 维护标准
 
-本阶段完成的标志不是“推荐变聪明”，而是：
+正常维护期的健康标准不是“没有 bug”，而是：
 
 - 每条生产反馈都在 `feedback/TRACKING.md` 有 closed / duplicate-covered 状态；
 - 已知修复提交和测试入口能从 tracking 找到；

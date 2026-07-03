@@ -4,7 +4,7 @@
 
 如果读者懂基建体系但不关心代码入口，先看 [GONGSUN_RUNTIME_OVERVIEW.md](GONGSUN_RUNTIME_OVERVIEW.md)。
 
-**结构已定稿，项目进入收尾 / bug 修复期**：不再做大范围源码拆分；靠文档路由到正确函数段。默认工作流是复现、定位、最小修复、补回归，见 [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)。
+**结构已定稿，项目进入正常维护 / bug 修复期**：不再做大范围源码拆分；靠文档路由到正确函数段。默认工作流是复现、定位、最小修复、补回归，见 [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)。
 
 ## 项目是什么
 
@@ -33,7 +33,7 @@
 
 **非目标**（由上层规划器负责）：心情排班、宿管恢复、全基建连班优化。见设计文档 §8.12。
 
-**全基建单班进驻编制**（`assign_shift` → `build_plan` / `execute_plan`、并行搜 + `used` 顺序落位）：现行见 **[BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md)**；**编排层 Phase 0–3 / 5 已落地**（`layout/orchestrate/`、`base_systems.json`）。剩余 Phase 计划在收尾期默认冻结，除非用户明确要求继续功能建设。
+**全基建单班进驻编制**（`assign_shift` → `build_plan` / `execute_plan`、并行搜 + `used` 顺序落位）：现行见 **[BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md)**；**编排层 Phase 0–3 / 5 已落地**（`layout/orchestrate/`、`base_systems.json`）。剩余 Phase 计划在维护期默认冻结，除非用户明确要求继续功能建设。
 
 ---
 
@@ -78,8 +78,8 @@ ArknightsInfraCalc-v2/
 │   ├── SCHEDULE_ROTATION.md    αβγ ABC 轮换 vs 废弃 A-B-A
 │   ├── SYSTEM_CHAINS.md        谜迭香/自动化/红松林/莱茵 体系链参考
 │   ├── INFRA_CLI.md            infra-cli 模块职责与改动边界
-│   ├── MAINTENANCE_MODE.md     收尾期 bug 修复流程、回归与验收矩阵
-│   ├── TODO/                   历史建设期计划；收尾期默认冻结
+│   ├── MAINTENANCE_MODE.md     维护期 bug 修复流程、回归与验收矩阵
+│   ├── TODO/                   历史建设期计划；维护期默认冻结
 │   ├── ARCHIVE/                已完成 / 废弃 / 历史材料
 │   └── INTERNAL/               大文件内部地图（interpreter / shortcut）
 ├── crates/
@@ -328,8 +328,8 @@ ArknightsInfraCalc-v2/
 | [MODELLED_OPERATORS.md](MODELLED_OPERATORS.md) | 已建模干员索引（从 EFFECT_ATOM_DESIGN.md §4 抽出） |
 | [SYSTEM_CHAINS.md](SYSTEM_CHAINS.md) | 谜迭香/自动化/红松林/莱茵 四大体系链参考手册 |
 | [INDEX.md](INDEX.md) | 文档入口、维护期路由、TODO / ARCHIVE 分层 |
-| [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md) | 收尾期 bug 修复流程、分层定位、回归与验收矩阵 |
-| [TODO/](TODO/) | 历史建设期计划；收尾期默认冻结 |
+| [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md) | 维护期 bug 修复流程、分层定位、回归与验收矩阵 |
+| [TODO/](TODO/) | 历史建设期计划；维护期默认冻结 |
 | [ARCHIVE/](ARCHIVE/) | 已完成、废弃或历史文档 |
 | [INFRA_CLI.md](INFRA_CLI.md) | CLI 分层原则、`commands` / `verify` / `output` 职责 |
 | [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md) | 制造站实现范围与缺口 |

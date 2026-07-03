@@ -6,7 +6,7 @@
 > 执行对象：GPT-5.5 / 后续实现 agent
 > 目标：在不引入 CP-SAT / MILP / 张量引擎等重型求解器的前提下，把当前约 90 分的推荐质量稳定提升到 95 分。
 
-> 2026-07-03 决策：本计划暂停作为默认主线。当前优先方向改为 [TRUST_RECOVERY_PLAN.md](TRUST_RECOVERY_PLAN.md)：生产反馈追踪、复现、分层定位、最小修复和回归保护。本计划保留为历史方案和可借鉴材料，但不要默认继续推进统一候选架构、全局 selector、SystemRule registry 或 baking materialized view。
+> 2026-07-03 决策：本计划暂停作为默认主线。项目已进入正常维护期；[TRUST_RECOVERY_PLAN.md](TRUST_RECOVERY_PLAN.md) 仅作为已修复反馈的关闭审计、防回归矩阵和新反馈处理参考。本计划保留为历史方案和可借鉴材料，但不要默认继续推进统一候选架构、全局 selector、SystemRule registry 或 baking materialized view。
 
 ## 0. 背景与判断
 
