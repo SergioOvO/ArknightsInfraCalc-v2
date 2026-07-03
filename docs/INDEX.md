@@ -4,7 +4,7 @@
 
 项目默认仍按**收尾 / bug 修复期**处理普通问题：先复现、最小修复、补回归。维护流程见 [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)。
 
-2026-06-30 起，用户已明确启动“90 → 95 质量提升”方向；这是收尾期的主动质量提升例外，不等同于恢复历史 Phase。相关工作从 [TODO/QUALITY_90_TO_95_PLAN.md](TODO/QUALITY_90_TO_95_PLAN.md) 进入。
+2026-07-03 起，用户确认“90 → 95 质量提升”方案过度设计；该方向已暂停作为默认主线。当前主动方向是信任恢复：从生产反馈出发做 tracking、复现、分层定位、最小修复和回归保护，入口为 [TODO/TRUST_RECOVERY_PLAN.md](TODO/TRUST_RECOVERY_PLAN.md) 和 [../feedback/TRACKING.md](../feedback/TRACKING.md)。
 
 ## 首读
 
@@ -15,7 +15,8 @@
 | [PROJECT_MAP.md](PROJECT_MAP.md) | 项目结构、模块索引、数据真源 |
 | [GONGSUN_RUNTIME_OVERVIEW.md](GONGSUN_RUNTIME_OVERVIEW.md) | 给懂基建但不懂代码的公孙长乐解释项目运行流程 |
 | [TODO/README.md](TODO/README.md) | 历史建设期 TODO；默认冻结，除非用户明确要求继续 |
-| [TODO/QUALITY_90_TO_95_PLAN.md](TODO/QUALITY_90_TO_95_PLAN.md) | 当前 90 → 95 质量提升主计划：候选架构、机制分析、体系烘焙、trace、回归 |
+| [TODO/TRUST_RECOVERY_PLAN.md](TODO/TRUST_RECOVERY_PLAN.md) | 当前主动主线：生产反馈 tracking、复现、trace v0、最小修复、回归 |
+| [TODO/QUALITY_90_TO_95_PLAN.md](TODO/QUALITY_90_TO_95_PLAN.md) | 已暂停的 90 → 95 质量提升方案；只作参考，不默认推进 |
 | [ARCHIVE/README.md](ARCHIVE/README.md) | 已完成、废弃或历史设计材料 |
 
 ## 按任务阅读
@@ -26,7 +27,8 @@
 | 改评分 / 排序 / 分量口径 | [SCORING_REFACTOR_PLAN.md](SCORING_REFACTOR_PLAN.md)、[SCORING_MODEL.md](SCORING_MODEL.md) |
 | 改编排 / 体系 / meta 组合 | [ADR/0001-layout-assignment-decomposition.md](ADR/0001-layout-assignment-decomposition.md)、[ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md)、[BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md) |
 | 用户明确要求继续历史体系 Phase | [TODO/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md](TODO/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md)、[TODO/SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md](TODO/SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md) |
-| 推进 90 → 95 质量提升 / 体系烘焙 / 候选架构 / 机制注册表分析 | [TODO/QUALITY_90_TO_95_PLAN.md](TODO/QUALITY_90_TO_95_PLAN.md)、[MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)、[ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md)、[INTERNAL/CROSS_FACILITY.md](INTERNAL/CROSS_FACILITY.md) |
+| 处理生产反馈 / 建立可信闭环 | [TODO/TRUST_RECOVERY_PLAN.md](TODO/TRUST_RECOVERY_PLAN.md)、[../feedback/TRACKING.md](../feedback/TRACKING.md)、[MAINTENANCE_MODE.md](MAINTENANCE_MODE.md) |
+| 用户明确要求恢复 90 → 95 / 体系烘焙 / 候选架构 | [TODO/QUALITY_90_TO_95_PLAN.md](TODO/QUALITY_90_TO_95_PLAN.md)、[MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)、[ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md)、[INTERNAL/CROSS_FACILITY.md](INTERNAL/CROSS_FACILITY.md) |
 | 给基建策略作者解释程序运行过程 | [GONGSUN_RUNTIME_OVERVIEW.md](GONGSUN_RUNTIME_OVERVIEW.md) |
 | 改排班轮换 / MAA 导出 | [SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md)、[INFRA_CLI.md](INFRA_CLI.md) |
 | 改 CLI / 前端集成 | [INFRA_CLI.md](INFRA_CLI.md)、[FRONTEND_CLI.md](FRONTEND_CLI.md) |

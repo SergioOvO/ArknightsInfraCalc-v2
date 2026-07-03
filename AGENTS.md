@@ -13,7 +13,7 @@
 
 现阶段普通问题的默认目标仍是稳定，不是扩张。除非用户明确要求新增功能，否则不要主动推进 `docs/TODO/` 里的历史 Phase 计划。
 
-2026-06-30 用户已明确启动“90 → 95 质量提升”方向；这是当前主动质量提升例外，入口为 [`docs/TODO/QUALITY_90_TO_95_PLAN.md`](docs/TODO/QUALITY_90_TO_95_PLAN.md)。该方向关注统一候选架构、机制注册表分析、制造站体系烘焙、decision trace 与反馈回归，不代表恢复所有历史 Phase。
+2026-07-03 用户确认“90 → 95 质量提升”方案过度设计；该方向已暂停作为默认主线。当前主动方向是信任恢复，入口为 [`docs/TODO/TRUST_RECOVERY_PLAN.md`](docs/TODO/TRUST_RECOVERY_PLAN.md) 与 [`feedback/TRACKING.md`](feedback/TRACKING.md)：从生产反馈出发做 tracking、复现、分层定位、最小修复和回归保护。[`docs/TODO/QUALITY_90_TO_95_PLAN.md`](docs/TODO/QUALITY_90_TO_95_PLAN.md) 只作为历史参考，除非用户明确要求恢复。
 
 非目标仍然是：心情排班、宿管恢复、全基建连续时间最优化。
 
