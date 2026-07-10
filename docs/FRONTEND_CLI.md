@@ -354,7 +354,7 @@ JSON **数组**，每项一名干员：
 |------|------|
 | `name` | 如 `Shift 1 · 12h · α+β` |
 | `description` | 班次说明 |
-| `Fiammetta` | 默认 `enable: false`；`target` 可按班次预填龙舌兰/但书 |
+| `Fiammetta` | 常规 CLI 导出按 `但书 > 巫恋 > 龙舌兰 > 清流 > 可露希尔` 选择当前班首个在岗目标；命中时 `enable: true`、`order: pre`，无候选时关闭 |
 | `drones` | 默认赤金制造站无人机；`room`/`index`/`order` |
 | `rooms` | 见下表 |
 
@@ -465,7 +465,7 @@ async function runTeamRotation({ cliPath, repoRoot, layout, operbox, maaOut, tit
 ## 9. 限制（告知产品 / UI）
 
 - 干员名必须为**客户端语言**（国服中文）。
-- 不建模心情曲线、宿管、菲亚梅塔自动放技能（菲亚梅塔字段默认关闭，可后续 UI 编辑 JSON）。
+- 不建模完整心情曲线和宿管恢复。当前只逐 plan 导出菲亚梅塔单目标线性优先级，不保证该时间点已经回满；布局动态排序、龙巫成组服务和实际宿舍操作尚未实现，详见 [Fiammetta.md](Fiammetta.md)。
 - 会客室若 solver 未分配人，导出为 `autofill: true`。
 - 首次 243 全精2 operbox 排班约 **5–15 秒**（CPU 搜索）；前端应加 loading。
 

@@ -17,6 +17,7 @@
 
 | 文件 | 状态 | 用途 |
 |------|------|------|
+| [FIAMMETTA_SHIFT_PRIORITY.md](FIAMMETTA_SHIFT_PRIORITY.md) | completed | MAA 单目标线性优先级已接入；动态布局规则留在后续排班策略层 |
 | [TRAINING_RECOMMENDER_RAG_PLAN.md](TRAINING_RECOMMENDER_RAG_PLAN.md) | proposal | 练度比对 / 练卡推荐 / RAG 解释层企划，待 Claude 与用户确认 |
 | [TRUST_RECOVERY_PLAN.md](TRUST_RECOVERY_PLAN.md) | maintenance-reference | 已修复反馈的关闭审计、防回归矩阵、新反馈处理规则 |
 | [QUALITY_90_TO_95_PLAN.md](QUALITY_90_TO_95_PLAN.md) | paused | 历史质量提升方案；只作为参考，不默认继续推进大架构 |
