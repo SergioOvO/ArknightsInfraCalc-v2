@@ -278,6 +278,7 @@ fn handle_plan(state: &ServeState, params: serde_json::Value) -> Result<serde_js
 
     if let Some(path) = params.maa_out.as_ref() {
         let mut maa_opts = MaaExportOptions::for_blueprint(&blueprint);
+        maa_opts.enable_gongsun_fiammetta_priority();
         if let Some(title) = params.maa_title.clone() {
             maa_opts.title = title;
         }

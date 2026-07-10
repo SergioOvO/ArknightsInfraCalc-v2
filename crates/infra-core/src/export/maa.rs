@@ -17,6 +17,11 @@ use crate::types::RecipeKind;
 pub struct MaaExportOptions {
     pub title: String,
     pub description: Option<String>,
+    /// 菲亚梅塔换班优先级清单（按优先级从高到低排列的干员名列表）。
+    ///
+    /// 每个 plan 生成时，从当班 assignment 中找清单里第一个在岗干员作为换班目标；
+    /// 找到则 `enable: true`，找不到或清单为空则 `enable: false`。
+    pub fiammetta_priority: Vec<String>,
 }
 
 impl MaaExportOptions {
@@ -29,7 +34,16 @@ impl MaaExportOptions {
         Self {
             title: format!("{template} 基建排班"),
             description: Some("由 ArknightsInfraCalc 生成；可导入 MAA 自定义基建换班。".into()),
+            fiammetta_priority: Vec::new(),
         }
+    }
+
+    /// 启用公孙长乐确认的菲亚梅塔常规目标顺序。
+    pub fn enable_gongsun_fiammetta_priority(&mut self) {
+        self.fiammetta_priority = ["但书", "巫恋", "龙舌兰", "清流", "可露希尔"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
     }
 }
 
@@ -104,6 +118,7 @@ struct PlanInput<'a> {
     name: String,
     description: String,
     resting: Vec<String>,
+    fiammetta_priority: &'a [String],
 }
 
 impl MaaSchedule {
@@ -153,6 +168,7 @@ pub fn build_from_team_rotation(
                     team_label_zh(shift.resting_team)
                 ),
                 resting,
+                fiammetta_priority: &opts.fiammetta_priority,
             }
         })
         .map(|input| build_plan(blueprint, &input))
@@ -184,6 +200,7 @@ pub fn build_from_base_rotation(
                 name: format!("Shift {} · {role}{reuse}", shift.index + 1),
                 description: format!("ABA {role} 班；下次约 12 小时后换班"),
                 resting: shift.rotating_workers.clone(),
+                fiammetta_priority: &opts.fiammetta_priority,
             }
         })
         .map(|input| build_plan(blueprint, &input))
@@ -203,7 +220,7 @@ fn build_plan(blueprint: &BaseBlueprint, input: &PlanInput) -> MaaPlan {
     MaaPlan {
         name: input.name.clone(),
         description: input.description.clone(),
-        fiammetta: fiammetta_defaults(input.index, input.assignment),
+        fiammetta: resolve_fiammetta(input.fiammetta_priority, input.assignment),
         drones: drone_defaults(blueprint),
         rooms: build_rooms(blueprint, input.assignment, &input.resting),
     }
@@ -373,26 +390,30 @@ fn operator_names(assignment: &BaseAssignment, room_id: &str) -> Vec<String> {
         .collect()
 }
 
-fn fiammetta_defaults(shift_index: usize, assignment: &BaseAssignment) -> MaaFiammetta {
-    let target = match shift_index {
-        1 => pick_named_operator(assignment, &["龙舌兰"]),
-        2 => pick_named_operator(assignment, &["但书", "龙舌兰"]),
-        _ => String::new(),
-    };
+/// 菲亚梅塔换班目标解析。
+///
+/// 从 `priority`（公孙长乐提供的优先级清单，从高到低）里，找第一个
+/// 出现在当班 `assignment` 里的干员作为换班目标；找到则 `enable: true`。
+/// 优先级清单为空时退化为旧行为（`enable: false`，不换班）。
+fn resolve_fiammetta(priority: &[String], assignment: &BaseAssignment) -> MaaFiammetta {
+    if priority.is_empty() {
+        return MaaFiammetta {
+            enable: false,
+            target: String::new(),
+            order: "pre",
+        };
+    }
+    let assigned: HashSet<_> = assignment_operator_names(assignment);
+    let target = priority
+        .iter()
+        .find(|name| assigned.contains(name.as_str()))
+        .cloned()
+        .unwrap_or_default();
     MaaFiammetta {
-        enable: false,
+        enable: !target.is_empty(),
         target,
         order: "pre",
     }
-}
-
-fn pick_named_operator(assignment: &BaseAssignment, names: &[&str]) -> String {
-    let assigned: HashSet<_> = assignment_operator_names(assignment);
-    names
-        .iter()
-        .find(|name| assigned.contains(**name))
-        .map(|s| (*s).to_string())
-        .unwrap_or_default()
 }
 
 fn drone_defaults(blueprint: &BaseBlueprint) -> MaaDrones {
@@ -628,12 +649,9 @@ mod tests {
             elapsed: Duration::from_millis(1),
         };
 
-        let schedule = build_from_team_rotation(
-            &blueprint,
-            &report,
-            &MaaExportOptions::for_blueprint(&blueprint),
-        )
-        .unwrap();
+        let mut opts = MaaExportOptions::for_blueprint(&blueprint);
+        opts.enable_gongsun_fiammetta_priority();
+        let schedule = build_from_team_rotation(&blueprint, &report, &opts).unwrap();
 
         assert_eq!(schedule.plans.len(), 1);
         assert_eq!(schedule.plans[0].rooms.trading[0].product, Some("LMD"));
@@ -646,5 +664,54 @@ mod tests {
             vec!["休息干员"]
         );
         assert_eq!(schedule.plans[0].drones.index, 1);
+        assert!(schedule.plans[0].fiammetta.enable);
+        assert_eq!(schedule.plans[0].fiammetta.target, "但书");
+        assert_eq!(schedule.plans[0].fiammetta.order, "pre");
+    }
+
+    #[test]
+    fn resolve_fiammetta_uses_confirmed_priority_order() {
+        let blueprint = sample_blueprint();
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room(
+            "trade_1",
+            vec![
+                AssignedOperator::new("龙舌兰", 2),
+                AssignedOperator::new("但书", 2),
+                AssignedOperator::new("可露希尔", 2),
+            ],
+        );
+        let mut opts = MaaExportOptions::for_blueprint(&blueprint);
+        opts.enable_gongsun_fiammetta_priority();
+
+        let resolved = resolve_fiammetta(&opts.fiammetta_priority, &assignment);
+
+        assert!(resolved.enable);
+        assert_eq!(resolved.target, "但书");
+        assert_eq!(resolved.order, "pre");
+    }
+
+    #[test]
+    fn resolve_fiammetta_falls_back_and_empty_priority_disables_it() {
+        let blueprint = sample_blueprint();
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room(
+            "trade_1",
+            vec![
+                AssignedOperator::new("清流", 2),
+                AssignedOperator::new("可露希尔", 2),
+            ],
+        );
+        let mut opts = MaaExportOptions::for_blueprint(&blueprint);
+        opts.enable_gongsun_fiammetta_priority();
+
+        let fallback = resolve_fiammetta(&opts.fiammetta_priority, &assignment);
+        assert!(fallback.enable);
+        assert_eq!(fallback.target, "清流");
+
+        let disabled = resolve_fiammetta(&[], &assignment);
+        assert!(!disabled.enable);
+        assert!(disabled.target.is_empty());
+        assert_eq!(disabled.order, "pre");
     }
 }

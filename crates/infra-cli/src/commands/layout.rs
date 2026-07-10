@@ -128,6 +128,7 @@ fn emit_manufacture_trace_debug_report(
 
 fn maa_export_options(args: &[String], blueprint: &BaseBlueprint) -> MaaExportOptions {
     let mut opts = MaaExportOptions::for_blueprint(blueprint);
+    opts.enable_gongsun_fiammetta_priority();
     if let Some(title) = args
         .windows(2)
         .find(|w| w[0] == "--maa-title")

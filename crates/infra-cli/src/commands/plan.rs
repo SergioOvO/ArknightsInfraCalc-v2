@@ -80,6 +80,7 @@ pub fn plan_cmd(args: &[String]) -> Result<(), Error> {
 
     if let Some(maa_path) = maa_out_from_args(args) {
         let mut maa_opts = MaaExportOptions::for_blueprint(&blueprint);
+        maa_opts.enable_gongsun_fiammetta_priority();
         if let Some(title) = args
             .windows(2)
             .find(|w| w[0] == "--maa-title")
