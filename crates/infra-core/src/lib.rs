@@ -6,6 +6,7 @@ pub mod eff_ramp;
 pub mod error;
 pub mod global_resource;
 pub mod instances;
+pub mod mood;
 pub mod operbox;
 pub mod pool;
 pub mod profile;
@@ -60,6 +61,10 @@ pub use layout::{
 pub use manufacture::{
     score_manu_composite, solve_manufacture, ManuCompositeScore, ManuLineScenario, ManuOperator,
     ManuProdBreakdown, ManuResult, ManuRoomInput, ManuSearchRecipeMode, ManuStorageBreakdown,
+};
+pub use mood::{
+    dorm_recovery_rates, facility_key as mood_facility_key, operator_net_drain, shift_eta,
+    workable_hours, DormOccupant, DrainInputs, MoodModel, OperatorEta, ShiftEta,
 };
 pub use operbox::{
     default_layout_243_path, default_operbox_full_e2_path, default_operbox_gongsun_path,

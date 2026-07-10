@@ -1,0 +1,221 @@
+//! 班次 ETA：给定一套 assignment，算出每个在岗生产/功能干员的净消耗与可工作时长，
+//! 班次 ETA = 所有在岗干员里最小的可工作时长（第一个耗尽心情的人决定换班）。
+//!
+//! 只统计工作设施（贸易/制造/发电/办公/中枢/会客）；宿舍是回复侧，不计入 ETA。
+//! 跨设施组合由组内消耗最快者决定——这里自然通过「全局取 min」体现。
+
+use serde::Serialize;
+
+use crate::layout::{BaseAssignment, BaseBlueprint, FacilityKind, RoomProduct};
+use crate::types::RecipeKind;
+
+use super::drain::{operator_net_drain, DrainInputs};
+use super::{facility_key, MoodModel};
+
+/// 单个在岗干员的 ETA 明细。
+#[derive(Debug, Clone, Serialize)]
+pub struct OperatorEta {
+    pub name: String,
+    pub room_id: String,
+    /// 净每小时心情消耗 `x`。
+    pub drain_per_hour: f64,
+    /// 满心情可工作时长（小时）；`x ≤ 0` 时为 `None`（在岗即回复，不成为瓶颈）。
+    pub workable_hours: Option<f64>,
+}
+
+/// 一个班次的 ETA 报告。
+#[derive(Debug, Clone, Serialize)]
+pub struct ShiftEta {
+    pub per_op: Vec<OperatorEta>,
+    /// 瓶颈干员名（可工作时长最短者）；全员无限时为 `None`。
+    pub bottleneck: Option<String>,
+    /// 班次 ETA（小时）= 最短可工作时长；无有限瓶颈时为 `None`。
+    pub eta_hours: Option<f64>,
+}
+
+fn recipe_key(recipe: RecipeKind) -> Option<&'static str> {
+    match recipe {
+        RecipeKind::Gold => Some("gold"),
+        RecipeKind::BattleRecord => Some("battle_record"),
+        RecipeKind::Originium => Some("originium"),
+        RecipeKind::All => None,
+    }
+}
+
+/// 计算一套 assignment 的班次 ETA。
+pub fn shift_eta(
+    model: &MoodModel,
+    blueprint: &BaseBlueprint,
+    assignment: &BaseAssignment,
+) -> ShiftEta {
+    // 中枢是否满 5 人 → 全局 −0.25。
+    let full_control = assignment
+        .rooms
+        .iter()
+        .find(|r| {
+            blueprint
+                .room(&r.room_id)
+                .is_some_and(|bp| bp.kind == FacilityKind::ControlCenter)
+        })
+        .is_some_and(|r| r.operators.len() >= 5);
+
+    let control_ops: Vec<(String, u8)> = assignment
+        .control_operators()
+        .iter()
+        .map(|o| (o.name.clone(), o.elite))
+        .collect();
+
+    let mut per_op: Vec<OperatorEta> = Vec::new();
+
+    for room in &assignment.rooms {
+        let Some(bp) = blueprint.room(&room.room_id) else {
+            continue;
+        };
+        // 只算工作设施（能映射到 mood 设施键的）；宿舍/训练/加工跳过。
+        if facility_key(bp.kind).is_none() || bp.kind == FacilityKind::Dormitory {
+            continue;
+        }
+        let recipe = match bp.product.as_ref() {
+            Some(RoomProduct::Factory { recipe }) => recipe_key(*recipe),
+            _ => None,
+        };
+        let room_ops: Vec<(String, u8)> = room
+            .operators
+            .iter()
+            .map(|o| (o.name.clone(), o.elite))
+            .collect();
+
+        for op in &room.operators {
+            let inputs = DrainInputs {
+                name: &op.name,
+                elite: op.elite,
+                facility: bp.kind,
+                room_ops: &room_ops,
+                full_control,
+                control_ops: &control_ops,
+                recipe,
+            };
+            let x = operator_net_drain(model, &inputs);
+            let hours = if x <= 0.0 {
+                None
+            } else {
+                Some(model.workable_mood() / x)
+            };
+            per_op.push(OperatorEta {
+                name: op.name.clone(),
+                room_id: room.room_id.0.clone(),
+                drain_per_hour: x,
+                workable_hours: hours,
+            });
+        }
+    }
+
+    // 瓶颈：可工作时长最短者。
+    let bottleneck_op = per_op
+        .iter()
+        .filter_map(|o| o.workable_hours.map(|h| (o.name.clone(), h)))
+        .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let (bottleneck, eta_hours) = match bottleneck_op {
+        Some((name, h)) => (Some(name), Some(h)),
+        None => (None, None),
+    };
+
+    ShiftEta {
+        per_op,
+        bottleneck,
+        eta_hours,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layout::AssignedOperator;
+
+    fn model() -> MoodModel {
+        MoodModel::load_default().expect("bundled mood_model.json")
+    }
+
+    /// 构造一个最小蓝图：一个中枢(5位) + 一个 L3 制造 + 一个 L3 贸易。
+    fn mini_blueprint() -> BaseBlueprint {
+        let json = r#"{
+            "rooms": [
+                {"id": "control", "kind": "control_center", "level": 5},
+                {"id": "manu_1", "kind": "factory", "level": 3, "product": {"factory": {"recipe": "gold"}}},
+                {"id": "trade_1", "kind": "trade_post", "level": 3, "product": {"trade": {"order": "gold"}}}
+            ]
+        }"#;
+        serde_json::from_str(json).expect("mini blueprint")
+    }
+
+    /// 单人生产房没有进驻人数减免：中枢普通干员和能天使均为 0.75/h，首个中枢干员成为瓶颈。
+    #[test]
+    fn shift_eta_bottleneck_is_fastest_drain() {
+        let m = model();
+        let bp = mini_blueprint();
+        let mut a = BaseAssignment::default();
+        a.set_room(
+            "control",
+            vec![
+                AssignedOperator::new("凯尔希", 2),
+                AssignedOperator::new("阿米娅", 2),
+                AssignedOperator::new("远山", 2),
+                AssignedOperator::new("琴柳", 2),
+                AssignedOperator::new("华法琳", 2),
+            ],
+        );
+        a.set_room("manu_1", vec![AssignedOperator::new("泡泡", 0)]);
+        a.set_room("trade_1", vec![AssignedOperator::new("能天使", 2)]);
+
+        let eta = shift_eta(&m, &bp, &a);
+        assert_eq!(eta.bottleneck.as_deref(), Some("凯尔希"));
+        let h = eta.eta_hours.expect("finite eta");
+        assert!((h - 32.0).abs() < 1e-6, "eta={h}");
+        let bubble = eta.per_op.iter().find(|o| o.name == "泡泡").unwrap();
+        assert!((bubble.drain_per_hour - 0.5).abs() < 1e-9);
+    }
+
+    /// 工休比断言：满级宿舍 x=0.65、y=4.0 → 最大工作占比 y/(x+y)=86.02%，24h 最长 20.645h。
+    #[test]
+    fn work_rest_ratio_matches_doc() {
+        let x = 0.65_f64;
+        let y = 4.0_f64;
+        let max_work_fraction = y / (x + y);
+        assert!(
+            (max_work_fraction - 0.860215).abs() < 1e-5,
+            "frac={max_work_fraction}"
+        );
+        let max_work_hours = 24.0 * y / (x + y);
+        assert!(
+            (max_work_hours - 20.6452).abs() < 1e-3,
+            "hours={max_work_hours}"
+        );
+    }
+
+    /// 空转设施不计入；无中枢满员时全局减免不生效。
+    #[test]
+    fn no_full_control_no_global_reduction() {
+        let m = model();
+        let bp = mini_blueprint();
+        let mut a = BaseAssignment::default();
+        // 中枢只放 3 人 → 不满员。
+        a.set_room(
+            "control",
+            vec![
+                AssignedOperator::new("凯尔希", 2),
+                AssignedOperator::new("阿米娅", 2),
+                AssignedOperator::new("远山", 2),
+            ],
+        );
+        a.set_room("trade_1", vec![AssignedOperator::new("能天使", 2)]);
+        let eta = shift_eta(&m, &bp, &a);
+        // 单人贸易站无进驻人数减免、无满中枢：1.0/h。
+        let ntz = eta.per_op.iter().find(|o| o.name == "能天使").unwrap();
+        assert!(
+            (ntz.drain_per_hour - 1.0).abs() < 1e-9,
+            "x={}",
+            ntz.drain_per_hour
+        );
+    }
+}

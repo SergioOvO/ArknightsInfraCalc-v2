@@ -192,6 +192,7 @@ fn materialize_embedded_data(
     embedded_name: &'static str,
     bytes: &'static [u8],
 ) -> Result<PathBuf> {
+    static NEXT_TEMP_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     embedded_name.hash(&mut hasher);
     bytes.hash(&mut hasher);
@@ -207,7 +208,27 @@ fn materialize_embedded_data(
         Err(_) => true,
     };
     if needs_write {
-        std::fs::write(&path, bytes)?;
+        // 多线程首次加载同一份 embedded 数据时，不能直接写最终路径：其他线程可能在
+        // `write` 完成前看到已创建的空文件。先写线程唯一临时文件，再原子替换。
+        let temp_id = NEXT_TEMP_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("embedded-data");
+        let temp_path = root.join(format!(
+            ".{file_name}.{}.{}.tmp",
+            std::process::id(),
+            temp_id
+        ));
+        std::fs::write(&temp_path, bytes)?;
+        if let Err(rename_error) = std::fs::rename(&temp_path, &path) {
+            let winner_is_valid =
+                std::fs::metadata(&path).is_ok_and(|meta| meta.len() == bytes.len() as u64);
+            let _ = std::fs::remove_file(&temp_path);
+            if !winner_is_valid {
+                return Err(rename_error.into());
+            }
+        }
     }
     Ok(path)
 }
@@ -247,6 +268,10 @@ fn exact_embedded_data(name: &str) -> Option<(&'static str, &'static [u8])> {
         "skill_table.json" => include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../data/skill_table.json"
+        )) as &[u8],
+        "mood_model.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/mood_model.json"
         )) as &[u8],
         "standalone_roster.json" => include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -350,6 +375,7 @@ fn exact_embedded_data(name: &str) -> Option<(&'static str, &'static [u8])> {
         match name {
             "operator_instances.json" => "operator_instances.json",
             "skill_table.json" => "skill_table.json",
+            "mood_model.json" => "mood_model.json",
             "standalone_roster.json" => "standalone_roster.json",
             "base_systems.json" => "base_systems.json",
             "trade_segments.json" => "trade_segments.json",
@@ -408,6 +434,39 @@ mod tests {
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         (table, instances)
+    }
+
+    #[test]
+    fn embedded_data_materialization_is_atomic_under_concurrency() {
+        const BYTES: &[u8] = b"atomic embedded data regression\n";
+        let path = materialize_embedded_data(
+            "tests/atomic-materialization.txt",
+            "atomic-materialization-v1",
+            BYTES,
+        )
+        .unwrap();
+        std::fs::remove_file(&path).unwrap();
+
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(12));
+        let workers: Vec<_> = (0..12)
+            .map(|_| {
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    let path = materialize_embedded_data(
+                        "tests/atomic-materialization.txt",
+                        "atomic-materialization-v1",
+                        BYTES,
+                    )
+                    .unwrap();
+                    std::fs::read(path).unwrap()
+                })
+            })
+            .collect();
+
+        for worker in workers {
+            assert_eq!(worker.join().unwrap(), BYTES);
+        }
     }
 
     #[test]
