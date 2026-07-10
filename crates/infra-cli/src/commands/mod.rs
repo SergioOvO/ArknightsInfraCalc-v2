@@ -1,3 +1,4 @@
+mod advice;
 mod bake;
 mod layout;
 mod plan;
@@ -5,6 +6,7 @@ mod profile;
 mod serve;
 mod verify;
 
+pub use advice::advice_cmd;
 pub use bake::bake_cmd;
 pub use layout::layout_cmd;
 pub use plan::plan_cmd;

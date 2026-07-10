@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "source_repo": "/mnt/c/Users/KnightCode/projects/arknights-base-vault",
+  "system_rules": [
+    {
+      "id": "witch_long_beta",
+      "label": "巫恋组",
+      "source_system_id": "witch_long_beta",
+      "priority_ready_after_training": "P0",
+      "priority_blocked": "Info",
+      "core": [
+        { "name": "巫恋", "elite": 2 },
+        { "name": "龙舌兰", "elite": 2 }
+      ],
+      "pick_one_core": [
+        {
+          "label": "裁缝β第三人",
+          "elite": 2,
+          "candidates": ["卡夫卡", "柏喙", "明椒", "折光"]
+        }
+      ],
+      "reason_code": "system_core_undertrained",
+      "message": "巫恋组核心已齐，但有人未达到体系要求。",
+      "source_paths": [
+        "data/base_systems.json",
+        "data/trade_shortcuts.json",
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/巫恋裁缝核.md"
+      ],
+      "source_notes": "外部知识库与当前 base_systems 均要求巫恋、龙舌兰和裁缝β第三人达标。",
+      "needs_review": false,
+      "conflicts": []
+    },
+    {
+      "id": "docus_syracusa",
+      "label": "但书叙拉古链",
+      "source_system_id": "syracusa_pair",
+      "priority_ready_after_training": "P0",
+      "priority_blocked": "Info",
+      "core": [
+        { "name": "但书", "elite": 2 },
+        { "name": "伺夜", "elite": 2 },
+        { "name": "贝洛内", "elite": 2 },
+        { "name": "八幡海铃", "elite": 2 }
+      ],
+      "pick_one_core": [],
+      "reason_code": "system_core_undertrained",
+      "message": "但书叙拉古链核心已齐，但有人未达到体系要求。",
+      "source_paths": [
+        "data/base_systems.json",
+        "data/trade_segments.json",
+        "data/trade_shortcuts.json",
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/但书叙拉古链.md"
+      ],
+      "source_notes": "当前 base_systems 将八幡海铃放在中枢、伺夜和贝洛内放在贸易站；推荐层按核心齐全后再建议补练。",
+      "needs_review": false,
+      "conflicts": []
+    },
+    {
+      "id": "blackkey_closure",
+      "label": "可露希尔 / 黑键 / 吉星特别订单",
+      "source_system_id": "blackkey_closure",
+      "priority_ready_after_training": "P1",
+      "priority_blocked": "Info",
+      "core": [
+        { "name": "可露希尔", "elite": 2 },
+        { "name": "黑键", "elite": 2 },
+        { "name": "吉星", "elite": 2 }
+      ],
+      "pick_one_core": [],
+      "reason_code": "system_core_undertrained",
+      "message": "可露希尔特别订单相关核心已齐，但有人未达到体系要求。",
+      "source_paths": [
+        "data/base_systems.json",
+        "data/trade_segments.json",
+        "data/trade_shortcuts.json",
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/可露希尔特别订单.md"
+      ],
+      "source_notes": "外部知识库以可露希尔特别订单为主，当前 base_systems 存在 blackkey_closure 三人站；MVP 暂按当前项目三人体系建规则。",
+      "needs_review": true,
+      "conflicts": [
+        "vault docs system_id=closure_special_order only lists 可露希尔 as operator; current data/base_systems.json uses 可露希尔+黑键+吉星 for blackkey_closure"
+      ]
+    }
+  ],
+  "standalone_rules": [
+    {
+      "id": "e1_four_star_must_train",
+      "label": "常用精一四星样例",
+      "priority": "P0",
+      "targets": [
+        { "name": "清流", "elite": 1 },
+        { "name": "砾", "elite": 1 }
+      ],
+      "reason_code": "standalone_e1_four_star",
+      "message": "四星或低成本基建干员已拥有，精一即可启用常用基建技能。",
+      "source_paths": [
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/0-规则/干员练度与技能.md",
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/4-散件工具人/散件干员速查.md"
+      ],
+      "source_notes": "第一版只放少量样例，后续再扩展完整散件表。",
+      "needs_review": false,
+      "conflicts": []
+    },
+    {
+      "id": "high_efficiency_standalone_samples",
+      "label": "40% 效率散件样例",
+      "priority": "P2",
+      "targets": [
+        { "name": "空弦", "elite": 2 },
+        { "name": "槐琥", "elite": 2 }
+      ],
+      "reason_code": "standalone_40pct_efficiency",
+      "message": "高效率散件已拥有但未达到推荐练度，可作为核心体系之外的补位培养。",
+      "source_paths": [
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/4-散件工具人/散件干员速查.md"
+      ],
+      "source_notes": "散件效率依赖设施与同站条件；MVP 只做已拥有未达标提示。",
+      "needs_review": false,
+      "conflicts": []
+    }
+  ]
+}

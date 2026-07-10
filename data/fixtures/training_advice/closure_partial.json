@@ -1,0 +1,20 @@
+[
+  {
+    "id": "char_003_kalts",
+    "name": "可露希尔",
+    "elite": 2,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 5
+  },
+  {
+    "id": "char_4043_eregli",
+    "name": "黑键",
+    "elite": 2,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 6
+  }
+]

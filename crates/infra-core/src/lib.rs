@@ -15,6 +15,7 @@ pub mod scoring;
 pub mod search;
 pub mod skill_table;
 pub mod tier;
+pub mod training_advice;
 pub mod types;
 
 pub mod control;
@@ -97,4 +98,12 @@ pub use search::{
 };
 pub use skill_table::SkillTable;
 pub use tier::PromotionTier;
+pub use training_advice::{
+    build_training_advice, default_training_recommendations_path,
+    load_training_recommendation_rules, OperatorTrainingState, PickOneCoreRule, RagContextItem,
+    RecommendationKind, RecommendationPriority, StandaloneRecommendationRule,
+    SystemRecommendationRule, SystemStatus, TrainingAdviceOptions, TrainingAdviceReport,
+    TrainingAdviceSummary, TrainingRecommendation, TrainingRecommendationRules,
+    TrainingSystemReport, TrainingTarget,
+};
 pub use types::*;

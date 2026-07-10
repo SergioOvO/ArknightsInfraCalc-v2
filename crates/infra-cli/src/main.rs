@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use std::path::PathBuf;
 
-use commands::{bake_cmd, layout_cmd, plan_cmd, profile_cmd, serve_cmd, verify_cmd};
+use commands::{advice_cmd, bake_cmd, layout_cmd, plan_cmd, profile_cmd, serve_cmd, verify_cmd};
 use infra_core::instances::{default_instances_path, OperatorInstances};
 use infra_core::layout::LayoutContext;
 use infra_core::manufacture::ManuSearchRecipeMode;
@@ -49,6 +49,7 @@ fn run() -> Result<(), Error> {
 
     match args[1].as_str() {
         "plan" => plan_cmd(&args[2..])?,
+        "advice" => advice_cmd(&args[2..])?,
         "verify" => verify_cmd(&args[2..])?,
         "pool" => pool_cmd(&args[2..])?,
         "search" => search_cmd(&args[2..])?,
@@ -71,6 +72,7 @@ fn print_usage() {
         "      [--profile-out <file.json>] [--output-dir <dir>] [--maa-out <file.json>] [--json]"
     );
     eprintln!("      (default layout: data/fixtures/243/layout.json)");
+    eprintln!("  infra-cli advice --operbox <path.json> [--rules <path>] [--json] [--pretty]");
     eprintln!("  infra-cli verify --case <case_id>");
     eprintln!("  infra-cli verify --all");
     eprintln!("  infra-cli pool --trade [--manufacture] [--roster <path>] [--operbox <path>] [-o <file.csv>] [--text]");

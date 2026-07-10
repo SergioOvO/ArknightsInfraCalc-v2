@@ -1,0 +1,29 @@
+[
+  {
+    "id": "char_254_vodfox",
+    "name": "巫恋",
+    "elite": 1,
+    "level": 70,
+    "own": true,
+    "potential": 1,
+    "rarity": 5
+  },
+  {
+    "id": "char_4000_tequila",
+    "name": "龙舌兰",
+    "elite": 1,
+    "level": 70,
+    "own": true,
+    "potential": 1,
+    "rarity": 5
+  },
+  {
+    "id": "char_214_kafka",
+    "name": "卡夫卡",
+    "elite": 1,
+    "level": 70,
+    "own": true,
+    "potential": 1,
+    "rarity": 5
+  }
+]
