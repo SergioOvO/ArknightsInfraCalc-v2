@@ -906,7 +906,10 @@ mod tests {
 
         assert_eq!(trace.source, "manual-system-candidate");
         assert_eq!(trace.source_system, "automation_group");
-        assert!(trace.rejected, "low-progress seed should be trace-only/rejected");
+        assert!(
+            trace.rejected,
+            "low-progress seed should be trace-only/rejected"
+        );
         assert!(
             trace.rejection_reason.is_some() || trace.evaluation_failed.is_some(),
             "rejected seed candidate should explain why it was not selected: {trace:?}"

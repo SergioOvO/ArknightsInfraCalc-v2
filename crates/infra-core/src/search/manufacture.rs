@@ -597,7 +597,10 @@ mod tests {
             entries: vec![
                 test_entry("槐琥", &["manu_prod_spd_variable2[000]"]),
                 test_entry("断罪者", &["manu_formula_spd[020]"]),
-                test_entry("满触发搭档", &["manu_formula_spd[020]", "manu_prod_spd[000]"]),
+                test_entry(
+                    "满触发搭档",
+                    &["manu_formula_spd[020]", "manu_prod_spd[000]"],
+                ),
             ],
             skipped: vec![],
         };

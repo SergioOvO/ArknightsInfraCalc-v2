@@ -1350,7 +1350,9 @@ mod tests {
 
         let manu_1 = assignment.operators_in(&RoomId::from("manu_1"));
         assert!(
-            !manu_1.iter().any(|o| ["灰毫", "远牙", "野鬃"].contains(&o.name.as_str())),
+            !manu_1
+                .iter()
+                .any(|o| ["灰毫", "远牙", "野鬃"].contains(&o.name.as_str())),
             "红松制造干员不应由 registry 固定同站，交给制造搜索分布: {:?}",
             manu_1.iter().map(|o| &o.name).collect::<Vec<_>>()
         );
@@ -1419,7 +1421,9 @@ mod tests {
 
         let manu_4 = assignment.operators_in(&RoomId::from("manu_4"));
         assert!(
-            !manu_4.iter().any(|o| ["灰毫", "远牙", "野鬃"].contains(&o.name.as_str())),
+            !manu_4
+                .iter()
+                .any(|o| ["灰毫", "远牙", "野鬃"].contains(&o.name.as_str())),
             "红松制造干员不应由 registry 固定到 manu_4: {:?}",
             manu_4.iter().map(|o| &o.name).collect::<Vec<_>>()
         );
@@ -1503,7 +1507,9 @@ mod tests {
         assert!(pinus_claimed(&assignment));
         let manu_1 = assignment.operators_in(&RoomId::from("manu_1"));
         assert!(
-            !manu_1.iter().any(|o| ["远牙", "野鬃", "食铁兽"].contains(&o.name.as_str())),
+            !manu_1
+                .iter()
+                .any(|o| ["远牙", "野鬃", "食铁兽"].contains(&o.name.as_str())),
             "缺 1 红松时 registry 仍不固定制造同站，交给制造搜索分布: {:?}",
             manu_1.iter().map(|o| &o.name).collect::<Vec<_>>()
         );
@@ -1543,7 +1549,9 @@ mod tests {
         );
         let manu_1 = assignment.operators_in(&RoomId::from("manu_1"));
         assert!(
-            !manu_1.iter().any(|o| ["灰毫", "远牙", "野鬃"].contains(&o.name.as_str())),
+            !manu_1
+                .iter()
+                .any(|o| ["灰毫", "远牙", "野鬃"].contains(&o.name.as_str())),
             "红松制造干员不应由 registry 固定同站: {:?}",
             manu_1.iter().map(|o| &o.name).collect::<Vec<_>>()
         );

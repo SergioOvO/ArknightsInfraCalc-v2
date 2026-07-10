@@ -330,7 +330,8 @@ fn align_warmup_rooms(
         .collect();
 
     for (name, kind) in ops {
-        let Some(current_room) = room_containing_operator(assignment, blueprint, &name, kind) else {
+        let Some(current_room) = room_containing_operator(assignment, blueprint, &name, kind)
+        else {
             continue;
         };
         let Some(anchor_room) = sticky_rooms.get(&name).cloned() else {
@@ -1393,11 +1394,8 @@ pub fn schedule_team_rotation(
                 gamma_h1: &gamma_h1,
                 mutable_manu_rooms: &h1.manu,
             });
-            let mut best_abyssal: Option<(
-                AbyssalCandidate,
-                ShiftScores,
-                HashMap<String, RoomId>,
-            )> = None;
+            let mut best_abyssal: Option<(AbyssalCandidate, ShiftScores, HashMap<String, RoomId>)> =
+                None;
             for mut candidate in abyssal_candidates {
                 clear_room(&mut candidate.assignment, "control");
                 let mut aby_used = candidate.assignment.operator_names();

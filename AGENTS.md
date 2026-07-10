@@ -164,6 +164,12 @@ cargo run -q -p infra-cli -- layout test \
 4. 验证通过，或验证未跑但原因已说明时，若本轮改动形成独立单元，默认创建简短 commit。
 5. 不自动 `amend`、`rebase`、`reset`、`checkout --` 或清理未跟踪文件。
 
+### 7.1 Rust 格式化口径
+
+1. `rustfmt` 的输出是本仓库 Rust 代码的规范格式；修改 Rust 后运行 `cargo fmt --all`。
+2. 保留 `rustfmt` 产生的换行、缩进与 import / re-export 排序，不要为了缩小 diff 手动改回格式化前的单行写法。
+3. 若一次格式化触及多个既有文件，也应保留格式化结果；可在 Git 中单独整理格式化提交，但不要反向手工排版。
+
 ## 8. 不必通读
 
 - `target/`、`out/`、release 产物、xlsx 二进制、`.venv/`。

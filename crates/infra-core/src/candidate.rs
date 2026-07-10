@@ -94,7 +94,11 @@ impl TeamCandidate {
             "manufacture.composite_score",
             hit.composite_score,
         )];
-        push_non_zero_column(&mut columns, "manufacture.gold.prod_total", hit.per_station.gold);
+        push_non_zero_column(
+            &mut columns,
+            "manufacture.gold.prod_total",
+            hit.per_station.gold,
+        );
         push_non_zero_column(
             &mut columns,
             "manufacture.battle_record.prod_total",
@@ -111,7 +115,10 @@ impl TeamCandidate {
         metadata.insert("prod_skill".to_string(), json!(hit.breakdown.prod_skill));
         metadata.insert("prod_global".to_string(), json!(hit.breakdown.prod_global));
         metadata.insert("prod_total".to_string(), json!(hit.breakdown.prod_total));
-        metadata.insert("storage_limit".to_string(), json!(hit.breakdown.storage_limit));
+        metadata.insert(
+            "storage_limit".to_string(),
+            json!(hit.breakdown.storage_limit),
+        );
         metadata.insert("storage".to_string(), json!(hit.storage));
 
         Self {
@@ -119,11 +126,7 @@ impl TeamCandidate {
             room_id,
             recipe,
             order_kind: None,
-            operators: first_non_empty(&[
-                &hit.names,
-                &hit.gold_names,
-                &hit.battle_record_names,
-            ]),
+            operators: first_non_empty(&[&hit.names, &hit.gold_names, &hit.battle_record_names]),
             source,
             source_id: None,
             system_tags: Vec::new(),
@@ -196,8 +199,14 @@ impl TeamCandidate {
 
         let mut metadata = BTreeMap::new();
         metadata.insert("trace_source".to_string(), json!(trace.source));
-        metadata.insert("evaluation_failed".to_string(), json!(trace.evaluation_failed));
-        metadata.insert("linked_producers".to_string(), json!(trace.linked_producers));
+        metadata.insert(
+            "evaluation_failed".to_string(),
+            json!(trace.evaluation_failed),
+        );
+        metadata.insert(
+            "linked_producers".to_string(),
+            json!(trace.linked_producers),
+        );
         metadata.insert("evidence".to_string(), json!(trace.evidence));
 
         Self {
@@ -304,12 +313,8 @@ mod tests {
         hit.names.clear();
         hit.gold_names = vec!["夜烟".to_string(), "清流".to_string(), "砾".to_string()];
 
-        let candidate = TeamCandidate::from_manu_search_hit(
-            &hit,
-            None,
-            None,
-            CandidateSource::DynamicSearch,
-        );
+        let candidate =
+            TeamCandidate::from_manu_search_hit(&hit, None, None, CandidateSource::DynamicSearch);
 
         assert_eq!(candidate.operators, hit.gold_names);
     }
@@ -385,7 +390,10 @@ mod tests {
         assert_eq!(candidate.system_tags, vec!["automation_group"]);
         assert_eq!(candidate.selected, Some(false));
         assert_eq!(candidate.rejected, Some(true));
-        assert_eq!(candidate.rejection_reason.as_deref(), Some("tier_gate_not_met"));
+        assert_eq!(
+            candidate.rejection_reason.as_deref(),
+            Some("tier_gate_not_met")
+        );
         assert_eq!(candidate.score.raw_score, 128.0);
         assert_eq!(candidate.score.decision_score, 128.0);
         assert!(candidate.metadata["linked_producers"]
