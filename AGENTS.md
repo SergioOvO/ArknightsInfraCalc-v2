@@ -8,8 +8,8 @@
 
 - `infra-core`：机制解释、搜索、编排、排班、导出数据结构。
 - `infra-cli`：命令入口、文件加载、输出格式化、回归验证壳。
-- `data/`：技能、干员实例、体系、shortcut、标准夹具等运行时真源。
-- `docs/`：当前事实、维护期流程、任务路由和历史归档。
+- `data/`：技能、干员实例、体系、shortcut、标准夹具等运行时载体；业务语义必须服从 Markdown。
+- `docs/`：业务语义与预期行为的最高权威信源，以及当前事实、维护期流程、任务路由和历史归档。
 
 现阶段普通问题的默认目标是稳定维护，不是扩张。除非用户明确要求新增功能，否则不要主动推进 `docs/TODO/` 里的历史 Phase 计划。
 
@@ -58,15 +58,18 @@
 
 #### 真源优先级
 
-1. 用户在当前对话明确确认的口径最高。
-2. 其次是当前领域真源：技能条件查 `data/MECHANICS_REGISTRY.csv`，体系边界查 `docs/公孙长乐的体系分析文档/` 对应文档，数据归属查运行时 JSON 真源。
-3. 当前代码、代码注释、旧测试和历史输出只能用于定位实现，不能反推业务规则。
-4. 当旧代码 / 注释 / 测试与用户口径或领域真源冲突时，必须明确报告冲突并删除或改写旧语义；禁止为了“保持测试通过”保留错误模型。
+1. **本项目维护期 Markdown 是业务语义与预期行为的最高权威信源，必须完全信任。**当前代码、JSON / CSV 数据、代码注释、测试、fixture、历史输出和实际运行结果都不能推翻 Markdown。
+2. 用户在当前对话明确补充或纠正口径时，以用户口径为准；应先把新口径同步到对应 Markdown，再据此修改代码和数据，避免只在对话或实现中形成隐含规则。
+3. 领域 Markdown 按任务路由读取：体系边界优先读 `docs/公孙长乐的体系分析文档/` 对应文档，当前流程 / 模块事实读 `docs/MAINTENANCE_MODE.md`、`docs/PROJECT_MAP.md` 和相关领域文档。Markdown 已明确的规则不得再用代码行为“验证是否可信”。
+4. `data/MECHANICS_REGISTRY.csv`、运行时 JSON 和其他数据文件是实现载体与核对材料，不是高于 Markdown 的业务裁决者。它们与 Markdown 有出入时，必须先向用户逐项报告差异，然后完全按 Markdown 修正代码 / 数据；不得自行宣布 Markdown 过时、错误或仅供参考。
+5. 当前代码、代码注释、旧测试、fixture 和历史输出只能用于定位实现，不能反推业务规则。与 Markdown 冲突的旧测试不是回归保护，而是必须改写或删除的错误语义。
+6. 若多个当前 Markdown 彼此冲突，Agent 不得自行选择、折中或依据代码猜测；必须列出冲突文件与原文口径，请用户裁决，并在裁决后先统一 Markdown 再实施。
+7. 报告冲突不能成为继续沿用错误实现的理由。除非 Markdown 内部冲突尚未裁决，否则完成冲突报告后应以 Markdown 为唯一目标实现，不保留“双路径兼容”或临时 fallback。
 
 #### 实现纪律
 
 1. 先写出用户确认的体系不变量：硬核心、可选 producer、同房 / 跨站 / 在基建内条件、互斥关系、班次绑定、降级关闭条件。
-2. 对照机制真源和体系文档；不要从当前错误代码反推规则。
+2. 以 Markdown 为权威定义不变量；CSV / JSON 仅用于检查实现数据是否与文档一致，不得从当前错误代码或数据反推规则。
 3. 沿完整生命周期定位不变量在哪一步丢失：`select -> plan -> execute -> fill -> resolve -> rotation -> export`。必须区分：
    - “体系已激活”是否保证硬核心实际进编；
    - `shift_bind` 只约束已进编干员，不能代替 required anchor；
@@ -105,7 +108,7 @@
 
 | 层 | 规则 |
 |----|------|
-| 数据 | `skill_table.id` 必须等于解包 `buff_id`；干员归属只在 `operator_instances.json` |
+| 数据 | 结构上 `skill_table.id` 必须等于解包 `buff_id`，干员归属写在 `operator_instances.json`；其业务含义与预期行为仍以 Markdown 为最高权威 |
 | L1 | `trade/interpreter.rs`、`manufacture/interpreter.rs` 只认 `buff_id`，不认识干员名 |
 | L2 | `gold_flow.rs`、`order_mechanic.rs`、`unit_output.rs` 处理机制域最优解；`atoms: []` 可表示委托 |
 | L3 | `shortcut.rs` + `trade_shortcuts.json` 处理固定最优 / 难 atom 化组合 |
