@@ -243,11 +243,7 @@ fn pick_disjoint_trade_hit(
 }
 
 fn role_pick_sort_key(hit: &TradeSearchHit) -> f64 {
-    if hit.unit_trade_per_day > 0.0 {
-        hit.unit_trade_per_day
-    } else {
-        hit.trade_pct
-    }
+    hit.score
 }
 
 fn trade_hit_names(hit: &TradeSearchHit) -> &[String] {
@@ -511,5 +507,28 @@ mod tests {
         assert_eq!(hit.shortcut.as_deref(), Some("gsl_docus_solo"));
         assert!((hit.breakdown.unit_output_multiplier - 1.55).abs() < 0.001);
         assert!(hit.score > hit.breakdown.paper_efficiency, "{hit:?}");
+    }
+
+    #[test]
+    fn role_pick_uses_final_efficiency_instead_of_raw_unit_output() {
+        let hit = |score: f64, unit_trade_per_day: f64| TradeSearchHit {
+            names: vec![format!("score-{score}")],
+            gold_names: vec![],
+            originium_names: vec![],
+            score,
+            trade_pct: score * 100.0,
+            gold_pct: 0.0,
+            shortcut: None,
+            unit_trade_per_day,
+            unit_gold_per_day: 0.0,
+            unit_originium_per_day: 0.0,
+            output_multiplier: 1.0,
+            breakdown: Default::default(),
+        };
+        let high_unit_low_final = hit(1.8, 20_000.0);
+        let low_unit_high_final = hit(2.1, 12_000.0);
+        assert!(
+            role_pick_sort_key(&low_unit_high_final) > role_pick_sort_key(&high_unit_low_final)
+        );
     }
 }

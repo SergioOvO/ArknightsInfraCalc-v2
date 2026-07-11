@@ -72,6 +72,7 @@ gold_pct: result.order_mechanic.mechanic_equiv_eff_pct,
 - 贸易 meta 复杂组合上不上班走 L3 shortcut / 编排认领；
 - CLI 与文档应拆开展示贸易赤金订单效率与赤金解释分量；
 - `effective_eff_multiplier` 为兼容字段，与 `final_efficiency` 同值。
+- role pick、普通搜索和排班落位全部按 `final_efficiency` 选择候选；`unit_trade_per_day` 只解释特殊订单乘区，不作为选人排序键。
 
 ---
 

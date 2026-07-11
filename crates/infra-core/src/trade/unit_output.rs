@@ -63,6 +63,11 @@ impl TradeUnitOutput {
         };
         self.drone_unit_trade_per_day = unit_trade_per_day * DRONE_TRADE_FACTOR;
     }
+
+    pub fn replace_gsl_gold_unit_output(&mut self, gsl_unit_gold: f64) {
+        self.unit_gold_per_day = gsl_unit_gold / GSL_GOLD_UNIT_SCALE;
+        self.drone_unit_gold_per_day = self.unit_gold_per_day * DRONE_TRADE_FACTOR;
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

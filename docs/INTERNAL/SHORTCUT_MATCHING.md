@@ -4,6 +4,8 @@
 > 数据：`data/trade_shortcuts.json`  
 > 设计背景：`EFFECT_ATOM_DESIGN.md` §8.7
 
+社区单位产出及视觉表解析来源见 [TRADE_COMMUNITY_UNIT_OUTPUT.md](TRADE_COMMUNITY_UNIT_OUTPUT.md)。特殊订单 shortcut 必须携带带来源和精度标记的 `unit_output`；加载失败时直接报错，不再静默使用旧等效百分比。
+
 ## 求解器中的位置
 
 `solver.rs` 在 L1（`apply_trade_phases`）结束后：

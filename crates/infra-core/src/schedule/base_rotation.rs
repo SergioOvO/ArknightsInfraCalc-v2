@@ -136,9 +136,10 @@ pub fn score_base_assignment(
             ..RoomScoreLine::default()
         };
         if let Some(snapshot) = assignment.efficiency_in(&room.id).filter(|s| s.is_trade()) {
-            trade_score += snapshot.trade_score;
-            line.trade_score = snapshot.trade_score;
-            line.trade_pct = snapshot.trade_pct;
+            let final_efficiency = snapshot.final_trade_efficiency();
+            trade_score += final_efficiency;
+            line.trade_score = final_efficiency;
+            line.trade_pct = snapshot.final_trade_efficiency_pct();
             line.trade_skill_pct = snapshot.trade_skill_pct;
         } else if !room.operators.is_empty() {
             let input = TradeRoomInput {

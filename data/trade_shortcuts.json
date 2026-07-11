@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "source": "工具人表26.5.xlsx @公孙长乐 2026年5月",
+  "version": 3,
+  "source": "工具人表26.5 (2).xlsx @公孙长乐 2026年5月；排班表图片生成器.md 三、需求模块二",
   "entries": [
     {
       "id": "gsl_witch_long_beta",
@@ -8,12 +8,13 @@
       "trade_pct": 138.0,
       "gold_pct": 46.0,
       "tailor_tier": "beta",
-      "unit_trade_anchor": 12288.8,
       "unit_gsl_gold_anchor": 2328.77,
       "unit_output": {
         "kind": "enhanced_unit_output_per_day",
         "value": 12739.73
       },
+      "unit_output_source": "排班表图片生成器.md 三.3：全精二巫恋+柏喙+龙舌兰加强后每日单位产出 12739.73",
+      "unit_output_precision": "exact",
       "match": {
         "kind": "witch"
       }
@@ -24,6 +25,12 @@
       "trade_pct": 129.0,
       "gold_pct": 38.0,
       "tailor_tier": "alpha",
+      "unit_output": {
+        "kind": "enhanced_unit_output_per_day",
+        "value": 12339.274611
+      },
+      "unit_output_source": "工具人表26.5 (2).xlsx!Sheet1 B41：等效129%贸；按需求文档等效公式，以纸面1.93、非技能1.03反算",
+      "unit_output_precision": "derived_from_rounded_equivalent",
       "match": {
         "kind": "witch"
       }
@@ -34,6 +41,12 @@
       "trade_pct": 124.0,
       "gold_pct": 33.0,
       "tailor_tier": "regular",
+      "unit_output": {
+        "kind": "enhanced_unit_output_per_day",
+        "value": 12073.341969
+      },
+      "unit_output_source": "工具人表26.5 (2).xlsx!Sheet1 B42：等效124%贸；按需求文档等效公式，以纸面1.93、非技能1.03反算",
+      "unit_output_precision": "derived_from_rounded_equivalent",
       "match": {
         "kind": "witch"
       }
@@ -44,6 +57,12 @@
       "trade_pct": 108.0,
       "gold_pct": 17.0,
       "tailor_tier": "regular",
+      "unit_output": {
+        "kind": "enhanced_unit_output_per_day",
+        "value": 11222.357513
+      },
+      "unit_output_source": "工具人表26.5 (2).xlsx!Sheet1 B43：等效108%贸；按需求文档等效公式，以纸面1.93、非技能1.03反算",
+      "unit_output_precision": "derived_from_rounded_equivalent",
       "match": {
         "kind": "witch"
       }
@@ -54,6 +73,12 @@
       "trade_pct": 93.0,
       "gold_pct": 0.0,
       "tailor_tier": "beta",
+      "unit_output": {
+        "kind": "enhanced_unit_output_per_day",
+        "value": 10424.559585
+      },
+      "unit_output_source": "工具人表26.5 (2).xlsx!Sheet1 B44：等效93%贸；按需求文档等效公式，以纸面1.93、非技能1.03反算",
+      "unit_output_precision": "derived_from_rounded_equivalent",
       "match": {
         "kind": "witch"
       }
@@ -64,6 +89,12 @@
       "trade_pct": 135.0,
       "gold_pct": 42.0,
       "tailor_tier": "regular",
+      "unit_output": {
+        "kind": "enhanced_unit_output_per_day",
+        "value": 12000.0
+      },
+      "unit_output_source": "工具人表26.5 (2).xlsx!Sheet1 H5:H8：固定2赤金/1200龙门币、每小时单位收益500贸；三级站1.169倍贸",
+      "unit_output_precision": "exact",
       "match": {
         "kind": "closure",
         "station_trade_pct": 114
@@ -75,6 +106,12 @@
       "trade_pct": 124.0,
       "gold_pct": 40.0,
       "tailor_tier": "regular",
+      "unit_output": {
+        "kind": "enhanced_unit_output_per_day",
+        "value": 12000.0
+      },
+      "unit_output_source": "工具人表26.5 (2).xlsx!Sheet1 H5:H9：固定2赤金/1200龙门币、每小时单位收益500贸；三级站1.169倍贸",
+      "unit_output_precision": "exact",
       "match": {
         "kind": "closure",
         "station_trade_pct": 80
@@ -86,6 +123,12 @@
       "trade_pct": 100.0,
       "gold_pct": 36.0,
       "tailor_tier": "regular",
+      "unit_output": {
+        "kind": "enhanced_unit_output_per_day",
+        "value": 12000.0
+      },
+      "unit_output_source": "工具人表26.5 (2).xlsx!Sheet1 H5:H10：固定2赤金/1200龙门币、每小时单位收益500贸；三级站1.169倍贸",
+      "unit_output_precision": "exact",
       "match": {
         "kind": "closure",
         "station_trade_pct": 60
@@ -103,6 +146,8 @@
         "lv2": 18591.55,
         "lv3": 15910.75
       },
+      "unit_output_source": "用户确认的社区分级锚点（2026-07-11）：lv1=20000、lv2=18591.55、lv3=15910.75；工具人表26.5 (2).xlsx!Sheet1 E5,E27 标注lv3 1.55与lv2 1.81倍率",
+      "unit_output_precision": "exact",
       "match": {
         "kind": "docus_syracusa"
       }
@@ -113,13 +158,14 @@
       "trade_pct": 0.0,
       "gold_pct": 55.0,
       "tailor_tier": "docus",
-      "unit_trade_anchor": 16747.8,
       "unit_output": {
         "kind": "enhanced_unit_output_by_level",
         "lv1": 20000.0,
         "lv2": 18591.55,
         "lv3": 15910.75
       },
+      "unit_output_source": "用户确认的社区分级锚点（2026-07-11）：lv1=20000、lv2=18591.55、lv3=15910.75；工具人表26.5 (2).xlsx!Sheet1 E5,E27 标注lv3 1.55与lv2 1.81倍率",
+      "unit_output_precision": "exact",
       "match": {
         "kind": "docus"
       }
@@ -137,6 +183,12 @@
       "trade_pct": 114.0,
       "gold_pct": 38.4,
       "tailor_tier": "regular",
+      "unit_output": {
+        "kind": "enhanced_unit_output_per_day",
+        "value": 12000.0
+      },
+      "unit_output_source": "工具人表26.5 (2).xlsx!Sheet1 H5:H10：黑键只改变纸面效率，可露希尔特别订单单位产出仍为12000",
+      "unit_output_precision": "exact",
       "match": {
         "kind": "blackkey_closure"
       }

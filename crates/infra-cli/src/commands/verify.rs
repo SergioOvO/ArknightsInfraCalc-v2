@@ -125,23 +125,39 @@ fn verify_unit_anchors(
         let trade_ok = (u.unit_trade_per_day - case.expect_unit_trade).abs() <= trade_tol;
         let gold_ok = case.expect_gsl_unit_gold <= 0.0
             || (u.gsl_unit_gold() - case.expect_gsl_unit_gold).abs() <= gold_tol;
-        if trade_ok && gold_ok {
+        let efficiency = &result.efficiency;
+        let expected_final = efficiency.paper.paper_efficiency * case.expect_unit_trade
+            / efficiency.production_basis.reference_unit_output_per_day;
+        let final_tol = expected_final.abs() * case.tolerance_pct / 100.0;
+        let final_ok = (efficiency.final_efficiency - expected_final).abs() <= final_tol;
+        let expected_daily =
+            efficiency.production_basis.reference_unit_output_per_day * expected_final;
+        let daily_tol = expected_daily.abs() * case.tolerance_pct / 100.0;
+        let daily_ok =
+            (result.production.daily_at_shift.trade_lmd - expected_daily).abs() <= daily_tol;
+        if trade_ok && gold_ok && final_ok && daily_ok {
             println!(
-                "PASS {} unit_trade={:.1} gsl_gold={:.1} mult={:.3}",
+                "PASS {} unit_trade={:.2} gsl_gold={:.2} paper={:.4} final={:.6} daily={:.2}",
                 case.case_id,
                 u.unit_trade_per_day,
                 u.gsl_unit_gold(),
-                u.multiplier_vs_lv3_regular
+                efficiency.paper.paper_efficiency,
+                efficiency.final_efficiency,
+                result.production.daily_at_shift.trade_lmd,
             );
         } else {
             any_fail = true;
             eprintln!(
-                "FAIL {} expected unit_trade={} gsl_gold={} got unit_trade={:.1} gsl_gold={:.1}",
+                "FAIL {} expected unit_trade={} gsl_gold={} final={:.6} daily={:.2} got unit_trade={:.2} gsl_gold={:.2} final={:.6} daily={:.2}",
                 case.case_id,
                 case.expect_unit_trade,
                 case.expect_gsl_unit_gold,
+                expected_final,
+                expected_daily,
                 u.unit_trade_per_day,
-                u.gsl_unit_gold()
+                u.gsl_unit_gold(),
+                efficiency.final_efficiency,
+                result.production.daily_at_shift.trade_lmd,
             );
         }
     }

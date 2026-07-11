@@ -45,6 +45,19 @@ pub struct TradeShortcutEntry {
     pub unit_gsl_gold_anchor: Option<f64>,
     #[serde(default)]
     pub unit_output: Option<CommunityUnitOutputRule>,
+    /// 社区数值在视觉表或需求文档中的可复核位置。
+    #[serde(default)]
+    pub unit_output_source: Option<String>,
+    /// 区分原始精确单位产出与从取整等效效率反算的派生值。
+    #[serde(default)]
+    pub unit_output_precision: Option<CommunityValuePrecision>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CommunityValuePrecision {
+    Exact,
+    DerivedFromRoundedEquivalent,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,6 +80,22 @@ impl CommunityUnitOutputRule {
             },
         }
     }
+
+    fn validate(&self) -> std::result::Result<(), String> {
+        let values: Vec<f64> = match self {
+            Self::UnitOutputMultiplier { value } | Self::EnhancedUnitOutputPerDay { value } => {
+                vec![*value]
+            }
+            Self::EnhancedUnitOutputByLevel { lv1, lv2, lv3 } => vec![*lv1, *lv2, *lv3],
+        };
+        if values
+            .iter()
+            .any(|value| !value.is_finite() || *value <= 0.0)
+        {
+            return Err("unit_output values must be finite and positive".to_string());
+        }
+        Ok(())
+    }
 }
 
 fn default_tailor_tier() -> ShortcutTailorTier {
@@ -75,6 +104,8 @@ fn default_tailor_tier() -> ShortcutTailorTier {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct TradeShortcutFile {
+    pub version: u32,
+    pub source: String,
     pub entries: Vec<TradeShortcutEntry>,
 }
 
@@ -87,7 +118,59 @@ pub fn load_trade_shortcuts(path: &Path) -> Result<Vec<TradeShortcutEntry>> {
     crate::profile::record_shortcut_json_load();
     let raw = std::fs::read_to_string(path)?;
     let file: TradeShortcutFile = serde_json::from_str(&raw)?;
+    if file.version != 3 {
+        return Err(crate::error::Error::msg(format!(
+            "unsupported trade_shortcuts version {}, expected 3",
+            file.version
+        )));
+    }
+    if file.source.trim().is_empty() {
+        return Err(crate::error::Error::msg(
+            "trade_shortcuts source must not be empty",
+        ));
+    }
+    validate_trade_shortcuts(&file.entries).map_err(crate::error::Error::msg)?;
     Ok(file.entries)
+}
+
+fn entry_requires_community_unit_output(entry: &TradeShortcutEntry) -> bool {
+    matches!(
+        entry.r#match.as_ref().map(|rule| rule.kind.as_str()),
+        Some("witch" | "closure" | "blackkey_closure" | "docus" | "docus_syracusa")
+    )
+}
+
+fn validate_trade_shortcuts(entries: &[TradeShortcutEntry]) -> std::result::Result<(), String> {
+    let mut ids = std::collections::HashSet::new();
+    for entry in entries {
+        if !ids.insert(entry.id.as_str()) {
+            return Err(format!("duplicate trade shortcut id {}", entry.id));
+        }
+        if !entry.trade_pct.is_finite() || !entry.gold_pct.is_finite() {
+            return Err(format!("{} has non-finite legacy percentages", entry.id));
+        }
+        if entry_requires_community_unit_output(entry) && entry.unit_output.is_none() {
+            return Err(format!(
+                "{} changes trade unit output but has no community unit_output",
+                entry.id
+            ));
+        }
+        if let Some(rule) = &entry.unit_output {
+            rule.validate()
+                .map_err(|reason| format!("{}: {reason}", entry.id))?;
+            if entry
+                .unit_output_source
+                .as_deref()
+                .is_none_or(|source| source.trim().is_empty())
+            {
+                return Err(format!("{} has unit_output without source", entry.id));
+            }
+            if entry.unit_output_precision.is_none() {
+                return Err(format!("{} has unit_output without precision", entry.id));
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn default_shortcuts_path() -> Result<std::path::PathBuf> {
@@ -126,28 +209,42 @@ impl TradeShortcutCache {
     }
 }
 
-pub(crate) fn community_unit_trade_per_day_by_id(
+pub(crate) fn required_community_unit_trade_per_day_by_id(
     id: &str,
     level: u8,
     reference: f64,
-) -> Option<f64> {
-    trade_shortcut_cache()?
-        .get_by_id(id)?
+) -> Result<f64> {
+    let cache = trade_shortcut_cache_result()?;
+    let entry = cache
+        .get_by_id(id)
+        .ok_or_else(|| crate::error::Error::msg(format!("missing trade shortcut {id}")))?;
+    entry
         .unit_output
         .as_ref()
         .map(|rule| rule.unit_trade_per_day(level, reference))
+        .ok_or_else(|| crate::error::Error::msg(format!("{id} has no community unit_output")))
 }
 
-static TRADE_SHORTCUT_CACHE: OnceLock<Option<TradeShortcutCache>> = OnceLock::new();
+static TRADE_SHORTCUT_CACHE: OnceLock<std::result::Result<TradeShortcutCache, String>> =
+    OnceLock::new();
 
-pub(crate) fn trade_shortcut_cache() -> Option<&'static TradeShortcutCache> {
+fn trade_shortcut_cache_result() -> Result<&'static TradeShortcutCache> {
     TRADE_SHORTCUT_CACHE
         .get_or_init(|| {
-            let path = default_shortcuts_path().ok()?;
-            let entries = load_trade_shortcuts(&path).ok()?;
-            Some(TradeShortcutCache::build(entries))
+            let path = default_shortcuts_path().map_err(|err| err.to_string())?;
+            let entries = load_trade_shortcuts(&path).map_err(|err| err.to_string())?;
+            Ok(TradeShortcutCache::build(entries))
         })
         .as_ref()
+        .map_err(|message| crate::error::Error::msg(message.clone()))
+}
+
+pub(crate) fn ensure_trade_shortcuts_loaded() -> Result<()> {
+    trade_shortcut_cache_result().map(|_| ())
+}
+
+pub(crate) fn trade_shortcut_cache() -> Option<&'static TradeShortcutCache> {
+    trade_shortcut_cache_result().ok()
 }
 
 /// 巫恋核 / 龙舌兰投资 / 裁缝 α/β（与但书、可露希尔互斥的「巫恋侧」机制）。
@@ -1177,5 +1274,33 @@ mod tests {
             mk_op("黑键", 2, vec!["trade_ord_spd_bd[010]"]),
         ];
         assert!(trade_station_exclusive_violation(&mix, &table));
+    }
+
+    #[test]
+    fn community_unit_output_rules_are_sourced_and_complete() {
+        let entries = load_trade_shortcuts(&default_shortcuts_path().unwrap()).unwrap();
+        for entry in &entries {
+            if entry_requires_community_unit_output(entry) {
+                assert!(entry.unit_output.is_some(), "{}", entry.id);
+                assert!(entry.unit_output_source.is_some(), "{}", entry.id);
+                assert!(entry.unit_output_precision.is_some(), "{}", entry.id);
+            }
+        }
+    }
+
+    #[test]
+    fn missing_special_unit_output_is_rejected() {
+        let entry: TradeShortcutEntry = serde_json::from_str(
+            r#"{
+                "id":"broken_closure",
+                "label":"broken",
+                "trade_pct":100.0,
+                "gold_pct":0.0,
+                "match":{"kind":"closure"}
+            }"#,
+        )
+        .unwrap();
+        let err = validate_trade_shortcuts(&[entry]).unwrap_err();
+        assert!(err.contains("no community unit_output"), "{err}");
     }
 }

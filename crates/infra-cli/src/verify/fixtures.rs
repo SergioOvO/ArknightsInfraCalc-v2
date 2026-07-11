@@ -3,6 +3,16 @@ use infra_core::trade::{TradeOperator, TradeRoomInput};
 use std::sync::Arc;
 
 pub fn unit_fixture(name: &str, level: u8) -> TradeRoomInput {
+    if name.starts_with("gsl_witch_") {
+        return witch_fixture(name, level);
+    }
+    if name == "gsl_blackkey_closure" {
+        return blackkey_closure_fixture(level);
+    }
+    if name.starts_with("gsl_closure_") {
+        let case_id = format!("reg_{name}");
+        return closure_fixture(&case_id, level);
+    }
     let op = |n: &str, elite: u8, buff_ids: Vec<&str>| {
         TradeOperator::new(n, elite, buff_ids.into_iter().map(str::to_string).collect())
     };
@@ -88,18 +98,21 @@ pub fn closure_fixture(case_id: &str, level: u8) -> TradeRoomInput {
         )
     };
     let closure = op("可露希尔", 2, vec!["trade_ord_closure[000]"]);
-    let exusiai = op("能天使", 2, vec!["trade_ord_spd[020]"]);
-    let texas_e2 = op("德克萨斯", 2, vec!["trade_ord_spd&cost_P[000]"]);
-    let texas_e0 = op("德克萨斯", 0, vec!["trade_ord_spd&cost_P[000]"]);
-    let lappland = op("拉普兰德", 2, vec!["trade_ord_limit&cost_P[001]"]);
-
+    let high = op(
+        "高效档测试干员",
+        2,
+        vec!["trade_ord_spd[020]", "trade_ord_spd[021]"],
+    );
+    let normal = op("普通高效测试干员", 2, vec!["trade_ord_spd[020]"]);
+    let medium = op("中效档测试干员", 2, vec!["trade_ord_spd[001]"]);
+    let low = op("低效档测试干员", 0, vec!["trade_ord_spd[000]"]);
     let operators = match case_id {
-        "reg_gsl_closure_tier90" => vec![closure, exusiai, texas_e2, lappland],
-        "reg_gsl_closure_tier80" => vec![closure, texas_e2, lappland],
-        "reg_gsl_closure_tier60" => vec![closure, exusiai, texas_e0],
-        _ => vec![closure, exusiai, texas_e2, lappland],
+        // 三人容量内构造 113% / 78% / 53% 加成，分别最接近社区 114 / 80 / 60 档。
+        "reg_gsl_closure_tier90" => vec![closure, high, medium],
+        "reg_gsl_closure_tier80" => vec![closure, normal, medium],
+        "reg_gsl_closure_tier60" => vec![closure, low.clone(), low],
+        _ => vec![closure, high, medium],
     };
-
     TradeRoomInput::with_operators(level, operators)
 }
 

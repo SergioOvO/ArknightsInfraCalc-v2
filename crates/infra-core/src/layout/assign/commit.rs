@@ -116,7 +116,12 @@ pub(super) fn manu_hit_names(hit: &ManuSearchHit) -> &[String] {
 
 pub(super) fn trade_efficiency_snapshot(hit: &TradeSearchHit) -> RoomEfficiencySnapshot {
     RoomEfficiencySnapshot {
-        trade_score: hit.breakdown.effective_eff_multiplier,
+        trade_paper_efficiency: hit.breakdown.paper_efficiency,
+        trade_unit_output_multiplier: hit.breakdown.unit_output_multiplier,
+        trade_final_efficiency: hit.breakdown.final_efficiency,
+        trade_equivalent_operator_skill_bonus: hit.breakdown.equivalent_operator_skill_bonus,
+        trade_rule_id: hit.breakdown.shortcut_id.clone(),
+        trade_score: hit.breakdown.final_efficiency,
         trade_pct: hit.trade_pct,
         trade_skill_pct: hit.breakdown.order_eff_skill,
         trade_gold_pct: hit.gold_pct,

@@ -67,9 +67,8 @@ fn resolve_unit_output(
     ctx: &TradeContext,
     mechanic: &OrderMechanicResult,
     sc: Option<&shortcut::TradeShortcutMatch>,
-    paper: &PaperTradeEfficiency,
     level: u8,
-) -> TradeUnitOutput {
+) -> Result<TradeUnitOutput> {
     let reference = if mechanic.order_kind.is_gold() {
         GOLD_TRADE_REFERENCE_OUTPUT_PER_DAY
     } else {
@@ -88,21 +87,17 @@ fn resolve_unit_output(
     };
 
     let community_trade_unit = if docus {
-        shortcut::community_unit_trade_per_day_by_id("gsl_docus_solo", level, reference)
+        Some(shortcut::required_community_unit_trade_per_day_by_id(
+            "gsl_docus_solo",
+            level,
+            reference,
+        )?)
     } else {
         sc.and_then(|m| m.community_unit_trade_per_day(level, reference))
     };
 
     if let Some(unit_trade_per_day) = community_trade_unit {
         unit.replace_trade_unit_output(unit_trade_per_day, reference);
-    } else if let Some(sc) = sc.filter(|m| m.entry.trade_pct > 0.0) {
-        // 兼容尚未迁移为 unit_output 的社区等效锚点：旧 trade_pct 表示等效技能加成。
-        let non_skill_anchor = paper.base_efficiency + paper.occupancy_bonus;
-        let paper_anchor = non_skill_anchor + paper.operator_skill_bonus;
-        let final_anchor = non_skill_anchor + sc.entry.trade_pct / 100.0;
-        if paper_anchor > 0.0 {
-            unit.replace_trade_unit_output(reference * final_anchor / paper_anchor, reference);
-        }
     } else if mechanic.order_kind.is_gold()
         && sc.is_none()
         && mechanic.dominant_kind == SpecialOrderKind::NormalGold
@@ -110,8 +105,11 @@ fn resolve_unit_output(
     {
         unit.replace_trade_unit_output(regular_trade_unit_output_per_day(level), reference);
     }
+    if let Some(gsl_unit_gold) = sc.and_then(|matched| matched.entry.unit_gsl_gold_anchor) {
+        unit.replace_gsl_gold_unit_output(gsl_unit_gold);
+    }
 
-    unit
+    Ok(unit)
 }
 
 fn build_efficiency(
@@ -162,6 +160,7 @@ fn solve_trade_with_shift_inner(
     check_exclusivity: bool,
 ) -> Result<TradeResult> {
     crate::profile::record_trade_solve();
+    shortcut::ensure_trade_shortcuts_loaded()?;
     if check_exclusivity && shortcut::trade_station_exclusive_violation(&input.operators, table) {
         return Err(crate::error::Error::msg(
             "trade station violates mechanism exclusivity (docus / closure / witch)",
@@ -200,8 +199,7 @@ fn solve_trade_with_shift_inner(
             let mechanic = sc.build_mechanic_result(input.level);
             let order_eff_total = sc.entry.trade_pct;
             let order_eff_skill_adj = order_eff_total - order_eff_base;
-            let unit =
-                resolve_unit_output(&ctx, &mechanic, Some(&sc), &paper_efficiency, input.level);
+            let unit = resolve_unit_output(&ctx, &mechanic, Some(&sc), input.level)?;
             let efficiency = build_efficiency(
                 paper_efficiency,
                 &unit,
@@ -226,7 +224,7 @@ fn solve_trade_with_shift_inner(
     }
 
     let mechanic = order_mechanic::resolve_order_mechanic(&ctx, order_eff_pre);
-    let unit = resolve_unit_output(&ctx, &mechanic, None, &paper_efficiency, input.level);
+    let unit = resolve_unit_output(&ctx, &mechanic, None, input.level)?;
     let efficiency = build_efficiency(paper_efficiency, &unit, &mechanic, None);
     let production = build_production(unit, &efficiency, shift_hours);
 
