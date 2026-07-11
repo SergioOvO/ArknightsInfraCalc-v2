@@ -289,6 +289,10 @@ fn exact_embedded_data(name: &str) -> Option<(&'static str, &'static [u8])> {
             env!("CARGO_MANIFEST_DIR"),
             "/../../data/trade_shortcuts.json"
         )) as &[u8],
+        "training_recommendations.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/training_recommendations.json"
+        )) as &[u8],
         "fixtures/243/layout.json" => include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../data/fixtures/243/layout.json"
@@ -380,6 +384,7 @@ fn exact_embedded_data(name: &str) -> Option<(&'static str, &'static [u8])> {
             "base_systems.json" => "base_systems.json",
             "trade_segments.json" => "trade_segments.json",
             "trade_shortcuts.json" => "trade_shortcuts.json",
+            "training_recommendations.json" => "training_recommendations.json",
             "fixtures/243/layout.json" => "fixtures/243/layout.json",
             "fixtures/243/operbox_full_e2.json" => "fixtures/243/operbox_full_e2.json",
             "fixtures/243/schedule_export.json" => "fixtures/243/schedule_export.json",
@@ -434,6 +439,25 @@ mod tests {
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         (table, instances)
+    }
+
+    #[test]
+    fn solver_runtime_data_is_embedded() {
+        for name in [
+            "operator_instances.json",
+            "skill_table.json",
+            "mood_model.json",
+            "standalone_roster.json",
+            "base_systems.json",
+            "trade_segments.json",
+            "trade_shortcuts.json",
+            "training_recommendations.json",
+        ] {
+            assert!(
+                exact_embedded_data(name).is_some(),
+                "missing embedded {name}"
+            );
+        }
     }
 
     #[test]
