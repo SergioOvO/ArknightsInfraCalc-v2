@@ -27,6 +27,8 @@ pub struct RoomEfficiencyLine {
     pub manufacture_skill_efficiency: Efficiency,
     #[serde(default, skip_serializing_if = "is_zero_efficiency")]
     pub power_efficiency: Efficiency,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub power_skill_efficiency: Efficiency,
 }
 
 fn is_zero_efficiency(v: &Efficiency) -> bool {
@@ -147,20 +149,22 @@ pub fn evaluate_base_assignment_efficiencies(
             room_id: room.id.0.clone(),
             ..RoomEfficiencyLine::default()
         };
-        let efficiency =
-            if let Some(snapshot) = assignment.efficiency_in(&room.id).filter(|s| s.is_power()) {
+        let input = PowerRoomInput {
+            operator: room.operator.clone(),
+            mood: 24.0,
+            shift_hours,
+            layout: room.layout.clone(),
+        };
+        let result = solve_power(&input, table)?;
+        let efficiency = assignment
+            .efficiency_in(&room.id)
+            .filter(|s| s.is_power())
+            .map_or(result.final_efficiency, |snapshot| {
                 snapshot.power_final_efficiency
-            } else {
-                let input = PowerRoomInput {
-                    operator: room.operator.clone(),
-                    mood: 24.0,
-                    shift_hours,
-                    layout: room.layout.clone(),
-                };
-                solve_power(&input, table)?.final_efficiency
-            };
+            });
         power_efficiency += efficiency;
         line.power_efficiency = efficiency;
+        line.power_skill_efficiency = result.skill_efficiency;
         room_lines.push(line);
     }
 
