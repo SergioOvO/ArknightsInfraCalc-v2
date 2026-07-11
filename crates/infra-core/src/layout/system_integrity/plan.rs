@@ -69,6 +69,15 @@ pub enum SkipReason {
     UnsupportedLayout {
         power_stations: u8,
     },
+    MissingFacility {
+        facility: FacilityKind,
+        recipe: Option<crate::types::RecipeKind>,
+    },
+    InsufficientOperators {
+        group: String,
+        required: usize,
+        present: usize,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,8 +87,24 @@ pub enum RosemaryVerdict {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PinusPlan {
+    pub system_id: String,
+    pub priority: i32,
+    pub control_anchors: Vec<SystemAnchor>,
+    pub manufacture_anchors: Vec<SystemAnchor>,
+    pub shift_bind: ShiftBind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PinusVerdict {
+    Activate(PinusPlan),
+    Skip(SkipReason),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvaluateResult {
     pub rosemary: RosemaryVerdict,
+    pub pinus: PinusVerdict,
 }
 
 impl EvaluateResult {

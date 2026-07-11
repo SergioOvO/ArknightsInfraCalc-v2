@@ -6,13 +6,14 @@ use crate::layout::blueprint::BaseBlueprint;
 use crate::layout::shift::AssignShiftMode;
 use crate::layout::system::select_registry_systems;
 use crate::layout::system_integrity::{
-    evaluate_systems, EvaluateContext, RosemaryPlan, RosemaryTier, RosemaryVerdict,
+    evaluate_systems, EvaluateContext, PinusPlan, PinusVerdict, RosemaryPlan, RosemaryTier,
+    RosemaryVerdict,
 };
 use crate::operbox::OperBox;
 
 use super::plan::{
-    registry_as_activated, AnchorFillPolicy, AssignmentPlan, DegradationLadder, ProducerSlot,
-    ShiftBind, SystemAnchor, SystemConstraint,
+    registry_as_activated, ActivatedSystem, AnchorFillPolicy, AssignmentPlan, DegradationLadder,
+    ProducerSlot, ShiftBind, SystemAnchor, SystemConstraint,
 };
 
 /// 根据 operbox / 蓝图 / 班次模式 / 种子编制构建编排计划。
@@ -28,12 +29,6 @@ pub fn build_plan(
         return Ok(AssignmentPlan::recovery(mode));
     }
 
-    let scratch = seed.clone();
-    let used = scratch.operator_names();
-    let registry_claims =
-        select_registry_systems(blueprint, operbox, mode, &scratch, &used, skip_system_ids);
-    let activated = registry_claims.iter().map(registry_as_activated).collect();
-
     // 代码化体系层（system_integrity）与数据驱动 registry 汇合到统一 plan：
     // 迷迭香感知链产出 anchor / producer / constraint / degradation / shift_bind 语义片段。
     let mut anchors = Vec::new();
@@ -41,8 +36,10 @@ pub fn build_plan(
     let mut constraints = Vec::new();
     let mut degradations = Vec::new();
     let mut shift_binds = Vec::new();
+    let mut code_activated = Vec::new();
     let ctx = EvaluateContext::new(blueprint, operbox, mode);
-    if let RosemaryVerdict::Activate(rplan) = evaluate_systems(&ctx).rosemary {
+    let evaluated = evaluate_systems(&ctx);
+    if let RosemaryVerdict::Activate(rplan) = evaluated.rosemary {
         merge_rosemary_into_plan(
             &rplan,
             &mut anchors,
@@ -52,6 +49,58 @@ pub fn build_plan(
             &mut shift_binds,
         );
     }
+    if let PinusVerdict::Activate(pplan) = evaluated.pinus {
+        merge_pinus_into_plan(&pplan, &mut anchors, &mut shift_binds);
+        code_activated.push(ActivatedSystem {
+            system_id: pplan.system_id.clone(),
+            priority: pplan.priority,
+            tier: crate::layout::tier::OperatorTier::CrossStation,
+            slots: Vec::new(),
+        });
+    }
+
+    // Registry selection must see codeized required anchors as occupied capacity/resources.
+    // Execute uses the same first-compatible-room rule, so selection cannot admit a claim
+    // that would only fit before those hard cores are placed.
+    let mut scratch = seed.clone();
+    for anchor in &anchors {
+        let accepts = |room: &&crate::layout::blueprint::RoomBlueprint| {
+            room.kind == anchor.facility
+                && scratch.operators_in(&room.id).len() < room.operator_capacity()
+                && anchor.recipe.is_none_or(|required| {
+                    matches!(room.product, Some(crate::layout::blueprint::RoomProduct::Factory { recipe }) if recipe == required)
+                })
+        };
+        let room_id = match &anchor.room_id {
+            Some(id) => blueprint
+                .rooms
+                .iter()
+                .find(|room| &room.id == id && accepts(room))
+                .map(|room| room.id.clone()),
+            None => blueprint
+                .rooms
+                .iter()
+                .find(accepts)
+                .map(|room| room.id.clone()),
+        }
+        .ok_or_else(|| {
+            crate::error::Error::msg(format!(
+                "required anchor {} for {} has no facility capacity",
+                anchor.operator, anchor.system_id
+            ))
+        })?;
+        let mut operators = scratch.operators_in(&room_id).to_vec();
+        operators.push(crate::layout::AssignedOperator::new(
+            anchor.operator.clone(),
+            anchor.elite,
+        ));
+        scratch.set_room(room_id, operators);
+    }
+    let used = scratch.operator_names();
+    let registry_claims =
+        select_registry_systems(blueprint, operbox, mode, &scratch, &used, skip_system_ids);
+    let mut activated: Vec<_> = registry_claims.iter().map(registry_as_activated).collect();
+    activated.extend(code_activated);
 
     Ok(AssignmentPlan {
         mode,
@@ -83,6 +132,7 @@ fn merge_rosemary_into_plan(
             elite: anchor.elite,
             facility: anchor.facility,
             room_id: anchor.room_id.clone(),
+            recipe: None,
             fill_policy: match anchor.facility {
                 crate::layout::FacilityKind::Factory => AnchorFillPolicy::ManufactureRecipe,
                 _ => AnchorFillPolicy::Plain,
@@ -121,6 +171,36 @@ fn merge_rosemary_into_plan(
         operators: rplan.shift_bind.operators.clone(),
         on_shifts: rplan.shift_bind.on_shifts,
         off_shifts: rplan.shift_bind.off_shifts,
+    });
+}
+
+fn merge_pinus_into_plan(
+    pplan: &PinusPlan,
+    anchors: &mut Vec<SystemAnchor>,
+    shift_binds: &mut Vec<ShiftBind>,
+) {
+    anchors.extend(pplan.control_anchors.iter().map(|anchor| SystemAnchor {
+        system_id: pplan.system_id.clone(),
+        operator: anchor.operator.clone(),
+        elite: anchor.elite,
+        facility: anchor.facility,
+        room_id: None,
+        recipe: None,
+        fill_policy: AnchorFillPolicy::Plain,
+    }));
+    anchors.extend(pplan.manufacture_anchors.iter().map(|anchor| SystemAnchor {
+        system_id: pplan.system_id.clone(),
+        operator: anchor.operator.clone(),
+        elite: anchor.elite,
+        facility: anchor.facility,
+        room_id: None,
+        recipe: Some(crate::types::RecipeKind::BattleRecord),
+        fill_policy: AnchorFillPolicy::ManufactureRecipe,
+    }));
+    shift_binds.push(ShiftBind {
+        operators: pplan.shift_bind.operators.clone(),
+        on_shifts: pplan.shift_bind.on_shifts,
+        off_shifts: pplan.shift_bind.off_shifts,
     });
 }
 

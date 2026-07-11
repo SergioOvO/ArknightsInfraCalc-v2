@@ -1021,9 +1021,16 @@ fn write_team_rotation_text(
             _ => report_line("  peak 主力最长工作时间: 无有限瓶颈"),
         }
     }
-    if !report.peak_plan.registry_claims.is_empty() {
-        let systems: Vec<&str> = report.peak_plan.registry_system_ids();
+    if !report.peak_plan.activated.is_empty() {
+        let systems: Vec<&str> = report
+            .peak_plan
+            .activated
+            .iter()
+            .map(|system| system.system_id.as_str())
+            .collect();
         report_line(&format!("  peak 编排体系: {}", systems.join(", ")));
+    }
+    if !report.peak_plan.registry_claims.is_empty() {
         let trade_rooms: Vec<String> = report
             .peak_plan
             .registry_trade_room_ids()

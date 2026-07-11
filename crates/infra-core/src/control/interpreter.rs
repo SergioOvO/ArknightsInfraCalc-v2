@@ -53,11 +53,11 @@ pub fn solve_control(input: &ControlRoomInput, table: &SkillTable) -> ControlCen
     };
 
     let atoms = collect_control_atoms(&ctx.operators, table);
-    for (atom, owner) in atoms {
+    for (atom, owner, source_buff_id) in atoms {
         if !condition_met(&atom.condition, &ctx, &owner) {
             continue;
         }
-        apply_atom(&mut ctx, &atom, &owner);
+        apply_atom(&mut ctx, &atom, &owner, &source_buff_id);
     }
 
     let mut global = input.layout.global.clone();
@@ -83,7 +83,7 @@ pub fn solve_control(input: &ControlRoomInput, table: &SkillTable) -> ControlCen
 fn collect_control_atoms<'a>(
     ops: &[ControlOperatorRuntime],
     table: &'a SkillTable,
-) -> Vec<(&'a EffectAtom, String)> {
+) -> Vec<(&'a EffectAtom, String, String)> {
     let mut atoms = Vec::new();
     for op in ops {
         for bid in &op.buff_ids {
@@ -94,11 +94,11 @@ fn collect_control_atoms<'a>(
                 continue;
             }
             for atom in &skill.atoms {
-                atoms.push((atom, op.name.clone()));
+                atoms.push((atom, op.name.clone(), bid.clone()));
             }
         }
     }
-    atoms.sort_by(|(a, _), (b, _)| {
+    atoms.sort_by(|(a, _, _), (b, _, _)| {
         let pa = a.phase.sort_key();
         let pb = b.phase.sort_key();
         pa.cmp(&pb).then(a.phase_order.cmp(&b.phase_order))
@@ -147,10 +147,10 @@ fn scaled_inject_value(ctx: &ControlContext, atom: &EffectAtom, base: f64) -> f6
     }
 }
 
-fn apply_atom(ctx: &mut ControlContext, atom: &EffectAtom, owner: &str) {
+fn apply_atom(ctx: &mut ControlContext, atom: &EffectAtom, owner: &str, source_buff_id: &str) {
     match atom.phase {
         Phase::StateWrite => apply_state_write(ctx, atom),
-        Phase::GlobalInject => apply_global_inject(ctx, atom),
+        Phase::GlobalInject => apply_global_inject(ctx, atom, source_buff_id),
         Phase::Mood => apply_mood_action(ctx, &atom.action, owner),
         _ => {}
     }
@@ -221,10 +221,11 @@ fn apply_state_write(ctx: &mut ControlContext, atom: &EffectAtom) {
     }
 }
 
-fn apply_global_inject(ctx: &mut ControlContext, atom: &EffectAtom) {
+fn apply_global_inject(ctx: &mut ControlContext, atom: &EffectAtom, source_buff_id: &str) {
     let family = atom.tag.as_deref().unwrap_or(match &atom.action {
         Action::GlobalInjectTradeEff { .. } => INJECT_FAMILY_TRADE_GLOBAL_FLAT,
         Action::GlobalInjectManuEff { .. } => INJECT_FAMILY_MANU_GLOBAL_ALL,
+        Action::GlobalInjectManuTaggedEff { .. } => "manu_tagged",
         _ => "default",
     });
     match &atom.action {
@@ -238,6 +239,17 @@ fn apply_global_inject(ctx: &mut ControlContext, atom: &EffectAtom) {
             let v = scaled_inject_value(ctx, atom, *value);
             if v != 0.0 {
                 ctx.inject.record_manu(family, *recipe, v);
+            }
+        }
+        Action::GlobalInjectManuTaggedEff {
+            value,
+            target_tag,
+            recipe,
+        } => {
+            let v = scaled_inject_value(ctx, atom, *value);
+            if v != 0.0 {
+                ctx.inject
+                    .record_manu_tagged(source_buff_id, target_tag, *recipe, v);
             }
         }
         Action::GlobalInjectKarlanPrecision {

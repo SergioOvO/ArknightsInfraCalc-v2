@@ -206,26 +206,19 @@ pub fn apply_manu_phases(ctx: &mut ManuContext, table: &SkillTable) {
         }
         apply_atom(ctx, atom, &owner, &names);
     }
-    apply_pinus_sylvestris_control(ctx);
+    apply_tagged_control_injects(ctx);
     apply_abyssal_hunters_control(ctx);
 }
 
-fn apply_pinus_sylvestris_control(ctx: &mut ManuContext) {
-    const YANWEI: &str = "焰尾";
-    const VIVIANA: &str = "薇薇安娜";
-    const TAG_PINUS: &str = "cc.g.pinus";
-    const TAG_KNIGHT: &str = "cc.g.knight";
-    let has_yanwei = ctx.layout.control_workforce.iter().any(|n| n == YANWEI);
-    let has_viviana = ctx.layout.control_workforce.iter().any(|n| n == VIVIANA);
+fn apply_tagged_control_injects(ctx: &mut ManuContext) {
+    let rules = ctx.layout.global_inject.manu_tagged().to_vec();
     for op in &mut ctx.operators {
-        if has_yanwei
-            && ctx.active_recipe == RecipeKind::BattleRecord
-            && op.tags.iter().any(|t| t == TAG_PINUS)
-        {
-            op.skill_eff.add(Some(RecipeKind::BattleRecord), 10.0);
-        }
-        if has_viviana && op.tags.iter().any(|t| t == TAG_KNIGHT) {
-            op.skill_eff.add(None, 7.0);
+        for rule in &rules {
+            if rule.recipe.is_none_or(|recipe| recipe == ctx.active_recipe)
+                && op.tags.iter().any(|tag| tag == &rule.target_tag)
+            {
+                op.skill_eff.add(rule.recipe, rule.value);
+            }
         }
     }
 }
@@ -1382,7 +1375,7 @@ mod tests {
             layout: std::sync::Arc::new(br_room.layout.clone()),
         };
         let br = crate::manufacture::solver::solve_manufacture(&br_input, &table).unwrap();
-        // 公孙社区口径 126% = 75 本体 + 60 焰尾 + 21 薇薇安娜；不含人头。
+        // 公孙社区口径 126% = 75 本体 + 30 焰尾 + 21 薇薇安娜；不含人头。
         assert!(
             ((br.skill_efficiency.as_f64() * 100.0) - 126.0).abs() < 1.5,
             "BR prod_total={} prod_skill={} (target skill ~126)",

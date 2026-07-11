@@ -57,6 +57,9 @@ pub(super) fn run_shift_pipeline(
         executed.assignment,
         executed.used,
     );
+    if mode == AssignShiftMode::Peak {
+        place_system_anchors(blueprint, &plan.anchors, &mut run.assignment, &mut run.used)?;
+    }
     timer.mark("编排落位");
 
     // resolve #1：仅 producer 视角快照（无 skill table）。
@@ -93,10 +96,6 @@ pub(super) fn run_shift_pipeline(
             &mut run.assignment,
             &mut run.used,
         );
-        // 迷迭香感知链：消费统一 plan 的 required anchor（迷迭香制造 + 黑键贸易）。
-        // anchor 由 build_plan 中 evaluate_systems 产出并
-        // 与 registry 汇合，pipeline 不再独立判定体系。
-        place_system_anchors(blueprint, &plan.anchors, &mut run.assignment, &mut run.used);
         assign_sphinx_urrbian_dorm_anchor(blueprint, operbox, &mut run.assignment, &mut run.used);
         assign_dorm_producers(
             blueprint,

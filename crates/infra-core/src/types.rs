@@ -324,6 +324,13 @@ pub enum Action {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         recipe: Option<RecipeKind>,
     },
+    /// 中枢注入：只对制造房内带 `target_tag` 的干员增加生产力。
+    GlobalInjectManuTaggedEff {
+        value: f64,
+        target_tag: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        recipe: Option<RecipeKind>,
+    },
     /// 中枢注入：灵知·精密计算。每名同贸易房谢拉格(`cc.g.karlan`)干员
     /// 订单获取效率 `eff_per_karlan`%、订单上限 `limit_per_karlan`（数值按房间组成在贸易域结算）。
     GlobalInjectKarlanPrecision {

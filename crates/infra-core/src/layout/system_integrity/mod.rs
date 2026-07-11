@@ -5,14 +5,16 @@
 
 mod apply;
 mod context;
+mod pinus;
 mod plan;
 mod rosemary;
 
 pub use apply::apply_rosemary_plan;
 pub use context::EvaluateContext;
+pub use pinus::evaluate_pinus;
 pub use plan::{
-    EvaluateResult, OptionalProducer, RosemaryPlan, RosemaryTier, RosemaryVerdict, ShiftBind,
-    SkipReason, SystemAnchor,
+    EvaluateResult, OptionalProducer, PinusPlan, PinusVerdict, RosemaryPlan, RosemaryTier,
+    RosemaryVerdict, ShiftBind, SkipReason, SystemAnchor,
 };
 pub use rosemary::evaluate_rosemary;
 
@@ -20,5 +22,6 @@ pub use rosemary::evaluate_rosemary;
 pub fn evaluate_systems(ctx: &EvaluateContext<'_>) -> EvaluateResult {
     EvaluateResult {
         rosemary: evaluate_rosemary(ctx),
+        pinus: evaluate_pinus(ctx),
     }
 }

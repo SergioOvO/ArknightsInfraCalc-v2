@@ -18,12 +18,21 @@ pub struct GlobalInjectManifest {
     manu_gold_by_family: HashMap<String, f64>,
     manu_battle_record_by_family: HashMap<String, f64>,
     manu_originium_by_family: HashMap<String, f64>,
+    manu_tagged: Vec<TaggedManuInject>,
     /// 灵知·精密计算规则（单一中枢，不与自身叠加）。
     karlan_precision: Option<KarlanPrecision>,
     /// 中枢八幡海铃 E2「家族认可」已进驻（叙拉古但书链段 producer；不含贸易站计数）。
     haru_e2_in_control: bool,
     /// 中枢戴菲恩 E2「运筹好手」已进驻（推王组链段 producer）。
     daifeen_e2_in_control: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaggedManuInject {
+    pub source_buff_id: String,
+    pub target_tag: String,
+    pub recipe: Option<RecipeKind>,
+    pub value: f64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -99,6 +108,25 @@ impl GlobalInjectManifest {
         } else {
             *entry += value;
         }
+    }
+
+    pub fn record_manu_tagged(
+        &mut self,
+        source_buff_id: &str,
+        target_tag: &str,
+        recipe: Option<RecipeKind>,
+        value: f64,
+    ) {
+        self.manu_tagged.push(TaggedManuInject {
+            source_buff_id: source_buff_id.to_string(),
+            target_tag: target_tag.to_string(),
+            recipe,
+            value,
+        });
+    }
+
+    pub fn manu_tagged(&self) -> &[TaggedManuInject] {
+        &self.manu_tagged
     }
 
     /// 记录灵知·精密计算；单一中枢不叠加，取订单上限增益更大的一条。

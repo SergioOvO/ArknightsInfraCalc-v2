@@ -63,9 +63,19 @@ pub fn align_shift_binds_in_halves(
         if rooms.len() < bind.operators.len() {
             continue;
         }
-        let anchor = &rooms[0];
+        let Some(anchor) = rooms
+            .iter()
+            .find(|room| half_contains_room(h1, room) || half_contains_room(h2, room))
+        else {
+            continue;
+        };
         let anchor_in_h1 = half_contains_room(h1, anchor);
-        for wanderer in &rooms[1..] {
+        for wanderer in &rooms {
+            if wanderer == anchor
+                || (!half_contains_room(h1, wanderer) && !half_contains_room(h2, wanderer))
+            {
+                continue;
+            }
             let wanderer_in_h1 = half_contains_room(h1, wanderer);
             if wanderer_in_h1 == anchor_in_h1 {
                 continue;

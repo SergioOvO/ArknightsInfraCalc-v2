@@ -57,13 +57,30 @@ mod tests {
             &std::collections::HashSet::new(),
         )
         .unwrap();
+        assert!(plan
+            .registry_claims
+            .iter()
+            .all(|c| c.system_id != "pinus_sylvestris"));
+        let pinus_anchors: Vec<_> = plan
+            .anchors
+            .iter()
+            .filter(|anchor| anchor.system_id == "pinus_sylvestris")
+            .collect();
+        assert_eq!(pinus_anchors.len(), 5);
         assert!(
-            plan.registry_claims
+            pinus_anchors
                 .iter()
-                .any(|c| c.system_id.starts_with("pinus_sylvestris")),
-            "peak plan 应含红松林: {:?}",
-            plan.registry_system_ids()
+                .filter(|a| a.recipe == Some(crate::types::RecipeKind::BattleRecord))
+                .count()
+                == 3
         );
+        assert!(plan.shift_binds.iter().any(|bind| {
+            ["焰尾", "薇薇安娜", "灰毫", "远牙", "野鬃"]
+                .iter()
+                .all(|name| bind.operators.iter().any(|op| op == name))
+                && bind.on_shifts == 2
+                && bind.off_shifts == 1
+        }));
     }
 
     #[test]
@@ -198,8 +215,7 @@ mod tests {
         )
         .unwrap();
         assert!(plan.anchors.iter().any(|anchor| {
-            anchor.operator == "黑键"
-                && anchor.facility == crate::layout::FacilityKind::TradePost
+            anchor.operator == "黑键" && anchor.facility == crate::layout::FacilityKind::TradePost
         }));
     }
 

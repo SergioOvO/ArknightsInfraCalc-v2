@@ -23,7 +23,7 @@ use crate::skill_table::SkillTable;
 use crate::tier::PromotionTier;
 
 use super::base_rotation::{evaluate_base_assignment_efficiencies, ShiftEfficiencies};
-use super::shift_bind::{align_shift_binds_in_halves, shift_binds_from_plan};
+use super::shift_bind::{shift_binds_from_plan, RuntimeShiftBind};
 
 /// αβγ 三队标签。每班两队上岗、一队休息；设施每班全部满编（不空转）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
@@ -108,26 +108,77 @@ pub struct FacilityHalf {
 }
 
 /// 把全部生产设施（贸易/制造/发电）按同类房间交替切成两半，尽量均衡负载。
-fn split_production_facilities(blueprint: &BaseBlueprint) -> [FacilityHalf; 2] {
+fn split_production_facilities(
+    blueprint: &BaseBlueprint,
+    peak: &BaseAssignment,
+    binds: &[RuntimeShiftBind],
+) -> Result<[FacilityHalf; 2]> {
+    let production_rooms: Vec<RoomId> = blueprint
+        .rooms
+        .iter()
+        .filter(|room| {
+            matches!(
+                room.kind,
+                FacilityKind::TradePost | FacilityKind::Factory | FacilityKind::PowerPlant
+            )
+        })
+        .map(|room| room.id.clone())
+        .collect();
+    let room_kind: HashMap<_, _> = blueprint
+        .rooms
+        .iter()
+        .map(|room| (room.id.clone(), room.kind))
+        .collect();
+    let mut components: Vec<Vec<RoomId>> = production_rooms
+        .iter()
+        .cloned()
+        .map(|room| vec![room])
+        .collect();
+    for bind in binds {
+        let mut bound_rooms = Vec::new();
+        for name in &bind.operators {
+            let room = peak
+                .rooms
+                .iter()
+                .find(|room| room.operators.iter().any(|op| &op.name == name))
+                .ok_or_else(|| {
+                    Error::msg(format!("shift bind operator {name} missing from peak"))
+                })?;
+            if production_rooms.contains(&room.room_id) && !bound_rooms.contains(&room.room_id) {
+                bound_rooms.push(room.room_id.clone());
+            }
+        }
+        if bound_rooms.len() < 2 {
+            continue;
+        }
+        let mut merged = Vec::new();
+        components.retain(|component| {
+            if component.iter().any(|room| bound_rooms.contains(room)) {
+                merged.extend(component.iter().cloned());
+                false
+            } else {
+                true
+            }
+        });
+        merged.sort_by(|a, b| a.0.cmp(&b.0));
+        merged.dedup();
+        components.push(merged);
+    }
+    components.sort_by_key(|component| std::cmp::Reverse(component.len()));
     let mut halves: [FacilityHalf; 2] = Default::default();
-    for (i, room) in blueprint
-        .rooms_of(FacilityKind::TradePost)
-        .iter()
-        .enumerate()
-    {
-        halves[i % 2].trade.push(room.id.clone());
+    for component in components {
+        let load = |half: &FacilityHalf| half.trade.len() + half.manu.len() + half.power.len();
+        let target = usize::from(load(&halves[1]) < load(&halves[0]));
+        for room in component {
+            match room_kind[&room] {
+                FacilityKind::TradePost => halves[target].trade.push(room),
+                FacilityKind::Factory => halves[target].manu.push(room),
+                FacilityKind::PowerPlant => halves[target].power.push(room),
+                _ => unreachable!(),
+            }
+        }
     }
-    for (i, room) in blueprint.rooms_of(FacilityKind::Factory).iter().enumerate() {
-        halves[i % 2].manu.push(room.id.clone());
-    }
-    for (i, room) in blueprint
-        .rooms_of(FacilityKind::PowerPlant)
-        .iter()
-        .enumerate()
-    {
-        halves[i % 2].power.push(room.id.clone());
-    }
-    halves
+    Ok(halves)
 }
 
 /// γ 替补半区：贸易沿用 core role 顺序，制造/发电站绑定搜索。
@@ -717,6 +768,12 @@ fn enumerate_abyssal_counts(
 /// 从编排计划中提取体系绑定的中枢干员名（含 PickOne 候选人）。
 fn system_control_operators(plan: &AssignmentPlan) -> HashSet<String> {
     let mut names = HashSet::new();
+    names.extend(
+        plan.anchors
+            .iter()
+            .filter(|anchor| anchor.facility == FacilityKind::ControlCenter)
+            .map(|anchor| anchor.operator.clone()),
+    );
     for sys in &plan.activated {
         let has_production_slot = sys.slots.iter().any(|slot| {
             let facility = match slot {
@@ -1164,10 +1221,9 @@ pub fn schedule_team_rotation(
     };
     let control_pool = build_control_pool(&operbox.control_roster(instances), instances, table)?;
 
-    let [mut h1, mut h2] = split_production_facilities(blueprint);
     // 班次绑定（上2休1）来自统一 plan，不再硬编码 ROSEMARY_BLACKKEY_BIND。
     let shift_binds = shift_binds_from_plan(&peak_plan);
-    align_shift_binds_in_halves(&peak, &shift_binds, &mut h1, &mut h2);
+    let [h1, h2] = split_production_facilities(blueprint, &peak, &shift_binds)?;
 
     // 3) α/β 从 peak 编制按 H1/H2 切半（保留编排已认领的 meta 锚点）；γ 走贸易 role 替补。
     let alpha = production_half_from_peak(&peak, &h1);
@@ -1308,6 +1364,21 @@ pub fn schedule_team_rotation(
     balance_control_plugin_class(&mut team_ctrl, &entry_by_name, control_entry_trade_inject);
     balance_control_plugin_class(&mut team_ctrl, &entry_by_name, control_entry_manu_inject);
     normalize_control_team_membership(&mut team_ctrl, &production_team_by_name);
+    // 跨设施 shift bind 是最终归属约束，不能被中枢均衡策略再次拆开。
+    for bind in &shift_binds {
+        let Some(team) = bind
+            .operators
+            .iter()
+            .find_map(|name| production_team_by_name.get(name).copied())
+        else {
+            continue;
+        };
+        for name in &bind.operators {
+            if peak_ctrl.contains(name) {
+                move_control_operator_to_team(&mut team_ctrl, name, team);
+            }
+        }
+    }
     for names in team_ctrl.values_mut() {
         names.sort();
         names.dedup();
@@ -1427,7 +1498,34 @@ pub fn schedule_team_rotation(
         // 体系中枢干员是当班硬锚点：先 pin 到 control，再由 assign_control 补满 5 人。
         // 这样薇薇安娜/夕等不在 standalone 中枢白名单内的体系位不会被搜索阶段丢掉。
         let pin_active_system_control = |a: &mut BaseAssignment, extra_control_pins: &[&str]| {
-            let mut ops = a.control_operators();
+            let previous = a.control_operators();
+            let mut required: Vec<String> = active_names
+                .iter()
+                .filter(|name| system_ctrl_names.contains(*name))
+                .cloned()
+                .collect();
+            required.extend(extra_control_pins.iter().map(|name| (*name).to_string()));
+            required.sort();
+            required.dedup();
+            let mut ops = Vec::new();
+            for name in &required {
+                let progress = operbox.progress_of(name).unwrap_or_default();
+                ops.push(AssignedOperator::from_progress(name, progress));
+            }
+            if ops.len() > 5 {
+                return Err(Error::msg(format!(
+                    "active required control anchors exceed capacity: {:?}",
+                    required
+                )));
+            }
+            for op in previous {
+                if ops.len() >= 5 {
+                    break;
+                }
+                if !required.contains(&op.name) {
+                    ops.push(op);
+                }
+            }
             let mut room_names: HashSet<String> = ops.iter().map(|o| o.name.clone()).collect();
             let assigned_names = a.operator_names();
             for name in extra_control_pins {
@@ -1484,13 +1582,14 @@ pub fn schedule_team_rotation(
             if !ops.is_empty() {
                 a.set_room(RoomId::from("control"), ops);
             }
+            Ok::<(), Error>(())
         };
 
         // 从队池分配中枢（池小不报错，有多少填多少）
         let assign_ctrl = |a: &mut BaseAssignment,
                            used: &mut HashSet<String>,
                            extra_control_pins: &[&str]| {
-            pin_active_system_control(a, extra_control_pins);
+            pin_active_system_control(a, extra_control_pins)?;
             *used = a.operator_names();
             let mut final_pool = base_control_pool.clone();
             let present: HashSet<String> =
@@ -3240,5 +3339,50 @@ mod tests {
                 "γ 队不应含 peak meta 干员 {name}"
             );
         }
+    }
+
+    #[test]
+    fn split_keeps_multi_room_production_bind_as_one_component() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let mut peak = BaseAssignment::default();
+        peak.set_room("manu_1", vec![AssignedOperator::new("生产甲", 2)]);
+        peak.set_room("manu_2", vec![AssignedOperator::new("生产乙", 2)]);
+        peak.set_room("manu_3", vec![AssignedOperator::new("生产丙", 2)]);
+        peak.set_room("control", vec![AssignedOperator::new("中枢甲", 2)]);
+        let bind = RuntimeShiftBind {
+            operators: ["生产甲", "生产乙", "生产丙", "中枢甲"]
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            on_shifts: 2,
+            off_shifts: 1,
+        };
+
+        let [h1, h2] = split_production_facilities(&blueprint, &peak, &[bind]).unwrap();
+        let bound = [
+            RoomId::from("manu_1"),
+            RoomId::from("manu_2"),
+            RoomId::from("manu_3"),
+        ];
+        assert!(
+            bound.iter().all(|room| h1.manu.contains(room))
+                || bound.iter().all(|room| h2.manu.contains(room)),
+            "multi-room bind was split: h1={:?}, h2={:?}",
+            h1.manu,
+            h2.manu
+        );
+    }
+
+    #[test]
+    fn split_rejects_bind_member_missing_from_peak() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let peak = BaseAssignment::default();
+        let bind = RuntimeShiftBind {
+            operators: vec!["不存在".into(), "也不存在".into()],
+            on_shifts: 2,
+            off_shifts: 1,
+        };
+        let error = split_production_facilities(&blueprint, &peak, &[bind]).unwrap_err();
+        assert!(error.to_string().contains("missing from peak"));
     }
 }

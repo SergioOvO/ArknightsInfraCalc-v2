@@ -5336,7 +5336,20 @@
       "skill_name": "烛骑士微光",
       "facility": "control",
       "tier": "tier_up",
-      "atoms": []
+      "atoms": [
+        {
+          "id": "control_prod_fraction[000]:knight_manu",
+          "action": {
+            "kind": "global_inject_manu_tagged_eff",
+            "params": {
+              "value": 7,
+              "target_tag": "cc.g.knight"
+            }
+          },
+          "phase": "global_inject",
+          "phase_order": 10
+        }
+      ]
     },
     {
       "id": "control_dorm_bd[000]",
@@ -5563,7 +5576,21 @@
       "skill_name": "红松的骑士",
       "facility": "control",
       "tier": "tier_up",
-      "atoms": []
+      "atoms": [
+        {
+          "id": "control_mp_psk[000]:pinus_battle_record",
+          "action": {
+            "kind": "global_inject_manu_tagged_eff",
+            "params": {
+              "value": 10,
+              "target_tag": "cc.g.pinus",
+              "recipe": "battle_record"
+            }
+          },
+          "phase": "global_inject",
+          "phase_order": 10
+        }
+      ]
     },
     {
       "id": "control_mp_cost[008]",

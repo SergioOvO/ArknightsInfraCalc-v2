@@ -4,6 +4,7 @@ use crate::layout::blueprint::{FacilityKind, RoomId};
 use crate::layout::shift::AssignShiftMode;
 use crate::layout::system::{RegistrySystemClaim, SlotFillMode};
 use crate::layout::tier::OperatorTier;
+use crate::types::RecipeKind;
 use std::collections::HashSet;
 
 /// 单个 slot 的落位方式（Phase 0 以 fixed / optional 为主；bond / core 在 Phase 2+ 扩展）。
@@ -65,6 +66,8 @@ pub struct SystemAnchor {
     pub facility: FacilityKind,
     /// `None` = 该设施类型首个空房，不绑定具体 `room_id`。
     pub room_id: Option<RoomId>,
+    /// 制造 anchor 的配方约束；非制造设施为 `None`。
+    pub recipe: Option<RecipeKind>,
     pub fill_policy: AnchorFillPolicy,
 }
 
