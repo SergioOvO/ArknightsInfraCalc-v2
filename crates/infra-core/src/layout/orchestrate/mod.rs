@@ -202,16 +202,10 @@ mod tests {
             "但书+迷迭香绑定上下文应含可露希尔黑键站: {:?}",
             plan.registry_system_ids()
         );
-        assert!(
-            plan.registry_claims
-                .iter()
-                .any(|c| c.system_id == "syracusa_pair"),
-            "peak plan 应与叙拉古同站 meta 共存"
-        );
     }
 
     #[test]
-    fn build_plan_peak_ideal_e2_activates_syracusa_pair() {
+    fn build_plan_does_not_reserve_docus_trade_teammates() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = OperBox::load(
             &crate::skill_table::data_path("schedule_243/operbox_ideal_e2.json").unwrap(),
@@ -231,21 +225,10 @@ mod tests {
         assert!(
             plan.registry_claims
                 .iter()
-                .any(|c| c.system_id == "syracusa_pair"),
-            "应选型叙拉古同站 meta: {:?}",
+                .any(|claim| claim.system_id == "syracusa_cross_station"),
+            "应选中叙拉古跨站体系: {:?}",
             plan.registry_claims
-                .iter()
-                .map(|c| &c.system_id)
-                .collect::<Vec<_>>()
         );
-        assert!(
-            !plan
-                .registry_claims
-                .iter()
-                .any(|c| c.system_id == "ling_jie_karlan"),
-            "exclusive_group 应优先但书链而非灵知喀兰"
-        );
-        assert!(!plan.activated.is_empty());
     }
 
     #[test]
@@ -275,13 +258,15 @@ mod tests {
             &BaseAssignment::default(),
         )
         .unwrap();
+        for name in ["但书", "伺夜", "贝洛内"] {
+            assert!(
+                !executed.used.contains(name),
+                "execute_plan 不应提前占用贸易自由搜索干员 {name}"
+            );
+        }
         assert!(
-            executed
-                .assignment
-                .rooms
-                .iter()
-                .any(|r| r.operators.iter().any(|o| o.name == "但书")),
-            "execute 应落位但书链"
+            executed.used.contains("八幡海铃"),
+            "跨站体系应固定八幡海铃中枢 producer"
         );
     }
 

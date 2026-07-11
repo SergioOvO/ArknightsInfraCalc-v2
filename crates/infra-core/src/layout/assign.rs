@@ -998,7 +998,7 @@ mod tests {
     }
 
     #[test]
-    fn assign_ideal_e2_peak_claims_syracusa_pair_system() {
+    fn assign_ideal_e2_peak_keeps_docus_as_trade_search_core() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = OperBox::load(
             &crate::skill_table::data_path("schedule_243/operbox_ideal_e2.json").unwrap(),
@@ -1024,12 +1024,11 @@ mod tests {
             },
         )
         .unwrap();
-        // 叙拉古同站 meta 由 registry 锚定；但书同站三级组合只作为 shortcut 命中。
-        let syracusa_room = assignment.rooms.iter().find(|r| {
-            r.operators.iter().any(|o| o.name == "伺夜")
-                && r.operators.iter().any(|o| o.name == "贝洛内")
-        });
-        assert!(syracusa_room.is_some(), "伺夜+贝洛内应锚定同一贸易站");
+        let docus_room = assignment
+            .rooms
+            .iter()
+            .find(|r| r.operators.iter().any(|o| o.name == "但书"));
+        assert!(docus_room.is_some(), "精二但书应作为贸易搜索第一核心");
 
         let control_ops = assignment.control_operators();
         let control: HashSet<_> = control_ops.iter().map(|o| o.name.as_str()).collect();
@@ -1057,7 +1056,7 @@ mod tests {
     }
 
     #[test]
-    fn assign_252_keeps_syracusa_pair_and_puts_docus_in_lv2_trade() {
+    fn assign_252_puts_docus_in_lv2_trade_without_reserving_teammates() {
         let blueprint =
             BaseBlueprint::load(&crate::skill_table::data_path("layout/252.json").unwrap())
                 .unwrap();
@@ -1096,27 +1095,6 @@ mod tests {
             docus_blueprint.level, 2,
             "但书应优先进入二级贸易站: {:?}",
             docus_room
-        );
-
-        let syracusa_room = assignment
-            .rooms
-            .iter()
-            .find(|r| {
-                r.operators.iter().any(|o| o.name == "伺夜")
-                    && r.operators.iter().any(|o| o.name == "贝洛内")
-            })
-            .expect("伺夜+贝洛内应同站");
-        let syracusa_blueprint = blueprint.room(&syracusa_room.room_id).unwrap();
-        assert_eq!(syracusa_blueprint.kind, FacilityKind::TradePost);
-        assert_eq!(
-            syracusa_blueprint.level, 3,
-            "伺夜+贝洛内应保留在三级贸易站: {:?}",
-            syracusa_room
-        );
-        assert!(
-            !syracusa_room.operators.iter().any(|o| o.name == "但书"),
-            "252 中但书不应抢占伺夜+贝洛内三级站: {:?}",
-            syracusa_room
         );
     }
 

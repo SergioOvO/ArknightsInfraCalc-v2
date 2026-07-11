@@ -314,7 +314,6 @@ Rows below are candidates for human review only. They are selected by coupling t
 | pinus_sylvestris_battle_manu4 | 焰尾, 砾, 薇薇安娜 | 6 | 2 | 制造站, 加工站, 控制中枢 |
 | snhunt_monhun_control | 火龙S黑角, 麒麟R夜刀 | 4 | 4 | 控制中枢 |
 | standardization_mizuki | 水月 | 2 | 1 | 制造站 |
-| syracusa_pair | 伺夜, 八幡海铃, 贝洛内 | 7 | 6 | 会客室, 控制中枢, 贸易站 |
 | vina_lungmen | 戴菲恩, 推进之王, 摩根, 维娜·维多利亚 | 8 | 6 | 办公室, 宿舍, 控制中枢, 贸易站 |
 | witch_long_beta | 巫恋, 龙舌兰 | 4 | 2 | 贸易站 |
 
@@ -477,4 +476,3 @@ These rows are runtime-scope entries with coarse coverage gaps and coupling/high
 - Draft seed: `data/feedback_regression_seeds/purestream_weedy_windflit_gold_automation.json` captures preferred pattern `清流 + 温蒂 + 冬时`, linked producer `承曦格雷伊`, and max regret tolerance.
 - Add a trace expectation that explains whether a system candidate was selected by near-optimal preference or rejected by raw-score gap/operator conflict.
 - Use the high-risk model-gap table to choose manual audits for cross-room/global tokens before adding any runtime rule.
-

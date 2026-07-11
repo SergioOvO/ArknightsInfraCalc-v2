@@ -100,7 +100,7 @@ crates/infra-core/src/layout/orchestrate/
 
 | 值 | 含义 | Executor |
 |----|------|----------|
-| `fixed` | 整包落位 | 直接 `set_room`（例：伺夜+贝洛内同站 meta；但书三人组只作为三级站 shortcut 命中） |
+| `fixed` | 整包落位 | 直接 `set_room`；不用于但书、伺夜或贝洛内，三者全部由贸易搜索决定 |
 | `bond` | 二人锁死 + 第三人 | 固定 A+B，`pick_one` 填第三（例：德 E0+拉普兰德 **或** 能天使+蕾缪安；同干员不同 tier 须分叉 System） |
 | `core` | 单人锚 + segment 池补满 | 仅用于未来非感知散件锚点；**黑键不走此路径** |
 | `pick_one` | 列表选一 | 第一个可用干员 |
@@ -128,7 +128,7 @@ crates/infra-core/src/layout/orchestrate/
 
 | id / role | 类型 | L3 shortcut | 当前运行时 |
 |-----------|------|-------------|------------|
-| `syracusa_pair` + role `docus` | 跨站同房 meta + 但书核心优先 | `gsl_docus_syracusa` / `gsl_docus_solo` | 精二但书独立作为全贸易站第一核心，优先进空二级金单站，并在包含但书的全部候选中按最终效率选最高组合；shortcut 只负责结算 |
+| `syracusa_cross_station` + role `docus` | 跨站成员 + 但书核心优先 | `gsl_docus_syracusa` / `gsl_docus_solo` | 八幡海铃固定中枢；伺夜/贝洛内是独立贸易 `search` 成员、不要求同站；但书先按最终效率自由选队友，剩余跨站成员再进入其余贸易站 |
 | `closure` | 可露希尔核心优先 | `gsl_blackkey_closure` / `gsl_closure_*` | 强制包含可露希尔；优先黑键可露锚点，缺黑键仍保留可露 |
 | `witch` / `witch_fallback` | 龙巫 / 巫恋兜底 | `gsl_witch_*` | `witch` 强制包含精二巫恋 + 龙舌兰；无龙舌兰时 `witch_fallback` 低于推王组，只做巫恋兜底 |
 | `ling_jie_karlan` | control producer + L1 自然搜索 | `gsl_ling_jie_yaxin` 仅参考 | 只认领灵知 E2 中枢；精1孑由贸易搜索注入 |
@@ -145,7 +145,7 @@ crates/infra-core/src/layout/orchestrate/
 4. `meta_vina`：戴菲恩 producer 激活时命中推王 + 摩根 + 维娜，优先级高于灵知孑与无龙舌兰巫恋兜底。
 5. `witch_fallback` / `karlan` / `penguin` / plain：无龙舌兰巫恋兜底、灵知孑、企鹅、散件工具人三人组，且排除黑键与巫恋同房冲突。
 
-这条顺序是核心优先策略，不是固定三人组优先级。八幡海铃 + 伺夜/贝洛内是独立的跨同站 meta；但书+伺夜+贝洛内只是可能被最高效率搜索选中的三级贸易站 shortcut。
+这条顺序是核心优先策略，不是固定三人组优先级。八幡海铃只提供中枢 producer 条件；伺夜、贝洛内要求进入贸易域但不要求同站；但书仍先自由搜索最高效率队友，三者同房只是可能自然选中的 shortcut。
 
 #### Phase 2 待建（贸易 bond）
 

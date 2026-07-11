@@ -257,13 +257,9 @@ struct BaseSystemsCache {
 
 static BASE_SYSTEMS_CACHE: OnceLock<Option<BaseSystemsCache>> = OnceLock::new();
 
-const SYRACUSA_PAIR_SYSTEM: &str = "syracusa_pair";
-const BLACKKEY_CLOSURE_SYSTEM: &str = "blackkey_closure";
-const ROSEMARY: &str = "迷迭香";
 const BLACKKEY: &str = "黑键";
 const CLOSURE: &str = "可露希尔";
 const JIXING: &str = "吉星";
-const MIN_PERCEPTION_SOURCES: &[&str] = &["絮雨", "八幡海铃", "焰狐龙梓兰"];
 
 pub fn load_base_systems(path: &Path) -> Result<BaseSystemsFile> {
     let raw = std::fs::read_to_string(path)?;
@@ -643,7 +639,7 @@ fn select_tier(
     skip_system_ids: &HashSet<String>,
     out: &mut Vec<RegistrySystemClaim>,
 ) {
-    for system in systems_for_tier(cache, tier, operbox, out) {
+    for system in systems_by_tier_and_priority(cache, tier) {
         if skip_system_ids.contains(&system.id) {
             continue;
         }
@@ -681,7 +677,7 @@ fn explain_tier(
     selected: &mut Vec<RegistrySystemClaim>,
     out: &mut Vec<SystemExplainEntry>,
 ) {
-    for system in systems_for_tier(cache, tier, operbox, selected) {
+    for system in systems_by_tier_and_priority(cache, tier) {
         if skip_system_ids.contains(&system.id) {
             out.push(system_explain_entry(
                 system,
@@ -778,52 +774,6 @@ fn systems_by_tier_and_priority(
     list
 }
 
-fn systems_for_tier<'a>(
-    cache: &'a BaseSystemsCache,
-    tier: OperatorTier,
-    operbox: &OperBox,
-    selected: &[RegistrySystemClaim],
-) -> Vec<&'a BaseSystemDef> {
-    let mut list = systems_by_tier_and_priority(cache, tier);
-    if tier == OperatorTier::SameStation && docus_closure_long_shift_active(operbox, selected) {
-        list.sort_by(|a, b| {
-            contextual_same_station_priority(b, true)
-                .cmp(&contextual_same_station_priority(a, true))
-        });
-    }
-    list
-}
-
-fn contextual_same_station_priority(system: &BaseSystemDef, docus_closure_long_shift: bool) -> i32 {
-    if docus_closure_long_shift && system.id == BLACKKEY_CLOSURE_SYSTEM {
-        return 17;
-    }
-    system.priority
-}
-
-/// Legacy registry 兼容路径：若直接调用 `claim_base_systems`，且叙拉古同站 meta 已认领、
-/// 迷迭香/黑键绑定链可用，则旧 fixed registry 会优先认领可露希尔+黑键+吉星。
-///
-/// 主路径 `assign_shift` 已跳过这些 role-managed 贸易 registry，由 `trade_segments.roles`
-/// 执行但书 -> 可露希尔 -> 巫恋的核心优先策略。
-fn docus_closure_long_shift_active(operbox: &OperBox, selected: &[RegistrySystemClaim]) -> bool {
-    selected
-        .iter()
-        .any(|claim| claim.system_id == SYRACUSA_PAIR_SYSTEM)
-        && owns_e2(operbox, "但书")
-        && owns_e2(operbox, ROSEMARY)
-        && owns_e2(operbox, BLACKKEY)
-        && owns_e2(operbox, CLOSURE)
-        && owns_e2(operbox, JIXING)
-        && MIN_PERCEPTION_SOURCES
-            .iter()
-            .any(|name| operbox.elite_of(name).is_some_and(|elite| elite >= 2))
-}
-
-fn owns_e2(operbox: &OperBox, name: &str) -> bool {
-    operbox.elite_of(name).is_some_and(|elite| elite >= 2)
-}
-
 /// 将 `RegistrySystemClaim` 写入编制。
 pub fn apply_registry_system_claim(
     blueprint: &BaseBlueprint,
@@ -832,6 +782,9 @@ pub fn apply_registry_system_claim(
     used: &mut HashSet<String>,
 ) -> Result<()> {
     for slot in &claim.slots {
+        if slot.fill == SlotFillMode::Search {
+            continue;
+        }
         let ops: Vec<AssignedOperator> = slot
             .operators
             .iter()
@@ -1045,6 +998,9 @@ fn apply_registry_claim_to_assignment(
     used: &mut HashSet<String>,
 ) {
     for slot in &claim.slots {
+        if slot.fill == SlotFillMode::Search {
+            continue;
+        }
         for op in &slot.operators {
             used.insert(op.name.clone());
         }
@@ -1097,7 +1053,11 @@ mod tests {
     fn base_systems_registry_loads_curated_groups() {
         let cache = base_systems_cache().expect("base_systems loaded");
         let ids: HashSet<_> = cache.systems.iter().map(|s| s.id.as_str()).collect();
-        assert!(ids.contains("syracusa_pair"));
+        assert!(
+            !ids.contains("syracusa_pair"),
+            "叙拉古队友已迁移到但书贸易自由搜索"
+        );
+        assert!(ids.contains("syracusa_cross_station"));
         assert!(
             !ids.contains("rosemary_perception"),
             "迷迭香感知链走代码化体系层（system_integrity），不进 registry"
@@ -1172,7 +1132,7 @@ mod tests {
     }
 
     #[test]
-    fn claim_syracusa_pair_on_ideal_e2_peak() {
+    fn registry_does_not_claim_docus_trade_teammates() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = ideal_e2_operbox();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
@@ -1192,24 +1152,9 @@ mod tests {
         )
         .unwrap();
 
-        let control: HashSet<_> = assignment
-            .control_operators()
-            .into_iter()
-            .map(|o| o.name)
-            .collect();
-        assert!(control.contains("八幡海铃"));
-        assert!(
-            control.contains("斩业星熊") && control.contains("诗怀雅"),
-            "龙门制造中枢应与叙拉古中枢同室认领: {:?}",
-            control
-        );
-
-        let syracusa_room = assignment.rooms.iter().any(|r| {
-            !r.operators.iter().any(|o| o.name == "但书")
-                && r.operators.iter().any(|o| o.name == "伺夜")
-                && r.operators.iter().any(|o| o.name == "贝洛内")
-        });
-        assert!(syracusa_room, "伺夜+贝洛内应作为叙拉古同站 meta 被认领");
+        assert!(!used.contains("伺夜"), "伺夜必须留给贸易搜索");
+        assert!(!used.contains("贝洛内"), "贝洛内必须留给贸易搜索");
+        assert!(used.contains("八幡海铃"), "八幡海铃应固定进入中枢");
     }
 
     #[test]

@@ -162,6 +162,7 @@ pub(super) fn assign_trade_remainder(
     layout: &LayoutContext,
     gold_lines: u32,
     options: &AssignBaseOptions,
+    search_anchors: &[String],
     assignment: &mut BaseAssignment,
     used: &mut HashSet<String>,
 ) -> Result<()> {
@@ -179,9 +180,34 @@ pub(super) fn assign_trade_remainder(
         let order = trade_order_from_room(room)?;
         let existing = assignment.operators_in(&room.id);
         let hit = if existing.is_empty() {
-            pick_trade_meta_then_plain(
-                pool, table, layout, gold_lines, options, order, room.level, used,
-            )
+            let missing_search_anchors: Vec<_> = search_anchors
+                .iter()
+                .filter(|name| !used.contains(name.as_str()))
+                .cloned()
+                .collect();
+            let docus_pending = pool
+                .entry(DOCUS_TRADE_NAME)
+                .is_some_and(|entry| entry.elite >= 2)
+                && !used.contains(DOCUS_TRADE_NAME);
+            if order == TradeOrderKind::Gold && !docus_pending && !missing_search_anchors.is_empty()
+            {
+                pick_trade_hit(
+                    pool,
+                    table,
+                    trade_room_options(layout, gold_lines, options, order, room.level),
+                    SearchTripleFilter {
+                        must_include_names: missing_search_anchors,
+                        hit_filter: Some(trade_hit_ok_for_greedy),
+                        ..SearchTripleFilter::default()
+                    },
+                    used,
+                    options.top_k,
+                )
+            } else {
+                pick_trade_meta_then_plain(
+                    pool, table, layout, gold_lines, options, order, room.level, used,
+                )
+            }
         } else {
             let anchors: Vec<_> = existing.iter().map(|op| op.name.clone()).collect();
             pick_trade_hit(

@@ -33,8 +33,8 @@
   ],
   "systems": [
     {
-      "id": "syracusa_pair",
-      "label": "叙拉古同站 meta：伺夜+贝洛内（中枢八幡海铃E2；但书三级同站仅作为 shortcut 命中）",
+      "id": "syracusa_cross_station",
+      "label": "叙拉古跨站：八幡海铃中枢，伺夜/贝洛内进入贸易搜索（不要求同站）",
       "tier": "cross_station",
       "priority": 20,
       "segment_id": "docus_syracusa",
@@ -47,10 +47,13 @@
         },
         {
           "facility": "trade_post",
-          "operators": [
-            { "name": "伺夜", "elite": 2 },
-            { "name": "贝洛内", "elite": 2 }
-          ]
+          "fill": "search",
+          "operators": [{ "name": "伺夜", "elite": 2 }]
+        },
+        {
+          "facility": "trade_post",
+          "fill": "search",
+          "operators": [{ "name": "贝洛内", "elite": 2 }]
         }
       ]
     },

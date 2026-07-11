@@ -2713,14 +2713,23 @@ mod tests {
         )
         .unwrap();
         assert_eq!(report.peak_plan.mode, AssignShiftMode::Peak);
-        if operbox.owns("伺夜") && operbox.owns("贝洛内") {
+        assert!(
+            !report
+                .peak_plan
+                .registry_system_ids()
+                .contains(&"syracusa_pair"),
+            "叙拉古贸易队友不应再由 peak registry 认领"
+        );
+        if ["八幡海铃", "伺夜", "贝洛内"]
+            .iter()
+            .all(|name| operbox.elite_of(name).is_some_and(|elite| elite >= 2))
+        {
             assert!(
                 report
                     .peak_plan
                     .registry_system_ids()
-                    .contains(&"syracusa_pair"),
-                "peak_plan 应含叙拉古同站 meta: {:?}",
-                report.peak_plan.registry_system_ids()
+                    .contains(&"syracusa_cross_station"),
+                "peak plan 应包含叙拉古跨站体系"
             );
         }
     }
@@ -2892,7 +2901,7 @@ mod tests {
     }
 
     #[test]
-    fn team_rotation_docus_and_blackkey_closure_share_12h_shift() {
+    fn team_rotation_keeps_docus_and_syracusa_cross_station_members() {
         use crate::operbox::default_operbox_full_e2_path;
 
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
@@ -2928,21 +2937,26 @@ mod tests {
             })
             .collect();
         assert!(
-            trade_rooms.iter().any(|r| {
-                ["但书", "伺夜", "贝洛内"]
-                    .iter()
-                    .all(|name| r.operators.iter().any(|o| o.name == *name))
-            }),
+            trade_rooms
+                .iter()
+                .any(|r| r.operators.iter().any(|o| o.name == "但书")),
             "12h 班应包含但书站: {:?}",
             trade_rooms
         );
         assert!(
             trade_rooms.iter().any(|r| {
-                ["可露希尔", "黑键", "吉星"]
+                ["伺夜", "贝洛内"]
                     .iter()
                     .all(|name| r.operators.iter().any(|o| o.name == *name))
             }),
-            "12h 班应包含可露希尔黑键吉星站: {:?}",
+            "12h 班应包含叙拉古跨站贸易成员: {:?}",
+            trade_rooms
+        );
+        assert!(
+            trade_rooms
+                .iter()
+                .any(|r| r.operators.iter().any(|o| o.name == "可露希尔")),
+            "12h 班应保留可露希尔核心: {:?}",
             trade_rooms
         );
     }

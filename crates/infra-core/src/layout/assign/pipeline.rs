@@ -132,6 +132,16 @@ pub(super) fn run_shift_pipeline(
         &mut manu_pool,
     );
     let gold_lines = blueprint.gold_manu_line_count();
+    let trade_search_anchors: Vec<String> = plan
+        .registry_claims
+        .iter()
+        .flat_map(|claim| &claim.slots)
+        .filter(|slot| {
+            slot.facility == crate::layout::FacilityKind::TradePost
+                && slot.fill == crate::layout::system::SlotFillMode::Search
+        })
+        .flat_map(|slot| slot.operators.iter().map(|op| op.name.clone()))
+        .collect();
     // forbid-same-room 约束（迷迭香 ≠ 清流/温蒂同制造站）从统一 plan 提取，供 anchor 房搜索排除。
     let forbid_same_room = forbid_same_room_pairs(plan);
     timer.mark("建池");
@@ -159,6 +169,7 @@ pub(super) fn run_shift_pipeline(
                 &trade_layout,
                 gold_lines,
                 options,
+                &trade_search_anchors,
                 &mut run.assignment,
                 &mut run.used,
             )?;
