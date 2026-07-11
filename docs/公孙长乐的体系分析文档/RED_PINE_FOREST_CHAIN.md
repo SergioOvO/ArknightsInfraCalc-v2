@@ -1,10 +1,11 @@
 # 红松林体系论证（公孙长乐 × InfraCalc）
 
-> 状态：**初稿完成** | 待确认项：无（2026-06-15 公孙已回答全部问题）
+> 状态：**严格实现审计与修复完成**（2026-07-12） | 业务口径已由公孙逐项确认
 > 对齐布局：含至少一条作战记录制造线的布局；不固定 room id
 > 对齐 operbox：含焰尾 E2 + 薇薇安娜 E2，以及灰毫 E2 / 远牙 E2 / 野鬃 E2 中至少两名
 > 对齐班次：体系全员由 `shift_bind` 保证同队上 2 休 1；不固定班次编号
-> 最后更新：2026-06-15
+> 实现提交：`9ca679a`（体系编排）+ `53060b8`（反例回归与多 anchor 修复）
+> 最后更新：2026-07-12
 
 ---
 
@@ -255,6 +256,18 @@
 ### 9.3 已废弃方案
 
 以下历史方案不得恢复：按 `manu_1`/`manu_3` 固定房号、强制三名红松同房、把砾作为硬核心、仅焰尾的低优先级 variant，以及依赖 `used` 碰巧形成轮休。
+
+### 9.4 完成证明
+
+| 不变量 | 代码保证 | 删除的冲突 | 回归与端到端结果 |
+|--------|----------|------------|------------------|
+| 缺焰尾 E2 或薇薇安娜 E2 关闭；红松制造成员少于 2 人关闭 | `evaluate_pinus` 是唯一激活判定 | 删除 `base_systems.json` 中重复红松条目和无薇薇安娜 variant | `system_integrity::pinus` 覆盖满配、两人档和缺核心关闭 |
+| 实际拥有的 2/3 名红松制造成员全部进入作战记录站，可同房或跨站 | `PinusPlan.manufacture_anchors` 生成 recipe anchor；通用 manufacture fill 保留同房全部 anchor | 删除固定 `manu_1`/`manu_3` 与强制三人同房语义；修正 fill 只保留首个 anchor 的覆盖路径 | `team_rotation_pinus_two_manufacturers_end_to_end` 验证最低人数；`team_rotation_pinus_three_manufacturers_span_battle_record_rooms` 强制三人跨两个经验站 |
+| 焰尾、薇薇安娜和纳入的红松制造成员同队上 2 休 1 | `PinusPlan.shift_bind` 经统一 `AssignmentPlan` 进入 rotation | 删除依赖 `used` 和搜索顺序碰巧同队的路径 | 两个 team-rotation 端到端测试均逐人断言工作两班、休息一班 |
+| 满配作战记录效率 126%，焰尾对红松成员赤金为 -10% | tagged manufacture inject 按 `buff_id`、tag 和 recipe 结算 | 删除制造 L1 按中文名识别体系技能的旧分支 | `pinus_sylvestris_br_room_126_and_gravel_gold_42` 同时锚定作战记录 126% 和红松成员赤金 66% |
+| 砾不绑定，由制造搜索自然决定 | 砾不进入 `PinusPlan` 的 anchor 或 bind | 删除砾硬核心、固定赤金房和班次绑定 | 端到端验收不要求砾出现；标准 CLI 中可由普通搜索自然上岗 |
+
+根因位于体系声明和制造补位边界：旧模型没有统一表达 required anchor、配方作用域与全员轮换，且多 anchor 房在 fill 时可能只保留首人。满配样例中，被覆盖成员可能又被效率搜索选回，因此结果看似正确但没有结构保证。现在 `PinusPlan -> AssignmentPlan` 是体系语义的单一事实源，通用 manufacture fill 只负责忠实消费全部 recipe anchor。
 
 ---
 
