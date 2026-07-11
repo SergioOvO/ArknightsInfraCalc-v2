@@ -47,10 +47,19 @@ impl GlobalInjectManifest {
     }
 
     pub fn manu_global_flat_eff_pct(&self) -> f64 {
-        self.manu_all_by_family
+        let value = self
+            .manu_all_by_family
             .get(INJECT_FAMILY_MANU_GLOBAL_ALL)
             .copied()
-            .unwrap_or(0.0)
+            .unwrap_or(0.0);
+        // The generic control-center effect is +2%. Hoshiguma the
+        // Breacher's conditional +3% occupies the same max-of-family slot,
+        // but is a cross-operator skill and must remain in displayed output.
+        if (value - 2.0).abs() < f64::EPSILON {
+            value
+        } else {
+            0.0
+        }
     }
 
     pub fn manu_eff_for(&self, recipe: RecipeKind) -> f64 {
@@ -124,6 +133,22 @@ impl GlobalInjectManifest {
 
     pub fn daifeen_e2_in_control(&self) -> bool {
         self.daifeen_e2_in_control
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn displayed_manu_flat_excludes_generic_two_but_keeps_hoshiguma_three() {
+        let mut inject = GlobalInjectManifest::default();
+        inject.record_manu(INJECT_FAMILY_MANU_GLOBAL_ALL, None, 2.0);
+        assert_eq!(inject.manu_global_flat_eff_pct(), 2.0);
+
+        inject.record_manu(INJECT_FAMILY_MANU_GLOBAL_ALL, None, 3.0);
+        assert_eq!(inject.manu_global_flat_eff_pct(), 0.0);
+        assert_eq!(inject.manu_eff_for(RecipeKind::Gold), 3.0);
     }
 }
 
