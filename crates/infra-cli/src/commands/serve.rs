@@ -207,6 +207,7 @@ struct PlanResult {
     daily_trade_efficiency: infra_core::Efficiency,
     daily_manufacture_efficiency: infra_core::Efficiency,
     daily_power_efficiency: infra_core::Efficiency,
+    shifts: Vec<infra_core::schedule::TeamShiftResult>,
 }
 
 fn handle_request(state: &ServeState, line: &str) -> ServeResponse<serde_json::Value> {
@@ -326,6 +327,7 @@ fn handle_plan(state: &ServeState, params: serde_json::Value) -> Result<serde_js
         daily_trade_efficiency: current.rotation.daily.trade,
         daily_manufacture_efficiency: current.rotation.daily.manufacture,
         daily_power_efficiency: current.rotation.daily.power,
+        shifts: current.rotation.shifts.clone(),
     };
     serde_json::to_value(result).map_err(Error::from)
 }
