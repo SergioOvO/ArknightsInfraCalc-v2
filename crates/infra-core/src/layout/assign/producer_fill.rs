@@ -87,7 +87,7 @@ pub(super) fn assign_dorm_producers(
 /// 落位统一 plan 的体系 anchor（核心干员入房 + 计 used，队友留给后续 fill 补齐）。
 ///
 /// 代码化体系层（如迷迭香）与 registry 汇合到 `AssignmentPlan.anchors` 后由本函数消费：
-/// 迷迭香制造 anchor 落「首个空 factory」或指定 `room_id`；黑键不在此（走贸易贪心）。
+/// 迷迭香制造 anchor 与黑键贸易 anchor 均为 required core；队友由后续设施 fill 补齐。
 /// producer（夕/絮雨/爱丽丝/车尔尼）已由 `place_system_producers` 落位，不在此重复。
 pub(super) fn place_system_anchors(
     blueprint: &BaseBlueprint,

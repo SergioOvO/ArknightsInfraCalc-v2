@@ -70,7 +70,7 @@ mod tests {
     fn build_plan_peak_ideal_e2_does_not_registry_claim_rosemary() {
         // 迷迭香感知链走代码化体系层（system_integrity），不再作为 registry 体系。
         // build_plan 把代码化产出汇合进统一 plan 的 anchors/degradations/shift_binds，
-        // 但不进 registry_claims；黑键走贸易贪心 + 上2休1 绑定。
+        // 但不进 registry_claims；迷迭香与黑键作为统一 plan 的 required anchors。
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = OperBox::load(
             &crate::skill_table::data_path("schedule_243/operbox_ideal_e2.json").unwrap(),
@@ -114,7 +114,7 @@ mod tests {
             &std::collections::HashSet::new(),
         )
         .unwrap();
-        // 迷迭香制造 anchor 汇入 plan.anchors；黑键不锚定。
+        // 两名硬核心都必须作为 required anchor 汇入 plan。
         assert!(
             plan.anchors.iter().any(|a| a.operator == "迷迭香"
                 && a.facility == crate::layout::blueprint::FacilityKind::Factory),
@@ -122,8 +122,10 @@ mod tests {
             plan.anchors
         );
         assert!(
-            !plan.anchors.iter().any(|a| a.operator == "黑键"),
-            "黑键不应锚定（走贸易贪心）"
+            plan.anchors.iter().any(|a| a.operator == "黑键"
+                && a.facility == crate::layout::blueprint::FacilityKind::TradePost),
+            "应含黑键贸易 anchor: {:?}",
+            plan.anchors
         );
         // 上2休1 shift_bind 汇入 plan.shift_binds。
         assert!(
@@ -178,7 +180,7 @@ mod tests {
     }
 
     #[test]
-    fn build_plan_peak_ideal_e2_claims_blackkey_closure_with_docus() {
+    fn build_plan_peak_ideal_e2_requires_blackkey_trade_anchor() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = OperBox::load(
             &crate::skill_table::data_path("schedule_243/operbox_ideal_e2.json").unwrap(),
@@ -195,13 +197,10 @@ mod tests {
             &std::collections::HashSet::new(),
         )
         .unwrap();
-        assert!(
-            plan.registry_claims
-                .iter()
-                .any(|c| c.system_id == "blackkey_closure"),
-            "但书+迷迭香绑定上下文应含可露希尔黑键站: {:?}",
-            plan.registry_system_ids()
-        );
+        assert!(plan.anchors.iter().any(|anchor| {
+            anchor.operator == "黑键"
+                && anchor.facility == crate::layout::FacilityKind::TradePost
+        }));
     }
 
     #[test]

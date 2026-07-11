@@ -8,8 +8,7 @@ use crate::layout::blueprint::{BaseBlueprint, FacilityKind, RoomId};
 
 use super::plan::{OptionalProducer, RosemaryPlan, SystemAnchor};
 
-/// 迷迭香链计划：钉制造锚点 + 可选 producer（缺房/满员时静默跳过 optional）。
-/// 黑键不进贸易锚点，由 resolve 后贸易贪心 + 感知 layout 自然选型。
+/// 迷迭香链计划：钉迷迭香制造与黑键贸易硬核心，再放置可选 producer。
 pub fn apply_rosemary_plan(
     blueprint: &BaseBlueprint,
     plan: &RosemaryPlan,
@@ -144,7 +143,7 @@ mod tests {
     use crate::operbox::OperBox;
 
     #[test]
-    fn apply_rosemary_plan_places_rosemary_factory_anchor_not_blackkey_trade() {
+    fn apply_rosemary_plan_places_both_required_core_anchors() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let path = crate::skill_table::data_path("fixtures/243/operbox_full_e2.json").unwrap();
         let operbox = OperBox::load(&path).unwrap();
@@ -158,7 +157,7 @@ mod tests {
         let mut used = HashSet::new();
         apply_rosemary_plan(&blueprint, &plan, &mut assignment, &mut used).unwrap();
 
-        assert!(!assignment.rooms.iter().any(|r| {
+        assert!(assignment.rooms.iter().any(|r| {
             blueprint
                 .rooms
                 .iter()

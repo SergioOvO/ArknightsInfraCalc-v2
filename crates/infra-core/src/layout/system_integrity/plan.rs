@@ -16,7 +16,7 @@ pub enum RosemaryTier {
     Tier3Substitute,
 }
 
-/// 班次绑定：迷迭香 + 黑键上 2 休 1（黑键贸站由贪心选型，不在此锚定）。
+/// 班次绑定：迷迭香 + 黑键上 2 休 1；两名硬核心均由 required anchor 保证进编。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShiftBind {
     pub operators: Vec<String>,

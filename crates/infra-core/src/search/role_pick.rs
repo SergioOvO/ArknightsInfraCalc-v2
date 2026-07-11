@@ -218,10 +218,18 @@ fn named_hit_filter(filter_id: &str) -> Option<fn(&TradeSearchHit) -> bool> {
         "docus_syracusa" => Some(hit_docus_syracusa_shortcut),
         "closure" => Some(hit_closure_shortcut),
         "blackkey_closure" => Some(hit_blackkey_closure_shortcut),
-        "witch" => Some(hit_witch_shortcut),
+        "witch" => Some(hit_witch_with_tailor),
+        "witch_fallback" => Some(hit_witch_shortcut),
         "karlan" => Some(hit_karlan_jie),
         _ => None,
     }
+}
+
+fn hit_witch_with_tailor(hit: &TradeSearchHit) -> bool {
+    matches!(
+        hit.rule_id.as_deref(),
+        Some("gsl_witch_long_beta" | "gsl_witch_long_alpha")
+    )
 }
 
 fn hit_karlan_jie(hit: &TradeSearchHit) -> bool {
@@ -336,9 +344,9 @@ mod tests {
     }
 
     #[test]
-    fn witch_role_uses_alpha_or_blank_when_beta_missing() {
+    fn witch_role_requires_and_uses_tailor_teammate() {
         let (pool, table, layout) =
-            fixtures(&[("巫恋", 2), ("龙舌兰", 2), ("古米", 2), ("夜刀", 2)]);
+            fixtures(&[("巫恋", 2), ("龙舌兰", 2), ("柏喙", 2), ("古米", 2)]);
         let hit = pick_trade_role_hit(
             "witch",
             &pool,
@@ -351,7 +359,26 @@ mod tests {
         .unwrap();
         assert!(hit.names.iter().any(|n| n == "巫恋"), "{hit:?}");
         assert!(hit.names.iter().any(|n| n == "龙舌兰"), "{hit:?}");
-        assert_eq!(hit.rule_id.as_deref(), Some("gsl_witch_long_blank"));
+        assert!(hit.names.iter().any(|n| n == "柏喙"), "{hit:?}");
+        assert_eq!(hit.rule_id.as_deref(), Some("gsl_witch_long_beta"));
+    }
+
+    #[test]
+    fn witch_role_rejects_non_tailor_third_operator() {
+        let (pool, table, layout) =
+            fixtures(&[("巫恋", 2), ("龙舌兰", 2), ("古米", 2), ("夜刀", 2)]);
+        let err = pick_trade_role_hit(
+            "witch",
+            &pool,
+            &table,
+            gold_opts(&layout),
+            &layout,
+            &HashSet::new(),
+            20,
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("witch"), "{err}");
     }
 
     #[test]

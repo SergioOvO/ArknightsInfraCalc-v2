@@ -34,7 +34,7 @@
 
 - `docus`：仅执行 `unfiltered + must_include_name=但书`，并要求但书精二；全部候选统一按 `final_efficiency` 排序。`gsl_docus_syracusa` / `gsl_docus_solo` 由 shortcut matcher 对实际候选自然结算，不参与 pick step 优先级。无精二但书时 role 失败，由调用方进入下一个 role 或 plain。
 - `closure`：`gsl_blackkey_closure` 优先，再 `closure` 分档，最后 `unfiltered + must_include_name=可露希尔`。黑键缺失不影响可露希尔核心上站。
-- `witch`：`filtered hit_filter=witch + must_include_names=[巫恋, 龙舌兰]`，只表示高优先级龙巫；由 `classify_witch_room` 覆盖龙舌兰精二 + 裁缝 β / α / 空白第三人等 fallback。
+- `witch`：`filtered hit_filter=witch + must_include_names=[巫恋, 龙舌兰]`，只接受 `gsl_witch_long_beta` / `gsl_witch_long_alpha`；blank 仅用于单站结算兼容。`witch_fallback` 使用独立过滤器，不与龙巫约束混用。
 - `meta_vina`：仅 `segment/vina_lungmen`，且必须由 `daifeen_e2_in_control` producer 激活；无 producer 时失败，不 fallback 成 plain。推进之王以 0% 贸易触发器入池，用于触发摩根/格拉斯哥同站技能；优先级高于无龙舌兰巫恋兜底。
 - `witch_fallback`：`filtered hit_filter=witch + must_include_name=巫恋`，只做无龙舌兰时的低优先兜底。
 

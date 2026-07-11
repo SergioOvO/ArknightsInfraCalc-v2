@@ -185,16 +185,9 @@ impl AssignmentPlan {
                     continue;
                 }
                 if slot.fill == SlotFillMode::Search {
-                    for op in &slot.operators {
-                        let in_ab = alpha.operator_names().contains(&op.name)
-                            || beta.operator_names().contains(&op.name);
-                        if !in_ab {
-                            return Err(format!(
-                                "registry anchor operator {} not in α/β slice",
-                                op.name
-                            ));
-                        }
-                    }
+                    // Search slots declare eligible cross-station members, not required anchors.
+                    // Only operators selected into peak are expected to appear in an alpha/beta
+                    // slice; absence is valid and must not fail rotation verification.
                     continue;
                 }
                 let room = &slot.room_id;

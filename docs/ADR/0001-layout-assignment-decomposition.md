@@ -222,7 +222,7 @@ pub(crate) struct AssignmentRun<'a> {
 
 - **Phase 1–2 完成**：`assign/{run,pipeline,commit,*_fill}` 子模块拆分行为等价；`orchestrate/plan.rs` 语义类型就位。
 - **Phase 3 完成**：迷迭香退出 registry（`base_systems.json` 删 `rosemary_perception`），改由 `system_integrity::evaluate_systems` 四档降级判定。
-- **Phase 4 部分完成 / 路线微调**：迷迭香不走 ADR 设想的「registry anchor + execute 三态」，而走 `system_integrity` 原型——只钉**迷迭香制造 anchor**，黑键不锚定（走贸易贪心 + `trade_hit_ok_for_greedy` 黑键≠巫恋过滤 + `shift_bind` 上2休1）。`build_plan` 调 `evaluate_systems` 把产出翻译为 `AssignmentPlan.anchors/producers/constraints/degradations/shift_binds`，`pipeline` 经 `place_system_anchors` / `place_system_producers` 消费——**两路径已在统一 plan 汇合**（决策 B 落地）。
+- **Phase 4 部分完成 / 路线微调**：迷迭香不走 registry fixed 三人组，而由 `system_integrity` 原子声明**迷迭香制造 anchor + 黑键贸易 anchor**两名硬核心；缺任一核心体系关闭。`shift_bind` 只负责两者上2休1，不代替进编保证。`build_plan` 把产出翻译为 `AssignmentPlan.anchors/producers/constraints/degradations/shift_binds`，`pipeline` 经 `place_system_anchors` / `place_system_producers` 消费——**两路径已在统一 plan 汇合**（决策 B 落地）。
   - 尚未泛化：`execute_plan` 的 reserved/required/committed 三态分支仍未抽象为通用机制（迷迭香用的是 anchor-then-search 的等效路径 + WIP 的 `must_include` 候选池修复）。**触发条件**：出现第二个「在 registry 数据驱动声明、且需要 anchor + 搜索半固定」的体系时再泛化三态。
 - **Phase 5 完成**：`SystemConstraint::ForbidSameRoom` 激活——`build_plan` 产出「迷迭香 ≠ 清流/温蒂同制造站」（`AUTOMATION_GROUP_CHAIN.md §2.4`「各占一条赤金线」），`manufacture_fill` 的 anchor 房搜索经 `forbidden_teammates` 把禁配干员当「已占用」排除出候选池（复用 `filter_manufacture_pool`，无新搜索机制）。
 - **Phase 6 完成**：`producer_fill` 手写感知 producer 收敛为统一 `place_system_producers(plan.producers)`，消费 `ProducerSlot`（夕中枢 / 絮雨办公室 / 爱丽丝·车尔尼宿舍）；落位用真实 progress 保持效率不变，ownership/elite gate 由体系层 `evaluate_rosemary` 前置。

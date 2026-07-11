@@ -141,7 +141,7 @@ crates/infra-core/src/layout/orchestrate/
 
 1. `docus`：拥有精二但书时，无条件作为全部金单贸易站的第一核心；有空二级金单站时优先进二级站，然后一次性搜索所有“必须包含但书”的候选并按 `final_efficiency` 取最高。`gsl_docus_solo` / `gsl_docus_syracusa` 由求解器按实际组合自然命中，不是候选优先级；没有精二但书时不启用该 role。
 2. `closure`：`gsl_blackkey_closure` 优先；否则 `gsl_closure_*`；否则包含可露希尔的最高可用三人组。
-3. `witch`：`gsl_witch_*`；必须同时包含精二巫恋与龙舌兰，支持裁缝 β / α / 空白第三人等龙巫 fallback。
+3. `witch`：必须同时包含精二巫恋、精二龙舌兰和裁缝 β/α；blank shortcut 不进入自动 role。
 4. `meta_vina`：戴菲恩 producer 激活时命中推王 + 摩根 + 维娜，优先级高于灵知孑与无龙舌兰巫恋兜底。
 5. `witch_fallback` / `karlan` / `penguin` / plain：无龙舌兰巫恋兜底、灵知孑、企鹅、散件工具人三人组，且排除黑键与巫恋同房冲突。
 
@@ -221,12 +221,12 @@ Producer 前提（跨房，非 global pool）：
 - [x] **已移除 / 不再存在**：`apply_blackkey_colocate_rule`、`assign_trade_meta`、`complete_trade_anchor_rooms`（旧黑键贸锚）
 - [x] 贸易核心 role：`docus` / `closure` / `witch` / `witch_fallback` 写入 `trade_segments.json`，由 `search/role_pick.rs` 统一执行
 - [x] `assign_shift` 主路径跳过 `witch_long_beta`、`blackkey_closure`、企鹅、推王等旧 registry 早占站条目，改由 role policy 选择
-- [x] **验收**：缺伺夜/贝洛内时但书仍进站；缺黑键时可露仍进站；缺裁缝 β 时巫恋走 α / blank fallback；小饼类账号保留但书、可露、龙巫
+- [x] **验收**：缺伺夜/贝洛内时但书仍进站；缺黑键时可露仍进站；缺裁缝 β 时龙巫只允许裁缝 α，否则不启用自动龙巫站
 
 #### 巫恋 role
 
 - **核心**：`witch` 是龙巫，强制包含精二巫恋 + 龙舌兰。
-- **fallback**：龙巫内部裁缝 β → 裁缝 α → 空白第三人；对应 `gsl_witch_long_beta` / `gsl_witch_long_alpha` / `gsl_witch_long_blank` 等。
+- **fallback**：自动龙巫内部仅裁缝 β → 裁缝 α；`gsl_witch_long_blank` 只保留单站结算兼容。
 - **兜底**：无龙舌兰时走 `witch_fallback`，只强制包含巫恋，优先级低于推王组。
 - **编排**：不再把 `witch_long_beta` 当固定三人组早占站；由 role policy 在贸易余站搜索里强制包含龙巫锚点。
 

@@ -120,12 +120,20 @@ pub fn evaluate_rosemary(ctx: &EvaluateContext<'_>) -> RosemaryVerdict {
         priority,
         tier,
         shift_mode: AssignShiftMode::Peak,
-        anchors: vec![SystemAnchor {
-            operator: ROSEMARY.into(),
-            elite: 2,
-            facility: FacilityKind::Factory,
-            room_id: None,
-        }],
+        anchors: vec![
+            SystemAnchor {
+                operator: ROSEMARY.into(),
+                elite: 2,
+                facility: FacilityKind::Factory,
+                room_id: None,
+            },
+            SystemAnchor {
+                operator: BLACKKEY.into(),
+                elite: 2,
+                facility: FacilityKind::TradePost,
+                room_id: None,
+            },
+        ],
         optional_producers,
         shift_bind: ShiftBind {
             operators: vec![ROSEMARY.into(), BLACKKEY.into()],
@@ -208,9 +216,9 @@ mod tests {
         assert_eq!(plan.system_id, SYSTEM_FULL);
         assert_eq!(plan.priority, 21);
         assert_eq!(plan.tier, RosemaryTier::Tier1);
-        assert_eq!(plan.anchors.len(), 1);
+        assert_eq!(plan.anchors.len(), 2);
         assert!(plan.anchors.iter().any(|a| a.operator == ROSEMARY));
-        assert!(!plan.anchors.iter().any(|a| a.operator == BLACKKEY));
+        assert!(plan.anchors.iter().any(|a| a.operator == BLACKKEY));
         assert!(plan.shift_bind.operators.contains(&BLACKKEY.to_string()));
         assert!(plan.producers_present.contains(&XUYU.to_string()));
         assert!(plan.producers_present.contains(&XI.to_string()));

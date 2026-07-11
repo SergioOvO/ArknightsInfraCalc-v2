@@ -83,8 +83,10 @@ fn merge_rosemary_into_plan(
             elite: anchor.elite,
             facility: anchor.facility,
             room_id: anchor.room_id.clone(),
-            // 迷迭香制造 anchor：队友按 recipe 约束搜索补齐。
-            fill_policy: AnchorFillPolicy::ManufactureRecipe,
+            fill_policy: match anchor.facility {
+                crate::layout::FacilityKind::Factory => AnchorFillPolicy::ManufactureRecipe,
+                _ => AnchorFillPolicy::Plain,
+            },
         });
     }
     for producer in &rplan.optional_producers {

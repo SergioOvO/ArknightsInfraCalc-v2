@@ -93,8 +93,8 @@ pub(super) fn run_shift_pipeline(
             &mut run.assignment,
             &mut run.used,
         );
-        // 迷迭香感知链：消费统一 plan 的 anchor（迷迭香制造 anchor；黑键不锚定，
-        // 走贸易贪心 + 上2休1 绑定）。anchor 由 build_plan 中 evaluate_systems 产出并
+        // 迷迭香感知链：消费统一 plan 的 required anchor（迷迭香制造 + 黑键贸易）。
+        // anchor 由 build_plan 中 evaluate_systems 产出并
         // 与 registry 汇合，pipeline 不再独立判定体系。
         place_system_anchors(blueprint, &plan.anchors, &mut run.assignment, &mut run.used);
         assign_sphinx_urrbian_dorm_anchor(blueprint, operbox, &mut run.assignment, &mut run.used);
@@ -132,16 +132,6 @@ pub(super) fn run_shift_pipeline(
         &mut manu_pool,
     );
     let gold_lines = blueprint.gold_manu_line_count();
-    let trade_search_anchors: Vec<String> = plan
-        .registry_claims
-        .iter()
-        .flat_map(|claim| &claim.slots)
-        .filter(|slot| {
-            slot.facility == crate::layout::FacilityKind::TradePost
-                && slot.fill == crate::layout::system::SlotFillMode::Search
-        })
-        .flat_map(|slot| slot.operators.iter().map(|op| op.name.clone()))
-        .collect();
     // forbid-same-room 约束（迷迭香 ≠ 清流/温蒂同制造站）从统一 plan 提取，供 anchor 房搜索排除。
     let forbid_same_room = forbid_same_room_pairs(plan);
     timer.mark("建池");
@@ -169,7 +159,6 @@ pub(super) fn run_shift_pipeline(
                 &trade_layout,
                 gold_lines,
                 options,
-                &trade_search_anchors,
                 &mut run.assignment,
                 &mut run.used,
             )?;

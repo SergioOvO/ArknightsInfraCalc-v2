@@ -257,9 +257,11 @@ struct BaseSystemsCache {
 
 static BASE_SYSTEMS_CACHE: OnceLock<Option<BaseSystemsCache>> = OnceLock::new();
 
+#[cfg(test)]
 const BLACKKEY: &str = "黑键";
+#[cfg(test)]
 const CLOSURE: &str = "可露希尔";
-const JIXING: &str = "吉星";
+
 
 pub fn load_base_systems(path: &Path) -> Result<BaseSystemsFile> {
     let raw = std::fs::read_to_string(path)?;
@@ -1186,61 +1188,6 @@ mod tests {
                 && r.operators.iter().any(|o| o.name == "贝洛内")
         });
         assert!(has_syracusa_trade, "叙拉古同站 meta 应认领某一贸易站");
-    }
-
-    #[test]
-    fn legacy_claim_docus_long_shift_prefers_blackkey_closure_over_witch() {
-        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let operbox = ideal_e2_operbox();
-        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-
-        let mut assignment = BaseAssignment::default();
-        let mut used = HashSet::new();
-        claim_base_systems(
-            &blueprint,
-            &operbox,
-            &table,
-            AssignShiftMode::Peak,
-            &mut assignment,
-            &mut used,
-            &HashSet::new(),
-        )
-        .unwrap();
-
-        let trade_posts: Vec<_> = blueprint
-            .rooms
-            .iter()
-            .filter(|r| r.kind == FacilityKind::TradePost)
-            .collect();
-        assert_eq!(trade_posts.len(), 2, "243 夹具应为双贸");
-
-        let closure_room = assignment.rooms.iter().find(|r| {
-            blueprint
-                .rooms
-                .iter()
-                .any(|b| b.id == r.room_id && b.kind == FacilityKind::TradePost)
-                && r.operators.iter().any(|o| o.name == CLOSURE)
-                && r.operators.iter().any(|o| o.name == BLACKKEY)
-                && r.operators.iter().any(|o| o.name == JIXING)
-        });
-        assert!(
-            closure_room.is_some(),
-            "legacy registry 兼容路径应认领可露希尔黑键站"
-        );
-        assert!(
-            !used.contains("巫恋") && !used.contains("龙舌兰"),
-            "legacy registry 兼容路径下不应让龙巫挤掉黑键长班"
-        );
-        let docus_room = assignment
-            .rooms
-            .iter()
-            .find(|r| r.operators.iter().any(|o| o.name == "但书"));
-        assert!(docus_room.is_some(), "但书链应认领贸易站");
-        assert_ne!(
-            closure_room.map(|r| &r.room_id),
-            docus_room.map(|r| &r.room_id),
-            "可露希尔黑键站与但书链应分占不同贸站"
-        );
     }
 
     #[test]
