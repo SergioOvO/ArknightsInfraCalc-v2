@@ -39,6 +39,20 @@ impl GlobalInjectManifest {
         self.trade_by_family.values().sum()
     }
 
+    pub fn trade_global_flat_eff_pct(&self) -> f64 {
+        self.trade_by_family
+            .get(INJECT_FAMILY_TRADE_GLOBAL_FLAT)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    pub fn manu_global_flat_eff_pct(&self) -> f64 {
+        self.manu_all_by_family
+            .get(INJECT_FAMILY_MANU_GLOBAL_ALL)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
     pub fn manu_eff_for(&self, recipe: RecipeKind) -> f64 {
         let all: f64 = self.manu_all_by_family.values().sum();
         all + match recipe {

@@ -22,13 +22,19 @@ pub struct RoomEfficiencyLine {
     #[serde(default, skip_serializing_if = "is_zero_efficiency")]
     pub trade_skill_efficiency: Efficiency,
     #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub trade_display_efficiency: Efficiency,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
     pub manufacture_efficiency: Efficiency,
     #[serde(default, skip_serializing_if = "is_zero_efficiency")]
     pub manufacture_skill_efficiency: Efficiency,
     #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub manufacture_display_efficiency: Efficiency,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
     pub power_efficiency: Efficiency,
     #[serde(default, skip_serializing_if = "is_zero_efficiency")]
     pub power_skill_efficiency: Efficiency,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub power_display_efficiency: Efficiency,
 }
 
 fn is_zero_efficiency(v: &Efficiency) -> bool {
@@ -113,6 +119,13 @@ pub fn evaluate_base_assignment_efficiencies(
             line.trade_efficiency = result.efficiency.final_efficiency;
             line.trade_skill_efficiency = result.efficiency.paper.skill_efficiency;
         }
+        if !line.trade_efficiency.is_zero() {
+            line.trade_display_efficiency = line.trade_efficiency
+                - Efficiency::ONE
+                - Efficiency::from_percent_points(
+                    room.layout.global_inject.trade_global_flat_eff_pct(),
+                );
+        }
         room_lines.push(line);
     }
 
@@ -141,6 +154,13 @@ pub fn evaluate_base_assignment_efficiencies(
             line.manufacture_efficiency = result.final_efficiency;
             line.manufacture_skill_efficiency = result.skill_efficiency;
         }
+        if !line.manufacture_efficiency.is_zero() {
+            line.manufacture_display_efficiency = line.manufacture_efficiency
+                - Efficiency::ONE
+                - Efficiency::from_percent_points(
+                    room.layout.global_inject.manu_global_flat_eff_pct(),
+                );
+        }
         room_lines.push(line);
     }
 
@@ -165,6 +185,7 @@ pub fn evaluate_base_assignment_efficiencies(
         power_efficiency += efficiency;
         line.power_efficiency = efficiency;
         line.power_skill_efficiency = result.skill_efficiency;
+        line.power_display_efficiency = result.final_efficiency - Efficiency::ONE;
         room_lines.push(line);
     }
 
