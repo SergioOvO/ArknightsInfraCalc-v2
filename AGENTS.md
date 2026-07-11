@@ -41,6 +41,27 @@
 
 如果无法复现，不要猜公式；先给出已跑命令、输入差异和下一步需要的最小材料。
 
+### 2.1 禁止补丁式修复
+
+“最小修复”指修正最小的**责任边界**，不是在最下游增加一个能让当前样例通过的条件分支。体系 / 编排 bug 必须先恢复领域不变量，再决定改动位置。
+
+1. 先写出用户确认的体系不变量：硬核心、可选 producer、同房 / 跨站 / 在基建内条件、互斥关系、班次绑定、降级关闭条件。
+2. 对照机制真源和体系文档：技能条件优先查 `data/MECHANICS_REGISTRY.csv`，体系边界查 `docs/公孙长乐的体系分析文档/` 对应文档；不要从当前错误代码反推规则。
+3. 沿完整生命周期定位不变量在哪一步丢失：`select -> plan -> execute -> fill -> resolve -> rotation -> export`。必须区分：
+   - “体系已激活”是否保证硬核心实际进编；
+   - `shift_bind` 只约束已进编干员，不能代替 required anchor；
+   - shortcut 只负责组合结算，不能代替体系选型或进编约束；
+   - `used` / 提前固定落位不得让后续搜索失去本应可选的队友。
+4. 若同一规则需要在 pipeline、role、rotation 分别追加特殊判断，说明抽象边界仍错；停止叠补丁，回到 `AssignmentPlan` / System schema / 领域候选约束重建单一事实源。
+5. 禁止用以下方式假装修好：
+   - 为一个 operbox、room id、班次下标或当前 top hit 写特判；
+   - 看到缺人就在下游强塞干员，却不修体系硬核心声明；
+   - 用 `shift_bind`、tag、priority 或 shortcut 间接期待某干员“自然入选”；
+   - 绕过正常 role 搜索，导致另一体系的硬约束失效；
+   - 只改文档或只改测试期待，使错误结果变成“通过”。
+6. 回归必须覆盖不变量，而非只钉最终快照：至少包括激活、关闭、进编、禁止同房 / 允许跨站、轮换绑定，并保留一个完整 `plan` 或 `team-rotation` 端到端用例。
+7. 修复说明必须回答三件事：根因在哪一层、旧模型为什么允许错误状态、现在由哪个单一边界保证不再发生。不能只描述新增了哪个 `if`。
+
 ## 3. 硬边界
 
 | 层 | 规则 |
@@ -55,6 +76,29 @@
 | CLI | 不写机制、公式、求解；只做命令、加载、输出、回归 |
 
 不要为了“零 warning”破坏 API / serde / 预留机制。当前允许保留 `private_interfaces`、未来机制 `dead_code`、预留字段 warning。
+
+### 3.1 已确认的体系不变量
+
+以下口径是维护期硬约束。修改迷迭香、贸易 core role、三队轮换前，必须读取 [`docs/公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md`](docs/公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md) 和对应 `MECHANICS_REGISTRY.csv` 行。
+
+#### 迷迭香感知体系
+
+1. 迷迭香 E2 与黑键 E2 是缺一不可的硬核心；缺黑键时体系整体关闭，不得降级成“只有迷迭香”。
+2. 体系激活后，peak 编制必须同时包含迷迭香和黑键。`shift_bind` 不能充当黑键进编保证。
+3. 三队轮换中迷迭香与黑键必须同队、上 2 休 1。
+4. 黑键必须位于非巫恋贸易站；黑键与但书 / 可露希尔的具体搭配由体系候选与效率搜索决定，不在这里额外钉死房号或固定三人组。
+
+#### 龙巫自动编排
+
+1. 自动编排的龙巫站必须包含巫恋、龙舌兰，以及一名持有 `tailor_alpha` 或 `tailor_beta` 的裁缝技能干员。
+2. 非裁缝技能持有者不得作为自动编排龙巫站第三人；不得用普通白板、贝洛内或其他高效率散件替代裁缝位。
+3. 历史 `gsl_witch_*_blank` 若为单站结算兼容而保留，不得进入自动编排 `witch` role 的候选集合。
+
+#### 叙拉古跨站语义
+
+1. 八幡海铃、伺夜、贝洛内按跨站机制建模；伺夜与贝洛内不要求同站。
+2. `MECHANICS_REGISTRY.csv` 中“同一个贸易站”“在基建内”“每个进驻在贸易站的叙拉古干员”是三种不同作用域，不得合并成固定同房组合。
+3. 搜索自然把伺夜、贝洛内放在同站是允许的；编排层不得把同站写成体系激活前提。
 
 ## 4. Bug 路由
 
@@ -90,6 +134,7 @@
    - 三队轮换：`schedule/team_rotation.rs`、`schedule/shift_bind.rs`
    - MAA 导出：`export/maa.rs`
 4. 不为单一 bug 泛化 ADR 决策 D 的 execute_plan 三态；只有出现第二个数据驱动、且需要 anchor + 搜索半固定的体系时再抽象。
+5. 若 bug 涉及体系硬核心缺失、required anchor 被降成 bind/tag、或多个 role 争夺同一贸易站，不能只改 `*_fill.rs`；应先修 `System / AssignmentPlan` 对硬核心和约束的表达，再让 fill 消费计划。
 
 ### 5.3 评分 / 输出 bug
 
@@ -173,7 +218,7 @@ cargo run -q -p infra-cli -- layout test \
 ## 8. 不必通读
 
 - `target/`、`out/`、release 产物、xlsx 二进制、`.venv/`。
-- PRTS HTML 快照、`MECHANICS_REGISTRY.csv`。
+- PRTS HTML 快照。`MECHANICS_REGISTRY.csv` 不需日常全量阅读，但同房 / 跨站 / 在基建内条件存在争议时必须按干员或技能定向读取。
 - `plans/` 与 `docs/TODO/` 历史计划，除非用户明确要求继续对应事项。
 - `docs/公孙长乐的体系分析文档/` 全部理论链，除非当前 bug 是体系 / 等效效率锚点。
 - `trade/interpreter.rs`、`manufacture/interpreter.rs`、`infra-cli/output.rs` 全文；优先按内部地图或函数名定位。
