@@ -115,25 +115,27 @@ pub(super) fn manu_hit_names(hit: &ManuSearchHit) -> &[String] {
 }
 
 pub(super) fn trade_efficiency_snapshot(hit: &TradeSearchHit) -> RoomEfficiencySnapshot {
+    let breakdown = hit
+        .breakdown
+        .as_ref()
+        .expect("room assignment requires a single-station trade hit");
     RoomEfficiencySnapshot {
-        trade_paper_efficiency: hit.breakdown.paper_efficiency,
-        trade_unit_output_multiplier: hit.breakdown.unit_output_multiplier,
-        trade_final_efficiency: hit.breakdown.final_efficiency,
-        trade_equivalent_operator_skill_bonus: hit.breakdown.equivalent_operator_skill_bonus,
-        trade_rule_id: hit.breakdown.shortcut_id.clone(),
-        trade_score: hit.breakdown.final_efficiency,
-        trade_pct: hit.trade_pct,
-        trade_skill_pct: hit.breakdown.order_eff_skill,
-        trade_gold_pct: hit.gold_pct,
+        trade_paper_efficiency: breakdown.paper_efficiency,
+        trade_unit_output_multiplier: breakdown.unit_output_multiplier,
+        trade_final_efficiency: breakdown.final_efficiency,
+        trade_equivalent_skill_efficiency: breakdown.equivalent_skill_efficiency,
+        trade_rule_id: breakdown.rule_id.clone(),
+        trade_skill_efficiency: breakdown.skill_efficiency,
+        trade_mechanic_equivalent_efficiency: breakdown.mechanic_equivalent_efficiency,
         ..RoomEfficiencySnapshot::default()
     }
 }
 
 pub(super) fn manu_efficiency_snapshot(hit: &ManuSearchHit) -> RoomEfficiencySnapshot {
     RoomEfficiencySnapshot {
-        manu_prod_total: hit.breakdown.prod_total,
-        manu_prod_skill: hit.breakdown.prod_skill,
-        manu_storage_limit: hit.breakdown.storage_limit,
+        manufacture_final_efficiency: hit.breakdown.final_efficiency,
+        manufacture_skill_efficiency: hit.breakdown.skill_efficiency,
+        manufacture_storage_limit: hit.breakdown.storage_limit,
         ..RoomEfficiencySnapshot::default()
     }
 }
@@ -142,7 +144,7 @@ pub(super) fn power_efficiency_snapshot(
     hit: &crate::search::PowerSearchHit,
 ) -> RoomEfficiencySnapshot {
     RoomEfficiencySnapshot {
-        power_charge_speed_pct: hit.charge_speed_pct,
+        power_final_efficiency: hit.final_efficiency,
         ..RoomEfficiencySnapshot::default()
     }
 }

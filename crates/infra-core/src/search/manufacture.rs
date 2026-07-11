@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use rayon::prelude::*;
 use serde::Serialize;
 
+use crate::efficiency::Efficiency;
 use crate::error::Result;
 use crate::layout::{LayoutContext, SharedLayout};
 use crate::manufacture::input::{ManuRoomInput, ManuSearchRecipeMode};
@@ -16,33 +17,52 @@ use crate::skill_table::SkillTable;
 use crate::types::{Action, Condition, EffectAtom, RecipeKind, SkillDef};
 use crate::FacilityKind;
 
-/// 制造站评分的完整分解，展示每个因子对 `composite_score` (= `prod_total`) 的贡献。
+/// 制造站直接效率分解，所有数值均为无量纲小数效率。
 ///
 /// 制造评分公式：
 /// ```text
-/// prod_total = prod_base + prod_skill + prod_global
+/// final_efficiency = base_efficiency + occupancy_efficiency + skill_efficiency + global_efficiency
 /// ```
-/// 其中 `prod_base` 为房间内干员数 × 100%，`prod_skill` 为技能/站级/布局效率，
-/// `prod_global` 为全局注入。
+/// `occupancy_efficiency` 为每名进驻干员 0.010，技能与全局注入也按小数效率表示。
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct ManuScoreBreakdown {
-    /// 房间基础 (人数 × 100%)
-    pub prod_base: f64,
-    /// 技能效率 (含站级/布局)
-    pub prod_skill: f64,
-    /// 全局注入
-    pub prod_global: f64,
-    /// = prod_base + prod_skill + prod_global（即 composite_score）
-    pub prod_total: f64,
+pub struct ManuEfficiencyBreakdown {
+    pub base_efficiency: Efficiency,
+    pub occupancy_efficiency: Efficiency,
+    pub skill_efficiency: Efficiency,
+    pub global_efficiency: Efficiency,
+    pub final_efficiency: Efficiency,
     /// 仓库上限
     pub storage_limit: i32,
     /// 配方类型
     pub recipe: String,
 }
 
+impl ManuEfficiencyBreakdown {
+    /// Aggregate per-station breakdowns into a multi-line direct-efficiency breakdown.
+    pub fn aggregate_lines(lines: &[(&Self, u8)]) -> Self {
+        let mut out = Self {
+            recipe: "lines".to_string(),
+            ..Self::default()
+        };
+        for (breakdown, count) in lines {
+            let count_i64 = i64::from(*count);
+            out.base_efficiency += breakdown.base_efficiency.scale_ratio(count_i64, 1);
+            out.occupancy_efficiency += breakdown.occupancy_efficiency.scale_ratio(count_i64, 1);
+            out.skill_efficiency += breakdown.skill_efficiency.scale_ratio(count_i64, 1);
+            out.global_efficiency += breakdown.global_efficiency.scale_ratio(count_i64, 1);
+            out.storage_limit += breakdown.storage_limit * i32::from(*count);
+        }
+        out.final_efficiency = out.base_efficiency
+            + out.occupancy_efficiency
+            + out.skill_efficiency
+            + out.global_efficiency;
+        out
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ManuSearchHit {
-    /// Single-recipe triple, or legacy combined triple.
+    /// Single-recipe triple, or combined multi-line result.
     pub names: Vec<String>,
     /// Split-line search: best triple on gold recipe stations.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -50,12 +70,12 @@ pub struct ManuSearchHit {
     /// Split-line search: best triple on battle-record recipe stations.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub battle_record_names: Vec<String>,
-    /// 排序主键：单配方时为 `prod_total`；多产线时为加权 `composite`。
-    pub composite_score: f64,
+    /// 排序主键；多产线时为各产线直接效率之和。
+    pub final_efficiency: Efficiency,
     pub per_station: ManuProdBreakdown,
     pub storage: ManuStorageBreakdown,
     /// 评分明细分解
-    pub breakdown: ManuScoreBreakdown,
+    pub breakdown: ManuEfficiencyBreakdown,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -135,25 +155,37 @@ fn search_manufacture_split_lines(
     br_opts.recipe_mode = ManuSearchRecipeMode::Single(RecipeKind::BattleRecord);
     let br_report = search_manufacture_single_recipe(pool, table, &br_opts)?;
 
-    let composite_score = f64::from(scenario.gold_lines) * gold_report.best.composite_score
-        + f64::from(scenario.battle_record_lines) * br_report.best.composite_score;
+    let final_efficiency = gold_report
+        .best
+        .final_efficiency
+        .scale_ratio(i64::from(scenario.gold_lines), 1)
+        + br_report
+            .best
+            .final_efficiency
+            .scale_ratio(i64::from(scenario.battle_record_lines), 1);
+
+    let breakdown = ManuEfficiencyBreakdown::aggregate_lines(&[
+        (&gold_report.best.breakdown, scenario.gold_lines),
+        (&br_report.best.breakdown, scenario.battle_record_lines),
+    ]);
+    debug_assert_eq!(breakdown.final_efficiency, final_efficiency);
 
     let best = ManuSearchHit {
         names: vec![],
         gold_names: gold_report.best.names.clone(),
         battle_record_names: br_report.best.names.clone(),
-        composite_score,
+        final_efficiency,
         per_station: ManuProdBreakdown {
             gold: gold_report.best.per_station.gold,
             battle_record: br_report.best.per_station.battle_record,
-            originium: 0.0,
+            originium: Efficiency::ZERO,
         },
         storage: ManuStorageBreakdown {
             gold: gold_report.best.storage.gold,
             battle_record: br_report.best.storage.battle_record,
             originium: 0,
         },
-        breakdown: ManuScoreBreakdown::default(),
+        breakdown,
     };
 
     Ok(ManuSearchReport {
@@ -253,8 +285,7 @@ fn search_manufacture_single_recipe(
 
     hits.sort_by(|a, b| {
         manufacture_efficiency_sort_key(b)
-            .partial_cmp(&manufacture_efficiency_sort_key(a))
-            .unwrap_or(std::cmp::Ordering::Equal)
+            .cmp(&manufacture_efficiency_sort_key(a))
             .then_with(|| {
                 b.storage
                     .gold
@@ -360,8 +391,8 @@ fn recipe_filter_matches(filter: Option<RecipeKind>, recipe: RecipeKind) -> bool
     matches!(filter, None | Some(RecipeKind::All)) || filter == Some(recipe)
 }
 
-fn manufacture_efficiency_sort_key(hit: &ManuSearchHit) -> f64 {
-    hit.composite_score
+fn manufacture_efficiency_sort_key(hit: &ManuSearchHit) -> Efficiency {
+    hit.final_efficiency
 }
 
 fn eval_single_recipe_hit(
@@ -381,29 +412,29 @@ fn eval_single_recipe_hit(
     let mut storage = ManuStorageBreakdown::default();
     let recipe_str = match recipe {
         RecipeKind::Gold => {
-            per_station.gold = result.prod_total;
+            per_station.gold = result.final_efficiency;
             storage.gold = result.storage_limit;
             "gold"
         }
         RecipeKind::BattleRecord => {
-            per_station.battle_record = result.prod_total;
+            per_station.battle_record = result.final_efficiency;
             storage.battle_record = result.storage_limit;
             "battle_record"
         }
         RecipeKind::Originium => {
-            per_station.originium = result.prod_total;
+            per_station.originium = result.final_efficiency;
             storage.originium = result.storage_limit;
             "originium"
         }
         RecipeKind::All => "all",
     };
 
-    let prod_global = result.prod_total - result.prod_base - result.prod_skill;
-    let breakdown = ManuScoreBreakdown {
-        prod_base: result.prod_base,
-        prod_skill: result.prod_skill,
-        prod_global,
-        prod_total: result.prod_total,
+    let breakdown = ManuEfficiencyBreakdown {
+        base_efficiency: result.base_efficiency,
+        occupancy_efficiency: result.occupancy_efficiency,
+        skill_efficiency: result.skill_efficiency,
+        global_efficiency: result.global_efficiency,
+        final_efficiency: result.final_efficiency,
         storage_limit: result.storage_limit,
         recipe: recipe_str.to_string(),
     };
@@ -412,7 +443,7 @@ fn eval_single_recipe_hit(
         names,
         gold_names: vec![],
         battle_record_names: vec![],
-        composite_score: result.prod_total,
+        final_efficiency: result.final_efficiency,
         per_station,
         storage,
         breakdown,
@@ -424,10 +455,10 @@ fn empty_hit() -> ManuSearchHit {
         names: vec![],
         gold_names: vec![],
         battle_record_names: vec![],
-        composite_score: 0.0,
+        final_efficiency: Efficiency::ZERO,
         per_station: ManuProdBreakdown::default(),
         storage: ManuStorageBreakdown::default(),
-        breakdown: ManuScoreBreakdown::default(),
+        breakdown: ManuEfficiencyBreakdown::default(),
     }
 }
 
@@ -438,7 +469,7 @@ mod tests {
     use crate::manufacture::input::{
         ManuLineScenario, ManuOperator, ManuRoomInput, ManuSearchRecipeMode,
     };
-    use crate::manufacture::solver::score_manu_composite;
+    use crate::manufacture::solver::evaluate_manufacture_lines;
     use crate::pool::{build_manufacture_pool, ManuPoolEntry};
     use crate::roster::Roster;
     use crate::tier::PromotionTier;
@@ -563,31 +594,67 @@ mod tests {
             report.best.names
         );
         assert!(
-            (report.best.composite_score - 98.0).abs() < 0.01,
+            (report.best.final_efficiency.as_f64() - 1.980).abs() < 0.001,
             "expected 3 base + 30 + 30 + 35 gold skill pct, got {:?}",
             report.best.breakdown
         );
     }
 
     #[test]
-    fn manufacture_search_score_is_prod_total_sort_key() {
+    fn manufacture_search_score_is_final_efficiency_sort_key() {
         let hit = ManuSearchHit {
             names: vec!["a".into()],
             gold_names: vec![],
             battle_record_names: vec![],
-            composite_score: 245.0,
+            final_efficiency: Efficiency::from_decimal(3.450),
             per_station: ManuProdBreakdown {
-                gold: 245.0,
+                gold: Efficiency::from_decimal(3.450),
                 ..Default::default()
             },
             storage: ManuStorageBreakdown::default(),
-            breakdown: ManuScoreBreakdown {
-                prod_total: 245.0,
+            breakdown: ManuEfficiencyBreakdown {
+                final_efficiency: Efficiency::from_decimal(3.450),
                 ..Default::default()
             },
         };
-        assert_eq!(manufacture_efficiency_sort_key(&hit), hit.composite_score);
-        assert_eq!(hit.composite_score, hit.breakdown.prod_total);
+        assert_eq!(manufacture_efficiency_sort_key(&hit), hit.final_efficiency);
+        assert_eq!(hit.final_efficiency, hit.breakdown.final_efficiency);
+    }
+
+    #[test]
+    fn aggregate_line_breakdown_sums_to_final_efficiency() {
+        let gold = ManuEfficiencyBreakdown {
+            base_efficiency: Efficiency::ONE,
+            occupancy_efficiency: Efficiency::from_decimal(0.030),
+            skill_efficiency: Efficiency::from_decimal(1.230),
+            global_efficiency: Efficiency::from_decimal(0.030),
+            final_efficiency: Efficiency::from_decimal(2.290),
+            storage_limit: 20,
+            recipe: "gold".to_string(),
+        };
+        let battle_record = ManuEfficiencyBreakdown {
+            base_efficiency: Efficiency::ONE,
+            occupancy_efficiency: Efficiency::from_decimal(0.030),
+            skill_efficiency: Efficiency::from_decimal(1.100),
+            global_efficiency: Efficiency::from_decimal(0.030),
+            final_efficiency: Efficiency::from_decimal(2.160),
+            storage_limit: 20,
+            recipe: "battle_record".to_string(),
+        };
+
+        let aggregate =
+            ManuEfficiencyBreakdown::aggregate_lines(&[(&gold, 2), (&battle_record, 2)]);
+
+        assert_eq!(aggregate.base_efficiency, Efficiency::from_decimal(4.000));
+        assert_eq!(
+            aggregate.occupancy_efficiency,
+            Efficiency::from_decimal(0.120)
+        );
+        assert_eq!(aggregate.skill_efficiency, Efficiency::from_decimal(4.660));
+        assert_eq!(aggregate.global_efficiency, Efficiency::from_decimal(0.120));
+        assert_eq!(aggregate.final_efficiency, Efficiency::from_decimal(8.900));
+        assert_eq!(aggregate.storage_limit, 80);
+        assert_eq!(aggregate.recipe, "lines");
     }
 
     #[test]
@@ -622,7 +689,7 @@ mod tests {
 
         assert_eq!(report.best.names, vec!["槐琥", "满触发搭档"]);
         assert!(
-            (report.best.breakdown.prod_skill - 90.0).abs() < 0.01,
+            (report.best.breakdown.skill_efficiency.as_f64() * 100.0 - 90.0).abs() < 0.01,
             "槐琥应由 50% 搭档喂满 40%，got {:?}",
             report.best.breakdown
         );
@@ -664,13 +731,13 @@ mod tests {
         );
 
         let scenario = ManuLineScenario::standard_four_lines();
-        let shitie_score = score_manu_composite(&shitie_room, &table, scenario).unwrap();
-        let generic_score = score_manu_composite(&generic_room, &table, scenario).unwrap();
+        let shitie_score = evaluate_manufacture_lines(&shitie_room, &table, scenario).unwrap();
+        let generic_score = evaluate_manufacture_lines(&generic_room, &table, scenario).unwrap();
         assert!(
-            shitie_score.composite > generic_score.composite,
+            shitie_score.final_efficiency.as_f64() > generic_score.final_efficiency.as_f64(),
             "shitie={} generic={}",
-            shitie_score.composite,
-            generic_score.composite
+            shitie_score.final_efficiency.as_f64(),
+            generic_score.final_efficiency.as_f64()
         );
         assert!(shitie_score.per_station.battle_record > shitie_score.per_station.gold);
     }
@@ -691,7 +758,7 @@ mod tests {
             .collect();
         let room = ManuRoomInput::with_operators(3, RecipeKind::Gold, ops);
         let scenario = ManuLineScenario::standard_four_lines();
-        let scored = score_manu_composite(&room, &table, scenario).unwrap();
+        let scored = evaluate_manufacture_lines(&room, &table, scenario).unwrap();
         let gold = solve_manufacture(
             &ManuRoomInput::with_operators(3, RecipeKind::Gold, room.operators.clone()),
             &table,
@@ -702,8 +769,8 @@ mod tests {
             &table,
         )
         .unwrap();
-        let expected = 2.0 * gold.prod_total + 2.0 * br.prod_total;
-        assert!((scored.composite - expected).abs() < 0.01);
+        let expected = 2.0 * gold.final_efficiency.as_f64() + 2.0 * br.final_efficiency.as_f64();
+        assert!((scored.final_efficiency.as_f64() - expected).abs() < 0.01);
     }
 
     #[test]
@@ -746,7 +813,7 @@ mod tests {
         .unwrap();
         assert_eq!(report.best.names.len(), 1);
         assert_eq!(report.combinations, 3);
-        assert_eq!(report.best.breakdown.prod_base, 1.0);
+        assert_eq!(report.best.breakdown.occupancy_efficiency.as_f64(), 0.010);
     }
 
     #[test]
@@ -831,11 +898,12 @@ mod tests {
         assert!(gold.names.contains(&"清流".to_string()));
         assert!(br.names.contains(&"酒神".to_string()));
         assert!(
-            (report.best.composite_score - (2.0 * gold.composite_score + 2.0 * br.composite_score))
-                .abs()
+            (report.best.final_efficiency.as_f64()
+                - (2.0 * gold.final_efficiency.as_f64() + 2.0 * br.final_efficiency.as_f64()))
+            .abs()
                 < 0.01
         );
-        assert!(report.best.composite_score > 342.0);
+        assert!(report.best.final_efficiency.as_f64() > 7.420);
     }
 
     #[test]
@@ -907,7 +975,7 @@ mod tests {
             ]
         );
         assert!(
-            (report.best.composite_score - 104.0).abs() < 0.01,
+            (report.best.final_efficiency.as_f64() - 2.040).abs() < 0.001,
             "expected 3 base + 101% skill, got {:?}",
             report.best.breakdown
         );
@@ -957,9 +1025,9 @@ mod tests {
             gold.names
         );
         assert!(
-            (gold.composite_score - 108.0).abs() < 0.5,
+            (gold.final_efficiency.as_f64() - 2.080).abs() < 0.005,
             "斑点+清流+砾 赤金纸面≈108%（243_use_this_ 空编制基准），got {}",
-            gold.composite_score
+            gold.final_efficiency.as_f64()
         );
 
         let dongshi_ops: Vec<ManuOperator> = ["冬时", "芬", "克洛丝"]
@@ -977,9 +1045,9 @@ mod tests {
         let dongshi_room = ManuRoomInput::with_operators(3, RecipeKind::Gold, dongshi_ops);
         let dongshi_gold = solve_manufacture(&dongshi_room, &table).unwrap();
         assert!(
-            (dongshi_gold.prod_skill - 30.0).abs() < 0.01,
+            ((dongshi_gold.skill_efficiency.as_f64() * 100.0) - 30.0).abs() < 0.01,
             "冬时站级 3×10%=30，got {}",
-            dongshi_gold.prod_skill
+            (dongshi_gold.skill_efficiency.as_f64() * 100.0)
         );
         assert_eq!(dongshi_gold.storage_limit, 35, "精一冬时 3×5 仓库贡献");
 
@@ -999,9 +1067,9 @@ mod tests {
         mixed_room.layout = Arc::new(LayoutContext::search_baseline());
         let mixed = solve_manufacture(&mixed_room, &table).unwrap();
         assert!(
-            (mixed.prod_skill - 70.0).abs() < 0.5,
+            ((mixed.skill_efficiency.as_f64() * 100.0) - 70.0).abs() < 0.5,
             "冬时+30 清流 2 贸 layout +40 芬归零 ≈70，got {}",
-            mixed.prod_skill
+            (mixed.skill_efficiency.as_f64() * 100.0)
         );
 
         // E2 森蚺应进池且自动化按发电站数加成
@@ -1041,9 +1109,9 @@ mod tests {
         let sen_gold = solve_manufacture(&sen_room, &table).unwrap();
         // 精二仅自动化·β：10% × 3 发电站 = 30%
         assert!(
-            (sen_gold.prod_skill - 30.0).abs() < 0.5,
+            ((sen_gold.skill_efficiency.as_f64() * 100.0) - 30.0).abs() < 0.5,
             "E2 森蚺 3 发电站 automation，got {}",
-            sen_gold.prod_skill
+            (sen_gold.skill_efficiency.as_f64() * 100.0)
         );
     }
 }

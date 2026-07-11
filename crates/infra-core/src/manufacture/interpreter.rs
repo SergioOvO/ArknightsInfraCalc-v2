@@ -1193,9 +1193,9 @@ mod tests {
         abyssal_room.layout = Arc::new(layout.clone());
         let abyssal = crate::manufacture::solver::solve_manufacture(&abyssal_room, &table).unwrap();
         assert!(
-            (abyssal.prod_skill - 95.0).abs() < 0.01,
+            ((abyssal.skill_efficiency.as_f64() * 100.0) - 95.0).abs() < 0.01,
             "2 abyssal hunters in room × 4 abyssal hunters in manufacture ×10 plus 芬15, got {}",
-            abyssal.prod_skill
+            (abyssal.skill_efficiency.as_f64() * 100.0)
         );
 
         let mut normal_room = ManuRoomInput::with_operators(
@@ -1206,9 +1206,9 @@ mod tests {
         normal_room.layout = Arc::new(layout);
         let normal = crate::manufacture::solver::solve_manufacture(&normal_room, &table).unwrap();
         assert!(
-            (normal.prod_skill - 15.0).abs() < 0.01,
+            ((normal.skill_efficiency.as_f64() * 100.0) - 15.0).abs() < 0.01,
             "non-abyssal room must not inherit global abyssal boost, got {}",
-            normal.prod_skill
+            (normal.skill_efficiency.as_f64() * 100.0)
         );
 
         let mut capped_layout = (*abyssal_room.layout).clone();
@@ -1218,9 +1218,9 @@ mod tests {
         abyssal_room.layout = Arc::new(capped_layout);
         let capped = crate::manufacture::solver::solve_manufacture(&abyssal_room, &table).unwrap();
         assert!(
-            (capped.prod_skill - 105.0).abs() < 0.01,
+            ((capped.skill_efficiency.as_f64() * 100.0) - 105.0).abs() < 0.01,
             "tier_up cap 90 plus 芬15, got {}",
-            capped.prod_skill
+            (capped.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -1253,9 +1253,9 @@ mod tests {
         room.layout = Arc::new(layout);
         let result = crate::manufacture::solver::solve_manufacture(&room, &table).unwrap();
         assert!(
-            (result.prod_skill - 60.0).abs() < 0.01,
+            ((result.skill_efficiency.as_f64() * 100.0) - 60.0).abs() < 0.01,
             "仿生海龙同站时不应再叠深海站级加成，got {}",
-            result.prod_skill
+            (result.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -1293,12 +1293,12 @@ mod tests {
         let result = crate::manufacture::solver::solve_manufacture(&input, &table).unwrap();
         // 冬时站级 30 + 清流 2×20% + 温蒂 4×15%（仿生海龙）= 130%
         assert!(
-            (result.prod_skill - 130.0).abs() < 0.5,
+            ((result.skill_efficiency.as_f64() * 100.0) - 130.0).abs() < 0.5,
             "prod_skill={} prod_total={}",
-            result.prod_skill,
-            result.prod_total
+            (result.skill_efficiency.as_f64() * 100.0),
+            ((result.final_efficiency.as_f64() - 1.0) * 100.0)
         );
-        assert!((result.prod_total - 133.0).abs() < 0.5);
+        assert!((((result.final_efficiency.as_f64() - 1.0) * 100.0) - 133.0).abs() < 0.5);
     }
 
     #[test]
@@ -1325,12 +1325,12 @@ mod tests {
         );
         // 清流 2×20% + 温蒂 4×15% + 森蚺 4×10% = 140%
         assert!(
-            (result.prod_skill - 140.0).abs() < 0.5,
+            ((result.skill_efficiency.as_f64() * 100.0) - 140.0).abs() < 0.5,
             "prod_skill={} prod_total={}",
-            result.prod_skill,
-            result.prod_total
+            (result.skill_efficiency.as_f64() * 100.0),
+            ((result.final_efficiency.as_f64() - 1.0) * 100.0)
         );
-        assert!((result.prod_total - 143.0).abs() < 0.5);
+        assert!((((result.final_efficiency.as_f64() - 1.0) * 100.0) - 143.0).abs() < 0.5);
     }
 
     #[test]
@@ -1384,16 +1384,16 @@ mod tests {
         let br = crate::manufacture::solver::solve_manufacture(&br_input, &table).unwrap();
         // 公孙社区口径 126% = 75 本体 + 60 焰尾 + 21 薇薇安娜；不含人头。
         assert!(
-            (br.prod_skill - 126.0).abs() < 1.5,
+            ((br.skill_efficiency.as_f64() * 100.0) - 126.0).abs() < 1.5,
             "BR prod_total={} prod_skill={} (target skill ~126)",
-            br.prod_total,
-            br.prod_skill
+            ((br.final_efficiency.as_f64() - 1.0) * 100.0),
+            (br.skill_efficiency.as_f64() * 100.0)
         );
         assert!(
-            (br.prod_total - 129.0).abs() < 1.5,
+            (((br.final_efficiency.as_f64() - 1.0) * 100.0) - 129.0).abs() < 1.5,
             "BR prod_total={} prod_skill={}",
-            br.prod_total,
-            br.prod_skill
+            ((br.final_efficiency.as_f64() - 1.0) * 100.0),
+            (br.skill_efficiency.as_f64() * 100.0)
         );
 
         let gravel_room = resolved
@@ -1410,13 +1410,13 @@ mod tests {
         };
         let gold = crate::manufacture::solver::solve_manufacture(&gold_input, &table).unwrap();
         assert!(
-            (gold.prod_skill - 42.0).abs() < 0.5,
+            ((gold.skill_efficiency.as_f64() * 100.0) - 42.0).abs() < 0.5,
             "砾本体 35% + 薇薇安娜 7% gold skill"
         );
         assert!(
-            (gold.prod_total - 45.0).abs() < 3.0,
+            (((gold.final_efficiency.as_f64() - 1.0) * 100.0) - 45.0).abs() < 3.0,
             "gold prod_total={}",
-            gold.prod_total
+            ((gold.final_efficiency.as_f64() - 1.0) * 100.0)
         );
     }
 
@@ -1434,7 +1434,7 @@ mod tests {
         );
         let solo_r = crate::manufacture::solver::solve_manufacture(&solo, &table).unwrap();
         // 金属工艺 30 + 打工心得 1×5%
-        assert!((solo_r.prod_skill - 35.0).abs() < 0.01);
+        assert!(((solo_r.skill_efficiency.as_f64() * 100.0) - 35.0).abs() < 0.01);
 
         let two_metal = ManuRoomInput::with_operators(
             3,
@@ -1446,7 +1446,7 @@ mod tests {
         );
         let two_r = crate::manufacture::solver::solve_manufacture(&two_metal, &table).unwrap();
         // 苍苔 30+10 + 夜烟 30 = 70
-        assert!((two_r.prod_skill - 70.0).abs() < 0.01);
+        assert!(((two_r.skill_efficiency.as_f64() * 100.0) - 70.0).abs() < 0.01);
 
         let three_metal = ManuRoomInput::with_operators(
             3,
@@ -1459,7 +1459,7 @@ mod tests {
         );
         let three_r = crate::manufacture::solver::solve_manufacture(&three_metal, &table).unwrap();
         // 苍苔 30+15 + 夜烟/斑点各 30 = 105
-        assert!((three_r.prod_skill - 105.0).abs() < 0.01);
+        assert!(((three_r.skill_efficiency.as_f64() * 100.0) - 105.0).abs() < 0.01);
 
         let mut ctx = ManuContext::from_room(&three_metal);
         apply_manu_phases(&mut ctx, &table);
@@ -1492,7 +1492,7 @@ mod tests {
         };
 
         let with_yeyan = solve_manufacture(&mk(&[("苍苔", 2), ("夜烟", 2)]), &table).unwrap();
-        assert!((with_yeyan.prod_skill - 70.0).abs() < 0.01);
+        assert!(((with_yeyan.skill_efficiency.as_f64() * 100.0) - 70.0).abs() < 0.01);
 
         let with_thorn =
             solve_manufacture(&mk(&[("苍苔", 2), ("夜烟", 2), ("引星棘刺", 2)]), &table).unwrap();
@@ -1502,9 +1502,9 @@ mod tests {
         assert!((cangtai.total_eff(RecipeKind::Gold) - 45.0).abs() < 0.01);
         // 夜烟 30 + 引星棘刺 30+2×3 + 苍苔 30+3×5 = 111
         assert!(
-            (with_thorn.prod_skill - 111.0).abs() < 0.01,
+            ((with_thorn.skill_efficiency.as_f64() * 100.0) - 111.0).abs() < 0.01,
             "got {}",
-            with_thorn.prod_skill
+            (with_thorn.skill_efficiency.as_f64() * 100.0)
         );
 
         let with_gravel =
@@ -1515,9 +1515,9 @@ mod tests {
         assert!((cangtai_gravel.total_eff(RecipeKind::Gold) - 45.0).abs() < 0.01);
         // 苍苔 45 + 砾 35 + 引星棘刺 36(30 + 2 贸易站×3%)
         assert!(
-            (with_gravel.prod_skill - 116.0).abs() < 0.01,
+            ((with_gravel.skill_efficiency.as_f64() * 100.0) - 116.0).abs() < 0.01,
             "got {}",
-            with_gravel.prod_skill
+            (with_gravel.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -1532,9 +1532,9 @@ mod tests {
         );
         let solo_r = solve_manufacture(&solo, &table).unwrap();
         assert!(
-            solo_r.prod_skill.abs() < 0.01,
+            (solo_r.skill_efficiency.as_f64() * 100.0).abs() < 0.01,
             "solo Christine should not get banquet bonus, got {}",
-            solo_r.prod_skill
+            (solo_r.skill_efficiency.as_f64() * 100.0)
         );
 
         let paired = ManuRoomInput::with_operators(
@@ -1555,9 +1555,9 @@ mod tests {
             .unwrap();
         assert!((christine.total_eff(RecipeKind::BattleRecord) - 30.0).abs() < 0.01);
         assert!(
-            (paired_r.prod_skill - 65.0).abs() < 0.01,
+            ((paired_r.skill_efficiency.as_f64() * 100.0) - 65.0).abs() < 0.01,
             "got {}",
-            paired_r.prod_skill
+            (paired_r.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -1580,7 +1580,7 @@ mod tests {
             )],
         );
         let result = solve_manufacture(&room, &table).unwrap();
-        assert!((result.prod_skill - 15.0).abs() < 0.01);
+        assert!(((result.skill_efficiency.as_f64() * 100.0) - 15.0).abs() < 0.01);
     }
 
     fn alanana_room(elite: u8, platforms: u8, with_wenmi: bool) -> ManuRoomInput {
@@ -1655,9 +1655,9 @@ mod tests {
         let result = solve_manufacture(&zhijian_room(0), &table).unwrap();
         // floor(42/16)×5 = 10%
         assert!(
-            (result.prod_skill - 10.0).abs() < 0.01,
+            ((result.skill_efficiency.as_f64() * 100.0) - 10.0).abs() < 0.01,
             "got {}",
-            result.prod_skill
+            (result.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -1667,9 +1667,9 @@ mod tests {
         let result = solve_manufacture(&zhijian_room(2), &table).unwrap();
         // floor(42/8)×5 = 25%
         assert!(
-            (result.prod_skill - 25.0).abs() < 0.01,
+            ((result.skill_efficiency.as_f64() * 100.0) - 25.0).abs() < 0.01,
             "got {}",
-            result.prod_skill
+            (result.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -1678,16 +1678,16 @@ mod tests {
         let table = table();
         let e0_one = solve_manufacture(&alanana_room(0, 1, false), &table).unwrap();
         assert!(
-            (e0_one.prod_skill - 5.0).abs() < 0.01,
+            ((e0_one.skill_efficiency.as_f64() * 100.0) - 5.0).abs() < 0.01,
             "got {}",
-            e0_one.prod_skill
+            (e0_one.skill_efficiency.as_f64() * 100.0)
         );
 
         let e2_three = solve_manufacture(&alanana_room(2, 3, false), &table).unwrap();
         assert!(
-            (e2_three.prod_skill - 30.0).abs() < 0.01,
+            ((e2_three.skill_efficiency.as_f64() * 100.0) - 30.0).abs() < 0.01,
             "got {}",
-            e2_three.prod_skill
+            (e2_three.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -1696,9 +1696,9 @@ mod tests {
         let table = table();
         let solo = solve_manufacture(&alanana_room(2, 1, false), &table).unwrap();
         assert!(
-            (solo.prod_skill - 10.0).abs() < 0.01,
+            ((solo.skill_efficiency.as_f64() * 100.0) - 10.0).abs() < 0.01,
             "got {}",
-            solo.prod_skill
+            (solo.skill_efficiency.as_f64() * 100.0)
         );
 
         let paired = solve_manufacture(&alanana_room(2, 1, true), &table).unwrap();
@@ -1707,9 +1707,9 @@ mod tests {
         let alanana = ctx.operators.iter().find(|o| o.name == "阿兰娜").unwrap();
         assert!((alanana.total_eff(RecipeKind::Gold) - 25.0).abs() < 0.01);
         assert!(
-            (paired.prod_skill - 55.0).abs() < 0.01,
+            ((paired.skill_efficiency.as_f64() * 100.0) - 55.0).abs() < 0.01,
             "got {}",
-            paired.prod_skill
+            (paired.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -1778,9 +1778,9 @@ mod tests {
         )
         .unwrap();
         assert!(
-            (solo.prod_skill - 15.0).abs() < 0.01,
+            ((solo.skill_efficiency.as_f64() * 100.0) - 15.0).abs() < 0.01,
             "solo got {}",
-            solo.prod_skill
+            (solo.skill_efficiency.as_f64() * 100.0)
         );
 
         let paired_room = ManuRoomInput::with_operators(
@@ -1795,9 +1795,9 @@ mod tests {
         let paired = solve_manufacture(&paired_room, &table).unwrap();
         // 精2 标准化·α +15%；同房 2 名 A1 → +20%（芬/克洛丝仅作 tag 载体）
         assert!(
-            (paired.prod_skill - 35.0).abs() < 0.01,
+            ((paired.skill_efficiency.as_f64() * 100.0) - 35.0).abs() < 0.01,
             "paired got {}",
-            paired.prod_skill
+            (paired.skill_efficiency.as_f64() * 100.0)
         );
 
         let mut ctx = ManuContext::from_room(&paired_room);
@@ -1823,9 +1823,9 @@ mod tests {
         with_gumi.layout = Arc::new(layout);
         let result = solve_manufacture(&with_gumi, &table).unwrap();
         assert!(
-            (result.prod_skill - 35.0).abs() < 0.01,
+            ((result.skill_efficiency.as_f64() * 100.0) - 35.0).abs() < 0.01,
             "with 古米 got {}",
-            result.prod_skill
+            (result.skill_efficiency.as_f64() * 100.0)
         );
 
         let without = ManuRoomInput::with_operators(
@@ -1835,9 +1835,9 @@ mod tests {
         );
         let solo = solve_manufacture(&without, &table).unwrap();
         assert!(
-            solo.prod_skill.abs() < 0.01,
+            (solo.skill_efficiency.as_f64() * 100.0).abs() < 0.01,
             "without 古米 got {}",
-            solo.prod_skill
+            (solo.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -1853,7 +1853,11 @@ mod tests {
             &table,
         )
         .unwrap();
-        assert!(e0.prod_skill.abs() < 0.01, "e0 solo got {}", e0.prod_skill);
+        assert!(
+            (e0.skill_efficiency.as_f64() * 100.0).abs() < 0.01,
+            "e0 solo got {}",
+            (e0.skill_efficiency.as_f64() * 100.0)
+        );
 
         let e2 = solve_manufacture(
             &ManuRoomInput::with_operators(
@@ -1866,9 +1870,9 @@ mod tests {
         .unwrap();
         // 标准化·β +25%；自身 1 个标准化类技能 → 意识协议 +5%
         assert!(
-            (e2.prod_skill - 30.0).abs() < 0.01,
+            ((e2.skill_efficiency.as_f64() * 100.0) - 30.0).abs() < 0.01,
             "e2 solo got {}",
-            e2.prod_skill
+            (e2.skill_efficiency.as_f64() * 100.0)
         );
 
         let paired_room = ManuRoomInput::with_operators(
@@ -1901,7 +1905,11 @@ mod tests {
             &table,
         )
         .unwrap();
-        assert!(e0.prod_skill.abs() < 0.01, "e0 solo got {}", e0.prod_skill);
+        assert!(
+            (e0.skill_efficiency.as_f64() * 100.0).abs() < 0.01,
+            "e0 solo got {}",
+            (e0.skill_efficiency.as_f64() * 100.0)
+        );
 
         let e2 = solve_manufacture(
             &ManuRoomInput::with_operators(
@@ -1914,9 +1922,9 @@ mod tests {
         .unwrap();
         // 莱茵科技·β +25%；自身 1 个莱茵类技能 → 源石技艺理论应用 +5%
         assert!(
-            (e2.prod_skill - 30.0).abs() < 0.01,
+            ((e2.skill_efficiency.as_f64() * 100.0) - 30.0).abs() < 0.01,
             "e2 solo got {}",
-            e2.prod_skill
+            (e2.skill_efficiency.as_f64() * 100.0)
         );
 
         let paired_room = ManuRoomInput::with_operators(
@@ -1951,9 +1959,9 @@ mod tests {
         let result = solve_manufacture(&input, &table).unwrap();
         // 莱茵·β 25% + 造价高昂 5×3% capped 15%
         assert!(
-            (result.prod_skill - 40.0).abs() < 0.5,
+            ((result.skill_efficiency.as_f64() * 100.0) - 40.0).abs() < 0.5,
             "prod_skill={}",
-            result.prod_skill
+            (result.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -2023,18 +2031,18 @@ mod tests {
         room.layout = Arc::new(layout.clone());
         let r2 = solve_manufacture(&room, &table).unwrap();
         assert!(
-            (r2.prod_skill - 20.0).abs() < 0.01,
+            ((r2.skill_efficiency.as_f64() * 100.0) - 20.0).abs() < 0.01,
             "lv2 got {}",
-            r2.prod_skill
+            (r2.skill_efficiency.as_f64() * 100.0)
         );
 
         layout.training_room_level = 3;
         room.layout = Arc::new(layout);
         let r3 = solve_manufacture(&room, &table).unwrap();
         assert!(
-            (r3.prod_skill - 30.0).abs() < 0.01,
+            ((r3.skill_efficiency.as_f64() * 100.0) - 30.0).abs() < 0.01,
             "lv3 got {}",
-            r3.prod_skill
+            (r3.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -2099,9 +2107,9 @@ mod tests {
         )
         .unwrap();
         assert!(
-            (result.prod_skill - 25.0).abs() < 0.01,
+            ((result.skill_efficiency.as_f64() * 100.0) - 25.0).abs() < 0.01,
             "got {}",
-            result.prod_skill
+            (result.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -2123,9 +2131,9 @@ mod tests {
         room.operators = vec![manu_op_from_instances("黍", 2)];
         let result = solve_manufacture(&room, &table).unwrap();
         assert!(
-            (result.prod_skill - 5.0).abs() < 0.01,
+            ((result.skill_efficiency.as_f64() * 100.0) - 5.0).abs() < 0.01,
             "15 fireworks / 3 = 5%, got {}",
-            result.prod_skill
+            (result.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -2136,18 +2144,18 @@ mod tests {
         e0.operators = vec![manu_op_from_instances("截云", 0)];
         let r0 = solve_manufacture(&e0, &table).unwrap();
         assert!(
-            (r0.prod_skill - 2.0).abs() < 0.01,
+            ((r0.skill_efficiency.as_f64() * 100.0) - 2.0).abs() < 0.01,
             "e0 10/5 = 2%, got {}",
-            r0.prod_skill
+            (r0.skill_efficiency.as_f64() * 100.0)
         );
 
         let mut e2 = room_with_human_fireworks(10.0);
         e2.operators = vec![manu_op_from_instances("截云", 2)];
         let r2 = solve_manufacture(&e2, &table).unwrap();
         assert!(
-            (r2.prod_skill - 4.0).abs() < 0.01,
+            ((r2.skill_efficiency.as_f64() * 100.0) - 4.0).abs() < 0.01,
             "e2 10/5*2 = 4%, got {}",
-            r2.prod_skill
+            (r2.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -2164,9 +2172,9 @@ mod tests {
         )
         .unwrap();
         assert!(
-            (e0.prod_skill - 10.0).abs() < 0.01,
+            ((e0.skill_efficiency.as_f64() * 100.0) - 10.0).abs() < 0.01,
             "e0 20 rings / 2 = 10%, got {}",
-            e0.prod_skill
+            (e0.skill_efficiency.as_f64() * 100.0)
         );
 
         let e2 = solve_manufacture(
@@ -2179,9 +2187,9 @@ mod tests {
         )
         .unwrap();
         assert!(
-            (e2.prod_skill - 20.0).abs() < 0.01,
+            ((e2.skill_efficiency.as_f64() * 100.0) - 20.0).abs() < 0.01,
             "e2 20 rings / 1 = 20%, got {}",
-            e2.prod_skill
+            (e2.skill_efficiency.as_f64() * 100.0)
         );
 
         let instances =
@@ -2208,9 +2216,9 @@ mod tests {
         )
         .unwrap();
         assert!(
-            (result.prod_skill - 30.0).abs() < 0.01,
+            ((result.skill_efficiency.as_f64() * 100.0) - 30.0).abs() < 0.01,
             "full mood baseline +30%, got {}",
-            result.prod_skill
+            (result.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -2227,9 +2235,9 @@ mod tests {
         )
         .unwrap();
         assert!(
-            (result.prod_skill - 20.0).abs() < 0.01,
+            ((result.skill_efficiency.as_f64() * 100.0) - 20.0).abs() < 0.01,
             "baseline +20%, got {}",
-            result.prod_skill
+            (result.skill_efficiency.as_f64() * 100.0)
         );
     }
 
@@ -2281,9 +2289,9 @@ mod tests {
         sui_room.layout = Arc::new(layout.clone());
         let sui = solve_manufacture(&sui_room, &table).unwrap();
         assert!(
-            (sui.prod_skill - 8.0).abs() < 0.01,
+            ((sui.skill_efficiency.as_f64() * 100.0) - 8.0).abs() < 0.01,
             "25 fireworks / 3 = 8%, got {}",
-            sui.prod_skill
+            (sui.skill_efficiency.as_f64() * 100.0)
         );
 
         let mut jie_room = ManuRoomInput::with_operators(
@@ -2294,9 +2302,9 @@ mod tests {
         jie_room.layout = Arc::new(layout);
         let jie = solve_manufacture(&jie_room, &table).unwrap();
         assert!(
-            (jie.prod_skill - 10.0).abs() < 0.01,
+            ((jie.skill_efficiency.as_f64() * 100.0) - 10.0).abs() < 0.01,
             "floor(25/5)*2 = 10%, got {}",
-            jie.prod_skill
+            (jie.skill_efficiency.as_f64() * 100.0)
         );
     }
 

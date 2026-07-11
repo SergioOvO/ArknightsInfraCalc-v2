@@ -8,6 +8,6 @@ mod components;
 mod metric;
 
 pub use components::{
-    current_control_inject_sort_score, ScoringPolicyId, TradeManuEfficiencyComponents,
+    evaluate_control_inject_policy, ScoringPolicyId, TradeManuEfficiencyComponents,
 };
-pub use metric::{ComponentScore, EffPct};
+pub use metric::{EffPct, PolicyEvaluation};

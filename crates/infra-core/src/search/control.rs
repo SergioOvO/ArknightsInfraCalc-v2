@@ -9,24 +9,28 @@ use crate::error::Result;
 use crate::global_resource::GlobalResourceKey;
 use crate::layout::LayoutContext;
 use crate::pool::{combinations_indices, ControlPool};
-use crate::scoring::{current_control_inject_sort_score, TradeManuEfficiencyComponents};
+use crate::scoring::{
+    evaluate_control_inject_policy, ScoringPolicyId, TradeManuEfficiencyComponents,
+};
 use crate::skill_table::SkillTable;
 use crate::types::RecipeKind;
 
 /// 木天蓼 consumer：贸易/制造侧的泰拉大陆调查团。
 pub const MATATABI_CONSUMER_NAME: &str = "泰拉大陆调查团";
 
-/// 中枢评分的完整分解。
+/// 中枢具名排序 policy 的完整分解。
 ///
-/// 当前中枢排序策略（`Efficiency` 策略）：
+/// 当前中枢排序策略（`ControlInjectRawSumV0`）：
 /// ```text
 /// sort_key = trade_inject + manu_gold_inject + manu_br_inject
 /// ```
-/// 这是历史注入排序策略：三项均为可解释效率百分比分量。它不是
-/// 贸易/制造平衡公式；vpower、木天蓼、心情扣分也不在中枢评分里预支，
+/// 这是局部注入排序策略：三项均为可解释效率百分比分量。它不是
+/// 贸易/制造平衡公式；vpower、木天蓼、心情扣分也不在中枢 policy 里预支，
 /// 而是分别在制造 resolve、调查团 consumer、轮换层体现。
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct ControlScoreBreakdown {
+pub struct ControlPolicyBreakdown {
+    /// 具名局部排序策略；不是生产效率。
+    pub policy: ScoringPolicyId,
     /// 贸易效率注入%
     pub trade_inject_pct: f64,
     /// 赤金制造效率注入%
@@ -37,38 +41,29 @@ pub struct ControlScoreBreakdown {
     pub inject_subtotal: f64,
     /// 虚拟发电站数
     pub virtual_power: f64,
-    /// vpower × 2.0
-    pub virtual_power_score: f64,
     /// 木天蓼点数
     pub matatabi: f64,
-    /// 5.0 + matatabi × 3.0（仅调查团在岗时生效）
-    pub matatabi_score: f64,
     /// 本班是否有调查团 consumer
     pub matatabi_consumer_active: bool,
     /// 心情消耗总和 (>0 的部分)
     pub mood_penalty: f64,
-    /// -mood × 2.0（HrAndMood 策略时为 ×3.0）
-    pub mood_penalty_score: f64,
-    /// 体系外散件分（单走八幡海铃等；与 +7/+2 同层比较）。
-    pub loose_piece_score: f64,
-    /// 心情补位分（EW / 玛恩纳等；低于效率散件）。
-    pub mood_fill_score: f64,
-    /// 线索补位分（低于心情）。
-    pub clue_fill_score: f64,
-    /// 兼容字段：体系外补位分总和。
-    pub ancillary_score: f64,
-    /// 搜索排序分；中枢补位按 组合体系(pinned) → 散件 → 心情 → 线索。
-    pub total_score: f64,
+    /// 体系外散件排序分量（单走八幡海铃等；与 +7/+2 同层比较）。
+    pub loose_piece_sort_component: f64,
+    /// 心情补位排序分量（EW / 玛恩纳等；低于效率散件）。
+    pub mood_fill_sort_component: f64,
+    /// 线索补位排序分量（低于心情）。
+    pub clue_fill_sort_component: f64,
+    /// policy 排序键；中枢补位按 组合体系(pinned) → 散件 → 心情 → 线索。
+    pub policy_sort_key: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ControlSearchHit {
     pub names: Vec<String>,
-    pub score: f64,
     pub trade_inject_pct: f64,
     pub manu_gold_inject_pct: f64,
-    /// 评分明细分解
-    pub breakdown: ControlScoreBreakdown,
+    /// 具名 policy 明细
+    pub breakdown: ControlPolicyBreakdown,
 }
 
 /// 中枢补位策略：`base_systems` 钉死组合体系后，剩余席位按
@@ -76,9 +71,9 @@ pub struct ControlSearchHit {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ControlFillPolicy {
     #[default]
-    Efficiency,
-    /// Legacy name retained for API compatibility; now means 公孙分层补位。
-    HrAndMood,
+    InjectOnly,
+    /// 公孙分层补位：注入散件 → 心情 → 线索。
+    LayeredFill,
 }
 
 #[derive(Debug, Clone)]
@@ -190,7 +185,7 @@ fn control_layered_fill_buff(buff_id: &str) -> bool {
 }
 
 fn control_inject_sort_key(hit: &ControlSearchHit) -> f64 {
-    hit.score
+    hit.breakdown.policy_sort_key
 }
 
 pub fn control_entry_core_inject_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
@@ -228,10 +223,10 @@ pub fn control_entry_plugin_fill(entry: &crate::pool::ControlPoolEntry) -> bool 
     {
         return false;
     }
-    control_entry_core_inject_fill(entry) || control_entry_hr_mood_fill(entry)
+    control_entry_core_inject_fill(entry) || control_entry_layered_fill(entry)
 }
 
-pub fn control_entry_hr_mood_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
+pub fn control_entry_layered_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
     if entry.name == "琴柳" {
         return false;
     }
@@ -253,10 +248,6 @@ struct ControlFillTierScores {
 }
 
 impl ControlFillTierScores {
-    fn ancillary(self) -> f64 {
-        self.loose_piece + self.mood + self.clue
-    }
-
     fn layered_sort_bonus(self) -> f64 {
         // 散件与 +7/+2 同层按数值比较；心情和线索只在高层同分时补空。
         self.loose_piece + self.mood * 0.01 + self.clue * 0.0001
@@ -313,25 +304,25 @@ fn control_layered_fill_scores(
 /// vpower、木天蓼、心情扣分不在此评分——它们分别在制造站 resolve、调查团 consumer、
 /// 轮换层心情管理里体现。
 ///
-/// 返回完整的评分明细分解；`.total_score` 即搜索排序分。
-fn score_control_result(
+/// 返回完整的 policy 分解；`.policy_sort_key` 只用于中枢候选排序。
+fn evaluate_control_policy(
     result: &crate::control::ControlCenterResult,
     operators: &[ControlOperator],
     table: &SkillTable,
     options: &ControlSearchOptions,
-) -> ControlScoreBreakdown {
+) -> ControlPolicyBreakdown {
     let mood_penalty: f64 = result
         .operator_mood_drains
         .values()
         .filter(|v| **v > 0.0)
         .sum();
 
-    if options.fill_policy == ControlFillPolicy::HrAndMood {
+    if options.fill_policy == ControlFillPolicy::LayeredFill {
         let fill_scores = control_layered_fill_scores(operators, table);
         let trade_inject = result.inject.trade_eff_pct();
         let manu_gold = result.inject.manu_eff_for(RecipeKind::Gold);
         let manu_br = result.inject.manu_eff_for(RecipeKind::BattleRecord);
-        let component_score = current_control_inject_sort_score(TradeManuEfficiencyComponents {
+        let component_score = evaluate_control_inject_policy(TradeManuEfficiencyComponents {
             trade_eff_pct: trade_inject,
             gold_manu_eff_pct: manu_gold,
             battle_record_manu_eff_pct: manu_br,
@@ -342,19 +333,18 @@ fn score_control_result(
                 .manufacture_station_count
                 .saturating_sub(options.layout.gold_manu_line_count.min(u32::from(u8::MAX)) as u8),
         });
-        return ControlScoreBreakdown {
+        return ControlPolicyBreakdown {
+            policy: component_score.policy,
             trade_inject_pct: trade_inject,
             manu_gold_inject_pct: manu_gold,
             manu_br_inject_pct: manu_br,
             inject_subtotal: component_score.sort_key_pct,
-            loose_piece_score: fill_scores.loose_piece,
-            mood_fill_score: fill_scores.mood,
-            clue_fill_score: fill_scores.clue,
-            ancillary_score: fill_scores.ancillary(),
+            loose_piece_sort_component: fill_scores.loose_piece,
+            mood_fill_sort_component: fill_scores.mood,
+            clue_fill_sort_component: fill_scores.clue,
             mood_penalty,
-            mood_penalty_score: 0.0,
-            total_score: component_score.sort_key_pct + fill_scores.layered_sort_bonus(),
-            ..ControlScoreBreakdown::default()
+            policy_sort_key: component_score.sort_key_pct + fill_scores.layered_sort_bonus(),
+            ..ControlPolicyBreakdown::default()
         };
     }
 
@@ -366,7 +356,7 @@ fn score_control_result(
         .layout
         .manufacture_station_count
         .saturating_sub(gold_line_count);
-    let component_score = current_control_inject_sort_score(TradeManuEfficiencyComponents {
+    let component_score = evaluate_control_inject_policy(TradeManuEfficiencyComponents {
         trade_eff_pct: trade_inject,
         gold_manu_eff_pct: manu_gold,
         battle_record_manu_eff_pct: manu_br,
@@ -379,7 +369,8 @@ fn score_control_result(
     let matatabi = result.global.get(GlobalResourceKey::Matatabi);
     let virtual_power = result.global.get(GlobalResourceKey::VirtualPower);
 
-    ControlScoreBreakdown {
+    ControlPolicyBreakdown {
+        policy: component_score.policy,
         trade_inject_pct: trade_inject,
         manu_gold_inject_pct: manu_gold,
         manu_br_inject_pct: manu_br,
@@ -388,8 +379,8 @@ fn score_control_result(
         matatabi,
         matatabi_consumer_active: options.matatabi_consumer_active,
         mood_penalty,
-        total_score: inject_subtotal,
-        ..ControlScoreBreakdown::default()
+        policy_sort_key: inject_subtotal,
+        ..ControlPolicyBreakdown::default()
     }
 }
 
@@ -429,9 +420,8 @@ pub fn search_control_combos(
                 layout: layout.clone(),
             };
             let result = solve_control(&input, table);
-            let breakdown = score_control_result(&result, &operators, table, options);
+            let breakdown = evaluate_control_policy(&result, &operators, table, options);
             Some(ControlSearchHit {
-                score: breakdown.total_score,
                 trade_inject_pct: result.inject.trade_eff_pct(),
                 manu_gold_inject_pct: result.inject.manu_eff_for(RecipeKind::Gold),
                 names,
@@ -496,20 +486,28 @@ mod tests {
     }
 
     #[test]
-    fn control_search_score_uses_total_score_sort_key() {
+    fn control_search_uses_named_policy_sort_key() {
         let hit = ControlSearchHit {
             names: vec!["a".into()],
-            score: 12.0,
             trade_inject_pct: 7.0,
             manu_gold_inject_pct: 5.0,
-            breakdown: ControlScoreBreakdown {
-                total_score: 12.0,
+            breakdown: ControlPolicyBreakdown {
+                policy: ScoringPolicyId::ControlInjectRawSumV0,
+                policy_sort_key: 12.0,
                 inject_subtotal: 12.0,
                 ..Default::default()
             },
         };
-        assert_eq!(control_inject_sort_key(&hit), hit.score);
-        assert_eq!(hit.score, hit.breakdown.total_score);
+        assert_eq!(control_inject_sort_key(&hit), 12.0);
+        assert_eq!(hit.breakdown.policy, ScoringPolicyId::ControlInjectRawSumV0);
+        let json = serde_json::to_value(&hit).unwrap();
+        assert_eq!(
+            json["breakdown"]["policy"],
+            serde_json::json!("ControlInjectRawSumV0")
+        );
+        assert_eq!(json["breakdown"]["policy_sort_key"], 12.0);
+        assert!(json.get("score").is_none());
+        assert!(json["breakdown"].get("total_score").is_none());
     }
 
     #[test]
@@ -518,7 +516,7 @@ mod tests {
         let (result, ops) = monhun_control_ops(&table);
         assert!(result.global.get(GlobalResourceKey::Matatabi) > 0.0);
 
-        let without = score_control_result(
+        let without = evaluate_control_policy(
             &result,
             &ops,
             &table,
@@ -527,7 +525,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let with = score_control_result(
+        let with = evaluate_control_policy(
             &result,
             &ops,
             &table,
@@ -538,10 +536,10 @@ mod tests {
         );
         // 纯注入评分：matatabi consumer 不影响 score（木天蓼不在中枢评分里预支）
         assert!(
-            (with.total_score - without.total_score).abs() < 0.001,
+            (with.policy_sort_key - without.policy_sort_key).abs() < 0.001,
             "matatabi 不应影响中枢注入评分: with={} without={}",
-            with.total_score,
-            without.total_score,
+            with.policy_sort_key,
+            without.policy_sort_key,
         );
         assert!(with.matatabi > 0.0, "matatabi 仍应在 breakdown 中记录");
         assert!(
@@ -613,7 +611,7 @@ mod tests {
             &ControlSearchOptions {
                 max_operators: 1,
                 top_k: 1,
-                fill_policy: ControlFillPolicy::HrAndMood,
+                fill_policy: ControlFillPolicy::LayeredFill,
                 ..Default::default()
             },
         )
@@ -621,7 +619,7 @@ mod tests {
 
         assert_eq!(hits[0].names, vec!["Mon3tr".to_string()]);
         assert!(
-            hits[0].breakdown.inject_subtotal > hits[0].breakdown.mood_fill_score * 0.01,
+            hits[0].breakdown.inject_subtotal > hits[0].breakdown.mood_fill_sort_component * 0.01,
             "efficiency pieces should outrank pure mood fill: {:?}",
             hits[0].breakdown
         );

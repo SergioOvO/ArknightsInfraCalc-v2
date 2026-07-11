@@ -1,121 +1,76 @@
-use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-use crate::error::{Error, Result};
+use crate::efficiency::Efficiency;
+use crate::error::Result;
 use crate::instances::OperatorInstances;
-use crate::layout::{
-    assign_shift, pinned_assignment, resolve_base, rotating_workers, AssignBaseOptions,
-    AssignShiftMode, BaseAssignment, BaseBlueprint,
-};
+use crate::layout::{resolve_base, BaseAssignment, BaseBlueprint};
 use crate::manufacture::input::ManuRoomInput;
 use crate::manufacture::solve_manufacture;
-use crate::operbox::OperBox;
 use crate::power::{solve_power, PowerRoomInput};
 use crate::skill_table::SkillTable;
 use crate::trade::input::TradeRoomInput;
 use crate::trade::solve_trade_with_shift;
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum BaseShiftRole {
-    Peak,
-    Recovery,
-}
-
-/// 单房间评分快照（用于 CLI 逐房展示）。
+/// 单房间直接效率快照（用于 CLI 逐房展示）。
 #[derive(Debug, Clone, Default, Serialize)]
-pub struct RoomScoreLine {
+pub struct RoomEfficiencyLine {
     pub room_id: String,
-    /// 仅贸易站填写：可直接用于产出预估的最终效率。
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub trade_score: f64,
-    /// 仅贸易站填写：完整最终效率百分比。
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub trade_pct: f64,
-    /// 仅贸易站填写：技能效率%（order_eff_skill，不含人头/全局）
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub trade_skill_pct: f64,
-    /// 仅制造站填写：社区展示口径，即技能生产力 `prod_skill`（不含人头/全局注入）。
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub manu_score: f64,
-    /// 仅发电站填写：charge_speed_pct
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub power_score: f64,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub trade_efficiency: Efficiency,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub trade_skill_efficiency: Efficiency,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub manufacture_efficiency: Efficiency,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub manufacture_skill_efficiency: Efficiency,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub power_efficiency: Efficiency,
 }
 
-fn is_zero_f64(v: &f64) -> bool {
-    *v == 0.0
+fn is_zero_efficiency(v: &Efficiency) -> bool {
+    v.is_zero()
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
-pub struct ShiftScores {
-    pub trade_score: f64,
-    pub manu_prod_sum: f64,
-    /// 发电站充能速度 % 合计（按 `shift_hours` 评估，含空构爬升）。
-    pub power_charge_sum: f64,
-    /// 各房间评分明细（按 SHIFT_STATION_ORDER 顺序）。
-    pub room_lines: Vec<RoomScoreLine>,
+pub struct ShiftEfficiencies {
+    pub trade_efficiency: Efficiency,
+    pub manufacture_efficiency: Efficiency,
+    pub power_efficiency: Efficiency,
+    /// 各房间效率明细（按 SHIFT_STATION_ORDER 顺序）。
+    pub room_lines: Vec<RoomEfficiencyLine>,
 }
 
-impl ShiftScores {
-    /// 贸易分按时长折算（不与制造/发电混合量纲）。
-    pub fn weighted_trade(&self, shift_hours: f64) -> f64 {
-        self.trade_score * (shift_hours / 24.0)
+impl ShiftEfficiencies {
+    /// 贸易效率按时长折算（不与制造/发电混合量纲）。
+    pub fn weighted_trade(&self, shift_hours: f64) -> Efficiency {
+        weighted_for_hours(self.trade_efficiency, shift_hours)
     }
-    /// 制造产量按时长折算。
-    pub fn weighted_manu(&self, shift_hours: f64) -> f64 {
-        self.manu_prod_sum * (shift_hours / 24.0)
+    /// 制造效率按时长折算。
+    pub fn weighted_manufacture(&self, shift_hours: f64) -> Efficiency {
+        weighted_for_hours(self.manufacture_efficiency, shift_hours)
     }
-    /// 发电充能% 按时长折算。
-    pub fn weighted_power(&self, shift_hours: f64) -> f64 {
-        self.power_charge_sum * (shift_hours / 24.0)
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct BaseShiftPlan {
-    pub index: usize,
-    pub role: BaseShiftRole,
-    pub assignment: BaseAssignment,
-    pub scores: ShiftScores,
-    pub rotating_workers: Vec<String>,
-    /// `Some(0)` when this shift reuses shift 1 (A-B-A).
-    pub reused_from_shift: Option<usize>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct BaseRotationReport {
-    pub shifts: Vec<BaseShiftPlan>,
-    pub elapsed: Duration,
-}
-
-fn workers_sorted(set: &HashSet<String>) -> Vec<String> {
-    let mut v: Vec<_> = set.iter().cloned().collect();
-    v.sort();
-    v
-}
-
-fn assert_disjoint(a: &HashSet<String>, b: &HashSet<String>, label: &str) -> Result<()> {
-    let overlap: Vec<String> = a.intersection(b).cloned().collect();
-    if overlap.is_empty() {
-        Ok(())
-    } else {
-        Err(Error::msg(format!("{label} 轮换岗干员重合: {overlap:?}")))
+    /// 发电效率按时长折算。
+    pub fn weighted_power(&self, shift_hours: f64) -> Efficiency {
+        weighted_for_hours(self.power_efficiency, shift_hours)
     }
 }
 
-/// 对编制逐房求贸易/制造/发电纸面分（满心情）；`shift_hours` 影响发电爬升与产出折算。
-pub fn score_base_assignment(
+fn weighted_for_hours(efficiency: Efficiency, hours: f64) -> Efficiency {
+    let minutes = (hours * 60.0).round() as i64;
+    efficiency.scale_ratio(minutes, 24 * 60)
+}
+
+/// 对编制逐房求贸易/制造/发电直接效率（满心情）；`shift_hours` 影响发电爬升与产出折算。
+pub fn evaluate_base_assignment_efficiencies(
     blueprint: &BaseBlueprint,
     assignment: &BaseAssignment,
     instances: &OperatorInstances,
     table: &SkillTable,
     shift_hours: f64,
     durin_plan: Option<u8>,
-) -> Result<ShiftScores> {
+) -> Result<ShiftEfficiencies> {
     let resolved = resolve_base(
         blueprint,
         assignment,
@@ -125,22 +80,20 @@ pub fn score_base_assignment(
         durin_plan,
     )?;
 
-    let mut trade_score = 0.0;
-    let mut manu_prod_sum = 0.0;
-    let mut power_charge_sum = 0.0;
-    let mut room_lines: Vec<RoomScoreLine> = Vec::new();
+    let mut trade_efficiency = Efficiency::ZERO;
+    let mut manufacture_efficiency = Efficiency::ZERO;
+    let mut power_efficiency = Efficiency::ZERO;
+    let mut room_lines: Vec<RoomEfficiencyLine> = Vec::new();
 
     for room in &resolved.trade_rooms {
-        let mut line = RoomScoreLine {
+        let mut line = RoomEfficiencyLine {
             room_id: room.id.0.clone(),
-            ..RoomScoreLine::default()
+            ..RoomEfficiencyLine::default()
         };
         if let Some(snapshot) = assignment.efficiency_in(&room.id).filter(|s| s.is_trade()) {
-            let final_efficiency = snapshot.final_trade_efficiency();
-            trade_score += final_efficiency;
-            line.trade_score = final_efficiency;
-            line.trade_pct = snapshot.final_trade_efficiency_pct();
-            line.trade_skill_pct = snapshot.trade_skill_pct;
+            trade_efficiency += snapshot.trade_final_efficiency;
+            line.trade_efficiency = snapshot.trade_final_efficiency;
+            line.trade_skill_efficiency = snapshot.trade_skill_efficiency;
         } else if !room.operators.is_empty() {
             let input = TradeRoomInput {
                 level: room.level,
@@ -154,26 +107,25 @@ pub fn score_base_assignment(
                 active_order_kind: room.order,
             };
             let result = solve_trade_with_shift(&input, table, shift_hours)?;
-            trade_score += result.effective_eff_multiplier;
-            line.trade_score = result.effective_eff_multiplier;
-            line.trade_pct = result.efficiency.final_efficiency_pct();
-            // 社区惯例：逐房展示只看技能面，不含人头与中枢全局注入。
-            line.trade_skill_pct = result.efficiency.paper.operator_skill_bonus * 100.0;
+            trade_efficiency += result.efficiency.final_efficiency;
+            line.trade_efficiency = result.efficiency.final_efficiency;
+            line.trade_skill_efficiency = result.efficiency.paper.skill_efficiency;
         }
         room_lines.push(line);
     }
 
     for room in &resolved.manu_rooms {
-        let mut line = RoomScoreLine {
+        let mut line = RoomEfficiencyLine {
             room_id: room.id.0.clone(),
-            ..RoomScoreLine::default()
+            ..RoomEfficiencyLine::default()
         };
         if let Some(snapshot) = assignment
             .efficiency_in(&room.id)
             .filter(|s| s.is_manufacture())
         {
-            manu_prod_sum += snapshot.manu_prod_total;
-            line.manu_score = snapshot.manu_prod_skill;
+            manufacture_efficiency += snapshot.manufacture_final_efficiency;
+            line.manufacture_efficiency = snapshot.manufacture_final_efficiency;
+            line.manufacture_skill_efficiency = snapshot.manufacture_skill_efficiency;
         } else if !room.operators.is_empty() {
             let input = ManuRoomInput {
                 level: room.level,
@@ -183,22 +135,21 @@ pub fn score_base_assignment(
                 layout: Arc::new(room.layout.clone()),
             };
             let result = solve_manufacture(&input, table)?;
-            let prod = result.prod_total;
-            manu_prod_sum += prod;
-            // 社区惯例：逐房展示只看技能面，不含人头与中枢全局注入。
-            line.manu_score = result.prod_skill;
+            manufacture_efficiency += result.final_efficiency;
+            line.manufacture_efficiency = result.final_efficiency;
+            line.manufacture_skill_efficiency = result.skill_efficiency;
         }
         room_lines.push(line);
     }
 
     for room in &resolved.power_rooms {
-        let mut line = RoomScoreLine {
+        let mut line = RoomEfficiencyLine {
             room_id: room.id.0.clone(),
-            ..RoomScoreLine::default()
+            ..RoomEfficiencyLine::default()
         };
-        let score =
+        let efficiency =
             if let Some(snapshot) = assignment.efficiency_in(&room.id).filter(|s| s.is_power()) {
-                snapshot.power_charge_speed_pct
+                snapshot.power_final_efficiency
             } else {
                 let input = PowerRoomInput {
                     operator: room.operator.clone(),
@@ -206,197 +157,40 @@ pub fn score_base_assignment(
                     shift_hours,
                     layout: room.layout.clone(),
                 };
-                solve_power(&input, table)?.charge_speed_pct
+                solve_power(&input, table)?.final_efficiency
             };
-        power_charge_sum += score;
-        line.power_score = score;
+        power_efficiency += efficiency;
+        line.power_efficiency = efficiency;
         room_lines.push(line);
     }
 
-    Ok(ShiftScores {
-        trade_score,
-        manu_prod_sum,
-        power_charge_sum,
+    Ok(ShiftEfficiencies {
+        trade_efficiency,
+        manufacture_efficiency,
+        power_efficiency,
         room_lines,
-    })
-}
-
-/// 全基建三班 A-B-A：高峰班 → 恢复班（池修剪）→ 复用高峰班；中枢/宿舍三班钉死。
-pub fn schedule_base_rotation_a_b_a(
-    blueprint: &BaseBlueprint,
-    operbox: &OperBox,
-    instances: &OperatorInstances,
-    table: &SkillTable,
-    options: &AssignBaseOptions,
-) -> Result<BaseRotationReport> {
-    let start = Instant::now();
-    blueprint.validate()?;
-
-    let durin_plan = operbox.durin_dorm_planning_count(instances);
-
-    let peak_assignment = assign_shift(
-        blueprint,
-        operbox,
-        instances,
-        table,
-        options,
-        AssignShiftMode::Peak,
-        &BaseAssignment::default(),
-    )?;
-    let peak_rotating = rotating_workers(&peak_assignment, blueprint);
-    if peak_rotating.is_empty() {
-        return Err(Error::msg("高峰班无贸易/制造/发电岗位"));
-    }
-
-    let pinned = pinned_assignment(&peak_assignment, blueprint);
-    let recovery_operbox = operbox.excluding(&peak_rotating);
-
-    let recovery_assignment = assign_shift(
-        blueprint,
-        &recovery_operbox,
-        instances,
-        table,
-        options,
-        AssignShiftMode::Recovery,
-        &pinned,
-    )?;
-    let recovery_rotating = rotating_workers(&recovery_assignment, blueprint);
-    assert_disjoint(&peak_rotating, &recovery_rotating, "高峰班与恢复班")?;
-
-    let peak_scores = score_base_assignment(
-        blueprint,
-        &peak_assignment,
-        instances,
-        table,
-        24.0,
-        Some(durin_plan),
-    )?;
-    let recovery_scores = score_base_assignment(
-        blueprint,
-        &recovery_assignment,
-        instances,
-        table,
-        24.0,
-        Some(durin_plan),
-    )?;
-
-    let shift1 = BaseShiftPlan {
-        index: 0,
-        role: BaseShiftRole::Peak,
-        assignment: peak_assignment.clone(),
-        scores: peak_scores.clone(),
-        rotating_workers: workers_sorted(&peak_rotating),
-        reused_from_shift: None,
-    };
-
-    let shift2 = BaseShiftPlan {
-        index: 1,
-        role: BaseShiftRole::Recovery,
-        assignment: recovery_assignment,
-        scores: recovery_scores,
-        rotating_workers: workers_sorted(&recovery_rotating),
-        reused_from_shift: None,
-    };
-
-    // shift3 复用 shift1 的 peak_assignment 评分，避免重复求解。
-    let shift3_scores = peak_scores;
-    let shift3 = BaseShiftPlan {
-        index: 2,
-        role: BaseShiftRole::Peak,
-        assignment: peak_assignment,
-        scores: shift3_scores,
-        rotating_workers: workers_sorted(&peak_rotating),
-        reused_from_shift: Some(0),
-    };
-
-    Ok(BaseRotationReport {
-        shifts: vec![shift1, shift2, shift3],
-        elapsed: start.elapsed(),
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::assignment_operator_names;
     use crate::layout::RoomEfficiencySnapshot;
-    use crate::operbox::{default_operbox_gongsun_path, OperBox};
     use crate::skill_table::{data_path, default_skill_table_path, SkillTable};
 
-    fn fixtures_243_2gold() -> (BaseBlueprint, OperBox, OperatorInstances, SkillTable) {
+    fn fixtures_243_2gold() -> (BaseBlueprint, OperatorInstances, SkillTable) {
         let blueprint =
             BaseBlueprint::load(&data_path("layout/243_use_this_.json").unwrap()).unwrap();
-        let operbox = OperBox::load(&data_path("schedule_243/operbox_ideal_e2.json").unwrap())
-            .or_else(|_| OperBox::load(&default_operbox_gongsun_path().unwrap()))
-            .unwrap();
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-        (blueprint, operbox, instances, table)
+        (blueprint, instances, table)
     }
 
     use crate::instances::default_instances_path;
 
     #[test]
-    fn base_rotation_aba_disjoint_and_reuse() {
-        let (blueprint, operbox, instances, table) = fixtures_243_2gold();
-        let report = schedule_base_rotation_a_b_a(
-            &blueprint,
-            &operbox,
-            &instances,
-            &table,
-            &AssignBaseOptions {
-                top_k: 10,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        assert_eq!(report.shifts.len(), 3);
-        assert_eq!(report.shifts[2].reused_from_shift, Some(0));
-
-        let w1: HashSet<_> = report.shifts[0].rotating_workers.iter().cloned().collect();
-        let w2: HashSet<_> = report.shifts[1].rotating_workers.iter().cloned().collect();
-        assert!(w1.is_disjoint(&w2));
-
-        for shift in &report.shifts {
-            let names = assignment_operator_names(&shift.assignment);
-            assert_eq!(
-                names.len(),
-                shift
-                    .assignment
-                    .rooms
-                    .iter()
-                    .map(|r| r.operators.len())
-                    .sum::<usize>(),
-                "shift {} has duplicate operators",
-                shift.index + 1
-            );
-        }
-    }
-
-    // 迷迭香+黑键「上 2 休 1」已迁至 αβγ：`team_rotation::team_rotation_rosemary_blackkey_shift_bind`。
-    // A-B-A 已废弃，不再维护该约束。
-    #[test]
-    fn base_rotation_peak_beats_recovery_on_trade_paper() {
-        let (blueprint, operbox, instances, table) = fixtures_243_2gold();
-        let report = schedule_base_rotation_a_b_a(
-            &blueprint,
-            &operbox,
-            &instances,
-            &table,
-            &AssignBaseOptions::default(),
-        )
-        .unwrap();
-        assert!(
-            report.shifts[0].scores.trade_score >= report.shifts[1].scores.trade_score,
-            "peak trade {:.3} should be >= recovery {:.3}",
-            report.shifts[0].scores.trade_score,
-            report.shifts[1].scores.trade_score
-        );
-    }
-
-    #[test]
-    fn score_base_assignment_uses_room_efficiency_snapshot() {
-        let (blueprint, _operbox, instances, table) = fixtures_243_2gold();
+    fn evaluate_base_assignment_uses_room_efficiency_snapshot() {
+        let (blueprint, instances, table) = fixtures_243_2gold();
         let mut assignment = BaseAssignment::default();
         assignment.set_room_with_efficiency(
             "manu_1",
@@ -406,20 +200,33 @@ mod tests {
                 crate::layout::AssignedOperator::new("泡普卡", 1),
             ],
             Some(RoomEfficiencySnapshot {
-                manu_prod_total: 333.0,
-                manu_prod_skill: 30.0,
+                manufacture_final_efficiency: Efficiency::from_decimal(3.330),
+                manufacture_skill_efficiency: Efficiency::from_decimal(0.300),
                 ..RoomEfficiencySnapshot::default()
             }),
         );
 
-        let scores =
-            score_base_assignment(&blueprint, &assignment, &instances, &table, 24.0, None).unwrap();
+        let scores = evaluate_base_assignment_efficiencies(
+            &blueprint,
+            &assignment,
+            &instances,
+            &table,
+            24.0,
+            None,
+        )
+        .unwrap();
         let line = scores
             .room_lines
             .iter()
             .find(|line| line.room_id == "manu_1")
             .expect("manu_1 line");
-        assert_eq!(scores.manu_prod_sum, 333.0);
-        assert_eq!(line.manu_score, 30.0);
+        assert_eq!(
+            scores.manufacture_efficiency,
+            Efficiency::from_decimal(3.330)
+        );
+        assert_eq!(
+            line.manufacture_skill_efficiency,
+            Efficiency::from_decimal(0.300)
+        );
     }
 }

@@ -1,12 +1,11 @@
 {
-  "version": 3,
+  "version": 4,
   "source": "工具人表26.5 (2).xlsx @公孙长乐 2026年5月；排班表图片生成器.md 三、需求模块二",
   "entries": [
     {
       "id": "gsl_witch_long_beta",
       "label": "巫恋Ⅱ+龙舌兰Ⅱ+裁缝β",
-      "trade_pct": 138.0,
-      "gold_pct": 46.0,
+      "mechanic_equivalent_efficiency": 0.46,
       "tailor_tier": "beta",
       "unit_gsl_gold_anchor": 2328.77,
       "unit_output": {
@@ -22,8 +21,7 @@
     {
       "id": "gsl_witch_long_alpha",
       "label": "巫恋Ⅱ+龙舌兰Ⅱ + 裁缝a",
-      "trade_pct": 129.0,
-      "gold_pct": 38.0,
+      "mechanic_equivalent_efficiency": 0.38,
       "tailor_tier": "alpha",
       "unit_output": {
         "kind": "enhanced_unit_output_per_day",
@@ -38,8 +36,7 @@
     {
       "id": "gsl_witch_long_blank",
       "label": "巫恋Ⅱ+龙舌兰Ⅱ + 白板",
-      "trade_pct": 124.0,
-      "gold_pct": 33.0,
+      "mechanic_equivalent_efficiency": 0.33,
       "tailor_tier": "regular",
       "unit_output": {
         "kind": "enhanced_unit_output_per_day",
@@ -54,8 +51,7 @@
     {
       "id": "gsl_witch_long0_blank",
       "label": "巫恋Ⅱ+龙舌兰0 + 白板",
-      "trade_pct": 108.0,
-      "gold_pct": 17.0,
+      "mechanic_equivalent_efficiency": 0.17,
       "tailor_tier": "regular",
       "unit_output": {
         "kind": "enhanced_unit_output_per_day",
@@ -70,8 +66,7 @@
     {
       "id": "gsl_witch_beta_blank",
       "label": "巫恋Ⅱ+ 裁缝β + 白板",
-      "trade_pct": 93.0,
-      "gold_pct": 0.0,
+      "mechanic_equivalent_efficiency": 0.0,
       "tailor_tier": "beta",
       "unit_output": {
         "kind": "enhanced_unit_output_per_day",
@@ -86,8 +81,7 @@
     {
       "id": "gsl_closure_tier90",
       "label": "可露希尔Ⅱ @ 90%档",
-      "trade_pct": 135.0,
-      "gold_pct": 42.0,
+      "mechanic_equivalent_efficiency": 0.42,
       "tailor_tier": "regular",
       "unit_output": {
         "kind": "enhanced_unit_output_per_day",
@@ -97,14 +91,13 @@
       "unit_output_precision": "exact",
       "match": {
         "kind": "closure",
-        "station_trade_pct": 114
+        "station_bonus_efficiency_anchor": 1.14
       }
     },
     {
       "id": "gsl_closure_tier80",
       "label": "可露希尔Ⅱ @ 80%档",
-      "trade_pct": 124.0,
-      "gold_pct": 40.0,
+      "mechanic_equivalent_efficiency": 0.4,
       "tailor_tier": "regular",
       "unit_output": {
         "kind": "enhanced_unit_output_per_day",
@@ -114,14 +107,13 @@
       "unit_output_precision": "exact",
       "match": {
         "kind": "closure",
-        "station_trade_pct": 80
+        "station_bonus_efficiency_anchor": 0.8
       }
     },
     {
       "id": "gsl_closure_tier60",
       "label": "可露希尔Ⅱ @ 60%档",
-      "trade_pct": 100.0,
-      "gold_pct": 36.0,
+      "mechanic_equivalent_efficiency": 0.36,
       "tailor_tier": "regular",
       "unit_output": {
         "kind": "enhanced_unit_output_per_day",
@@ -131,14 +123,13 @@
       "unit_output_precision": "exact",
       "match": {
         "kind": "closure",
-        "station_trade_pct": 60
+        "station_bonus_efficiency_anchor": 0.6
       }
     },
     {
       "id": "gsl_docus_syracusa",
       "label": "但书+伺夜+贝洛内（叙拉古链；含阿米娅7%、人头3%、中枢八幡海铃E2，200%贸）",
-      "trade_pct": 200.0,
-      "gold_pct": 55.0,
+      "mechanic_equivalent_efficiency": 0.55,
       "tailor_tier": "docus",
       "unit_output": {
         "kind": "enhanced_unit_output_by_level",
@@ -154,9 +145,8 @@
     },
     {
       "id": "gsl_docus_solo",
-      "label": "但书单走（纸面eff×1.55，trade_pct 由 L1 注入）",
-      "trade_pct": 0.0,
-      "gold_pct": 55.0,
+      "label": "但书单走（完整纸面效率×社区单位产出倍率）",
+      "mechanic_equivalent_efficiency": 0.55,
       "tailor_tier": "docus",
       "unit_output": {
         "kind": "enhanced_unit_output_by_level",
@@ -173,15 +163,13 @@
     {
       "id": "gsl_ling_jie_yaxin",
       "label": "灵知+精1孑+银灰+琳琅诗怀雅（参考锚点；现由L1自然计算129%贸）",
-      "trade_pct": 129.0,
-      "gold_pct": 0.0,
+      "mechanic_equivalent_efficiency": 0.0,
       "tailor_tier": "regular"
     },
     {
       "id": "gsl_blackkey_closure",
       "label": "黑键E2+可露希尔+挂件（感知链贸站；纸面~82→等效114贸+38.4金 @公孙长乐）",
-      "trade_pct": 114.0,
-      "gold_pct": 38.4,
+      "mechanic_equivalent_efficiency": 0.384,
       "tailor_tier": "regular",
       "unit_output": {
         "kind": "enhanced_unit_output_per_day",
@@ -196,8 +184,7 @@
     {
       "id": "gsl_vina_lungmen",
       "label": "推王组：推进之王+摩根+维娜·维多利亚（135%贸；需中枢戴菲恩E2）",
-      "trade_pct": 135.0,
-      "gold_pct": 0.0,
+      "mechanic_equivalent_efficiency": 0.0,
       "tailor_tier": "regular",
       "match": {
         "kind": "vina_lungmen"
@@ -206,8 +193,7 @@
     {
       "id": "gsl_penguin_texlap_e0",
       "label": "企鹅物流：德狼恩怨+拉普兰德+挂件（德克萨斯精0/精2均可）",
-      "trade_pct": 88.0,
-      "gold_pct": 0.0,
+      "mechanic_equivalent_efficiency": 0.0,
       "tailor_tier": "regular",
       "match": {
         "kind": "penguin_texlap_e0"
@@ -216,8 +202,7 @@
     {
       "id": "gsl_penguin_texangel_e2",
       "label": "企鹅物流：德E2默契+能天使+挂件",
-      "trade_pct": 55.0,
-      "gold_pct": 0.0,
+      "mechanic_equivalent_efficiency": 0.0,
       "tailor_tier": "regular",
       "match": {
         "kind": "penguin_texangel_e2"
@@ -226,8 +211,7 @@
     {
       "id": "gsl_penguin_exusiai_lemuen",
       "label": "企鹅物流：能天使+蕾缪安E2相伴+挂件",
-      "trade_pct": 70.0,
-      "gold_pct": 0.0,
+      "mechanic_equivalent_efficiency": 0.0,
       "tailor_tier": "regular",
       "match": {
         "kind": "penguin_exusiai_lemuen"

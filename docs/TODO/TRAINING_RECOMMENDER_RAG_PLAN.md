@@ -47,10 +47,13 @@ OperBox / 未来森空岛导入
 | 体系目录 | `data/base_systems.json` | 已有体系、slots、elite 要求、priority、label，可作为组合规则种子 |
 | 贸易核心角色 | `data/trade_segments.json` | 但书、可露希尔、巫恋等 role pick 与 shortcut 入口 |
 | shortcut | `data/trade_shortcuts.json` | 固定最优 / 难 atom 化组合依据 |
-| 体系文档 | `docs/SYSTEM_CHAINS.md`、`docs/公孙长乐的体系分析文档/` | RAG 解释材料，按体系选择性检索 |
+| 体系文档 | `docs/SYSTEM_CHAINS.md`、`docs/公孙长乐的体系分析文档/` | 当前仓库内的 RAG 解释材料，按体系选择性检索 |
+| 外部知识库 | `/mnt/c/Users/KnightCode/projects/arknights-base-vault` | 体系分析、工具人速查、互斥关系、降级路径和解释文案的主要参考来源 |
 | 前端契约 | `docs/FRONTEND_CLI.md` | `profile_out` 现有 JSON 契约；新推荐报告不要破坏 schema v2 |
 
 注意：项目里的 “MAA JSON” 主要指排班导出/导入，不是练度盒。练度输入当前应称为 `OperBox` JSON；MAA / 森空岛入口作为转换层处理。
+
+外部知识库在 Windows 侧路径为 `C:\Users\KnightCode\projects\arknights-base-vault`，WSL 下访问路径为 `/mnt/c/Users/KnightCode/projects/arknights-base-vault`。第一版规则与 RAG 语料应以该知识库的 `docs/**/*.md` 为主要参考；当前项目的 `data/*.json` 与 Rust 代码负责结构化实现、ID 对齐和已有建模校验。若知识库文档与当前项目数据冲突，不要让 LLM 自行裁决，应在规则草稿中标记 `needs_review` 并列出冲突。
 
 ## 3. 非目标
 
@@ -182,10 +185,13 @@ OperBox / 未来森空岛导入
 
 第一批规则建议由 Claude / 人类从以下来源抽取：
 
-1. `data/base_systems.json`：直接抽 slots、elite、pick_one、priority、label。
-2. `data/trade_segments.json`：补但书、可露希尔、巫恋等贸易角色链。
-3. 现有“必练图片/表格”：人工转成 `standalone_rules`。
-4. `docs/SYSTEM_CHAINS.md` 和体系分析文档：只抽解释片段，不直接当判定真源。
+1. 外部知识库 `/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/**/*.md`：作为体系分析、工具人速查、互斥关系、降级路径、练度口径和解释文案的主要参考来源。优先入口：`README.md`、`docs/2-体系/体系总览.md`、`docs/2-体系/`、`docs/4-散件工具人/散件干员速查.md`、`docs/0-规则/`。
+2. `data/base_systems.json`：用于对齐当前项目已有的体系 ID、slots、elite、pick_one、priority、label，可自动生成 `system_rules` 草稿，但草稿需要按知识库文档人工确认。
+3. `data/trade_segments.json`：补但书、可露希尔、巫恋等贸易角色链，与知识库文档互相校验。
+4. 现有“必练图片/表格”：若未进入知识库，应人工转成 `standalone_rules` 或先补入知识库。
+5. 当前仓库内 `docs/SYSTEM_CHAINS.md` 和体系分析文档：作为补充语料，与外部知识库交叉校验。
+
+不要把外部知识库的 `meta/templates/` 和 `TODO.md` 当作玩家知识正文进入 RAG。若知识库文档、当前仓库 docs、`data/*.json` 之间出现冲突，规则草稿应保留候选并标记 `needs_review: true`，由人工裁决。
 
 ### 5.2 规则解释边界
 
@@ -212,24 +218,28 @@ OperBox / 未来森空岛导入
 MVP 语料建议：
 
 | 来源 | 粒度 | metadata |
-|------|------|----------|
-| `training_recommendations.json` | rule | `rule_id/system_id/operator/reason_code` |
+| ------ | ------ | ---------- |
+| `training_recommendations.json` | rule | `rule_id/system_id/operator/reason_code/source_paths/needs_review` |
 | `base_systems.json` | system | `system_id/label/operators/priority` |
 | `trade_segments.json` | role / segment | `role_id/segment_id/shortcut_id/operators` |
 | `docs/SYSTEM_CHAINS.md` | heading section | `system_id/operators/domain` |
 | `docs/公孙长乐的体系分析文档/*.md` | heading section | `chain_name/operators/domain` |
 | `docs/MODELLED_OPERATORS.md` | operator group | `operator/domain/status` |
+| `/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/*.md` | heading section | `vault_path/system_name/operators/facility/mutual_exclusion/source_updated` |
+| `/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/4-散件工具人/散件干员速查.md` | operator / heading section | `vault_path/operator/facility/target_elite/priority_hint` |
+| `/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/0-规则/*.md` | rule section | `vault_path/rule_topic/operators/facility` |
 
-不建议把 `MECHANICS_REGISTRY.csv` 作为第一版 RAG 语料，噪声大且不是当前代码入口。
+不建议把 `MECHANICS_REGISTRY.csv` 作为第一版 RAG 语料，噪声大且不是当前代码入口。外部知识库的 `meta/templates/` 和 `TODO.md` 也不应进入玩家问答语料。
 
 ### 6.2 MVP 检索方式
 
 先做伪 RAG：
 
-1. 从规则层结果收集关键词：`operator`、`system_id`、`reason_code`、`shortcut_id`。
-2. 在预切分的本地 JSONL 文档片段里做关键词匹配。
-3. 每个推荐最多取 2-3 段短 context。
+1. 从规则层结果收集关键词：`operator`、`system_id`、`label`、`reason_code`、`shortcut_id`。
+2. 在预切分的本地 JSONL 文档片段里做关键词匹配，优先命中 `training_recommendations.json` 的 `source_paths` 和外部知识库对应文档。
+3. 每个推荐最多取 2-3 段短 context；每个体系状态最多取 1-2 段体系说明 / 降级说明。
 4. 将结构化 facts 和 context 一起交给 LLM 生成报告。
+5. 若某条规则带有 `needs_review: true`，RAG 只能说明“该规则待人工复核”，不能把它写成已确认结论。
 
 后续再替换为：
 
@@ -239,6 +249,16 @@ docs/rag_corpus/*.jsonl
   -> vector store
   -> top-k by operator/system/reason_code
 ```
+
+建议第一版 corpus 生成脚本显式支持外部知识库路径参数，例如：
+
+```bash
+python scripts/build_training_rag_corpus.py \
+  --vault-root /mnt/c/Users/KnightCode/projects/arknights-base-vault \
+  --out docs/rag_corpus/training_advice.jsonl
+```
+
+生成脚本应跳过 `meta/templates/`、`TODO.md`、`.git/`，并在每个 chunk 中保留原始 `source_path`，便于人工追溯。
 
 ### 6.3 LLM 提示约束
 
@@ -322,7 +342,7 @@ cargo run -q -p infra-cli -- plan \
 建议新增 `data/fixtures/training_advice/`：
 
 | fixture | 目的 |
-|---------|------|
+| --------- | ------ |
 | `witch_only_tequila.json` | 只有龙舌兰无巫恋：不推荐练龙舌兰，标记缺巫恋 |
 | `witch_ready_untrained.json` | 巫恋 + 龙舌兰 + 裁缝均拥有但未达标：P0 练核心 |
 | `standalone_e1_four_star.json` | 常用精一四星拥有未练：P0 |
@@ -374,17 +394,18 @@ cargo run -q -p infra-cli -- plan \
 请 Claude 优先分析以下问题：
 
 1. `training_recommendations.json` 的 schema 是否足够表达“散件必练、核心组合、pick_one、缺搭档暂缓”。
-2. 能否从 `data/base_systems.json` 自动生成第一批 `system_rules` 草稿；哪些条目必须人工覆写。
-3. 第一批 P0/P1/P2 推荐名单如何从现有表格/图片/文档落成结构化规则。
+2. 能否以外部知识库 `/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/**/*.md` 为主要参考，从 `data/base_systems.json` 自动生成第一批 `system_rules` 草稿；哪些条目必须人工覆写。
+3. 第一批 P0/P1/P2 推荐名单如何从外部知识库的体系文档、`docs/4-散件工具人/散件干员速查.md`、现有表格/图片/当前仓库文档落成结构化规则。
 4. `advice` 独立命令与 `plan --recommend-out` 的接入顺序是否合理。
-5. RAG 语料应优先切哪些文档，哪些文档噪声太大不应进入第一版。
+5. RAG 语料应优先切外部知识库哪些文档，哪些文档噪声太大不应进入第一版。
 6. 是否需要在规则里区分 `target.elite` 与 `target.level`，以及 40% 纯效率角色是否需要 level 要求。
 7. 如何处理同一干员在多个体系中的重复推荐与解释合并。
+8. 当外部知识库文档与当前项目 `data/*.json` / docs 冲突时，规则草稿如何记录 `needs_review`、冲突来源与人工复核结论。
 
 建议 Claude 输出：
 
-- 修订后的 schema。
+- 修订后的 schema，包含 `source_paths`、`needs_review` / 冲突记录字段建议。
 - 首批规则样例，至少覆盖：巫恋组、但书、可露希尔黑键吉星、常用精一四星、40% 效率散件。
+- 外部知识库文档到规则草稿 / RAG corpus 的抽取流程。
 - MVP 实现拆分：数据、core、cli、测试、RAG corpus。
 - 至少 5 个回归 fixture 的输入/期望。
-

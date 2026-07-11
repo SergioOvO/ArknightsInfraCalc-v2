@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+use crate::efficiency::Efficiency;
 use crate::error::Result;
 use crate::manufacture::input::{ManuLineScenario, ManuRoomInput};
 use crate::manufacture::interpreter::{apply_manu_phases, ManuContext};
@@ -8,14 +9,14 @@ use crate::types::RecipeKind;
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct ManuProdBreakdown {
-    pub gold: f64,
-    pub battle_record: f64,
-    pub originium: f64,
+    pub gold: Efficiency,
+    pub battle_record: Efficiency,
+    pub originium: Efficiency,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct ManuCompositeScore {
-    pub composite: f64,
+pub struct ManuLineEfficiency {
+    pub final_efficiency: Efficiency,
     pub per_station: ManuProdBreakdown,
     pub storage: ManuStorageBreakdown,
 }
@@ -36,9 +37,11 @@ pub struct OperatorMoodDrain {
 #[derive(Debug, Clone, Serialize)]
 pub struct ManuResult {
     pub active_recipe: RecipeKind,
-    pub prod_base: f64,
-    pub prod_skill: f64,
-    pub prod_total: f64,
+    pub base_efficiency: Efficiency,
+    pub occupancy_efficiency: Efficiency,
+    pub skill_efficiency: Efficiency,
+    pub global_efficiency: Efficiency,
+    pub final_efficiency: Efficiency,
     pub storage_limit: i32,
     pub mood_drain: Vec<OperatorMoodDrain>,
 }
@@ -48,11 +51,21 @@ pub fn solve_manufacture(input: &ManuRoomInput, table: &SkillTable) -> Result<Ma
     apply_manu_phases(&mut ctx, table);
 
     let recipe = input.active_recipe;
+    let occupancy_efficiency = Efficiency::from_percent_points(ctx.prod_base());
+    let skill_efficiency = Efficiency::from_percent_points(ctx.prod_skill(recipe));
+    let global_efficiency = Efficiency::from_percent_points(
+        ctx.prod_total(recipe) - ctx.prod_base() - ctx.prod_skill(recipe),
+    );
     Ok(ManuResult {
         active_recipe: recipe,
-        prod_base: ctx.prod_base(),
-        prod_skill: ctx.prod_skill(recipe),
-        prod_total: ctx.prod_total(recipe),
+        base_efficiency: Efficiency::ONE,
+        occupancy_efficiency,
+        skill_efficiency,
+        global_efficiency,
+        final_efficiency: Efficiency::ONE
+            + occupancy_efficiency
+            + skill_efficiency
+            + global_efficiency,
         storage_limit: ctx.storage_limit(recipe),
         mood_drain: ctx
             .mood_drain_summary()
@@ -66,12 +79,12 @@ pub fn solve_manufacture(input: &ManuRoomInput, table: &SkillTable) -> Result<Ma
 }
 
 /// 按 `ManuLineScenario` 对同一三人组在各配方产线上求值并加权求和。
-pub fn score_manu_composite(
+pub fn evaluate_manufacture_lines(
     input: &ManuRoomInput,
     table: &SkillTable,
     scenario: ManuLineScenario,
-) -> Result<ManuCompositeScore> {
-    let mut composite = 0.0;
+) -> Result<ManuLineEfficiency> {
+    let mut final_efficiency = Efficiency::ZERO;
     let mut per_station = ManuProdBreakdown::default();
     let mut storage = ManuStorageBreakdown::default();
 
@@ -79,27 +92,26 @@ pub fn score_manu_composite(
         let mut room = input.clone();
         room.active_recipe = recipe;
         let result = solve_manufacture(&room, table)?;
-        let weight = f64::from(lines);
-        composite += weight * result.prod_total;
+        final_efficiency += result.final_efficiency.scale_ratio(i64::from(lines), 1);
         match recipe {
             RecipeKind::Gold => {
-                per_station.gold = result.prod_total;
+                per_station.gold = result.final_efficiency;
                 storage.gold = result.storage_limit;
             }
             RecipeKind::BattleRecord => {
-                per_station.battle_record = result.prod_total;
+                per_station.battle_record = result.final_efficiency;
                 storage.battle_record = result.storage_limit;
             }
             RecipeKind::Originium => {
-                per_station.originium = result.prod_total;
+                per_station.originium = result.final_efficiency;
                 storage.originium = result.storage_limit;
             }
             RecipeKind::All => {}
         }
     }
 
-    Ok(ManuCompositeScore {
-        composite,
+    Ok(ManuLineEfficiency {
+        final_efficiency,
         per_station,
         storage,
     })
@@ -130,8 +142,8 @@ mod tests {
             .collect();
         let input = ManuRoomInput::with_operators(3, RecipeKind::BattleRecord, operators);
         let result = solve_manufacture(&input, &table).unwrap();
-        assert!((result.prod_base - 3.0).abs() < 0.01);
-        assert!(result.prod_skill > 20.0);
+        assert!(((result.occupancy_efficiency.as_f64() * 100.0) - 3.0).abs() < 0.01);
+        assert!((result.skill_efficiency.as_f64() * 100.0) > 20.0);
         assert!(result.storage_limit >= 26);
     }
 }

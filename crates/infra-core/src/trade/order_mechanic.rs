@@ -3,6 +3,8 @@
 
 use serde::Serialize;
 
+use crate::efficiency::Efficiency;
+
 use super::interpreter::{MechanicCaps, TradeContext};
 use crate::trade::input::TradeOrderKind;
 
@@ -121,7 +123,7 @@ pub struct OrderMechanicResult {
     pub gold_distribution: GoldDistribution,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub originium_distribution: Option<OriginiumDistribution>,
-    pub mechanic_equiv_eff_pct: f64,
+    pub mechanic_equivalent_efficiency: Efficiency,
     pub gold_per_order_avg: f64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub originium_per_order_avg: f64,
@@ -139,21 +141,6 @@ fn is_zero(v: &f64) -> bool {
 impl OrderMechanicResult {
     pub fn ignores_order_eff(&self) -> bool {
         self.dominant_kind == SpecialOrderKind::PepeExclusive
-    }
-
-    pub fn effective_eff_multiplier(&self, order_eff_total_pct: f64) -> f64 {
-        if self.dominant_kind == SpecialOrderKind::PepeExclusive {
-            let base = baseline_unit_trade_lv3_regular();
-            if base > 0.0 {
-                pepe_unit_trade_per_day() / base
-            } else {
-                1.0
-            }
-        } else {
-            let eff = 1.0 + order_eff_total_pct / 100.0;
-            let mech = 1.0 + self.mechanic_equiv_eff_pct / 100.0;
-            eff * mech
-        }
     }
 }
 
@@ -209,7 +196,7 @@ pub fn resolve_order_mechanic(ctx: &TradeContext, order_eff_total_pct: f64) -> O
         dominant_kind: SpecialOrderKind::NormalGold,
         gold_distribution: dist,
         originium_distribution: None,
-        mechanic_equiv_eff_pct: mechanic_equiv,
+        mechanic_equivalent_efficiency: Efficiency::from_percent_points(mechanic_equiv),
         gold_per_order_avg: gold_avg,
         originium_per_order_avg: 0.0,
         minutes_per_gold: mpg,
@@ -256,7 +243,7 @@ fn eureka_result(order_eff_total_pct: f64, dist: &GoldDistribution) -> OrderMech
         dominant_kind: SpecialOrderKind::NormalGold,
         gold_distribution: dist.clone(),
         originium_distribution: None,
-        mechanic_equiv_eff_pct: mechanic_equiv,
+        mechanic_equivalent_efficiency: Efficiency::from_percent_points(mechanic_equiv),
         gold_per_order_avg: 2.0,
         originium_per_order_avg: 0.0,
         minutes_per_gold: eureka_mpg,
@@ -278,7 +265,7 @@ fn pepe_result(dist: &GoldDistribution) -> OrderMechanicResult {
         dominant_kind: SpecialOrderKind::PepeExclusive,
         gold_distribution: dist.clone(),
         originium_distribution: None,
-        mechanic_equiv_eff_pct: mechanic_equiv,
+        mechanic_equivalent_efficiency: Efficiency::from_percent_points(mechanic_equiv),
         gold_per_order_avg: 0.0,
         originium_per_order_avg: 0.0,
         minutes_per_gold: PEPE_ORDER_DURATION_MIN,
@@ -301,7 +288,7 @@ fn closure_result(order_eff_total_pct: f64, dist: &GoldDistribution) -> OrderMec
         dominant_kind: SpecialOrderKind::ClosureSpecial,
         gold_distribution: dist.clone(),
         originium_distribution: None,
-        mechanic_equiv_eff_pct: mechanic_equiv,
+        mechanic_equivalent_efficiency: Efficiency::from_percent_points(mechanic_equiv),
         gold_per_order_avg: 2.0,
         originium_per_order_avg: 0.0,
         minutes_per_gold: closure_mpg,
@@ -404,7 +391,7 @@ fn originium_result(level: u8) -> OrderMechanicResult {
         dominant_kind: SpecialOrderKind::NormalOriginium,
         gold_distribution: GoldDistribution::for_trade_level(level),
         originium_distribution: Some(dist),
-        mechanic_equiv_eff_pct: mechanic_equiv,
+        mechanic_equivalent_efficiency: Efficiency::from_percent_points(mechanic_equiv),
         gold_per_order_avg: 0.0,
         originium_per_order_avg: originium_avg,
         minutes_per_gold: 0.0,

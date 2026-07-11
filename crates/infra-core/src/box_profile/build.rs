@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
+use crate::efficiency::Efficiency;
 use crate::error::Result;
 use crate::instances::OperatorInstances;
 use crate::layout::BaseBlueprint;
@@ -46,11 +47,9 @@ pub enum GapSeverity {
 #[derive(Debug, Clone, Serialize)]
 pub struct ComboSnapshot {
     pub operators: Vec<String>,
-    pub score: f64,
+    pub final_efficiency: Efficiency,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub trade_pct: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gold_pct: Option<f64>,
+    pub mechanic_equivalent_efficiency: Option<Efficiency>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -90,14 +89,14 @@ pub struct OperboxSummary {
     #[serde(alias = "elite2")]
     pub tier_up_owned: usize,
     pub trade_pool_ready: usize,
-    pub manu_pool_ready: usize,
+    pub manufacture_pool_ready: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RotationSnapshot {
-    pub daily_trade: f64,
-    pub daily_manu: f64,
-    pub daily_power: f64,
+    pub daily_trade_efficiency: Efficiency,
+    pub daily_manufacture_efficiency: Efficiency,
+    pub daily_power_efficiency: Efficiency,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -195,7 +194,7 @@ fn assemble_box_profile(
     let baseline_rotation = rotation_snapshot(baseline);
 
     BoxProfile {
-        schema_version: 2,
+        schema_version: 4,
         layout_label: layout_label.to_string(),
         operbox_label: operbox_label.to_string(),
         baseline_label,
@@ -203,7 +202,7 @@ fn assemble_box_profile(
             owned: current.owned,
             tier_up_owned: current.tier_up_owned,
             trade_pool_ready: current.trade_pool_ready,
-            manu_pool_ready: current.manu_pool_ready,
+            manufacture_pool_ready: current.manufacture_pool_ready,
         },
         domains,
         rotation,
@@ -216,9 +215,9 @@ fn assemble_box_profile(
 
 pub(super) fn rotation_snapshot(probe: &LayoutProbe) -> RotationSnapshot {
     RotationSnapshot {
-        daily_trade: probe.rotation.daily.trade,
-        daily_manu: probe.rotation.daily.manu,
-        daily_power: probe.rotation.daily.power,
+        daily_trade_efficiency: probe.rotation.daily.trade,
+        daily_manufacture_efficiency: probe.rotation.daily.manufacture,
+        daily_power_efficiency: probe.rotation.daily.power,
     }
 }
 
@@ -228,6 +227,10 @@ fn gap_ratio(current: f64, baseline: f64) -> f64 {
     } else {
         (current - baseline) / baseline
     }
+}
+
+fn efficiency_gap(current: Efficiency, baseline: Efficiency) -> f64 {
+    gap_ratio(current.as_f64(), baseline.as_f64())
 }
 
 fn severity(gap: f64, warn: f64, critical: f64) -> GapSeverity {
@@ -251,21 +254,19 @@ pub(super) fn build_domains(
         current.trade_report.gold_order_line.as_ref(),
         baseline.trade_report.gold_order_line.as_ref(),
     ) {
-        let gap = gap_ratio(g.score, bg.score);
+        let gap = efficiency_gap(g.final_efficiency, bg.final_efficiency);
         out.push(DomainMetric {
             id: "trade_gold",
             label: "贸易·赤金线",
             current: ComboSnapshot {
                 operators: g.names.clone(),
-                score: g.score,
-                trade_pct: Some(g.trade_pct),
-                gold_pct: Some(g.gold_pct),
+                final_efficiency: g.final_efficiency,
+                mechanic_equivalent_efficiency: Some(g.mechanic_equivalent_efficiency),
             },
             baseline: ComboSnapshot {
                 operators: bg.names.clone(),
-                score: bg.score,
-                trade_pct: Some(bg.trade_pct),
-                gold_pct: Some(bg.gold_pct),
+                final_efficiency: bg.final_efficiency,
+                mechanic_equivalent_efficiency: Some(bg.mechanic_equivalent_efficiency),
             },
             gap_ratio: gap,
             severity: severity(gap, options.gap_warn, options.gap_critical),
@@ -276,21 +277,19 @@ pub(super) fn build_domains(
         current.trade_report.originium_order_line.as_ref(),
         baseline.trade_report.originium_order_line.as_ref(),
     ) {
-        let gap = gap_ratio(o.score, bo.score);
+        let gap = efficiency_gap(o.final_efficiency, bo.final_efficiency);
         out.push(DomainMetric {
             id: "trade_originium",
             label: "贸易·订单/源石线",
             current: ComboSnapshot {
                 operators: o.names.clone(),
-                score: o.score,
-                trade_pct: Some(o.trade_pct),
-                gold_pct: None,
+                final_efficiency: o.final_efficiency,
+                mechanic_equivalent_efficiency: None,
             },
             baseline: ComboSnapshot {
                 operators: bo.names.clone(),
-                score: bo.score,
-                trade_pct: Some(bo.trade_pct),
-                gold_pct: None,
+                final_efficiency: bo.final_efficiency,
+                mechanic_equivalent_efficiency: None,
             },
             gap_ratio: gap,
             severity: severity(gap, options.gap_warn, options.gap_critical),
@@ -300,21 +299,19 @@ pub(super) fn build_domains(
     {
         let c = &current.manu_report.best;
         let b = &baseline.manu_report.best;
-        let gap = gap_ratio(c.composite_score, b.composite_score);
+        let gap = efficiency_gap(c.final_efficiency, b.final_efficiency);
         out.push(DomainMetric {
-            id: "manu_composite",
+            id: "manufacture_total",
             label: "制造·综合",
             current: ComboSnapshot {
                 operators: c.names.clone(),
-                score: c.composite_score,
-                trade_pct: None,
-                gold_pct: None,
+                final_efficiency: c.final_efficiency,
+                mechanic_equivalent_efficiency: None,
             },
             baseline: ComboSnapshot {
                 operators: b.names.clone(),
-                score: b.composite_score,
-                trade_pct: None,
-                gold_pct: None,
+                final_efficiency: b.final_efficiency,
+                mechanic_equivalent_efficiency: None,
             },
             gap_ratio: gap,
             severity: severity(gap, options.gap_warn, options.gap_critical),
@@ -325,21 +322,19 @@ pub(super) fn build_domains(
         current.manu_report.gold_line.as_ref(),
         baseline.manu_report.gold_line.as_ref(),
     ) {
-        let gap = gap_ratio(g.composite_score, bg.composite_score);
+        let gap = efficiency_gap(g.final_efficiency, bg.final_efficiency);
         out.push(DomainMetric {
-            id: "manu_gold",
+            id: "manufacture_gold",
             label: "制造·赤金产线",
             current: ComboSnapshot {
                 operators: g.names.clone(),
-                score: g.composite_score,
-                trade_pct: None,
-                gold_pct: None,
+                final_efficiency: g.final_efficiency,
+                mechanic_equivalent_efficiency: None,
             },
             baseline: ComboSnapshot {
                 operators: bg.names.clone(),
-                score: bg.composite_score,
-                trade_pct: None,
-                gold_pct: None,
+                final_efficiency: bg.final_efficiency,
+                mechanic_equivalent_efficiency: None,
             },
             gap_ratio: gap,
             severity: severity(gap, options.gap_warn, options.gap_critical),
@@ -350,62 +345,59 @@ pub(super) fn build_domains(
         current.manu_report.battle_record_line.as_ref(),
         baseline.manu_report.battle_record_line.as_ref(),
     ) {
-        let gap = gap_ratio(e.composite_score, be.composite_score);
+        let gap = efficiency_gap(e.final_efficiency, be.final_efficiency);
         out.push(DomainMetric {
-            id: "manu_exp",
+            id: "manufacture_battle_record",
             label: "制造·经验产线",
             current: ComboSnapshot {
                 operators: e.names.clone(),
-                score: e.composite_score,
-                trade_pct: None,
-                gold_pct: None,
+                final_efficiency: e.final_efficiency,
+                mechanic_equivalent_efficiency: None,
             },
             baseline: ComboSnapshot {
                 operators: be.names.clone(),
-                score: be.composite_score,
-                trade_pct: None,
-                gold_pct: None,
+                final_efficiency: be.final_efficiency,
+                mechanic_equivalent_efficiency: None,
             },
             gap_ratio: gap,
             severity: severity(gap, options.gap_warn, options.gap_critical),
         });
     }
 
-    let gap = gap_ratio(current.rotation.daily.trade, baseline.rotation.daily.trade);
+    let gap = efficiency_gap(current.rotation.daily.trade, baseline.rotation.daily.trade);
     out.push(DomainMetric {
         id: "rotation_trade",
         label: "轮休·24h贸易加权",
         current: ComboSnapshot {
             operators: vec![],
-            score: current.rotation.daily.trade,
-            trade_pct: None,
-            gold_pct: None,
+            final_efficiency: current.rotation.daily.trade,
+            mechanic_equivalent_efficiency: None,
         },
         baseline: ComboSnapshot {
             operators: vec![],
-            score: baseline.rotation.daily.trade,
-            trade_pct: None,
-            gold_pct: None,
+            final_efficiency: baseline.rotation.daily.trade,
+            mechanic_equivalent_efficiency: None,
         },
         gap_ratio: gap,
         severity: severity(gap, options.gap_warn, options.gap_critical),
     });
 
-    let gap = gap_ratio(current.rotation.daily.manu, baseline.rotation.daily.manu);
+    let gap = efficiency_gap(
+        current.rotation.daily.manufacture,
+        baseline.rotation.daily.manufacture,
+    );
     out.push(DomainMetric {
-        id: "rotation_manu",
+        id: "rotation_manufacture",
         label: "轮休·24h制造加权",
         current: ComboSnapshot {
             operators: vec![],
-            score: current.rotation.daily.manu,
-            trade_pct: None,
-            gold_pct: None,
+            final_efficiency: current.rotation.daily.manufacture,
+            mechanic_equivalent_efficiency: None,
         },
         baseline: ComboSnapshot {
             operators: vec![],
-            score: baseline.rotation.daily.manu,
-            trade_pct: None,
-            gold_pct: None,
+            final_efficiency: baseline.rotation.daily.manufacture,
+            mechanic_equivalent_efficiency: None,
         },
         gap_ratio: gap,
         severity: severity(gap, options.gap_warn, options.gap_critical),
@@ -527,9 +519,9 @@ pub(super) fn build_flags(domains: &[DomainMetric]) -> Vec<String> {
     }
     if domains
         .iter()
-        .any(|d| d.id == "manu_composite" && d.severity == GapSeverity::Critical)
+        .any(|d| d.id == "manufacture_total" && d.severity == GapSeverity::Critical)
     {
-        flags.push("manu_bottleneck".to_string());
+        flags.push("manufacture_bottleneck".to_string());
     }
     flags
 }
@@ -551,7 +543,7 @@ pub(super) fn build_narration_hints(
     }
 
     if let (Some(c), Some(b)) = (
-        domains.iter().find(|d| d.id == "manu_composite"),
+        domains.iter().find(|d| d.id == "manufacture_total"),
         domains.iter().find(|d| d.id == "trade_gold"),
     ) {
         if c.severity == GapSeverity::Critical && b.severity != GapSeverity::Critical {
@@ -601,19 +593,17 @@ mod tests {
             ]),
         };
         let domain = DomainMetric {
-            id: "manu_gold",
+            id: "manufacture_gold",
             label: "制造·赤金",
             current: ComboSnapshot {
                 operators: vec![],
-                score: 0.0,
-                trade_pct: None,
-                gold_pct: None,
+                final_efficiency: Efficiency::ZERO,
+                mechanic_equivalent_efficiency: None,
             },
             baseline: ComboSnapshot {
                 operators: vec!["清流".to_string(), "槐琥".to_string()],
-                score: 1.0,
-                trade_pct: None,
-                gold_pct: None,
+                final_efficiency: Efficiency::ONE,
+                mechanic_equivalent_efficiency: None,
             },
             gap_ratio: -0.3,
             severity: GapSeverity::Critical,

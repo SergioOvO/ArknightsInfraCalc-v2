@@ -1,7 +1,7 @@
 # 全基建进驻编制（宏观排班）
 
 > **状态**：**已落地**（`assign_base_greedy`、`assign_shift`、`layout/orchestrate::{build_plan, execute_plan}`、`search_control_combos`、`assign_dorm_producers`、`assign_manufacture_lines`、`assign_power_stations`、`assign_trade_remainder`；`layout test` 默认调用宏观落位）。
-> 多班轮换见 **[SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md)**（现行 αβγ ABC；A-B-A 已废弃）。本文管**单班全蓝图各房间谁上岗**。
+> 多班轮换见 **[SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md)**（αβγ ABC 唯一现行路径；A-B-A 已移除）。本文管**单班全蓝图各房间谁上岗**。
 > 心情 / 宿管 / 跨班连班仍属非目标，见 [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) §8.12。
 
 ---
@@ -91,7 +91,7 @@ operbox + blueprint
 2. 若 `top_k` 耗尽，对该房用 `filter_*_pool(pool, &used)` **缩小池后重搜**（仍 `C(n',3)`，`n'` 已减小）；
 3. 认领成功后，将组合内所有 `name` 插入 `used`。
 
-贸易站已有先例：`pool/trade.rs` 的 `filter_trade_pool` + `schedule/trade_rotation.rs` 的 `commit_station`。
+贸易站落位实现见 `layout/assign/commit.rs` 与 `layout/assign/trade_fill.rs`。
 
 发电站已在 `search/power.rs` 内对多站使用 `used`。
 
@@ -103,7 +103,7 @@ operbox + blueprint
 
 | 设施 | 每房人数 | 搜索入口（现有） | 编制备注 |
 |------|----------|------------------|----------|
-| 控制中枢 | 1～5 | `search_control_combos` | `ControlFillPolicy` 控制 HR / 心情补位 |
+| 控制中枢 | 1～5 | `search_control_combos` | `ControlFillPolicy::InjectOnly` / `LayeredFill`；输出具名 policy key，不输出生产效率 |
 | 贸易站 | 按等级 1/2/3 | `search_trade_triples` / `search_trade_triples_filtered` | 同房互斥：`trade_station_exclusive_violation` |
 | 制造站 | 按等级 1/2/3 | `search_manufacture_triples` | 同类产线共用同容量组合（`ManuSearchRecipeMode::Lines`） |
 | 发电站 | 1 | `search_power_assignment` | 站内不重复 |
@@ -150,11 +150,10 @@ operbox + blueprint
 
 | 命令 | 当前用途 | 备注 |
 |------|----------|------|
-| `layout test` | 默认调用 `assign_base_greedy`；传 `--assignment` 时消费用户给定编制 | 自定义布局 + operbox 的单班搜索 / 评分探测入口 |
+| `layout test` | 默认调用 `assign_base_greedy`；传 `--assignment` 时消费用户给定编制 | 自定义布局 + operbox 的单班搜索 / 效率探测入口 |
 | `bench` | 固定 243 基准分搜 | 不代表宏观编制；不要用它替代 `layout test` |
 | `plan` | 账号画像 + αβγ ABC 排班 + 可选 MAA 导出 | 用户说“跑一遍模拟”时的推荐入口 |
 | `layout team-rotation` | αβγ ABC 三队轮换 | 当前全基建多班轮换入口 |
-| `layout rotation` / `schedule rotation` | A-B-A legacy | 保留兼容；新任务不要默认使用 |
 | `search trade` | 单贸易站探索 | 不做制造 / 全基建编制 |
 
 ---
@@ -197,7 +196,7 @@ operbox + blueprint
 | `layout/resolve.rs` | `resolve_base`、全局资源 producer 注入 |
 | `layout/workforce.rs` | `WorkforceIndex`、`apply_to_layout` |
 | `schedule/shift_bind.rs` | 迷迭香+黑键等同上同下约束 |
-| `schedule/base_rotation.rs` | `schedule_base_rotation_a_b_a`（A-B-A legacy）+ `score_base_assignment` |
+| `schedule/base_rotation.rs` | `evaluate_base_assignment_efficiencies`：ABC 逐房直接效率结算 |
 | `schedule/team_rotation.rs` | `schedule_team_rotation`：αβγ 三队轮换 |
 | `search/control.rs` | `search_control_combos`：中枢 C(n,k) + `ControlFillPolicy` |
 | `search/role_pick.rs` | 贸易 core role：`docus` / `closure` / `witch` / `witch_fallback` fallback 链 |

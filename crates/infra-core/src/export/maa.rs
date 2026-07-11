@@ -9,9 +9,7 @@ use crate::layout::{
     RoomProduct,
 };
 use crate::operbox::OperBox;
-use crate::schedule::{
-    BaseRotationReport, BaseShiftRole, TeamLabel, TeamRotationReport, FIAMMETTA_RETURN_PRIORITY,
-};
+use crate::schedule::{TeamLabel, TeamRotationReport, FIAMMETTA_RETURN_PRIORITY};
 use crate::trade::input::TradeOrderKind;
 use crate::types::RecipeKind;
 
@@ -19,6 +17,14 @@ use crate::types::RecipeKind;
 pub struct MaaExportOptions {
     pub title: String,
     pub description: Option<String>,
+    /// 作者信息，写入导出 JSON 的 `author` 字段。
+    pub author: Option<String>,
+    /// 排班方案 ID（一图流格式），写入 `id` 字段。
+    pub id: Option<u64>,
+    /// 基建布局类型（如 243），写入 `buildingType` 字段。
+    pub building_type: Option<u32>,
+    /// 换班次数说明（如 `"3班"`），写入 `planTimes` 字段。
+    pub plan_times: Option<String>,
     /// 菲亚梅塔换班优先级清单（按优先级从高到低排列的干员名列表）。
     ///
     /// 每个 plan 生成时，从当班 assignment 中找清单里第一个在岗干员作为换班目标；
@@ -36,6 +42,10 @@ impl MaaExportOptions {
         Self {
             title: format!("{template} 基建排班"),
             description: Some("由 ArknightsInfraCalc 生成；可导入 MAA 自定义基建换班。".into()),
+            author: None,
+            id: None,
+            building_type: None,
+            plan_times: None,
             fiammetta_priority: Vec::new(),
         }
     }
@@ -52,9 +62,17 @@ impl MaaExportOptions {
 #[derive(Debug, Clone, Serialize)]
 pub struct MaaSchedule {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<u64>,
+    #[serde(rename = "buildingType", skip_serializing_if = "Option::is_none")]
+    pub building_type: Option<u32>,
+    #[serde(rename = "planTimes", skip_serializing_if = "Option::is_none")]
+    pub plan_times: Option<String>,
     pub plans: Vec<MaaPlan>,
 }
 
@@ -114,7 +132,6 @@ pub struct MaaRoomSlot {
 }
 
 struct PlanInput<'a> {
-    index: usize,
     assignment: &'a BaseAssignment,
     name: String,
     description: String,
@@ -162,7 +179,6 @@ pub fn build_from_team_rotation(
                 }
             }
             PlanInput {
-                index: shift.index,
                 assignment: &shift.assignment,
                 name: format!(
                     "Shift {} · {:.0}h · {}",
@@ -189,42 +205,14 @@ pub fn build_from_team_rotation(
     Ok(wrap_schedule(opts, plans))
 }
 
-pub fn build_from_base_rotation(
-    blueprint: &BaseBlueprint,
-    report: &BaseRotationReport,
-    opts: &MaaExportOptions,
-) -> Result<MaaSchedule> {
-    let plans = report
-        .shifts
-        .iter()
-        .map(|shift| {
-            let role = match shift.role {
-                BaseShiftRole::Peak => "高峰",
-                BaseShiftRole::Recovery => "恢复",
-            };
-            let reuse = shift
-                .reused_from_shift
-                .map(|i| format!(" · 复用 shift{}", i + 1))
-                .unwrap_or_default();
-            PlanInput {
-                index: shift.index,
-                assignment: &shift.assignment,
-                name: format!("Shift {} · {role}{reuse}", shift.index + 1),
-                description: format!("ABA {role} 班；下次约 12 小时后换班"),
-                resting: shift.rotating_workers.clone(),
-                fiammetta_target: None,
-                fiammetta_priority: &opts.fiammetta_priority,
-            }
-        })
-        .map(|input| build_plan(blueprint, &input))
-        .collect();
-    Ok(wrap_schedule(opts, plans))
-}
-
 fn wrap_schedule(opts: &MaaExportOptions, plans: Vec<MaaPlan>) -> MaaSchedule {
     MaaSchedule {
+        author: opts.author.clone(),
         title: Some(opts.title.clone()),
         description: opts.description.clone(),
+        id: opts.id,
+        building_type: opts.building_type,
+        plan_times: opts.plan_times.clone(),
         plans,
     }
 }
@@ -597,7 +585,7 @@ fn push_room_ops(
 mod tests {
     use super::*;
     use crate::layout::{AssignedOperator, RoomBlueprint, RoomId};
-    use crate::schedule::{ShiftScores, TeamAssignment, TeamShiftResult};
+    use crate::schedule::{ShiftEfficiencies, TeamAssignment, TeamShiftResult};
     use std::time::Duration;
 
     fn sample_blueprint() -> BaseBlueprint {
@@ -670,10 +658,10 @@ mod tests {
                     displaced: "被换下干员".into(),
                     room_id: RoomId::new("trade_1"),
                 }),
-                scores: ShiftScores::default(),
-                weighted_trade: 0.0,
-                weighted_manu: 0.0,
-                weighted_power: 0.0,
+                efficiencies: ShiftEfficiencies::default(),
+                weighted_trade: crate::Efficiency::ZERO,
+                weighted_manufacture: crate::Efficiency::ZERO,
+                weighted_power: crate::Efficiency::ZERO,
             }],
             daily: Default::default(),
             elapsed: Duration::from_millis(1),

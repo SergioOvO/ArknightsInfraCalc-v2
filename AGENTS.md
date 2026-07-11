@@ -51,7 +51,7 @@
 | L3 | `shortcut.rs` + `trade_shortcuts.json` 处理固定最优 / 难 atom 化组合 |
 | GL | `cross_facility/`、`global_resource/`、`control/` 处理跨设施资源与注入 |
 | Layout | `build_plan -> execute_plan -> pipeline -> resolve_base` 是主路径；不要绕过它修排班 |
-| Scoring | 跨贸易 / 制造 / power / global 注入默认拆分展示；需要排序必须经命名 policy |
+| Scoring | 生产域统一用 `Efficiency` 直接小数效率并保留贸易 / 制造 / power 分量；global 局部 heuristic 需要命名 policy |
 | CLI | 不写机制、公式、求解；只做命令、加载、输出、回归 |
 
 不要为了“零 warning”破坏 API / serde / 预留机制。当前允许保留 `private_interfaces`、未来机制 `dead_code`、预留字段 warning。
@@ -97,9 +97,9 @@
 2. 核心分量错改 `infra-core`；列名、文本、JSON 形状错改 `infra-cli/output.rs`。
 3. 不新增匿名综合权重。
 4. 现有排序口径：
-   - 贸易搜索：`score == trade_pct == order_eff_total`
-   - 制造搜索：`prod_total`
-   - 发电搜索：`charge_speed_pct`
+   - 贸易搜索：`final_efficiency`
+   - 制造搜索：`final_efficiency`
+   - 发电搜索：`final_efficiency`
    - 中枢搜索：`ControlInjectRawSumV0`，即 `trade_inject + manu_gold + manu_br` 的局部 heuristic
 
 ## 6. 默认命令
@@ -143,7 +143,7 @@ cargo run -q -p infra-cli -- layout team-rotation \
   --maa-out out/243_maa.json
 ```
 
-不要用 `layout rotation`（A-B-A，已废弃）或 `layout test`（单班探测）代替模拟。
+不要用 `layout test`（单班探测）代替模拟；A-B-A 入口已移除。
 
 ### 改机制后的 smoke test
 

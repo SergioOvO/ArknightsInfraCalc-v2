@@ -3,6 +3,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::Efficiency;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CandidateSource {
@@ -29,31 +31,16 @@ pub enum CandidateStationKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CandidateScore {
-    pub raw_score: f64,
-    pub decision_score: f64,
-}
-
-impl CandidateScore {
-    pub fn raw_only(raw_score: f64) -> Self {
-        Self {
-            raw_score,
-            decision_score: raw_score,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TeamColumn {
+pub struct TeamMetric {
     pub key: String,
-    pub score: f64,
+    pub value: f64,
 }
 
-impl TeamColumn {
-    fn new(key: impl Into<String>, score: f64) -> Self {
+impl TeamMetric {
+    fn new(key: impl Into<String>, value: f64) -> Self {
         Self {
             key: key.into(),
-            score,
+            value,
         }
     }
 }
@@ -70,8 +57,9 @@ pub struct TeamCandidate {
     pub source_id: Option<String>,
     pub system_tags: Vec<String>,
 
-    pub score: CandidateScore,
-    pub columns: Vec<TeamColumn>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub final_efficiency: Option<Efficiency>,
+    pub metrics: Vec<TeamMetric>,
 
     pub selected: Option<bool>,
     pub rejected: Option<bool>,
@@ -90,31 +78,47 @@ impl TeamCandidate {
         let recipe = recipe
             .map(|recipe| format!("{recipe:?}"))
             .or_else(|| non_empty_string(&hit.breakdown.recipe));
-        let mut columns = vec![TeamColumn::new(
-            "manufacture.composite_score",
-            hit.composite_score,
+        let mut metrics = vec![TeamMetric::new(
+            "manufacture.final_efficiency",
+            hit.final_efficiency.as_f64(),
         )];
-        push_non_zero_column(
-            &mut columns,
-            "manufacture.gold.prod_total",
-            hit.per_station.gold,
+        push_non_zero_metric(
+            &mut metrics,
+            "manufacture.gold.final_efficiency",
+            hit.per_station.gold.as_f64(),
         );
-        push_non_zero_column(
-            &mut columns,
-            "manufacture.battle_record.prod_total",
-            hit.per_station.battle_record,
+        push_non_zero_metric(
+            &mut metrics,
+            "manufacture.battle_record.final_efficiency",
+            hit.per_station.battle_record.as_f64(),
         );
-        push_non_zero_column(
-            &mut columns,
-            "manufacture.originium.prod_total",
-            hit.per_station.originium,
+        push_non_zero_metric(
+            &mut metrics,
+            "manufacture.originium.final_efficiency",
+            hit.per_station.originium.as_f64(),
         );
 
         let mut metadata = BTreeMap::new();
-        metadata.insert("prod_base".to_string(), json!(hit.breakdown.prod_base));
-        metadata.insert("prod_skill".to_string(), json!(hit.breakdown.prod_skill));
-        metadata.insert("prod_global".to_string(), json!(hit.breakdown.prod_global));
-        metadata.insert("prod_total".to_string(), json!(hit.breakdown.prod_total));
+        metadata.insert(
+            "base_efficiency".to_string(),
+            json!(hit.breakdown.base_efficiency),
+        );
+        metadata.insert(
+            "occupancy_efficiency".to_string(),
+            json!(hit.breakdown.occupancy_efficiency),
+        );
+        metadata.insert(
+            "skill_efficiency".to_string(),
+            json!(hit.breakdown.skill_efficiency),
+        );
+        metadata.insert(
+            "global_efficiency".to_string(),
+            json!(hit.breakdown.global_efficiency),
+        );
+        metadata.insert(
+            "final_efficiency".to_string(),
+            json!(hit.breakdown.final_efficiency),
+        );
         metadata.insert(
             "storage_limit".to_string(),
             json!(hit.breakdown.storage_limit),
@@ -130,8 +134,8 @@ impl TeamCandidate {
             source,
             source_id: None,
             system_tags: Vec::new(),
-            score: CandidateScore::raw_only(hit.composite_score),
-            columns,
+            final_efficiency: Some(hit.final_efficiency),
+            metrics,
             selected: None,
             rejected: None,
             rejection_reason: None,
@@ -146,28 +150,29 @@ impl TeamCandidate {
         source: Option<CandidateSource>,
     ) -> Self {
         let source = source.unwrap_or_else(|| {
-            if hit.shortcut.is_some() {
+            if hit.rule_id.is_some() {
                 CandidateSource::Shortcut
             } else {
                 CandidateSource::DynamicSearch
             }
         });
-        let mut columns = vec![
-            TeamColumn::new("trade.score", hit.score),
-            TeamColumn::new("trade.trade_pct", hit.trade_pct),
-            TeamColumn::new("trade.gold_pct", hit.gold_pct),
-            TeamColumn::new("trade.unit_trade_per_day", hit.unit_trade_per_day),
-            TeamColumn::new("trade.unit_gold_per_day", hit.unit_gold_per_day),
-            TeamColumn::new("trade.output_multiplier", hit.output_multiplier),
+        let mut metrics = vec![
+            TeamMetric::new("trade.final_efficiency", hit.final_efficiency.as_f64()),
+            TeamMetric::new(
+                "trade.mechanic_equivalent_efficiency",
+                hit.mechanic_equivalent_efficiency.as_f64(),
+            ),
+            TeamMetric::new("trade.unit_trade_per_day", hit.unit_trade_per_day),
+            TeamMetric::new("trade.unit_gold_per_day", hit.unit_gold_per_day),
         ];
-        push_non_zero_column(
-            &mut columns,
+        push_non_zero_metric(
+            &mut metrics,
             "trade.unit_originium_per_day",
             hit.unit_originium_per_day,
         );
 
         let mut metadata = BTreeMap::new();
-        metadata.insert("shortcut".to_string(), json!(hit.shortcut));
+        metadata.insert("rule_id".to_string(), json!(hit.rule_id));
         metadata.insert("breakdown".to_string(), json!(hit.breakdown));
 
         Self {
@@ -177,10 +182,10 @@ impl TeamCandidate {
             order_kind: order_kind.map(|order| format!("{order:?}")),
             operators: first_non_empty(&[&hit.names, &hit.gold_names, &hit.originium_names]),
             source,
-            source_id: hit.shortcut.clone(),
+            source_id: hit.rule_id.clone(),
             system_tags: Vec::new(),
-            score: CandidateScore::raw_only(hit.score),
-            columns,
+            final_efficiency: Some(hit.final_efficiency),
+            metrics,
             selected: None,
             rejected: None,
             rejection_reason: None,
@@ -191,10 +196,12 @@ impl TeamCandidate {
     pub fn from_manufacture_system_trace(
         trace: &crate::layout::ManufactureSystemCandidateTrace,
     ) -> Self {
-        let raw_score = trace.raw_score.unwrap_or(0.0);
-        let mut columns = Vec::new();
-        if trace.raw_score.is_some() {
-            columns.push(TeamColumn::new("manufacture.raw_score", raw_score));
+        let mut metrics = Vec::new();
+        if let Some(final_efficiency) = trace.final_efficiency {
+            metrics.push(TeamMetric::new(
+                "manufacture.final_efficiency",
+                final_efficiency.as_f64(),
+            ));
         }
 
         let mut metadata = BTreeMap::new();
@@ -218,8 +225,8 @@ impl TeamCandidate {
             source: CandidateSource::ManualSystemCandidate,
             source_id: Some(trace.source_system.clone()),
             system_tags: vec![trace.source_system.clone()],
-            score: CandidateScore::raw_only(raw_score),
-            columns,
+            final_efficiency: trace.final_efficiency,
+            metrics,
             selected: Some(trace.selected),
             rejected: Some(trace.rejected),
             rejection_reason: trace.rejection_reason.clone(),
@@ -244,9 +251,9 @@ fn non_empty_string(value: &str) -> Option<String> {
     }
 }
 
-fn push_non_zero_column(columns: &mut Vec<TeamColumn>, key: &'static str, score: f64) {
-    if score != 0.0 {
-        columns.push(TeamColumn::new(key, score));
+fn push_non_zero_metric(metrics: &mut Vec<TeamMetric>, key: &'static str, value: f64) {
+    if value != 0.0 {
+        metrics.push(TeamMetric::new(key, value));
     }
 }
 
@@ -255,27 +262,31 @@ mod tests {
     use super::*;
     use crate::layout::{ManufactureLinkedProducer, ManufactureSystemCandidateTrace};
     use crate::manufacture::{ManuProdBreakdown, ManuStorageBreakdown};
-    use crate::search::{ManuScoreBreakdown, ManuSearchHit, TradeScoreBreakdown, TradeSearchHit};
+    use crate::search::{
+        ManuEfficiencyBreakdown, ManuSearchHit, TradeEfficiencyBreakdown, TradeSearchHit,
+    };
+    use crate::Efficiency;
 
     fn test_manu_hit() -> ManuSearchHit {
         ManuSearchHit {
             names: vec!["清流".to_string(), "温蒂".to_string(), "冬时".to_string()],
             gold_names: vec![],
             battle_record_names: vec![],
-            composite_score: 130.0,
+            final_efficiency: Efficiency::from_decimal(2.300),
             per_station: ManuProdBreakdown {
-                gold: 130.0,
+                gold: Efficiency::from_decimal(2.300),
                 ..Default::default()
             },
             storage: ManuStorageBreakdown {
                 gold: 20,
                 ..Default::default()
             },
-            breakdown: ManuScoreBreakdown {
-                prod_base: 3.0,
-                prod_skill: 127.0,
-                prod_global: 0.0,
-                prod_total: 130.0,
+            breakdown: ManuEfficiencyBreakdown {
+                base_efficiency: Efficiency::ONE,
+                occupancy_efficiency: Efficiency::from_decimal(0.030),
+                skill_efficiency: Efficiency::from_decimal(1.270),
+                global_efficiency: Efficiency::ZERO,
+                final_efficiency: Efficiency::from_decimal(2.300),
                 storage_limit: 20,
                 recipe: "gold".to_string(),
             },
@@ -283,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn manu_search_hit_candidate_preserves_raw_score() {
+    fn manu_search_hit_candidate_preserves_final_efficiency() {
         let hit = test_manu_hit();
         let candidate = TeamCandidate::from_manu_search_hit(
             &hit,
@@ -297,14 +308,21 @@ mod tests {
         assert_eq!(candidate.room_id.as_deref(), Some("manu_1"));
         assert_eq!(candidate.recipe.as_deref(), Some("gold"));
         assert_eq!(candidate.operators, hit.names);
-        assert_eq!(candidate.score.raw_score, 130.0);
-        assert_eq!(candidate.score.decision_score, 130.0);
+        assert_eq!(candidate.final_efficiency, Some(hit.final_efficiency));
         assert!(candidate
-            .columns
+            .metrics
             .iter()
-            .any(|column| column.key == "manufacture.composite_score" && column.score == 130.0));
+            .any(|metric| metric.key == "manufacture.final_efficiency" && metric.value == 2.300));
         assert!(candidate.selected.is_none());
         assert!(candidate.rejected.is_none());
+
+        let json = serde_json::to_value(&candidate).unwrap();
+        assert_eq!(json["final_efficiency"], serde_json::json!(2.300));
+        assert!(json.get("metrics").is_some());
+        assert!(json.get("score").is_none());
+        assert!(json.get("columns").is_none());
+        assert!(json.get("raw_score").is_none());
+        assert!(json.get("decision_score").is_none());
     }
 
     #[test]
@@ -325,20 +343,18 @@ mod tests {
             names: vec!["巫恋".to_string(), "龙舌兰".to_string(), "柏喙".to_string()],
             gold_names: vec![],
             originium_names: vec![],
-            score: 120.0,
-            trade_pct: 120.0,
-            gold_pct: 35.0,
-            shortcut: Some("witch_tequila_bibeak".to_string()),
+            final_efficiency: Efficiency::from_decimal(1.200),
+            mechanic_equivalent_efficiency: Efficiency::from_decimal(0.350),
+            rule_id: Some("witch_tequila_bibeak".to_string()),
             unit_trade_per_day: 60000.0,
             unit_gold_per_day: 40.0,
             unit_originium_per_day: 0.0,
-            output_multiplier: 2.2,
-            breakdown: TradeScoreBreakdown {
-                order_eff_total_pct: 120.0,
-                mechanic_equiv_eff_pct: 35.0,
-                shortcut_id: Some("witch_tequila_bibeak".to_string()),
+            breakdown: Some(TradeEfficiencyBreakdown {
+                final_efficiency: Efficiency::from_decimal(1.200),
+                mechanic_equivalent_efficiency: Efficiency::from_decimal(0.350),
+                rule_id: Some("witch_tequila_bibeak".to_string()),
                 ..Default::default()
-            },
+            }),
         };
 
         let candidate = TeamCandidate::from_trade_search_hit(&hit, None, None, None);
@@ -347,16 +363,14 @@ mod tests {
         assert_eq!(candidate.source, CandidateSource::Shortcut);
         assert_eq!(candidate.source_id.as_deref(), Some("witch_tequila_bibeak"));
         assert_eq!(candidate.operators, hit.names);
-        assert_eq!(candidate.score.raw_score, hit.score);
-        assert_eq!(candidate.score.decision_score, hit.score);
+        assert_eq!(candidate.final_efficiency, Some(hit.final_efficiency));
         assert!(candidate
-            .columns
+            .metrics
             .iter()
-            .any(|column| column.key == "trade.trade_pct" && column.score == 120.0));
-        assert!(candidate
-            .columns
-            .iter()
-            .any(|column| column.key == "trade.gold_pct" && column.score == 35.0));
+            .any(|metric| metric.key == "trade.final_efficiency" && metric.value == 1.200));
+        assert!(candidate.metrics.iter().any(|metric| metric.key
+            == "trade.mechanic_equivalent_efficiency"
+            && metric.value == 0.350));
     }
 
     #[test]
@@ -369,7 +383,7 @@ mod tests {
             selected: false,
             rejected: true,
             rejection_reason: Some("tier_gate_not_met".to_string()),
-            raw_score: Some(128.0),
+            final_efficiency: Some(Efficiency::from_decimal(2.300)),
             evaluation_failed: None,
             linked_producers: vec![ManufactureLinkedProducer {
                 station: "power".to_string(),
@@ -394,8 +408,10 @@ mod tests {
             candidate.rejection_reason.as_deref(),
             Some("tier_gate_not_met")
         );
-        assert_eq!(candidate.score.raw_score, 128.0);
-        assert_eq!(candidate.score.decision_score, 128.0);
+        assert_eq!(
+            candidate.final_efficiency,
+            Some(Efficiency::from_decimal(2.300))
+        );
         assert!(candidate.metadata["linked_producers"]
             .as_array()
             .unwrap()
@@ -405,7 +421,7 @@ mod tests {
     }
 
     #[test]
-    fn manual_trace_without_raw_score_stays_inert() {
+    fn manual_trace_without_final_efficiency_stays_inert() {
         let trace = ManufactureSystemCandidateTrace {
             room: "manu_1".to_string(),
             recipe: "gold".to_string(),
@@ -414,7 +430,7 @@ mod tests {
             selected: false,
             rejected: true,
             rejection_reason: Some("missing_operator".to_string()),
-            raw_score: None,
+            final_efficiency: None,
             evaluation_failed: Some("missing_operator:温蒂".to_string()),
             linked_producers: vec![],
             source_system: "automation_group".to_string(),
@@ -423,9 +439,8 @@ mod tests {
 
         let candidate = TeamCandidate::from_manufacture_system_trace(&trace);
 
-        assert_eq!(candidate.score.raw_score, 0.0);
-        assert_eq!(candidate.score.decision_score, 0.0);
-        assert!(candidate.columns.is_empty());
+        assert_eq!(candidate.final_efficiency, None);
+        assert!(candidate.metrics.is_empty());
         assert_eq!(
             candidate.metadata["evaluation_failed"].as_str(),
             Some("missing_operator:温蒂")

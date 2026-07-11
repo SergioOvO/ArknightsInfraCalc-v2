@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::efficiency::Efficiency;
 use crate::error::Result;
 use crate::export::maa::{assignment_from_maa_plan, load_maa_schedule};
 use crate::instances::OperatorInstances;
@@ -15,10 +16,10 @@ use crate::manufacture::input::ManuRoomInput;
 use crate::manufacture::solver::{solve_manufacture, ManuProdBreakdown, ManuStorageBreakdown};
 use crate::operbox::OperBox;
 use crate::pool::{build_manufacture_pool, build_trade_pool};
-use crate::schedule::{score_base_assignment, DailyTotals, TeamRotationReport};
+use crate::schedule::{evaluate_base_assignment_efficiencies, DailyTotals, TeamRotationReport};
 use crate::search::{
-    ManuScoreBreakdown, ManuSearchHit, ManuSearchReport, TradeScoreBreakdown, TradeSearchHit,
-    TradeSearchReport,
+    ManuEfficiencyBreakdown, ManuSearchHit, ManuSearchReport, TradeEfficiencyBreakdown,
+    TradeSearchHit, TradeSearchReport,
 };
 use crate::skill_table::{data_path, SkillTable};
 use crate::tier::PromotionTier;
@@ -64,7 +65,7 @@ pub fn run_schedule_eval_probe(
     let mut daily = DailyTotals::default();
     for (plan, &hours) in schedule.plans.iter().zip(SHIFT_HOURS.iter()) {
         let assignment = assignment_from_maa_plan(plan, operbox);
-        let scores = score_base_assignment(
+        let scores = evaluate_base_assignment_efficiencies(
             blueprint,
             &assignment,
             instances,
@@ -73,7 +74,7 @@ pub fn run_schedule_eval_probe(
             Some(durin_plan),
         )?;
         daily.trade += scores.weighted_trade(hours);
-        daily.manu += scores.weighted_manu(hours);
+        daily.manufacture += scores.weighted_manufacture(hours);
         daily.power += scores.weighted_power(hours);
     }
 
@@ -109,7 +110,6 @@ pub fn trade_report_from_assignment(
 
     let mut gold_line = None;
     let mut originium_line = None;
-    let mut best_score = 0.0f64;
     let mut best_hit: Option<TradeSearchHit> = None;
 
     for room in &resolved.trade_rooms {
@@ -117,8 +117,10 @@ pub fn trade_report_from_assignment(
             continue;
         }
         let hit = eval_trade_room(&resolved, room, table, 24.0)?;
-        best_score = best_score.max(hit.score);
-        if best_hit.as_ref().is_none_or(|b| hit.score > b.score) {
+        if best_hit
+            .as_ref()
+            .is_none_or(|b| hit.final_efficiency > b.final_efficiency)
+        {
             best_hit = Some(hit.clone());
         }
         let names: Vec<_> = room.operators.iter().map(|o| o.name.clone()).collect();
@@ -177,10 +179,34 @@ pub fn manu_report_from_assignment(
 
     let gold_line = average_manu_hit(&gold_hits);
     let br_line = average_manu_hit(&br_hits);
-    let composite = f64::from(scenario.gold_lines)
-        * gold_line.as_ref().map(|h| h.composite_score).unwrap_or(0.0)
-        + f64::from(scenario.battle_record_lines)
-            * br_line.as_ref().map(|h| h.composite_score).unwrap_or(0.0);
+    let final_efficiency = gold_line
+        .as_ref()
+        .map(|h| {
+            h.final_efficiency
+                .scale_ratio(i64::from(scenario.gold_lines), 1)
+        })
+        .unwrap_or(Efficiency::ZERO)
+        + br_line
+            .as_ref()
+            .map(|h| {
+                h.final_efficiency
+                    .scale_ratio(i64::from(scenario.battle_record_lines), 1)
+            })
+            .unwrap_or(Efficiency::ZERO);
+
+    let breakdown_lines: Vec<_> = [
+        gold_line
+            .as_ref()
+            .map(|hit| (&hit.breakdown, scenario.gold_lines)),
+        br_line
+            .as_ref()
+            .map(|hit| (&hit.breakdown, scenario.battle_record_lines)),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let breakdown = ManuEfficiencyBreakdown::aggregate_lines(&breakdown_lines);
+    debug_assert_eq!(breakdown.final_efficiency, final_efficiency);
 
     let best = ManuSearchHit {
         names: gold_line
@@ -195,10 +221,30 @@ pub fn manu_report_from_assignment(
             .as_ref()
             .map(|h| h.names.clone())
             .unwrap_or_default(),
-        composite_score: composite,
-        per_station: Default::default(),
-        storage: Default::default(),
-        breakdown: ManuScoreBreakdown::default(),
+        final_efficiency,
+        per_station: ManuProdBreakdown {
+            gold: gold_line
+                .as_ref()
+                .map(|hit| hit.final_efficiency)
+                .unwrap_or_default(),
+            battle_record: br_line
+                .as_ref()
+                .map(|hit| hit.final_efficiency)
+                .unwrap_or_default(),
+            originium: Efficiency::ZERO,
+        },
+        storage: ManuStorageBreakdown {
+            gold: gold_line
+                .as_ref()
+                .map(|hit| hit.breakdown.storage_limit)
+                .unwrap_or_default(),
+            battle_record: br_line
+                .as_ref()
+                .map(|hit| hit.breakdown.storage_limit)
+                .unwrap_or_default(),
+            originium: 0,
+        },
+        breakdown,
     };
 
     Ok(ManuSearchReport {
@@ -234,7 +280,7 @@ fn probe_shell(
         owned: operbox.owned_count(),
         tier_up_owned,
         trade_pool_ready: trade_pool.stats(3).ready,
-        manu_pool_ready: manu_pool.stats(3).ready,
+        manufacture_pool_ready: manu_pool.stats(3).ready,
         trade_report,
         manu_report,
         rotation: TeamRotationReport {
@@ -253,15 +299,13 @@ fn empty_trade_hit() -> TradeSearchHit {
         names: vec![],
         gold_names: vec![],
         originium_names: vec![],
-        score: 0.0,
-        trade_pct: 0.0,
-        gold_pct: 0.0,
-        shortcut: None,
+        final_efficiency: Efficiency::ZERO,
+        mechanic_equivalent_efficiency: Efficiency::ZERO,
+        rule_id: None,
         unit_trade_per_day: 0.0,
         unit_gold_per_day: 0.0,
         unit_originium_per_day: 0.0,
-        output_multiplier: 0.0,
-        breakdown: TradeScoreBreakdown::default(),
+        breakdown: None,
     }
 }
 
@@ -291,38 +335,30 @@ fn eval_trade_room(
     };
     let unit = &result.production.unit;
     let efficiency = &result.efficiency;
-    let order_eff_global = efficiency.paper.control_bonus * 100.0;
-    let eff_factor = efficiency.paper.paper_efficiency;
-    let mech_factor = efficiency.production_basis.unit_output_multiplier;
     Ok(TradeSearchHit {
         names,
         gold_names,
         originium_names,
-        score: efficiency.final_efficiency,
-        trade_pct: efficiency.final_efficiency_pct(),
-        gold_pct: result.order_mechanic.mechanic_equiv_eff_pct,
-        shortcut: result.trade_shortcut.clone(),
+        final_efficiency: efficiency.final_efficiency,
+        mechanic_equivalent_efficiency: result.order_mechanic.mechanic_equivalent_efficiency,
+        rule_id: result.rule_id.clone(),
         unit_trade_per_day: unit.unit_trade_per_day,
         unit_gold_per_day: unit.unit_gold_per_day,
         unit_originium_per_day: unit.unit_originium_per_day,
-        output_multiplier: unit.multiplier_vs_lv3_regular,
-        breakdown: TradeScoreBreakdown {
-            order_eff_base: efficiency.paper.occupancy_bonus * 100.0,
-            order_eff_skill: efficiency.paper.operator_skill_bonus * 100.0,
-            order_eff_global,
-            order_eff_total_pct: efficiency.paper.paper_efficiency * 100.0,
-            mechanic_equiv_eff_pct: result.order_mechanic.mechanic_equiv_eff_pct,
-            eff_factor,
-            mech_factor,
-            effective_eff_multiplier: result.effective_eff_multiplier,
+        breakdown: Some(TradeEfficiencyBreakdown {
+            base_efficiency: efficiency.paper.base_efficiency,
+            occupancy_efficiency: efficiency.paper.occupancy_efficiency,
+            skill_efficiency: efficiency.paper.skill_efficiency,
+            control_efficiency: efficiency.paper.control_efficiency,
             paper_efficiency: efficiency.paper.paper_efficiency,
+            mechanic_equivalent_efficiency: result.order_mechanic.mechanic_equivalent_efficiency,
             unit_output_multiplier: efficiency.production_basis.unit_output_multiplier,
             final_efficiency: efficiency.final_efficiency,
-            equivalent_operator_skill_bonus: efficiency.equivalent_operator_skill_bonus,
+            equivalent_skill_efficiency: efficiency.equivalent_skill_efficiency,
             unit_trade_per_day: unit.unit_trade_per_day,
             unit_gold_per_day: unit.unit_gold_per_day,
-            shortcut_id: result.trade_shortcut.clone(),
-        },
+            rule_id: result.rule_id.clone(),
+        }),
     })
 }
 
@@ -345,15 +381,15 @@ fn eval_manu_room(
     let mut storage = ManuStorageBreakdown::default();
     match room.recipe {
         RecipeKind::Gold => {
-            per_station.gold = result.prod_total;
+            per_station.gold = result.final_efficiency;
             storage.gold = result.storage_limit;
         }
         RecipeKind::BattleRecord => {
-            per_station.battle_record = result.prod_total;
+            per_station.battle_record = result.final_efficiency;
             storage.battle_record = result.storage_limit;
         }
         RecipeKind::Originium => {
-            per_station.originium = result.prod_total;
+            per_station.originium = result.final_efficiency;
             storage.originium = result.storage_limit;
         }
         RecipeKind::All => {}
@@ -364,7 +400,6 @@ fn eval_manu_room(
         RecipeKind::Originium => "originium",
         RecipeKind::All => "all",
     };
-    let prod_global = result.prod_total - result.prod_base - result.prod_skill;
     Ok(ManuSearchHit {
         names: names.clone(),
         gold_names: if room.recipe == RecipeKind::Gold {
@@ -377,14 +412,15 @@ fn eval_manu_room(
         } else {
             vec![]
         },
-        composite_score: result.prod_total,
+        final_efficiency: result.final_efficiency,
         per_station,
         storage,
-        breakdown: ManuScoreBreakdown {
-            prod_base: result.prod_base,
-            prod_skill: result.prod_skill,
-            prod_global,
-            prod_total: result.prod_total,
+        breakdown: ManuEfficiencyBreakdown {
+            base_efficiency: result.base_efficiency,
+            occupancy_efficiency: result.occupancy_efficiency,
+            skill_efficiency: result.skill_efficiency,
+            global_efficiency: result.global_efficiency,
+            final_efficiency: result.final_efficiency,
             storage_limit: result.storage_limit,
             recipe: recipe_str.to_string(),
         },
@@ -395,16 +431,40 @@ fn average_manu_hit(hits: &[ManuSearchHit]) -> Option<ManuSearchHit> {
     if hits.is_empty() {
         return None;
     }
-    let n = hits.len() as f64;
-    let composite_score = hits.iter().map(|h| h.composite_score).sum::<f64>() / n;
+    let total: Efficiency = hits.iter().map(|h| h.final_efficiency).sum();
+    let final_efficiency = total.scale_ratio(1, hits.len() as i64);
+    let average_efficiency = |value: fn(&ManuEfficiencyBreakdown) -> Efficiency| {
+        hits.iter()
+            .map(|hit| value(&hit.breakdown))
+            .sum::<Efficiency>()
+            .scale_ratio(1, hits.len() as i64)
+    };
+    let base_efficiency = average_efficiency(|b| b.base_efficiency);
+    let occupancy_efficiency = average_efficiency(|b| b.occupancy_efficiency);
+    let skill_efficiency = average_efficiency(|b| b.skill_efficiency);
+    let global_efficiency =
+        final_efficiency - base_efficiency - occupancy_efficiency - skill_efficiency;
+    let breakdown = ManuEfficiencyBreakdown {
+        base_efficiency,
+        occupancy_efficiency,
+        skill_efficiency,
+        global_efficiency,
+        final_efficiency,
+        storage_limit: hits
+            .iter()
+            .map(|hit| hit.breakdown.storage_limit)
+            .sum::<i32>()
+            / hits.len() as i32,
+        recipe: hits[0].breakdown.recipe.clone(),
+    };
     Some(ManuSearchHit {
         names: hits[0].names.clone(),
         gold_names: hits[0].gold_names.clone(),
         battle_record_names: hits[0].battle_record_names.clone(),
-        composite_score,
+        final_efficiency,
         per_station: hits[0].per_station.clone(),
         storage: hits[0].storage.clone(),
-        breakdown: ManuScoreBreakdown::default(),
+        breakdown,
     })
 }
 

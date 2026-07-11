@@ -40,7 +40,7 @@ All file paths are chosen by the frontend.
 Success:
 
 ```json
-{"id":1,"ok":true,"elapsed_ms":123,"result":{"layout":"tmp/layout.json","operbox":"tmp/operbox.json","owned":418,"top":20,"profile_out":"tmp/profile.json","maa_out":"tmp/maa.json","output_dir":"tmp/shifts","daily_trade":7.44,"daily_manu":520.12,"daily_power":55.12}}
+{"id":1,"ok":true,"elapsed_ms":123,"result":{"layout":"tmp/layout.json","operbox":"tmp/operbox.json","owned":418,"top":20,"profile_out":"tmp/profile.json","maa_out":"tmp/maa.json","output_dir":"tmp/shifts","daily_trade_efficiency":5.288,"daily_manufacture_efficiency":9.175,"daily_power_efficiency":3.552}}
 ```
 
 Error:

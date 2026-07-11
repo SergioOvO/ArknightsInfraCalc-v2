@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use rayon::prelude::*;
 use serde::Serialize;
 
+use crate::efficiency::Efficiency;
 use crate::error::Result;
 use crate::layout::{LayoutContext, SharedLayout};
 use crate::pool::{
@@ -19,40 +20,24 @@ use crate::trade::solver::solve_trade_with_shift_prevalidated;
 
 /// 贸易站评分的完整分解。
 ///
-/// 当前搜索排序主键是 [`TradeSearchHit::score`]，其口径为可直接参与产出预估的
+/// 当前搜索排序主键是 [`TradeSearchHit::final_efficiency`]，其口径为可直接参与产出预估的
 /// `final_efficiency`：三级贸易基准日产出 × final_efficiency × 工作时长占比。
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct TradeScoreBreakdown {
-    /// 人头效率（每名干员 +1%）。
-    pub order_eff_base: f64,
-    /// 技能效率总和
-    pub order_eff_skill: f64,
-    /// 全局注入 (如阿米娅中枢 +7%)
-    pub order_eff_global: f64,
-    /// 纸面贸易效率%
-    pub order_eff_total_pct: f64,
-    /// 订单机制等效效率%
-    pub mechanic_equiv_eff_pct: f64,
-    /// 效率因子 = 1 + order_eff_total/100
-    pub eff_factor: f64,
-    /// 机制因子 = 1 + mechanic_equiv_eff/100
-    pub mech_factor: f64,
-    /// 内部调试用乘积解释值；用户侧以 trade_pct / gold_pct 拆开阅读。
-    pub effective_eff_multiplier: f64,
-    /// 包含基础 100%、人头、技能和中枢的完整纸面效率。
-    pub paper_efficiency: f64,
-    /// 社区加强单位产出相对统一基准的倍率。
-    pub unit_output_multiplier: f64,
-    /// 可直接用于排序和产出预估的最终效率。
-    pub final_efficiency: f64,
-    /// 报表展示用的等效技能加成（无量纲）。
-    pub equivalent_operator_skill_bonus: f64,
+pub struct TradeEfficiencyBreakdown {
+    pub base_efficiency: Efficiency,
+    pub occupancy_efficiency: Efficiency,
+    pub skill_efficiency: Efficiency,
+    pub control_efficiency: Efficiency,
+    pub paper_efficiency: Efficiency,
+    pub mechanic_equivalent_efficiency: Efficiency,
+    pub unit_output_multiplier: Efficiency,
+    pub final_efficiency: Efficiency,
+    pub equivalent_skill_efficiency: Efficiency,
     /// 实际日产量（龙门币/天）
     pub unit_trade_per_day: f64,
     /// 实际日耗赤金
     pub unit_gold_per_day: f64,
-    /// 命中的短路 ID
-    pub shortcut_id: Option<String>,
+    pub rule_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -62,19 +47,15 @@ pub struct TradeSearchHit {
     pub gold_names: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub originium_names: Vec<String>,
-    /// 搜索排序主键：可直接参与产出预估的最终效率，`1.0` 表示三级普通站 100%。
-    pub score: f64,
-    /// 兼容展示字段：完整最终效率百分比，如 `190.65` 表示 `1.9065`。
-    pub trade_pct: f64,
-    pub gold_pct: f64,
-    pub shortcut: Option<String>,
+    pub final_efficiency: Efficiency,
+    pub mechanic_equivalent_efficiency: Efficiency,
+    pub rule_id: Option<String>,
     pub unit_trade_per_day: f64,
     pub unit_gold_per_day: f64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub unit_originium_per_day: f64,
-    pub output_multiplier: f64,
-    /// 评分明细分解
-    pub breakdown: TradeScoreBreakdown,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub breakdown: Option<TradeEfficiencyBreakdown>,
 }
 
 fn is_zero(v: &f64) -> bool {
@@ -217,22 +198,26 @@ fn search_trade_split_stations(
     let ori_report =
         search_trade_single_order(pool, table, &ori_opts, TradeOrderKind::Originium, filter)?;
 
-    let composite_score = f64::from(scenario.gold_order_stations) * gold_report.best.score
-        + f64::from(scenario.originium_order_stations) * ori_report.best.score;
+    let composite_efficiency = gold_report
+        .best
+        .final_efficiency
+        .scale_ratio(i64::from(scenario.gold_order_stations), 1)
+        + ori_report
+            .best
+            .final_efficiency
+            .scale_ratio(i64::from(scenario.originium_order_stations), 1);
 
     let best = TradeSearchHit {
         names: vec![],
         gold_names: gold_report.best.names.clone(),
         originium_names: ori_report.best.names.clone(),
-        score: composite_score,
-        trade_pct: gold_report.best.trade_pct,
-        gold_pct: gold_report.best.gold_pct,
-        shortcut: None,
+        final_efficiency: composite_efficiency,
+        mechanic_equivalent_efficiency: gold_report.best.mechanic_equivalent_efficiency,
+        rule_id: None,
         unit_trade_per_day: gold_report.best.unit_trade_per_day,
         unit_gold_per_day: gold_report.best.unit_gold_per_day,
         unit_originium_per_day: ori_report.best.unit_originium_per_day,
-        output_multiplier: gold_report.best.output_multiplier,
-        breakdown: TradeScoreBreakdown::default(),
+        breakdown: None,
     };
 
     Ok(TradeSearchReport {
@@ -249,8 +234,8 @@ fn search_trade_split_stations(
     })
 }
 
-fn trade_efficiency_sort_key(hit: &TradeSearchHit) -> f64 {
-    hit.score
+fn trade_efficiency_sort_key(hit: &TradeSearchHit) -> Efficiency {
+    hit.final_efficiency
 }
 
 fn search_trade_single_order(
@@ -353,11 +338,7 @@ fn search_trade_single_order(
         .collect();
 
     let evaluated = hits.len() as u64;
-    hits.sort_by(|a, b| {
-        trade_efficiency_sort_key(b)
-            .partial_cmp(&trade_efficiency_sort_key(a))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    hits.sort_by(|a, b| trade_efficiency_sort_key(b).cmp(&trade_efficiency_sort_key(a)));
     let best = hits.first().cloned().ok_or_else(|| {
         crate::error::Error::msg(
             if filter.hit_filter.is_some() || filter.has_must_include() {
@@ -441,61 +422,53 @@ fn eval_combo_hit(
     let names: Vec<String> = input.operators.iter().map(|o| o.name.clone()).collect();
 
     let efficiency = &result.efficiency;
-    let order_eff_global = efficiency.paper.control_bonus * 100.0;
-    let eff_factor = efficiency.paper.paper_efficiency;
-    let mech_factor = efficiency.production_basis.unit_output_multiplier;
-    let breakdown = TradeScoreBreakdown {
-        order_eff_base: efficiency.paper.occupancy_bonus * 100.0,
-        order_eff_skill: efficiency.paper.operator_skill_bonus * 100.0,
-        order_eff_global,
-        order_eff_total_pct: efficiency.paper.paper_efficiency * 100.0,
-        mechanic_equiv_eff_pct: result.order_mechanic.mechanic_equiv_eff_pct,
-        eff_factor,
-        mech_factor,
-        effective_eff_multiplier: result.effective_eff_multiplier,
+    let breakdown = TradeEfficiencyBreakdown {
+        base_efficiency: efficiency.paper.base_efficiency,
+        occupancy_efficiency: efficiency.paper.occupancy_efficiency,
+        skill_efficiency: efficiency.paper.skill_efficiency,
+        control_efficiency: efficiency.paper.control_efficiency,
         paper_efficiency: efficiency.paper.paper_efficiency,
+        mechanic_equivalent_efficiency: result.order_mechanic.mechanic_equivalent_efficiency,
         unit_output_multiplier: efficiency.production_basis.unit_output_multiplier,
         final_efficiency: efficiency.final_efficiency,
-        equivalent_operator_skill_bonus: efficiency.equivalent_operator_skill_bonus,
+        equivalent_skill_efficiency: efficiency.equivalent_skill_efficiency,
         unit_trade_per_day: result.production.unit.unit_trade_per_day,
         unit_gold_per_day: result.production.unit.unit_gold_per_day,
-        shortcut_id: result.trade_shortcut.clone(),
+        rule_id: result.rule_id.clone(),
     };
 
     Some(TradeSearchHit {
         names,
         gold_names: vec![],
         originium_names: vec![],
-        score: efficiency.final_efficiency,
-        trade_pct: efficiency.final_efficiency_pct(),
-        gold_pct: result.order_mechanic.mechanic_equiv_eff_pct,
-        shortcut: result.trade_shortcut,
+        final_efficiency: efficiency.final_efficiency,
+        mechanic_equivalent_efficiency: result.order_mechanic.mechanic_equivalent_efficiency,
+        rule_id: result.rule_id,
         unit_trade_per_day: result.production.unit.unit_trade_per_day,
         unit_gold_per_day: result.production.unit.unit_gold_per_day,
         unit_originium_per_day: result.production.unit.unit_originium_per_day,
-        output_multiplier: result.production.unit.multiplier_vs_lv3_regular,
-        breakdown,
+        breakdown: Some(breakdown),
     })
 }
 
 pub fn hit_witch_shortcut(hit: &TradeSearchHit) -> bool {
-    hit.shortcut
+    hit.rule_id
         .as_deref()
         .is_some_and(|id| id.starts_with("gsl_witch"))
 }
 
 pub fn hit_closure_shortcut(hit: &TradeSearchHit) -> bool {
-    hit.shortcut
+    hit.rule_id
         .as_deref()
         .is_some_and(|id| id.starts_with("gsl_closure") || id == "gsl_blackkey_closure")
 }
 
 pub fn hit_blackkey_closure_shortcut(hit: &TradeSearchHit) -> bool {
-    hit.shortcut.as_deref() == Some("gsl_blackkey_closure")
+    hit.rule_id.as_deref() == Some("gsl_blackkey_closure")
 }
 
 pub fn hit_docus_solo_shortcut(hit: &TradeSearchHit) -> bool {
-    hit.shortcut.as_deref() == Some("gsl_docus_solo")
+    hit.rule_id.as_deref() == Some("gsl_docus_solo")
 }
 
 #[cfg(test)]
@@ -546,7 +519,10 @@ mod tests {
         .unwrap();
         assert_eq!(report.best.names.len(), 2);
         assert!(report.combinations > 0);
-        assert_eq!(report.best.breakdown.order_eff_base, 2.0);
+        assert_eq!(
+            report.best.breakdown.as_ref().unwrap().occupancy_efficiency,
+            Efficiency::from_decimal(0.020)
+        );
     }
 
     #[test]
@@ -580,7 +556,16 @@ mod tests {
 
         assert_eq!(report.best.names, vec!["维娜·维多利亚", "但书"]);
         assert!(
-            (report.best.breakdown.order_eff_skill - 30.0).abs() < 0.01,
+            (report
+                .best
+                .breakdown
+                .as_ref()
+                .unwrap()
+                .skill_efficiency
+                .as_f64()
+                - 0.300)
+                .abs()
+                < 0.001,
             "维娜未与其他格拉斯哥同房时应为 30% 退化态: {:?}",
             report.best
         );
@@ -615,12 +600,14 @@ mod tests {
         assert!(
             docus_solo.is_some(),
             "但书应出现在搜索结果中（score={} 为贸易效率%，赤金效率另列）: top_k={}",
-            docus_solo.map(|h| h.score).unwrap_or(0.0),
+            docus_solo
+                .map(|h| h.final_efficiency.as_f64())
+                .unwrap_or(0.0),
             report.top.len()
         );
         let hit = docus_solo.unwrap();
         assert!(
-            hit.shortcut.as_deref() == Some("gsl_docus_solo"),
+            hit.rule_id.as_deref() == Some("gsl_docus_solo"),
             "但书应命中 gsl_docus_solo: {:?}",
             hit
         );
@@ -637,24 +624,23 @@ mod tests {
             names: vec!["a".into()],
             gold_names: vec![],
             originium_names: vec![],
-            score: 1.23,
-            trade_pct: 123.0,
-            gold_pct: 45.0,
-            shortcut: None,
+            final_efficiency: Efficiency::from_decimal(1.230),
+            mechanic_equivalent_efficiency: Efficiency::from_decimal(0.450),
+            rule_id: None,
             unit_trade_per_day: 10_000.0,
             unit_gold_per_day: 1_000.0,
             unit_originium_per_day: 0.0,
-            output_multiplier: 3.14,
-            breakdown: TradeScoreBreakdown {
-                order_eff_total_pct: 123.0,
-                effective_eff_multiplier: 1.23,
-                final_efficiency: 1.23,
+            breakdown: Some(TradeEfficiencyBreakdown {
+                paper_efficiency: Efficiency::from_decimal(1.230),
+                final_efficiency: Efficiency::from_decimal(1.230),
                 ..Default::default()
-            },
+            }),
         };
-        assert_eq!(trade_efficiency_sort_key(&hit), hit.score);
-        assert_eq!(hit.score, hit.breakdown.final_efficiency);
-        assert_eq!(hit.trade_pct, hit.score * 100.0);
+        assert_eq!(trade_efficiency_sort_key(&hit), hit.final_efficiency);
+        assert_eq!(
+            hit.final_efficiency,
+            hit.breakdown.as_ref().unwrap().final_efficiency
+        );
     }
 
     #[test]
@@ -738,7 +724,7 @@ mod tests {
         .unwrap();
 
         let best = report.best;
-        assert_eq!(best.shortcut, None);
+        assert_eq!(best.rule_id, None);
         assert!(best.names.contains(&"孑".to_string()), "{:?}", best.names);
         assert!(best.names.contains(&"银灰".to_string()), "{:?}", best.names);
         assert!(
@@ -746,8 +732,14 @@ mod tests {
             "{:?}",
             best.names
         );
-        assert!((best.score - 2.29).abs() < 0.01, "best={best:?}");
-        assert!((best.breakdown.order_eff_skill - 129.0).abs() < 0.01);
+        assert!(
+            (best.final_efficiency.as_f64() - 2.29).abs() < 0.01,
+            "best={best:?}"
+        );
+        assert!(
+            ((best.breakdown.as_ref().unwrap().skill_efficiency.as_f64() * 100.0) - 129.0).abs()
+                < 0.01
+        );
     }
 
     #[test]
@@ -769,8 +761,8 @@ mod tests {
         assert_eq!(gold.unit_gold_per_day > 0.0, true);
         assert_eq!(ori.unit_originium_per_day > 0.0, true);
         let scenario = TradeStationScenario::standard_three_stations();
-        let expected = f64::from(scenario.gold_order_stations) * gold.score
-            + f64::from(scenario.originium_order_stations) * ori.score;
-        assert!((report.best.score - expected).abs() < 0.001);
+        let expected = f64::from(scenario.gold_order_stations) * gold.final_efficiency.as_f64()
+            + f64::from(scenario.originium_order_stations) * ori.final_efficiency.as_f64();
+        assert!((report.best.final_efficiency.as_f64() - expected).abs() < 0.001);
     }
 }

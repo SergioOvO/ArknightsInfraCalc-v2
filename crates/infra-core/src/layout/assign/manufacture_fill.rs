@@ -51,7 +51,7 @@ pub struct ManufactureSystemCandidateTrace {
     pub selected: bool,
     pub rejected: bool,
     pub rejection_reason: Option<String>,
-    pub raw_score: Option<f64>,
+    pub final_efficiency: Option<crate::Efficiency>,
     pub evaluation_failed: Option<String>,
     pub linked_producers: Vec<ManufactureLinkedProducer>,
     pub source_system: String,
@@ -213,7 +213,7 @@ pub(super) fn trace_gongsun_gold_windflit_candidate(
         }
     }
 
-    let (raw_score, evaluation_failed) = if missing.is_empty() {
+    let (final_efficiency, evaluation_failed) = if missing.is_empty() {
         let opts = manu_options(layout, options, RecipeKind::Gold, room.level);
         match score_manu_entries(
             &entries,
@@ -223,7 +223,7 @@ pub(super) fn trace_gongsun_gold_windflit_candidate(
             RecipeKind::Gold,
             opts.level,
         ) {
-            Some(hit) => (Some(hit.composite_score), None),
+            Some(hit) => (Some(hit.final_efficiency), None),
             None => (None, Some("evaluation_failed".to_string())),
         }
     } else {
@@ -272,7 +272,7 @@ pub(super) fn trace_gongsun_gold_windflit_candidate(
     };
     let selected_by_hit = selected_hit.is_some_and(|hit| manu_hit_matches_names(hit, &operators));
     let selected = selected_by_assignment || selected_by_hit;
-    let selected_score = selected_hit.map(|hit| hit.composite_score);
+    let selected_efficiency = selected_hit.map(|hit| hit.final_efficiency);
     let rejection_reason = if selected {
         None
     } else if !missing.is_empty() {
@@ -285,9 +285,9 @@ pub(super) fn trace_gongsun_gold_windflit_candidate(
         Some("required_buff_missing".to_string())
     } else if !linked.satisfied {
         Some("linked_producer_not_satisfied".to_string())
-    } else if let (Some(raw), Some(selected)) = (raw_score, selected_score) {
-        if raw < selected {
-            Some("raw_score_below_selected".to_string())
+    } else if let (Some(candidate), Some(selected)) = (final_efficiency, selected_efficiency) {
+        if candidate < selected {
+            Some("final_efficiency_below_selected".to_string())
         } else {
             Some("trace_only_low_progress".to_string())
         }
@@ -305,7 +305,7 @@ pub(super) fn trace_gongsun_gold_windflit_candidate(
         selected,
         rejected: !selected && rejection_reason.is_some(),
         rejection_reason,
-        raw_score,
+        final_efficiency,
         evaluation_failed,
         linked_producers: vec![linked],
         source_system: "automation_group".to_string(),
@@ -582,9 +582,8 @@ pub(crate) fn assign_manu_room_with_anchors(
             score_manu_entries(&entries, table, layout, options, recipe, room_level)
         })
         .max_by(|a, b| {
-            a.composite_score
-                .partial_cmp(&b.composite_score)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            a.final_efficiency
+                .cmp(&b.final_efficiency)
                 .then_with(|| {
                     a.storage
                         .gold
@@ -657,17 +656,17 @@ fn score_manu_entries(
     let mut storage = crate::manufacture::ManuStorageBreakdown::default();
     let recipe_label = match recipe {
         RecipeKind::Gold => {
-            per_station.gold = result.prod_total;
+            per_station.gold = result.final_efficiency;
             storage.gold = result.storage_limit;
             "gold"
         }
         RecipeKind::BattleRecord => {
-            per_station.battle_record = result.prod_total;
+            per_station.battle_record = result.final_efficiency;
             storage.battle_record = result.storage_limit;
             "battle_record"
         }
         RecipeKind::Originium => {
-            per_station.originium = result.prod_total;
+            per_station.originium = result.final_efficiency;
             storage.originium = result.storage_limit;
             "originium"
         }
@@ -677,14 +676,15 @@ fn score_manu_entries(
         names,
         gold_names: vec![],
         battle_record_names: vec![],
-        composite_score: result.prod_total,
+        final_efficiency: result.final_efficiency,
         per_station,
         storage,
-        breakdown: crate::search::ManuScoreBreakdown {
-            prod_base: result.prod_base,
-            prod_skill: result.prod_skill,
-            prod_global: result.prod_total - result.prod_base - result.prod_skill,
-            prod_total: result.prod_total,
+        breakdown: crate::search::ManuEfficiencyBreakdown {
+            base_efficiency: result.base_efficiency,
+            occupancy_efficiency: result.occupancy_efficiency,
+            skill_efficiency: result.skill_efficiency,
+            global_efficiency: result.global_efficiency,
+            final_efficiency: result.final_efficiency,
             storage_limit: result.storage_limit,
             recipe: recipe_label.to_string(),
         },
@@ -731,17 +731,17 @@ pub(super) fn pick_capacity_manu_hit(
     let mut storage = crate::manufacture::ManuStorageBreakdown::default();
     let recipe_label = match recipe {
         RecipeKind::Gold => {
-            per_station.gold = result.prod_total;
+            per_station.gold = result.final_efficiency;
             storage.gold = result.storage_limit;
             "gold"
         }
         RecipeKind::BattleRecord => {
-            per_station.battle_record = result.prod_total;
+            per_station.battle_record = result.final_efficiency;
             storage.battle_record = result.storage_limit;
             "battle_record"
         }
         RecipeKind::Originium => {
-            per_station.originium = result.prod_total;
+            per_station.originium = result.final_efficiency;
             storage.originium = result.storage_limit;
             "originium"
         }
@@ -752,14 +752,15 @@ pub(super) fn pick_capacity_manu_hit(
         names,
         gold_names: vec![],
         battle_record_names: vec![],
-        composite_score: result.prod_total,
+        final_efficiency: result.final_efficiency,
         per_station,
         storage,
-        breakdown: crate::search::ManuScoreBreakdown {
-            prod_base: result.prod_base,
-            prod_skill: result.prod_skill,
-            prod_global: result.prod_total - result.prod_base - result.prod_skill,
-            prod_total: result.prod_total,
+        breakdown: crate::search::ManuEfficiencyBreakdown {
+            base_efficiency: result.base_efficiency,
+            occupancy_efficiency: result.occupancy_efficiency,
+            skill_efficiency: result.skill_efficiency,
+            global_efficiency: result.global_efficiency,
+            final_efficiency: result.final_efficiency,
             storage_limit: result.storage_limit,
             recipe: recipe_label.to_string(),
         },

@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 use crate::eff_ramp::{eff_ramp_at_shift_hours, EffRampStyle};
+use crate::efficiency::Efficiency;
 use crate::error::Result;
 use crate::global_resource::GlobalResourceKey;
 use crate::instances::OperatorInstances;
@@ -15,12 +16,11 @@ const ADDITION_BETA: &str = "power_rec_spd&addition[001]";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PowerResult {
-    /// 纸面充能速度 %（含空构爬升后的有效值）。
-    pub charge_speed_pct: f64,
-    /// L1 固定/selector 部分（不含爬升）。
-    pub charge_speed_base_pct: f64,
-    /// 空构·技术交流爬升贡献。
-    pub charge_ramp_pct: f64,
+    pub base_efficiency: Efficiency,
+    pub skill_efficiency: Efficiency,
+    pub ramp_efficiency: Efficiency,
+    /// 可直接用于充能产出预估的最终效率。
+    pub final_efficiency: Efficiency,
     pub mood_drain_delta: f64,
     pub virtual_power_produced: f64,
 }
@@ -74,10 +74,13 @@ pub fn solve_power(input: &PowerRoomInput, table: &SkillTable) -> Result<PowerRe
         .copied()
         .unwrap_or(0.0);
 
+    let skill_efficiency = Efficiency::from_percent_points(base);
+    let ramp_efficiency = Efficiency::from_percent_points(ramp);
     Ok(PowerResult {
-        charge_speed_pct: base + ramp,
-        charge_speed_base_pct: base,
-        charge_ramp_pct: ramp,
+        base_efficiency: Efficiency::ONE,
+        skill_efficiency,
+        ramp_efficiency,
+        final_efficiency: Efficiency::ONE + skill_efficiency + ramp_efficiency,
         mood_drain_delta: ctx.operator.mood_drain_delta,
         virtual_power_produced: (after_vp - before_vp).max(0.0),
     })
@@ -126,7 +129,7 @@ mod tests {
             vec!["power_rec_spd[000]".into()],
         ));
         let result = solve_power(&input, &table).unwrap();
-        assert!((result.charge_speed_pct - 10.0).abs() < 0.01);
+        assert_eq!(result.final_efficiency, Efficiency::from_decimal(1.100));
     }
 
     #[test]
@@ -142,7 +145,7 @@ mod tests {
         let buff_ids = instances.resolve_power_buff_ids("格雷伊", PromotionTier::Tier0);
         let input = PowerRoomInput::with_operator(PowerOperator::new("格雷伊", 0, buff_ids));
         let result = solve_power(&input, &table).unwrap();
-        assert!((result.charge_speed_pct - 20.0).abs() < 0.01);
+        assert_eq!(result.final_efficiency, Efficiency::from_decimal(1.200));
     }
 
     #[test]
@@ -159,9 +162,9 @@ mod tests {
         let result = solve_power(&input, &table).unwrap();
         // +10% 基础 + 4×3%（除自身外 4 名莱茵）
         assert!(
-            (result.charge_speed_pct - 22.0).abs() < 0.01,
+            result.final_efficiency == Efficiency::from_decimal(1.220),
             "got {}",
-            result.charge_speed_pct
+            result.final_efficiency
         );
     }
 }

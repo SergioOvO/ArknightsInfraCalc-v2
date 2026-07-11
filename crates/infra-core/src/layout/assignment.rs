@@ -3,6 +3,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use crate::efficiency::Efficiency;
 use crate::error::{Error, Result};
 
 use crate::layout::blueprint::RoomId;
@@ -59,86 +60,56 @@ fn is_zero_u32(v: &u32) -> bool {
     *v == 0
 }
 
-fn is_zero_f64(v: &f64) -> bool {
-    *v == 0.0
-}
-
 fn is_zero_i32(v: &i32) -> bool {
     *v == 0
+}
+
+fn is_zero_efficiency(v: &Efficiency) -> bool {
+    v.is_zero()
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RoomEfficiencySnapshot {
     /// 完整纸面效率，包含基础 100%、人头、技能与中枢。
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub trade_paper_efficiency: f64,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub trade_paper_efficiency: Efficiency,
     /// 社区加强单位产出相对三级普通贸易站的倍率。
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub trade_unit_output_multiplier: f64,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub trade_unit_output_multiplier: Efficiency,
     /// 贸易最终效率；排班与产出预估的正式真源。
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub trade_final_efficiency: f64,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub trade_final_efficiency: Efficiency,
     /// 从最终效率反算的等效技能加成。
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub trade_equivalent_operator_skill_bonus: f64,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub trade_equivalent_skill_efficiency: Efficiency,
     /// 命中的社区规则或 shortcut ID，用于产出审计。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trade_rule_id: Option<String>,
-    /// 可直接用于产出预估的贸易最终效率，`1.0` 表示三级普通站 100%。
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub trade_score: f64,
-    /// 完整贸易最终效率百分比，例如 `190.65` 表示 `1.9065`。
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub trade_pct: f64,
-    /// 贸易技能效率 `%`，不含人头与全局注入。
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub trade_skill_pct: f64,
-    /// 赤金侧等效效率 `%`，用于拆分展示。
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub trade_gold_pct: f64,
-    /// 制造总效率 `%`，即搜索排序使用的 `prod_total`。
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub manu_prod_total: f64,
-    /// 制造技能生产力 `%`，不含人头与全局注入。
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub manu_prod_skill: f64,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub trade_skill_efficiency: Efficiency,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub trade_mechanic_equivalent_efficiency: Efficiency,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub manufacture_final_efficiency: Efficiency,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub manufacture_skill_efficiency: Efficiency,
     #[serde(default, skip_serializing_if = "is_zero_i32")]
-    pub manu_storage_limit: i32,
-    /// 发电充能速度 `%`。
-    #[serde(default, skip_serializing_if = "is_zero_f64")]
-    pub power_charge_speed_pct: f64,
+    pub manufacture_storage_limit: i32,
+    #[serde(default, skip_serializing_if = "is_zero_efficiency")]
+    pub power_final_efficiency: Efficiency,
 }
 
 impl RoomEfficiencySnapshot {
     pub fn is_trade(&self) -> bool {
-        self.trade_final_efficiency != 0.0
-            || self.trade_score != 0.0
-            || self.trade_pct != 0.0
-            || self.trade_skill_pct != 0.0
-    }
-
-    pub fn final_trade_efficiency(&self) -> f64 {
-        if self.trade_final_efficiency != 0.0 {
-            self.trade_final_efficiency
-        } else {
-            self.trade_score
-        }
-    }
-
-    pub fn final_trade_efficiency_pct(&self) -> f64 {
-        if self.trade_final_efficiency != 0.0 {
-            self.trade_final_efficiency * 100.0
-        } else {
-            self.trade_pct
-        }
+        !self.trade_final_efficiency.is_zero()
     }
 
     pub fn is_manufacture(&self) -> bool {
-        self.manu_prod_total != 0.0 || self.manu_prod_skill != 0.0
+        !self.manufacture_final_efficiency.is_zero()
     }
 
     pub fn is_power(&self) -> bool {
-        self.power_charge_speed_pct != 0.0
+        !self.power_final_efficiency.is_zero()
     }
 }
 
@@ -271,40 +242,41 @@ mod tests {
     use super::*;
 
     #[test]
-    fn trade_snapshot_prefers_new_final_efficiency_and_keeps_legacy_fallback() {
-        let current = RoomEfficiencySnapshot {
-            trade_final_efficiency: 1.9065,
-            trade_score: 1.23,
-            trade_pct: 123.0,
+    fn trade_snapshot_uses_direct_efficiency_only() {
+        let snapshot = RoomEfficiencySnapshot {
+            trade_final_efficiency: Efficiency::from_decimal(1.907),
             ..RoomEfficiencySnapshot::default()
         };
-        assert_eq!(current.final_trade_efficiency(), 1.9065);
-        assert_eq!(current.final_trade_efficiency_pct(), 190.65);
-
-        let legacy = RoomEfficiencySnapshot {
-            trade_score: 1.23,
-            trade_pct: 123.0,
-            ..RoomEfficiencySnapshot::default()
-        };
-        assert_eq!(legacy.final_trade_efficiency(), 1.23);
-        assert_eq!(legacy.final_trade_efficiency_pct(), 123.0);
+        assert_eq!(
+            snapshot.trade_final_efficiency,
+            Efficiency::from_millis(1907)
+        );
     }
 
     #[test]
     fn trade_snapshot_roundtrip_preserves_audit_fields() {
         let snapshot = RoomEfficiencySnapshot {
-            trade_paper_efficiency: 1.23,
-            trade_unit_output_multiplier: 1.55,
-            trade_final_efficiency: 1.9065,
-            trade_equivalent_operator_skill_bonus: 0.8065,
+            trade_paper_efficiency: Efficiency::from_decimal(1.230),
+            trade_unit_output_multiplier: Efficiency::from_decimal(1.550),
+            trade_final_efficiency: Efficiency::from_decimal(1.907),
+            trade_equivalent_skill_efficiency: Efficiency::from_decimal(0.807),
             trade_rule_id: Some("gsl_docus_solo".to_string()),
             ..RoomEfficiencySnapshot::default()
         };
         let json = serde_json::to_string(&snapshot).unwrap();
         let decoded: RoomEfficiencySnapshot = serde_json::from_str(&json).unwrap();
-        assert_eq!(decoded.trade_paper_efficiency, 1.23);
-        assert_eq!(decoded.trade_unit_output_multiplier, 1.55);
-        assert_eq!(decoded.trade_final_efficiency, 1.9065);
+        assert_eq!(
+            decoded.trade_paper_efficiency,
+            Efficiency::from_decimal(1.230)
+        );
+        assert_eq!(
+            decoded.trade_unit_output_multiplier,
+            Efficiency::from_decimal(1.550)
+        );
+        assert_eq!(
+            decoded.trade_final_efficiency,
+            Efficiency::from_decimal(1.907)
+        );
         assert_eq!(decoded.trade_rule_id.as_deref(), Some("gsl_docus_solo"));
     }
 }

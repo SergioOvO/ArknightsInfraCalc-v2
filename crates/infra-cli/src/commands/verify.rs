@@ -33,55 +33,60 @@ pub fn verify_cmd(args: &[String]) -> Result<(), Error> {
             && !case.operators.starts_with("但书")
             && !case.operators.starts_with("黑键")
             && case.operators != "see_roster"
-            && !case.expect_shortcut.starts_with("gsl_witch_")
+            && !case.expect_rule_id.starts_with("gsl_witch_")
             && !case.case_id.contains("ling_jie")
         {
             println!("skip {} (fixture not wired)", case.case_id);
             continue;
         }
 
-        let input = if case.expect_shortcut == "gsl_blackkey_closure" {
+        let input = if case.expect_rule_id == "gsl_blackkey_closure" {
             blackkey_closure_fixture(case.trade_level)
         } else if case.case_id.contains("ling_jie") {
             ling_jie_fixture(case.trade_level)
-        } else if case.expect_shortcut.starts_with("gsl_witch_") {
-            witch_fixture(&case.expect_shortcut, case.trade_level)
-        } else if case.expect_shortcut.starts_with("gsl_docus_") {
+        } else if case.expect_rule_id.starts_with("gsl_witch_") {
+            witch_fixture(&case.expect_rule_id, case.trade_level)
+        } else if case.expect_rule_id.starts_with("gsl_docus_") {
             docus_fixture(&case.case_id, case.trade_level)
         } else {
             closure_fixture(&case.case_id, case.trade_level)
         };
         let result = solve_trade_with_shift(&input, &table, 24.0)?;
-        let trade_ok = (result.order_eff_total - case.expect_trade_pct).abs() <= case.tolerance;
-        let gold_ok = (result.order_mechanic.mechanic_equiv_eff_pct - case.expect_gold_pct).abs()
+        let efficiency_ok =
+            (result.efficiency.final_efficiency.as_f64() - case.expect_final_efficiency).abs()
+                <= case.tolerance;
+        let mechanic_ok = (result
+            .order_mechanic
+            .mechanic_equivalent_efficiency
+            .as_f64()
+            - case.expect_mechanic_equivalent_efficiency)
+            .abs()
             <= case.tolerance;
-        let shortcut_ok = if case.expect_shortcut == "none" {
-            result.trade_shortcut.is_none()
+        let rule_ok = if case.expect_rule_id == "none" {
+            result.rule_id.is_none()
         } else {
-            result.trade_shortcut.as_deref() == Some(case.expect_shortcut.as_str())
+            result.rule_id.as_deref() == Some(case.expect_rule_id.as_str())
         };
 
-        if trade_ok && gold_ok && shortcut_ok {
+        if efficiency_ok && mechanic_ok && rule_ok {
             println!(
-                "PASS {} trade={:.1} gold={:.1} shortcut={:?} pre={:.1}",
+                "PASS {} final_efficiency={} mechanic_efficiency={} rule_id={:?}",
                 case.case_id,
-                result.order_eff_total,
-                result.order_mechanic.mechanic_equiv_eff_pct,
-                result.trade_shortcut,
-                result.order_eff_pre_shortcut
+                result.efficiency.final_efficiency,
+                result.order_mechanic.mechanic_equivalent_efficiency,
+                result.rule_id,
             );
         } else {
             any_fail = true;
             eprintln!(
-                "FAIL {} expected trade={} gold={} shortcut={} got trade={:.1} gold={:.1} shortcut={:?} pre={:.1}",
+                "FAIL {} expected final_efficiency={} mechanic_efficiency={} rule_id={} got final_efficiency={} mechanic_efficiency={} rule_id={:?}",
                 case.case_id,
-                case.expect_trade_pct,
-                case.expect_gold_pct,
-                case.expect_shortcut,
-                result.order_eff_total,
-                result.order_mechanic.mechanic_equiv_eff_pct,
-                result.trade_shortcut,
-                result.order_eff_pre_shortcut
+                case.expect_final_efficiency,
+                case.expect_mechanic_equivalent_efficiency,
+                case.expect_rule_id,
+                result.efficiency.final_efficiency,
+                result.order_mechanic.mechanic_equivalent_efficiency,
+                result.rule_id,
             );
         }
     }
@@ -126,12 +131,19 @@ fn verify_unit_anchors(
         let gold_ok = case.expect_gsl_unit_gold <= 0.0
             || (u.gsl_unit_gold() - case.expect_gsl_unit_gold).abs() <= gold_tol;
         let efficiency = &result.efficiency;
-        let expected_final = efficiency.paper.paper_efficiency * case.expect_unit_trade
-            / efficiency.production_basis.reference_unit_output_per_day;
-        let final_tol = expected_final.abs() * case.tolerance_pct / 100.0;
-        let final_ok = (efficiency.final_efficiency - expected_final).abs() <= final_tol;
+        let unit_multiplier = infra_core::Efficiency::from_decimal(
+            case.expect_unit_trade / efficiency.production_basis.reference_unit_output_per_day,
+        );
+        let expected_final = if efficiency.applies_paper_efficiency {
+            efficiency.paper.paper_efficiency * unit_multiplier
+        } else {
+            unit_multiplier
+        };
+        let final_tol = expected_final.as_f64().abs() * case.tolerance_pct / 100.0;
+        let final_ok =
+            (efficiency.final_efficiency.as_f64() - expected_final.as_f64()).abs() <= final_tol;
         let expected_daily =
-            efficiency.production_basis.reference_unit_output_per_day * expected_final;
+            efficiency.production_basis.reference_unit_output_per_day * expected_final.as_f64();
         let daily_tol = expected_daily.abs() * case.tolerance_pct / 100.0;
         let daily_ok =
             (result.production.daily_at_shift.trade_lmd - expected_daily).abs() <= daily_tol;

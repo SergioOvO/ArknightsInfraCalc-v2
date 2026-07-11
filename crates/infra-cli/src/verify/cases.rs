@@ -33,9 +33,9 @@ pub fn load_unit_anchor_cases(path: &Path) -> Result<Vec<UnitAnchorCase>, Error>
 #[derive(Debug)]
 pub struct RegressionCase {
     pub case_id: String,
-    pub expect_trade_pct: f64,
-    pub expect_gold_pct: f64,
-    pub expect_shortcut: String,
+    pub expect_final_efficiency: f64,
+    pub expect_mechanic_equivalent_efficiency: f64,
+    pub expect_rule_id: String,
     pub tolerance: f64,
     pub trade_level: u8,
     pub operators: String,
@@ -48,12 +48,12 @@ pub fn load_regression_cases(path: &Path) -> Result<Vec<RegressionCase>, Error> 
         let rec = rec?;
         out.push(RegressionCase {
             case_id: rec[0].to_string(),
-            expect_shortcut: rec[1].to_string(),
+            expect_rule_id: rec[1].to_string(),
             operators: rec[2].to_string(),
             trade_level: rec[3].parse().unwrap_or(3),
-            expect_trade_pct: rec[4].parse().unwrap_or(0.0),
-            expect_gold_pct: rec[5].parse().unwrap_or(0.0),
-            tolerance: rec[7].parse().unwrap_or(0.5),
+            expect_final_efficiency: rec[4].parse().unwrap_or(0.0),
+            expect_mechanic_equivalent_efficiency: rec[5].parse().unwrap_or(0.0),
+            tolerance: rec[6].parse().unwrap_or(0.001),
         });
     }
     Ok(out)

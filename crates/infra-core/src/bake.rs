@@ -10,6 +10,7 @@ use std::time::Instant as StdInstant;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::efficiency::Efficiency;
 use crate::error::{Error, Result};
 use crate::instances::{default_instances_path, OperatorInstances};
 use crate::layout::LayoutContext;
@@ -23,8 +24,9 @@ use crate::pool::{standalone_names_for, StandaloneFilter};
 use crate::pool::{HasName, ManuPool, PoolCore, TradePool};
 use crate::roster::{OperatorProgress, Roster};
 use crate::search::{
-    ManuScoreBreakdown, ManuSearchHit, ManuSearchOptions, ManuSearchReport, SearchTripleFilter,
-    TradeScoreBreakdown, TradeSearchHit, TradeSearchOptions, TradeSearchReport,
+    ManuEfficiencyBreakdown, ManuSearchHit, ManuSearchOptions, ManuSearchReport,
+    SearchTripleFilter, TradeEfficiencyBreakdown, TradeSearchHit, TradeSearchOptions,
+    TradeSearchReport,
 };
 use crate::skill_table::{data_path, default_skill_table_path, SkillTable};
 use crate::trade::input::{TradeOrderKind, TradeRoomInput, TradeSearchOrderMode};
@@ -33,7 +35,7 @@ use crate::trade::solver::solve_trade_with_shift_prevalidated;
 use crate::types::RecipeKind;
 use crate::FacilityKind;
 
-pub const BAKE_SCHEMA_VERSION: u32 = 9;
+pub const BAKE_SCHEMA_VERSION: u32 = 10;
 
 pub type BakeProgressCallback = Arc<dyn Fn(BakeProgressEvent) + Send + Sync>;
 
@@ -229,25 +231,28 @@ struct BakedComboRowDisk {
     room_level: u8,
     operator_capacity: usize,
     operator_indices: Vec<usize>,
-    sort_score: f64,
+    sort_efficiency_millis: i32,
     order_kind: Option<TradeOrderKind>,
     recipe: Option<RecipeKind>,
-    trade_pct: Option<f64>,
-    gold_pct: Option<f64>,
-    shortcut: Option<String>,
+    trade_base_efficiency_millis: Option<i32>,
+    trade_occupancy_efficiency_millis: Option<i32>,
+    trade_skill_efficiency_millis: Option<i32>,
+    trade_control_efficiency_millis: Option<i32>,
+    trade_paper_efficiency_millis: Option<i32>,
+    trade_mechanic_equivalent_efficiency_millis: Option<i32>,
+    trade_unit_output_multiplier_millis: Option<i32>,
+    trade_final_efficiency_millis: Option<i32>,
+    trade_equivalent_skill_efficiency_millis: Option<i32>,
+    rule_id: Option<String>,
     unit_trade_per_day: Option<f64>,
     unit_gold_per_day: Option<f64>,
     unit_originium_per_day: Option<f64>,
-    output_multiplier: Option<f64>,
-    trade_order_eff_base: Option<f64>,
-    trade_order_eff_skill: Option<f64>,
-    trade_order_eff_global: Option<f64>,
-    trade_effective_eff_multiplier: Option<f64>,
-    manu_prod_total: Option<f64>,
-    manu_prod_base: Option<f64>,
-    manu_prod_skill: Option<f64>,
-    manu_prod_global: Option<f64>,
-    manu_storage_limit: Option<i32>,
+    manufacture_base_efficiency_millis: Option<i32>,
+    manufacture_occupancy_efficiency_millis: Option<i32>,
+    manufacture_skill_efficiency_millis: Option<i32>,
+    manufacture_global_efficiency_millis: Option<i32>,
+    manufacture_final_efficiency_millis: Option<i32>,
+    manufacture_storage_limit: Option<i32>,
 }
 
 impl From<&BakedComboTable> for BakedComboTableDisk {
@@ -270,25 +275,46 @@ impl From<&BakedComboRow> for BakedComboRowDisk {
             room_level: value.room_level,
             operator_capacity: value.operator_capacity,
             operator_indices: value.operator_indices.clone(),
-            sort_score: value.sort_score,
+            sort_efficiency_millis: value.sort_efficiency.millis(),
             order_kind: value.order_kind,
             recipe: value.recipe,
-            trade_pct: value.trade_pct,
-            gold_pct: value.gold_pct,
-            shortcut: value.shortcut.clone(),
+            trade_base_efficiency_millis: value.trade_base_efficiency.map(Efficiency::millis),
+            trade_occupancy_efficiency_millis: value
+                .trade_occupancy_efficiency
+                .map(Efficiency::millis),
+            trade_skill_efficiency_millis: value.trade_skill_efficiency.map(Efficiency::millis),
+            trade_control_efficiency_millis: value.trade_control_efficiency.map(Efficiency::millis),
+            trade_paper_efficiency_millis: value.trade_paper_efficiency.map(Efficiency::millis),
+            trade_mechanic_equivalent_efficiency_millis: value
+                .trade_mechanic_equivalent_efficiency
+                .map(Efficiency::millis),
+            trade_unit_output_multiplier_millis: value
+                .trade_unit_output_multiplier
+                .map(Efficiency::millis),
+            trade_final_efficiency_millis: value.trade_final_efficiency.map(Efficiency::millis),
+            trade_equivalent_skill_efficiency_millis: value
+                .trade_equivalent_skill_efficiency
+                .map(Efficiency::millis),
+            rule_id: value.rule_id.clone(),
             unit_trade_per_day: value.unit_trade_per_day,
             unit_gold_per_day: value.unit_gold_per_day,
             unit_originium_per_day: value.unit_originium_per_day,
-            output_multiplier: value.output_multiplier,
-            trade_order_eff_base: value.trade_order_eff_base,
-            trade_order_eff_skill: value.trade_order_eff_skill,
-            trade_order_eff_global: value.trade_order_eff_global,
-            trade_effective_eff_multiplier: value.trade_effective_eff_multiplier,
-            manu_prod_total: value.manu_prod_total,
-            manu_prod_base: value.manu_prod_base,
-            manu_prod_skill: value.manu_prod_skill,
-            manu_prod_global: value.manu_prod_global,
-            manu_storage_limit: value.manu_storage_limit,
+            manufacture_base_efficiency_millis: value
+                .manufacture_base_efficiency
+                .map(Efficiency::millis),
+            manufacture_occupancy_efficiency_millis: value
+                .manufacture_occupancy_efficiency
+                .map(Efficiency::millis),
+            manufacture_skill_efficiency_millis: value
+                .manufacture_skill_efficiency
+                .map(Efficiency::millis),
+            manufacture_global_efficiency_millis: value
+                .manufacture_global_efficiency
+                .map(Efficiency::millis),
+            manufacture_final_efficiency_millis: value
+                .manufacture_final_efficiency
+                .map(Efficiency::millis),
+            manufacture_storage_limit: value.manufacture_storage_limit,
         }
     }
 }
@@ -318,25 +344,56 @@ impl From<BakedComboRowDisk> for BakedComboRow {
             names: Vec::new(),
             operator_indices: value.operator_indices,
             operator_mask: Vec::new(),
-            sort_score: value.sort_score,
+            sort_efficiency: Efficiency::from_millis(value.sort_efficiency_millis),
             order_kind: value.order_kind,
             recipe: value.recipe,
-            trade_pct: value.trade_pct,
-            gold_pct: value.gold_pct,
-            shortcut: value.shortcut,
+            trade_base_efficiency: value
+                .trade_base_efficiency_millis
+                .map(Efficiency::from_millis),
+            trade_occupancy_efficiency: value
+                .trade_occupancy_efficiency_millis
+                .map(Efficiency::from_millis),
+            trade_skill_efficiency: value
+                .trade_skill_efficiency_millis
+                .map(Efficiency::from_millis),
+            trade_control_efficiency: value
+                .trade_control_efficiency_millis
+                .map(Efficiency::from_millis),
+            trade_paper_efficiency: value
+                .trade_paper_efficiency_millis
+                .map(Efficiency::from_millis),
+            trade_mechanic_equivalent_efficiency: value
+                .trade_mechanic_equivalent_efficiency_millis
+                .map(Efficiency::from_millis),
+            trade_unit_output_multiplier: value
+                .trade_unit_output_multiplier_millis
+                .map(Efficiency::from_millis),
+            trade_final_efficiency: value
+                .trade_final_efficiency_millis
+                .map(Efficiency::from_millis),
+            trade_equivalent_skill_efficiency: value
+                .trade_equivalent_skill_efficiency_millis
+                .map(Efficiency::from_millis),
+            rule_id: value.rule_id,
             unit_trade_per_day: value.unit_trade_per_day,
             unit_gold_per_day: value.unit_gold_per_day,
             unit_originium_per_day: value.unit_originium_per_day,
-            output_multiplier: value.output_multiplier,
-            trade_order_eff_base: value.trade_order_eff_base,
-            trade_order_eff_skill: value.trade_order_eff_skill,
-            trade_order_eff_global: value.trade_order_eff_global,
-            trade_effective_eff_multiplier: value.trade_effective_eff_multiplier,
-            manu_prod_total: value.manu_prod_total,
-            manu_prod_base: value.manu_prod_base,
-            manu_prod_skill: value.manu_prod_skill,
-            manu_prod_global: value.manu_prod_global,
-            manu_storage_limit: value.manu_storage_limit,
+            manufacture_base_efficiency: value
+                .manufacture_base_efficiency_millis
+                .map(Efficiency::from_millis),
+            manufacture_occupancy_efficiency: value
+                .manufacture_occupancy_efficiency_millis
+                .map(Efficiency::from_millis),
+            manufacture_skill_efficiency: value
+                .manufacture_skill_efficiency_millis
+                .map(Efficiency::from_millis),
+            manufacture_global_efficiency: value
+                .manufacture_global_efficiency_millis
+                .map(Efficiency::from_millis),
+            manufacture_final_efficiency: value
+                .manufacture_final_efficiency_millis
+                .map(Efficiency::from_millis),
+            manufacture_storage_limit: value.manufacture_storage_limit,
         }
     }
 }
@@ -374,43 +431,49 @@ struct BakedComboRow {
     #[serde(default, skip_serializing)]
     operator_mask: Vec<u64>,
     #[serde(rename = "s")]
-    sort_score: f64,
+    sort_efficiency: Efficiency,
     #[serde(rename = "ok", skip_serializing_if = "Option::is_none")]
     order_kind: Option<TradeOrderKind>,
     #[serde(rename = "r", skip_serializing_if = "Option::is_none")]
     recipe: Option<RecipeKind>,
+    #[serde(rename = "tb", skip_serializing_if = "Option::is_none")]
+    trade_base_efficiency: Option<Efficiency>,
+    #[serde(rename = "to", skip_serializing_if = "Option::is_none")]
+    trade_occupancy_efficiency: Option<Efficiency>,
+    #[serde(rename = "ts", skip_serializing_if = "Option::is_none")]
+    trade_skill_efficiency: Option<Efficiency>,
+    #[serde(rename = "tc", skip_serializing_if = "Option::is_none")]
+    trade_control_efficiency: Option<Efficiency>,
     #[serde(rename = "tp", skip_serializing_if = "Option::is_none")]
-    trade_pct: Option<f64>,
-    #[serde(rename = "gp", skip_serializing_if = "Option::is_none")]
-    gold_pct: Option<f64>,
-    #[serde(rename = "sc", skip_serializing_if = "Option::is_none")]
-    shortcut: Option<String>,
+    trade_paper_efficiency: Option<Efficiency>,
+    #[serde(rename = "tm", skip_serializing_if = "Option::is_none")]
+    trade_mechanic_equivalent_efficiency: Option<Efficiency>,
+    #[serde(rename = "tu", skip_serializing_if = "Option::is_none")]
+    trade_unit_output_multiplier: Option<Efficiency>,
+    #[serde(rename = "tf", skip_serializing_if = "Option::is_none")]
+    trade_final_efficiency: Option<Efficiency>,
+    #[serde(rename = "te", skip_serializing_if = "Option::is_none")]
+    trade_equivalent_skill_efficiency: Option<Efficiency>,
+    #[serde(rename = "ri", skip_serializing_if = "Option::is_none")]
+    rule_id: Option<String>,
     #[serde(rename = "utd", skip_serializing_if = "Option::is_none")]
     unit_trade_per_day: Option<f64>,
     #[serde(rename = "ugd", skip_serializing_if = "Option::is_none")]
     unit_gold_per_day: Option<f64>,
     #[serde(rename = "uod", default, skip_serializing_if = "Option::is_none")]
     unit_originium_per_day: Option<f64>,
-    #[serde(rename = "out", default, skip_serializing_if = "Option::is_none")]
-    output_multiplier: Option<f64>,
-    #[serde(rename = "teb", default, skip_serializing_if = "Option::is_none")]
-    trade_order_eff_base: Option<f64>,
-    #[serde(rename = "tes", default, skip_serializing_if = "Option::is_none")]
-    trade_order_eff_skill: Option<f64>,
-    #[serde(rename = "teg", default, skip_serializing_if = "Option::is_none")]
-    trade_order_eff_global: Option<f64>,
-    #[serde(rename = "tem", default, skip_serializing_if = "Option::is_none")]
-    trade_effective_eff_multiplier: Option<f64>,
-    #[serde(rename = "mpt", skip_serializing_if = "Option::is_none")]
-    manu_prod_total: Option<f64>,
-    #[serde(rename = "mpb", skip_serializing_if = "Option::is_none")]
-    manu_prod_base: Option<f64>,
-    #[serde(rename = "mps", default, skip_serializing_if = "Option::is_none")]
-    manu_prod_skill: Option<f64>,
-    #[serde(rename = "mpg", default, skip_serializing_if = "Option::is_none")]
-    manu_prod_global: Option<f64>,
+    #[serde(rename = "mb", skip_serializing_if = "Option::is_none")]
+    manufacture_base_efficiency: Option<Efficiency>,
+    #[serde(rename = "mo", skip_serializing_if = "Option::is_none")]
+    manufacture_occupancy_efficiency: Option<Efficiency>,
+    #[serde(rename = "ms", skip_serializing_if = "Option::is_none")]
+    manufacture_skill_efficiency: Option<Efficiency>,
+    #[serde(rename = "mg", skip_serializing_if = "Option::is_none")]
+    manufacture_global_efficiency: Option<Efficiency>,
+    #[serde(rename = "mf", skip_serializing_if = "Option::is_none")]
+    manufacture_final_efficiency: Option<Efficiency>,
     #[serde(rename = "msl", default, skip_serializing_if = "Option::is_none")]
-    manu_storage_limit: Option<i32>,
+    manufacture_storage_limit: Option<i32>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -751,25 +814,32 @@ fn trade_combo_row(
         names,
         operator_indices,
         operator_mask,
-        sort_score: result.efficiency.final_efficiency,
+        sort_efficiency: result.efficiency.final_efficiency,
         order_kind: Some(order_kind),
         recipe: None,
-        trade_pct: Some(result.efficiency.final_efficiency_pct()),
-        gold_pct: Some(result.order_mechanic.mechanic_equiv_eff_pct),
-        shortcut: result.trade_shortcut.clone(),
+        trade_base_efficiency: Some(result.efficiency.paper.base_efficiency),
+        trade_occupancy_efficiency: Some(result.efficiency.paper.occupancy_efficiency),
+        trade_skill_efficiency: Some(result.efficiency.paper.skill_efficiency),
+        trade_control_efficiency: Some(result.efficiency.paper.control_efficiency),
+        trade_paper_efficiency: Some(result.efficiency.paper.paper_efficiency),
+        trade_mechanic_equivalent_efficiency: Some(
+            result.order_mechanic.mechanic_equivalent_efficiency,
+        ),
+        trade_unit_output_multiplier: Some(
+            result.efficiency.production_basis.unit_output_multiplier,
+        ),
+        trade_final_efficiency: Some(result.efficiency.final_efficiency),
+        trade_equivalent_skill_efficiency: Some(result.efficiency.equivalent_skill_efficiency),
+        rule_id: result.rule_id.clone(),
         unit_trade_per_day: Some(result.production.unit.unit_trade_per_day),
         unit_gold_per_day: Some(result.production.unit.unit_gold_per_day),
         unit_originium_per_day: Some(result.production.unit.unit_originium_per_day),
-        output_multiplier: Some(result.production.unit.multiplier_vs_lv3_regular),
-        trade_order_eff_base: Some(result.efficiency.paper.occupancy_bonus * 100.0),
-        trade_order_eff_skill: Some(result.efficiency.paper.operator_skill_bonus * 100.0),
-        trade_order_eff_global: Some(result.efficiency.paper.control_bonus * 100.0),
-        trade_effective_eff_multiplier: Some(result.effective_eff_multiplier),
-        manu_prod_total: None,
-        manu_prod_base: None,
-        manu_prod_skill: None,
-        manu_prod_global: None,
-        manu_storage_limit: None,
+        manufacture_base_efficiency: None,
+        manufacture_occupancy_efficiency: None,
+        manufacture_skill_efficiency: None,
+        manufacture_global_efficiency: None,
+        manufacture_final_efficiency: None,
+        manufacture_storage_limit: None,
     })
 }
 
@@ -888,33 +958,35 @@ fn manufacture_combo_row(
         names,
         operator_indices,
         operator_mask,
-        sort_score: result.prod_total,
+        sort_efficiency: result.final_efficiency,
         order_kind: None,
         recipe: Some(recipe),
-        trade_pct: None,
-        gold_pct: None,
-        shortcut: None,
+        trade_base_efficiency: None,
+        trade_occupancy_efficiency: None,
+        trade_skill_efficiency: None,
+        trade_control_efficiency: None,
+        trade_paper_efficiency: None,
+        trade_mechanic_equivalent_efficiency: None,
+        trade_unit_output_multiplier: None,
+        trade_final_efficiency: None,
+        trade_equivalent_skill_efficiency: None,
+        rule_id: None,
         unit_trade_per_day: None,
         unit_gold_per_day: None,
         unit_originium_per_day: None,
-        output_multiplier: None,
-        trade_order_eff_base: None,
-        trade_order_eff_skill: None,
-        trade_order_eff_global: None,
-        trade_effective_eff_multiplier: None,
-        manu_prod_total: Some(result.prod_total),
-        manu_prod_base: Some(result.prod_base),
-        manu_prod_skill: Some(result.prod_skill),
-        manu_prod_global: Some(result.prod_total - result.prod_base - result.prod_skill),
-        manu_storage_limit: Some(result.storage_limit),
+        manufacture_base_efficiency: Some(result.base_efficiency),
+        manufacture_occupancy_efficiency: Some(result.occupancy_efficiency),
+        manufacture_skill_efficiency: Some(result.skill_efficiency),
+        manufacture_global_efficiency: Some(result.global_efficiency),
+        manufacture_final_efficiency: Some(result.final_efficiency),
+        manufacture_storage_limit: Some(result.storage_limit),
     })
 }
 
 fn sort_signature_rows(rows: &mut [BakedComboRow]) {
     rows.sort_by(|a, b| {
-        b.sort_score
-            .partial_cmp(&a.sort_score)
-            .unwrap_or(std::cmp::Ordering::Equal)
+        b.sort_efficiency
+            .cmp(&a.sort_efficiency)
             .then_with(|| a.names.cmp(&b.names))
     });
 }
@@ -1306,58 +1378,34 @@ fn row_to_trade_hit(row: &BakedComboRow) -> Option<TradeSearchHit> {
     if row.facility != "trade" {
         return None;
     }
-    let trade_pct = row.trade_pct?;
-    let gold_pct = row.gold_pct?;
+    let final_efficiency = row.trade_final_efficiency?;
+    let mechanic_equivalent_efficiency = row.trade_mechanic_equivalent_efficiency?;
     let unit_trade_per_day = row.unit_trade_per_day.unwrap_or(0.0);
     let unit_gold_per_day = row.unit_gold_per_day.unwrap_or(0.0);
-    let output_multiplier = row.output_multiplier.unwrap_or(0.0);
-    let paper_efficiency = 1.0
-        + (row
-            .trade_order_eff_base
-            .unwrap_or(row.operator_capacity as f64)
-            + row.trade_order_eff_skill.unwrap_or(0.0)
-            + row.trade_order_eff_global.unwrap_or(0.0))
-            / 100.0;
-    let unit_output_multiplier = output_multiplier;
-    let final_efficiency = row.trade_effective_eff_multiplier.unwrap_or(row.sort_score);
-    let equivalent_operator_skill_bonus = final_efficiency
-        - (1.0
-            + row
-                .trade_order_eff_base
-                .unwrap_or(row.operator_capacity as f64)
-                / 100.0
-            + row.trade_order_eff_global.unwrap_or(0.0) / 100.0);
     Some(TradeSearchHit {
         names: row.names.clone(),
         gold_names: vec![],
         originium_names: vec![],
-        score: row.sort_score,
-        trade_pct,
-        gold_pct,
-        shortcut: row.shortcut.clone(),
+        final_efficiency,
+        mechanic_equivalent_efficiency,
+        rule_id: row.rule_id.clone(),
         unit_trade_per_day,
         unit_gold_per_day,
         unit_originium_per_day: row.unit_originium_per_day.unwrap_or(0.0),
-        output_multiplier,
-        breakdown: TradeScoreBreakdown {
-            order_eff_base: row
-                .trade_order_eff_base
-                .unwrap_or(row.operator_capacity as f64),
-            order_eff_skill: row.trade_order_eff_skill.unwrap_or(0.0),
-            order_eff_global: row.trade_order_eff_global.unwrap_or(0.0),
-            order_eff_total_pct: paper_efficiency * 100.0,
-            mechanic_equiv_eff_pct: gold_pct,
-            eff_factor: paper_efficiency,
-            mech_factor: unit_output_multiplier,
-            effective_eff_multiplier: final_efficiency,
-            paper_efficiency,
-            unit_output_multiplier,
+        breakdown: Some(TradeEfficiencyBreakdown {
+            base_efficiency: row.trade_base_efficiency?,
+            occupancy_efficiency: row.trade_occupancy_efficiency?,
+            skill_efficiency: row.trade_skill_efficiency?,
+            control_efficiency: row.trade_control_efficiency?,
+            paper_efficiency: row.trade_paper_efficiency?,
+            mechanic_equivalent_efficiency,
+            unit_output_multiplier: row.trade_unit_output_multiplier?,
             final_efficiency,
-            equivalent_operator_skill_bonus,
+            equivalent_skill_efficiency: row.trade_equivalent_skill_efficiency?,
             unit_trade_per_day,
             unit_gold_per_day,
-            shortcut_id: row.shortcut.clone(),
-        },
+            rule_id: row.rule_id.clone(),
+        }),
     })
 }
 
@@ -1366,23 +1414,23 @@ fn row_to_manu_hit(row: &BakedComboRow) -> Option<ManuSearchHit> {
         return None;
     }
     let recipe = row.recipe?;
-    let prod_total = row.manu_prod_total?;
-    let storage_limit = row.manu_storage_limit.unwrap_or(0);
+    let final_efficiency = row.manufacture_final_efficiency?;
+    let storage_limit = row.manufacture_storage_limit.unwrap_or(0);
     let mut per_station = crate::manufacture::ManuProdBreakdown::default();
     let mut storage = crate::manufacture::ManuStorageBreakdown::default();
     let recipe_label = match recipe {
         RecipeKind::Gold => {
-            per_station.gold = prod_total;
+            per_station.gold = final_efficiency;
             storage.gold = storage_limit;
             "gold"
         }
         RecipeKind::BattleRecord => {
-            per_station.battle_record = prod_total;
+            per_station.battle_record = final_efficiency;
             storage.battle_record = storage_limit;
             "battle_record"
         }
         RecipeKind::Originium => {
-            per_station.originium = prod_total;
+            per_station.originium = final_efficiency;
             storage.originium = storage_limit;
             "originium"
         }
@@ -1392,14 +1440,15 @@ fn row_to_manu_hit(row: &BakedComboRow) -> Option<ManuSearchHit> {
         names: row.names.clone(),
         gold_names: vec![],
         battle_record_names: vec![],
-        composite_score: prod_total,
+        final_efficiency,
         per_station,
         storage,
-        breakdown: ManuScoreBreakdown {
-            prod_base: row.manu_prod_base.unwrap_or(row.operator_capacity as f64),
-            prod_skill: row.manu_prod_skill.unwrap_or(0.0),
-            prod_global: row.manu_prod_global.unwrap_or(0.0),
-            prod_total,
+        breakdown: ManuEfficiencyBreakdown {
+            base_efficiency: row.manufacture_base_efficiency?,
+            occupancy_efficiency: row.manufacture_occupancy_efficiency?,
+            skill_efficiency: row.manufacture_skill_efficiency?,
+            global_efficiency: row.manufacture_global_efficiency?,
+            final_efficiency,
             storage_limit,
             recipe: recipe_label.to_string(),
         },
@@ -1416,11 +1465,7 @@ fn build_combo_table_from_rows(
         a.facility
             .cmp(&b.facility)
             .then_with(|| a.signature_key.cmp(&b.signature_key))
-            .then_with(|| {
-                b.sort_score
-                    .partial_cmp(&a.sort_score)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
+            .then_with(|| b.sort_efficiency.cmp(&a.sort_efficiency))
             .then_with(|| a.names.cmp(&b.names))
     });
     for (idx, row) in rows.iter_mut().enumerate() {

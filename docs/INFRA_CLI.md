@@ -20,7 +20,7 @@ infra-core  pool / search / schedule / solve_trade_*
 
 | 层 | 允许做 | 禁止做 |
 |----|--------|--------|
-| **main / commands** | 子命令分发；把 argv 转成 core 的输入结构；组合多次 core 调用 | 解释 EffectAtom；手写 trade%/gold% 公式 |
+| **main / commands** | 子命令分发；把 argv 转成 core 的输入结构；组合多次 core 调用 | 解释 EffectAtom；手写生产效率公式 |
 | **verify** | 回归用例加载；硬编码 `TradeRoomInput` 夹具；PASS/FAIL 断言与打印 | 修改求解逻辑（应改 core 或 CSV 期望值） |
 | **output** | `OutputOptions`、CSV BOM、列名、人类可读标签 | 调用 `solve_*` 或改变评分 |
 
@@ -38,7 +38,7 @@ crates/infra-cli/src/
 │   ├── bake.rs          # `bake`：生成贸易/制造 3/2/1 人单房候选索引表（运行时验证后优先读取）
 │   ├── plan.rs          # `plan`：box profile + αβγ 排班 + MAA
 │   ├── serve.rs         # `serve`：前端常驻 worker；stdin/stdout JSON line 协议
-│   ├── layout.rs        # `layout test` / `rotation` / `team-rotation` / `analyze` / `eval` 全部子命令
+│   ├── layout.rs        # `layout test` / `team-rotation` / `analyze` / `eval` 全部子命令
 │   ├── profile.rs       # `profile`：性能画像 / 分析链路对比辅助
 │   └── verify.rs        # `verify` 子命令：跑回归、汇总失败
 ├── verify/
@@ -54,7 +54,7 @@ crates/infra-cli/src/
 |------|------|
 | `main` / `run` | `ExitCode` 包装；按 `args[1]` 分发子命令 |
 | `print_usage` | 用法说明（stderr） |
-| **暂留** | `pool` / `search` / `schedule` / `trade` / `bench` 及共享参数解析（`--roster`、`--operbox` 等） |
+| **暂留** | `pool` / `search` / `trade` / `bench` 及共享参数解析（`--roster`、`--operbox` 等） |
 
 改子命令路由或全局 usage 时改这里；**不要**把新的回归夹具或 CSV 结构塞回 `main.rs`。
 
@@ -64,12 +64,12 @@ crates/infra-cli/src/
 
 | 模块 | 职责 | 不负责 |
 |------|------|--------|
-| `bake.rs` | `bake`：并行生成 `combo_table.json`、`operators.json`、`manifest.json`；`bake validate` 校验当前 CLI 指纹 | 贸易/制造效率公式；手写搜索排序 |
+| `bake.rs` | `bake`：并行生成 schema v10 的整数效率 `combo_table.bin`、`operators.json`、`manifest.json`；`bake validate` 校验当前 CLI 指纹 | 贸易/制造效率公式；手写搜索排序 |
 | `plan.rs` | **`plan`**：box profile JSON + `schedule_team_rotation` + MAA；`--operbox` 支持 JSON/xlsx；布局默认 243 | 画像算法（`box_profile/`）；排班逻辑（`schedule/`） |
 | `serve.rs` | `serve`：常驻读取 stdin JSON line，复用加载好的机制数据，按请求写出前端指定路径 | 新业务公式；替代 core 求解 API |
-| `layout.rs` | `layout test` / `rotation` / `team-rotation` / `analyze` / `eval`：蓝图 JSON + operbox → `assign_shift` 宏观落位（或自定义 `--assignment`）→ `resolve_base` → 搜索/评分 | 蓝图格式定义（`infra-core::layout::blueprint`）；求解公式（在 `infra-core`） |
+| `layout.rs` | `layout test` / `team-rotation` / `analyze` / `eval`：蓝图 JSON + operbox → `assign_shift` 宏观落位（或自定义 `--assignment`）→ `resolve_base` → 搜索/效率结算 | 蓝图格式定义（`infra-core::layout::blueprint`）；求解公式（在 `infra-core`） |
 | `profile.rs` | `profile layout-full` / `profile analyze-compare`：采集 CLI 热路径、搜索规模和分析链路耗时 | 业务求解公式；用户主流程输出契约 |
-| `verify.rs` | `verify_cmd`：遍历 `REGRESSION_CASES.csv`；按 `expect_shortcut` 选夹具；对比 trade%/gold%/shortcut；再跑 `UNIT_OUTPUT_ANCHORS.csv` | 夹具定义（在 `verify/fixtures.rs`）；CSV 列定义（在 `verify/cases.rs`） |
+| `verify.rs` | `verify_cmd`：遍历 `REGRESSION_CASES.csv`；按 `rule_id` 选夹具；对比三位小数最终效率、机制等效效率与规则 ID；再跑 `UNIT_OUTPUT_ANCHORS.csv` | 夹具定义（在 `verify/fixtures.rs`）；CSV 列定义（在 `verify/cases.rs`） |
 
 项目结构已定型：`pool` / `search` 等编排暂留 `main.rs`，**不再计划拆文件**。新增子命令仍应优先新建 `commands/foo.rs`，避免继续膨胀 `main.rs`。
 
@@ -93,7 +93,7 @@ crates/infra-cli/src/
 | `docus_fixture` | 但书 solo（`gsl_docus_*`） |
 | `unit_fixture` | 单位产出锚点 + `trade yield <fixture>` 探测 |
 
-**重要**：`REGRESSION_CASES.csv` 的 `operators` 列目前**未**驱动夹具选择；`verify` 按 `expect_shortcut` / `case_id` 映射到上述函数。扩展新回归族时：**夹具加在 `fixtures.rs`，断言逻辑加在 `commands/verify.rs`，期望值加在 CSV**。
+**重要**：`REGRESSION_CASES.csv` 的 `operators` 列目前**未**驱动夹具选择；`verify` 按 `rule_id` / `case_id` 映射到上述函数。扩展新回归族时：**夹具加在 `fixtures.rs`，断言逻辑加在 `commands/verify.rs`，期望值加在 CSV**。
 
 #### `commands/verify.rs` — 断言编排
 
@@ -110,7 +110,6 @@ crates/infra-cli/src/
 | `emit_pool` | `pool` |
 | `emit_trade_search` | `search trade` |
 | `emit_bench` | `bench` |
-| `emit_schedule` | `schedule rotation` |
 | `emit_trade_yield` | `trade yield` |
 
 约定：默认 **CSV**（写文件时 UTF-8 BOM）；`--text` 走 stderr 人类可读。新增子命令时先定 `emit_*` API，再在 `commands/*.rs` 里调用。
@@ -130,12 +129,10 @@ crates/infra-cli/src/
 | `bench` | `main.rs` | `output::emit_bench` | 必选 `--operbox`；布局固定 `search_baseline`（`243_use_this_.json`） |
 | **`layout test`** | `commands/layout.rs` | `output::emit_bench` | 必选 `--layout` + `--operbox`；默认调用 `assign_base_greedy` |
 | **`layout team-rotation`** | `commands/layout.rs` | `output::emit_team_rotation` | 必选 `--layout` + `--operbox`；**αβγ ABC 轮换**；仅排班时用 |
-| **`layout rotation`** | `commands/layout.rs` | `output::emit_base_rotation` | **已废弃**（A-B-A）；启动时 stderr 警告，请改用 `team-rotation` |
 | **`layout analyze`** | `commands/layout.rs` | `print_box_profile_report` | 必选 `--layout` + `--operbox`；练度概况分析 |
 | **`layout eval`** | `commands/layout.rs` | stderr 文本 / JSON | 必选 `--layout` + `--operbox` + `--assignment`；评估指定编制 |
 | `profile layout-full` | `commands/profile.rs` | stderr 性能报告 | 开发辅助；默认路径为历史性能夹具，用户模拟不要用 |
 | `profile analyze-compare` | `commands/profile.rs` | stderr 对比报告 | 开发辅助；对比 hybrid profile 与旧 probe 链路耗时 |
-| `schedule rotation` | `main.rs` | `output::emit_schedule` | 贸易站 A-B-A（旧入口，已废弃） |
 | `trade yield` | `main.rs` | `output::emit_trade_yield` | `verify::unit_fixture` |
 
 ---
@@ -181,7 +178,7 @@ cargo run -p infra-cli -- plan \
 
 ## 跑一遍模拟（Agent 默认）
 
-> **给 Cursor / 协作者**：用户说「跑一遍模拟」「跑模拟」「三班模拟」等，且未指定其他命令时，**默认**跑 **`plan`** 并**写出 MAA JSON**，因为它同时包含账号分析与 αβγ 排班。只有用户明确说“仅排班 / 不要分析”时，才用 `layout team-rotation`。不要用 `layout rotation`（A-B-A）或 `layout test`（单班搜索）代替。
+> **给 Cursor / 协作者**：用户说「跑一遍模拟」「跑模拟」「三班模拟」等，且未指定其他命令时，**默认**跑 **`plan`** 并**写出 MAA JSON**，因为它同时包含账号分析与 αβγ 排班。只有用户明确说“仅排班 / 不要分析”时，才用 `layout team-rotation`。`layout test` 只用于单班搜索探测；A-B-A 入口已移除。
 
 **无用户指定路径时，Agent 固定用：**
 
@@ -254,7 +251,7 @@ cargo run -p infra-cli -- layout test \
   --operbox data/fixtures/243/operbox_full_e2.json \
   [--top <n>] \
   [-o <file.csv>] \
-  [--text]
+  [--text | --json]
 ```
 
 用户指定路径时，将 `--layout` / `--operbox` 换成用户文件即可：
@@ -265,7 +262,7 @@ cargo run -p infra-cli -- layout test \
   --operbox <练度盒.json> \
   [--top <n>] \
   [-o <file.csv>] \
-  [--text]
+  [--text | --json]
 ```
 
 | 参数 | 说明 |
@@ -275,6 +272,7 @@ cargo run -p infra-cli -- layout test \
 | `--top` | Top-K 条数，默认 3 |
 | `-o` / `--output` | 写 CSV（UTF-8 BOM）；缺省 stdout |
 | `--text` | 人类可读摘要写 stderr（**Agent 本地探测时推荐**） |
+| `--json` | 输出 `{meta, trade, manufacture}`；制造最终效率为 `manufacture.report.*.final_efficiency`，分解值均为直接小数效率 |
 
 ### 内部链路（`layout test`）
 
@@ -338,8 +336,8 @@ cargo run -p infra-cli -- layout test \
 
 | 文件 | 按函数定位 |
 |------|------------|
-| `main.rs` | `pool_cmd` / `search_cmd` / `schedule_cmd` / `trade_cmd` / `bench_cmd` |
-| `output.rs` | `emit_pool`、`emit_trade_search`、`emit_bench`、`emit_schedule`、`emit_trade_yield` |
+| `main.rs` | `pool_cmd` / `search_cmd` / `trade_cmd` / `bench_cmd` |
+| `output.rs` | `emit_pool`、`emit_trade_search`、`emit_bench`、`emit_trade_yield`、`emit_team_rotation` |
 
 新增输出先加 `emit_*`，再在对应 `*_cmd` 调用；保持「编排 vs 呈现」分离。
 

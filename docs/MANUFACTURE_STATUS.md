@@ -1,7 +1,7 @@
 # 制造站域状态
 
 > **勿按贸易站 L2/L3 假设改制造站。** 制造站无 `gold_flow` / `order_mechanic` / `trade_shortcuts`；求解为 L1 直通 `solve_manufacture`。  
-> **搜索刻意对候选池做 `C(n,3)` 穷举**：制造站无贸易式「金标组合」L3，穷举 + `composite` 评分是定稿设计，不是待补缺口；排班层会先用工具人表按剩余制造房间需求缩小候选池。
+> **搜索刻意对候选池做 `C(n,3)` 穷举**：制造站无贸易式「金标组合」L3，穷举后按 `final_efficiency` 排序是定稿设计，不是待补缺口；排班层会先用工具人表按剩余制造房间需求缩小候选池。
 
 ## 域对比
 
@@ -22,7 +22,7 @@
 |------|------|
 | `manufacture/input.rs` | `ManuOperator`、`ManuRoomInput`、`ManuLineScenario`、`ManuSearchRecipeMode` |
 | `manufacture/interpreter.rs` | `apply_manu_phases`；`ManuContext` / `RecipeEff` / `RecipeLimit` |
-| `manufacture/solver.rs` | `solve_manufacture`、`score_manu_composite`；按 `RecipeKind` 输出产能与仓库 |
+| `manufacture/solver.rs` | `solve_manufacture`、`evaluate_manufacture_lines`；按 `RecipeKind` 输出直接效率与仓库 |
 | `pool/manufacture.rs` | 从 operbox 制造 roster 建池；跳过未建模 buff |
 | `search/manufacture.rs` | C(n,3) 穷举；支持单配方 / 多产线 split（2 金 + 2 经验默认） |
 
@@ -47,7 +47,7 @@
 | `search trade` | 仅贸易单站探索；当前没有制造专用 `search` 子命令 |
 | **`layout test`** | 默认调用 `assign_base_greedy` 宏观落位→ `resolve_base` → 制造搜索（含产线拆解） |
 | **`layout team-rotation`** | αβγ ABC：三班均覆盖制造产线（现行） |
-| **`layout rotation`** | ~~A-B-A~~ 已废弃 |
+| **`layout team-rotation`** | αβγ ABC 制造轮换与直接效率汇总 |
 
 输出在 `infra-cli/output.rs` 的 `emit_bench` / pool 相关段。
 
@@ -82,14 +82,14 @@
 - [ ] 制造专用 L2 域引擎（若出现大量 `atoms: []` 委托）
 - [ ] 制造 L3 组合表（若出现类似巫恋核的表化最优解）
 - [ ] `verify` 制造回归 CSV + 夹具
-- [x] **制造产线排班** — 已通过 `assign_shift`（`Peak` / `Recovery`）覆盖；现行 `schedule_team_rotation` 参与制造评分
-- [ ] `市井之道产能耦合` 类问题在制造侧重算 score 时尚未完全对齐贸易站讨论（见设计文档 §九）
+- [x] **制造产线排班** — 已通过 `assign_shift`（`Peak` / `Recovery`）覆盖；现行 `schedule_team_rotation` 按制造直接效率比较
+- [ ] `市井之道产能耦合` 类问题在制造侧重算最终效率时尚未完全对齐贸易站讨论（见设计文档 §九）
 - [ ] 制造 `GlobalInject` 特定 buff（目前走 `control/interpreter.rs`，未单独拆制造侧 `global_inject` 阶段）
 
 ## 改制造站时推荐顺序
 
 1. 本文 + `manufacture/interpreter.rs` 局部（结构同 [INTERNAL/TRADE_INTERPRETER.md](INTERNAL/TRADE_INTERPRETER.md)）
 2. `types.rs` / `skill_table.json` / `operator_instances.json`
-3. `manufacture/solver.rs` 与 `search/manufacture.rs` 评分
+3. `manufacture/solver.rs` 与 `search/manufacture.rs` 直接效率结算
 4. `cargo test -p infra-core`（制造相关 `mod tests`）
 5. **不要**改 `trade/shortcut.rs` 或 `REGRESSION_CASES.csv` 除非同时动贸易站

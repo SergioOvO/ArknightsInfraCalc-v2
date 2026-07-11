@@ -12,7 +12,7 @@
 
 1. 取 `order_eff_pre = ctx.order_eff_total()`
 2. 若赤金订单 → `resolve_trade_shortcut(..., &layout.global_inject)`
-3. 命中则走 L3：`sc.build_mechanic_result` + 社区 `unit_output`；旧 `trade_pct` / `gold_pct` 仅保留兼容解释
+3. 命中则走 L3：`sc.build_mechanic_result` + 社区 `unit_output`，并输出小数 `mechanic_equivalent_efficiency`
 4. 未命中则走 L2 `order_mechanic::resolve_order_mechanic`
 
 互斥违规在 solver 入口直接 `Err`（`trade_station_exclusive_violation`）。
@@ -80,10 +80,9 @@ None → 走 L2
 ## 但书单走（`gsl_docus_solo`）
 
 - 条件：`is_docus_solo_station` — ≥3 人、有但书机制 buff、无巫恋侧。
-- `trade_pct` **运行时覆盖**为 L1 算出的 `order_eff_pre`。
 - `unit_output` 按贸易站等级提供社区加强日产出；三级站相对 `10265` 为 `×1.55`。
 - 最终得分为完整纸面效率（基础 100% + 人头 + 技能 + 中枢）乘单位产出倍率。
-- `gold_pct=55` 仅保留旧回归解释，不再参与排序或产出乘法。
+- `mechanic_equivalent_efficiency=0.550` 仅作解释，不再参与排序或产出乘法。
 
 ## 巫恋核（`gsl_witch_*`）
 
@@ -99,13 +98,13 @@ None → 走 L2
 | 龙舌兰精0 + 空白第三人 | `gsl_witch_long0_blank` |
 | 无龙舌兰精二 + β + 空白第三人 | `gsl_witch_beta_blank` |
 
-表内 `trade_pct` / `gold_pct` / `unit_trade_anchor` 为公孙工具人锚点；L1 仍算 `order_eff_pre` 供对比。
+表内 `unit_output` 是社区单位产出真源，`mechanic_equivalent_efficiency` 是解释锚点；L1 仍计算纸面效率。
 
 ## 灵知市井孑（L1 自然计算）
 
 - 当前不走 active L3：`trade_segments.json` 无 `ling_jie`，`shortcut.rs` 无 `match_ling_jie_shortcut`。
 - `base_systems.json` 的 `ling_jie_karlan` 只认领灵知 E2 中枢；贸易站由 L1 搜索在 `karlan_precision` 激活时注入精1+ 市井孑，再自然选择银灰、琳琅诗怀雅、崖心、讯使等第三人。
-- 回归：`reg_ling_jie_yaxin_natural` 断言中枢灵知 E2 + 精1+孑 / 银灰 / 琳琅诗怀雅 = **129.0**，且 `trade_shortcut=None`。
+- 回归：`reg_ling_jie_yaxin_natural` 断言中枢灵知 E2 + 精1+孑 / 银灰 / 琳琅诗怀雅的最终直接效率为 **2.290**，且 `rule_id=None`。
 - 129 拆法：银灰受精密计算后 5% + 琳琅 20% = 25%；孑按 18 单上限给 72%；琳琅按超出 10 单的 8 单给 32%；合计 129%。
 - `gsl_ling_jie_yaxin` 保留在 `trade_shortcuts.json` 作为参考锚点，不应出现在 solver 输出的 `trade_shortcut`。
 
@@ -113,7 +112,7 @@ None → 走 L2
 
 - 条件：`has_closure`、无巫恋低语、无但书。
 - 在 `trade_shortcuts.json` 中筛 `match.kind == "closure"` 的条目。
-- 选 `station_trade_pct` 与 `order_eff_pre` **距离最小**的档。
+- 选 `station_bonus_efficiency_anchor` 与纸面加成效率**距离最小**的档。
 - 若最小距离 **> 25** → 不匹配（回退 L2）。
 - 典型 case_id：`reg_gsl_closure_tier90` / `tier80` / `tier60`。
 
@@ -121,23 +120,23 @@ None → 走 L2
 
 | 字段 | 含义 |
 |------|------|
-| `id` | 回归 `expect_shortcut`、solver 输出 `trade_shortcut` |
-| `trade_pct` / `gold_pct` | 旧兼容锚点，不再作为最终得分或产出输入 |
+| `id` | 回归 `rule_id`、solver 输出 `rule_id` |
+| `mechanic_equivalent_efficiency` | 小数机制解释值，不参与第二次乘法 |
 | `tailor_tier` | 裁缝档 → `GoldDistribution` |
 | `match.kind` | `closure` 等匹配器类型 |
-| `match.station_trade_pct` | 可露希尔分档纸面 trade% 锚点 |
-| `unit_trade_anchor` / `unit_gsl_gold_anchor` | 产量层锚点（L3 未展开巫恋核等） |
+| `match.station_bonus_efficiency_anchor` | 可露希尔分档纸面加成效率锚点 |
+| `unit_gsl_gold_anchor` | 独立赤金消耗锚点 |
 | `unit_output` | 正式社区单位产出规则：倍率、固定日产出或分等级日产出 |
 
 ## 回归夹具映射
 
-`verify_cmd` 按 `expect_shortcut` 前缀选夹具（**不是** CSV `operators` 列）：
+`verify_cmd` 按 `rule_id` 前缀选夹具（**不是** CSV `operators` 列）：
 
-| `expect_shortcut` 前缀 | 夹具函数 |
+| `rule_id` 前缀 | 夹具函数 |
 |------------------------|----------|
 | `gsl_witch_*` | `witch_fixture(shortcut_id, level)` |
 | `gsl_docus_*` | `docus_fixture(case_id, level)` |
-| `case_id contains ling_jie` + `expect_shortcut=none` | `ling_jie_fixture(level)` |
+| `case_id contains ling_jie` + `rule_id=none` | `ling_jie_fixture(level)` |
 | 其他已接线 closure | `closure_fixture(case_id, level)` |
 
 未接线 case 打印 `skip ... (fixture not wired)`。夹具定义：`infra-cli/src/verify/fixtures.rs`。
@@ -147,5 +146,5 @@ None → 走 L2
 1. `trade_shortcuts.json` 条目与 `id` 一致
 2. `shortcut.rs` 匹配条件（尤其互斥与 `classify_witch_room`）
 3. `verify/fixtures.rs` 若新族需要新夹具
-4. `REGRESSION_CASES.csv` 的 `expect_trade_pct` / `expect_gold_pct` / `expect_shortcut`
+4. `REGRESSION_CASES.csv` 的 `expect_final_efficiency` / `expect_mechanic_equivalent_efficiency` / `rule_id`
 5. `cargo run -p infra-cli -- verify --case <id>`

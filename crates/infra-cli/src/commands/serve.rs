@@ -202,9 +202,9 @@ struct PlanResult {
     maa_out: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     output_dir: Option<String>,
-    daily_trade: f64,
-    daily_manu: f64,
-    daily_power: f64,
+    daily_trade_efficiency: infra_core::Efficiency,
+    daily_manufacture_efficiency: infra_core::Efficiency,
+    daily_power_efficiency: infra_core::Efficiency,
 }
 
 fn handle_request(state: &ServeState, line: &str) -> ServeResponse<serde_json::Value> {
@@ -321,9 +321,9 @@ fn handle_plan(state: &ServeState, params: serde_json::Value) -> Result<serde_js
             .output_dir
             .as_ref()
             .map(|path| path.to_string_lossy().into_owned()),
-        daily_trade: current.rotation.daily.trade,
-        daily_manu: current.rotation.daily.manu,
-        daily_power: current.rotation.daily.power,
+        daily_trade_efficiency: current.rotation.daily.trade,
+        daily_manufacture_efficiency: current.rotation.daily.manufacture,
+        daily_power_efficiency: current.rotation.daily.power,
     };
     serde_json::to_value(result).map_err(Error::from)
 }

@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
+use crate::efficiency::Efficiency;
 use crate::error::{Error, Result};
 use crate::instances::OperatorInstances;
 use crate::layout::{
@@ -21,7 +22,7 @@ use crate::search::{control_efficiency_fill_sort_weight, control_entry_plugin_fi
 use crate::skill_table::SkillTable;
 use crate::tier::PromotionTier;
 
-use super::base_rotation::{score_base_assignment, ShiftScores};
+use super::base_rotation::{evaluate_base_assignment_efficiencies, ShiftEfficiencies};
 use super::shift_bind::{align_shift_binds_in_halves, shift_binds_from_plan};
 
 /// αβγ 三队标签。每班两队上岗、一队休息；设施每班全部满编（不空转）。
@@ -66,21 +67,21 @@ pub struct TeamShiftResult {
     /// 菲亚梅塔使休息队主力额外回岗的单次覆盖；没有可接受目标时为 `None`。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fiammetta: Option<FiammettaShiftAction>,
-    pub scores: ShiftScores,
-    /// 贸易分按时长折算（三类各自独立，不混合量纲）。
-    pub weighted_trade: f64,
-    /// 制造产量按时长折算。
-    pub weighted_manu: f64,
-    /// 发电充能% 按时长折算。
-    pub weighted_power: f64,
+    pub efficiencies: ShiftEfficiencies,
+    /// 贸易效率按时长折算（三类各自独立，不混合量纲）。
+    pub weighted_trade: Efficiency,
+    /// 制造效率按时长折算。
+    pub weighted_manufacture: Efficiency,
+    /// 发电效率按时长折算。
+    pub weighted_power: Efficiency,
 }
 
 /// 三类各自的每日加权产出（贸易/制造/发电分开，不相加）。
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct DailyTotals {
-    pub trade: f64,
-    pub manu: f64,
-    pub power: f64,
+    pub trade: Efficiency,
+    pub manufacture: Efficiency,
+    pub power: Efficiency,
 }
 
 /// αβγ 三队轮换报告。
@@ -214,17 +215,31 @@ fn clear_room_efficiency(assignment: &mut BaseAssignment, room_id: &RoomId) {
     }
 }
 
+fn clear_production_efficiencies(blueprint: &BaseBlueprint, assignment: &mut BaseAssignment) {
+    for room in &blueprint.rooms {
+        if matches!(
+            room.kind,
+            FacilityKind::TradePost | FacilityKind::Factory | FacilityKind::PowerPlant
+        ) {
+            clear_room_efficiency(assignment, &room.id);
+        }
+    }
+}
+
 /// 当前轻量策略每个 24h αβγ 周期只安排一次菲亚梅塔回岗。
 ///
 /// 顺序是公孙长乐确认的常规线性 fallback；布局动态排序和龙巫成组服务留给
 /// 后续完整心情排班器。
 pub const FIAMMETTA_RETURN_PRIORITY: [&str; 5] = ["但书", "巫恋", "龙舌兰", "清流", "可露希尔"];
 
-fn production_score(scores: &ShiftScores, kind: FacilityKind) -> Option<f64> {
+fn production_efficiency(
+    efficiencies: &ShiftEfficiencies,
+    kind: FacilityKind,
+) -> Option<Efficiency> {
     match kind {
-        FacilityKind::TradePost => Some(scores.trade_score),
-        FacilityKind::Factory => Some(scores.manu_prod_sum),
-        FacilityKind::PowerPlant => Some(scores.power_charge_sum),
+        FacilityKind::TradePost => Some(efficiencies.trade_efficiency),
+        FacilityKind::Factory => Some(efficiencies.manufacture_efficiency),
+        FacilityKind::PowerPlant => Some(efficiencies.power_efficiency),
         _ => None,
     }
 }
@@ -298,7 +313,12 @@ fn apply_fiammetta_return(
             continue;
         };
 
-        let mut best: Option<(BaseAssignment, ShiftScores, AssignedOperator, f64)> = None;
+        let mut best: Option<(
+            BaseAssignment,
+            ShiftEfficiencies,
+            AssignedOperator,
+            Efficiency,
+        )> = None;
         for slot in 0..current_room.operators.len() {
             let mut candidate = shifts[shift_index].assignment.clone();
             let Some(room) = candidate
@@ -312,7 +332,7 @@ fn apply_fiammetta_return(
             room.operators[slot] = target_op.clone();
             room.efficiency = None;
 
-            let Ok(scores) = score_base_assignment(
+            let Ok(scores) = evaluate_base_assignment_efficiencies(
                 blueprint,
                 &candidate,
                 instances,
@@ -322,11 +342,11 @@ fn apply_fiammetta_return(
             ) else {
                 continue;
             };
-            let candidate_score = production_score(&scores, room_blueprint.kind)
+            let candidate_score = production_efficiency(&scores, room_blueprint.kind)
                 .expect("production room kind checked above");
             let replace = best
                 .as_ref()
-                .is_none_or(|(_, _, _, best_score)| candidate_score > *best_score + 1e-9);
+                .is_none_or(|(_, _, _, best_score)| candidate_score > *best_score);
             if replace {
                 best = Some((candidate, scores, displaced, candidate_score));
             }
@@ -338,9 +358,9 @@ fn apply_fiammetta_return(
         let shift = &mut shifts[shift_index];
         shift.assignment = assignment;
         shift.weighted_trade = scores.weighted_trade(hours);
-        shift.weighted_manu = scores.weighted_manu(hours);
+        shift.weighted_manufacture = scores.weighted_manufacture(hours);
         shift.weighted_power = scores.weighted_power(hours);
-        shift.scores = scores;
+        shift.efficiencies = scores;
         shift.fiammetta = Some(FiammettaShiftAction {
             target: target_name.to_string(),
             displaced: displaced.name,
@@ -1531,8 +1551,15 @@ pub fn schedule_team_rotation(
             assign_ctrl(&mut base, &mut base_used, &[])?;
             let mut base_warmup_rooms = warmup_sticky_rooms.clone();
             align_warmup_rooms(blueprint, instances, &mut base, &mut base_warmup_rooms);
-            let score_base =
-                score_base_assignment(blueprint, &base, instances, table, hours, Some(durin_plan))?;
+            clear_production_efficiencies(blueprint, &mut base);
+            let score_base = evaluate_base_assignment_efficiencies(
+                blueprint,
+                &base,
+                instances,
+                table,
+                hours,
+                Some(durin_plan),
+            )?;
 
             // 路径 B: 有深海（S2 短班候选）
             let alpha_blocked_ops: HashSet<String> = operators_of(&alpha).into_iter().collect();
@@ -1551,8 +1578,11 @@ pub fn schedule_team_rotation(
                 gamma_h1: &gamma_h1,
                 mutable_manu_rooms: &h1.manu,
             });
-            let mut best_abyssal: Option<(AbyssalCandidate, ShiftScores, HashMap<String, RoomId>)> =
-                None;
+            let mut best_abyssal: Option<(
+                AbyssalCandidate,
+                ShiftEfficiencies,
+                HashMap<String, RoomId>,
+            )> = None;
             for mut candidate in abyssal_candidates {
                 clear_room(&mut candidate.assignment, "control");
                 let mut aby_used = candidate.assignment.operator_names();
@@ -1572,10 +1602,8 @@ pub fn schedule_team_rotation(
                 {
                     return Err(Error::msg("abyssal S2 candidate lost Gladiia control pin"));
                 }
-                for room_id in &h1.manu {
-                    clear_room_efficiency(&mut candidate.assignment, room_id);
-                }
-                let score_aby = score_base_assignment(
+                clear_production_efficiencies(blueprint, &mut candidate.assignment);
+                let score_aby = evaluate_base_assignment_efficiencies(
                     blueprint,
                     &candidate.assignment,
                     instances,
@@ -1583,16 +1611,16 @@ pub fn schedule_team_rotation(
                     hours,
                     Some(durin_plan),
                 )?;
-                let replace = best_abyssal
-                    .as_ref()
-                    .is_none_or(|(_, best, _)| score_aby.manu_prod_sum > best.manu_prod_sum);
+                let replace = best_abyssal.as_ref().is_none_or(|(_, best, _)| {
+                    score_aby.manufacture_efficiency > best.manufacture_efficiency
+                });
                 if replace {
                     best_abyssal = Some((candidate, score_aby, candidate_warmup_rooms));
                 }
             }
             let (best_assignment, best_scores, best_warmup_rooms) =
                 if let Some((candidate, score_aby, candidate_warmup_rooms)) = best_abyssal {
-                    if score_aby.manu_prod_sum > score_base.manu_prod_sum {
+                    if score_aby.manufacture_efficiency > score_base.manufacture_efficiency {
                         let alpha_beta: HashSet<String> = teams
                             .iter()
                             .filter(|team| matches!(team.label, TeamLabel::Alpha | TeamLabel::Beta))
@@ -1620,7 +1648,7 @@ pub fn schedule_team_rotation(
             let scores = best_scores;
             warmup_sticky_rooms = best_warmup_rooms;
             let weighted_trade = scores.weighted_trade(hours);
-            let weighted_manu = scores.weighted_manu(hours);
+            let weighted_manufacture = scores.weighted_manufacture(hours);
             let weighted_power = scores.weighted_power(hours);
             shifts.push(TeamShiftResult {
                 index,
@@ -1629,9 +1657,9 @@ pub fn schedule_team_rotation(
                 resting_team: resting,
                 assignment,
                 fiammetta: None,
-                scores,
+                efficiencies: scores,
                 weighted_trade,
-                weighted_manu,
+                weighted_manufacture,
                 weighted_power,
             });
         } else {
@@ -1649,7 +1677,8 @@ pub fn schedule_team_rotation(
                 &mut assignment,
                 &mut warmup_sticky_rooms,
             );
-            let scores = score_base_assignment(
+            clear_production_efficiencies(blueprint, &mut assignment);
+            let scores = evaluate_base_assignment_efficiencies(
                 blueprint,
                 &assignment,
                 instances,
@@ -1658,7 +1687,7 @@ pub fn schedule_team_rotation(
                 Some(durin_plan),
             )?;
             let weighted_trade = scores.weighted_trade(hours);
-            let weighted_manu = scores.weighted_manu(hours);
+            let weighted_manufacture = scores.weighted_manufacture(hours);
             let weighted_power = scores.weighted_power(hours);
             shifts.push(TeamShiftResult {
                 index,
@@ -1667,9 +1696,9 @@ pub fn schedule_team_rotation(
                 resting_team: resting,
                 assignment,
                 fiammetta: None,
-                scores,
+                efficiencies: scores,
                 weighted_trade,
-                weighted_manu,
+                weighted_manufacture,
                 weighted_power,
             });
         }
@@ -1687,7 +1716,7 @@ pub fn schedule_team_rotation(
     )?;
     let daily = DailyTotals {
         trade: shifts.iter().map(|shift| shift.weighted_trade).sum(),
-        manu: shifts.iter().map(|shift| shift.weighted_manu).sum(),
+        manufacture: shifts.iter().map(|shift| shift.weighted_manufacture).sum(),
         power: shifts.iter().map(|shift| shift.weighted_power).sum(),
     };
     let t4 = Instant::now();
@@ -2283,8 +2312,8 @@ mod tests {
         }
 
         assert!((report.shifts[0].duration_hours - 12.0).abs() < f64::EPSILON);
-        assert!(report.daily.trade > 0.0);
-        assert!(report.daily.manu > 0.0);
+        assert!(!report.daily.trade.is_zero());
+        assert!(!report.daily.manufacture.is_zero());
     }
 
     #[test]
@@ -2452,9 +2481,9 @@ mod tests {
                 shifts_with_abyssal_manu.push(shift.index);
                 assert_eq!(shift.index, 1, "深海链只允许 S2 6h 短班");
                 assert!(
-                    shift.scores.manu_prod_sum > 450.0,
+                    shift.efficiencies.manufacture_efficiency.as_f64() > 4.500,
                     "S2 深海候选应使用带歌蕾蒂娅和深海 tag 的最终布局重算制造分，got {}",
-                    shift.scores.manu_prod_sum
+                    shift.efficiencies.manufacture_efficiency
                 );
                 assert!(
                     shift
@@ -2548,6 +2577,59 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn team_rotation_scores_match_current_shift_context() {
+        let (blueprint, operbox, instances, table) = fixtures();
+        let report = schedule_team_rotation(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 5,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let durin_plan = operbox.durin_dorm_planning_count(&instances);
+
+        for shift in &report.shifts {
+            let mut assignment = shift.assignment.clone();
+            clear_production_efficiencies(&blueprint, &mut assignment);
+            let recomputed = evaluate_base_assignment_efficiencies(
+                &blueprint,
+                &assignment,
+                &instances,
+                &table,
+                shift.duration_hours,
+                Some(durin_plan),
+            )
+            .unwrap();
+
+            assert!(
+                recomputed.trade_efficiency == shift.efficiencies.trade_efficiency,
+                "shift {} trade score used a stale room snapshot: recomputed={} stored={}",
+                shift.index + 1,
+                recomputed.trade_efficiency,
+                shift.efficiencies.trade_efficiency
+            );
+            assert!(
+                recomputed.manufacture_efficiency == shift.efficiencies.manufacture_efficiency,
+                "shift {} manufacture score used a stale room snapshot: recomputed={} stored={}",
+                shift.index + 1,
+                recomputed.manufacture_efficiency,
+                shift.efficiencies.manufacture_efficiency
+            );
+            assert!(
+                recomputed.power_efficiency == shift.efficiencies.power_efficiency,
+                "shift {} power score used a stale room snapshot: recomputed={} stored={}",
+                shift.index + 1,
+                recomputed.power_efficiency,
+                shift.efficiencies.power_efficiency
+            );
         }
     }
 

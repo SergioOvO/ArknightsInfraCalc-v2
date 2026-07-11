@@ -530,7 +530,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(hit.shortcut.as_deref(), Some("gsl_vina_lungmen"));
+        assert_eq!(hit.rule_id.as_deref(), Some("gsl_vina_lungmen"));
         for name in ["推进之王", "摩根", "维娜·维多利亚"] {
             assert!(hit.names.iter().any(|n| n == name), "{hit:?}");
         }
@@ -575,7 +575,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(hit.shortcut.as_deref(), Some("gsl_vina_lungmen"));
+        assert_eq!(hit.rule_id.as_deref(), Some("gsl_vina_lungmen"));
         assert!(!hit.names.iter().any(|n| n == "巫恋"), "{hit:?}");
     }
 }

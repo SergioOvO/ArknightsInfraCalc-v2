@@ -30,12 +30,12 @@ struct WorkloadStats {
     trade_pool_ready: usize,
     trade_combinations: u64,
     trade_evaluated: u64,
-    manu_pool_ready: usize,
-    manu_combinations: u64,
-    manu_evaluated: u64,
+    manufacture_pool_ready: usize,
+    manufacture_combinations: u64,
+    manufacture_evaluated: u64,
     rotation_shifts: usize,
-    rotation_trade_peak: f64,
-    rotation_trade_recovery: f64,
+    rotation_trade_peak: infra_core::Efficiency,
+    rotation_trade_recovery: infra_core::Efficiency,
 }
 
 #[derive(Debug, Clone)]
@@ -246,20 +246,20 @@ fn run_layout_full(
         trade_pool_ready: trade_pool.entries.len(),
         trade_combinations: trade_report.combinations,
         trade_evaluated: trade_report.evaluated,
-        manu_pool_ready: manu_pool.entries.len(),
-        manu_combinations: manu_report.combinations,
-        manu_evaluated: manu_report.evaluated,
+        manufacture_pool_ready: manu_pool.entries.len(),
+        manufacture_combinations: manu_report.combinations,
+        manufacture_evaluated: manu_report.evaluated,
         rotation_shifts: rotation.shifts.len(),
         rotation_trade_peak: rotation
             .shifts
             .first()
-            .map(|s| s.scores.trade_score)
-            .unwrap_or(0.0),
+            .map(|s| s.efficiencies.trade_efficiency)
+            .unwrap_or_default(),
         rotation_trade_recovery: rotation
             .shifts
             .get(1)
-            .map(|s| s.scores.trade_score)
-            .unwrap_or(0.0),
+            .map(|s| s.efficiencies.trade_efficiency)
+            .unwrap_or_default(),
     };
 
     Ok(RunProfile {
@@ -300,8 +300,10 @@ fn print_profile_report(runs: &[RunProfile]) {
             run.stats.trade_pool_ready, run.stats.trade_combinations, run.stats.trade_evaluated
         );
         eprintln!(
-            "    manu  pool ready={} combos={} evaluated={}",
-            run.stats.manu_pool_ready, run.stats.manu_combinations, run.stats.manu_evaluated
+            "    manufacture pool ready={} combos={} evaluated={}",
+            run.stats.manufacture_pool_ready,
+            run.stats.manufacture_combinations,
+            run.stats.manufacture_evaluated
         );
         eprintln!(
             "    rotation shifts={} peak_trade={:.3} recovery_trade={:.3}",

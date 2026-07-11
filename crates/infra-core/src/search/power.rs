@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use rayon::prelude::*;
 use serde::Serialize;
 
+use crate::efficiency::Efficiency;
 use crate::error::Result;
 use crate::layout::LayoutContext;
 use crate::pool::PowerPool;
@@ -24,43 +25,33 @@ pub const VIRTUAL_POWER_MANU_EQUIV: f64 = 30.0;
 /// ```
 /// 虚拟发电站在制造 resolve 时通过 layout 无人机加速体现价值，不在此预支。
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct PowerScoreBreakdown {
-    /// 总充能速度%
-    pub charge_speed_pct: f64,
-    /// L1 固定/selector 部分（不含爬升）
-    pub charge_speed_base_pct: f64,
-    /// 空构·技术交流爬升贡献
-    pub charge_ramp_pct: f64,
+pub struct PowerEfficiencyBreakdown {
+    pub base_efficiency: Efficiency,
+    pub skill_efficiency: Efficiency,
+    pub ramp_efficiency: Efficiency,
+    pub final_efficiency: Efficiency,
     /// 虚拟发电站数
     pub virtual_power_produced: f64,
     /// vpower × VIRTUAL_POWER_MANU_EQUIV
     pub virtual_power_equiv: f64,
-    /// 当前搜索排序分；现阶段等于 `charge_speed_pct`，不包含虚拟发电折算。
-    pub score: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PowerSearchHit {
     pub name: String,
-    pub charge_speed_pct: f64,
+    pub final_efficiency: Efficiency,
     pub mood_drain_delta: f64,
     /// 晨曦等本班产出的虚拟发电站（写入 layout 前快照）。
     pub virtual_power_produced: f64,
-    /// 搜索排序分：当前等于充能速度 `charge_speed_pct`。
-    pub score: f64,
     /// 评分明细分解
-    pub breakdown: PowerScoreBreakdown,
+    pub breakdown: PowerEfficiencyBreakdown,
 }
 
 /// 单站贪心排序：纯充能速度 %。
 ///
 /// 虚拟发电站的价值在制造站 resolve 时通过 layout 无人机加速自然体现，不在此预支。
-pub fn power_station_score(charge_speed_pct: f64, _virtual_power_produced: f64) -> f64 {
-    charge_speed_pct
-}
-
-fn power_efficiency_sort_key(hit: &PowerSearchHit) -> f64 {
-    hit.score
+fn power_efficiency_sort_key(hit: &PowerSearchHit) -> Efficiency {
+    hit.final_efficiency
 }
 
 fn low_priority_power_name(name: &str) -> bool {
@@ -71,10 +62,7 @@ fn low_priority_power_name(name: &str) -> bool {
 }
 
 fn power_hit_precedes(a: &PowerSearchHit, b: &PowerSearchHit) -> bool {
-    match power_efficiency_sort_key(a)
-        .partial_cmp(&power_efficiency_sort_key(b))
-        .unwrap_or(std::cmp::Ordering::Equal)
-    {
+    match power_efficiency_sort_key(a).cmp(&power_efficiency_sort_key(b)) {
         std::cmp::Ordering::Greater => true,
         std::cmp::Ordering::Less => false,
         std::cmp::Ordering::Equal => low_priority_power_name(&a.name)
@@ -93,7 +81,7 @@ pub struct PowerStationAssignment {
 #[derive(Debug, Clone, Serialize)]
 pub struct PowerSearchReport {
     pub assignments: Vec<PowerStationAssignment>,
-    pub total_charge_speed_pct: f64,
+    pub total_efficiency: Efficiency,
     pub evaluated: u64,
     pub elapsed: Duration,
 }
@@ -126,7 +114,7 @@ pub fn search_power_assignment(
     let start = Instant::now();
     let mut used = HashSet::new();
     let mut assignments = Vec::new();
-    let mut total = 0.0;
+    let mut total_efficiency = Efficiency::ZERO;
     let mut evaluated = 0u64;
 
     for station in 0..options.station_count as usize {
@@ -145,20 +133,18 @@ pub fn search_power_assignment(
             };
             let result = solve_power(&input, table)?;
             evaluated += 1;
-            let score = power_station_score(result.charge_speed_pct, result.virtual_power_produced);
             let hit = PowerSearchHit {
                 name: entry.name.clone(),
-                charge_speed_pct: result.charge_speed_pct,
+                final_efficiency: result.final_efficiency,
                 mood_drain_delta: result.mood_drain_delta,
                 virtual_power_produced: result.virtual_power_produced,
-                score,
-                breakdown: PowerScoreBreakdown {
-                    charge_speed_pct: result.charge_speed_pct,
-                    charge_speed_base_pct: result.charge_speed_base_pct,
-                    charge_ramp_pct: result.charge_ramp_pct,
+                breakdown: PowerEfficiencyBreakdown {
+                    base_efficiency: result.base_efficiency,
+                    skill_efficiency: result.skill_efficiency,
+                    ramp_efficiency: result.ramp_efficiency,
+                    final_efficiency: result.final_efficiency,
                     virtual_power_produced: result.virtual_power_produced,
                     virtual_power_equiv: result.virtual_power_produced * VIRTUAL_POWER_MANU_EQUIV,
-                    score,
                 },
             };
             if best.as_ref().is_none_or(|b| power_hit_precedes(&hit, b)) {
@@ -167,7 +153,7 @@ pub fn search_power_assignment(
         }
         let Some(hit) = best else { break };
         used.insert(hit.name.clone());
-        total += hit.charge_speed_pct;
+        total_efficiency += hit.final_efficiency;
         assignments.push(PowerStationAssignment {
             station_index: station,
             hit,
@@ -176,7 +162,7 @@ pub fn search_power_assignment(
 
     Ok(PowerSearchReport {
         assignments,
-        total_charge_speed_pct: total,
+        total_efficiency,
         evaluated,
         elapsed: start.elapsed(),
     })
@@ -203,20 +189,18 @@ pub fn search_power_top(
                 layout: layout.clone(),
             };
             let result = solve_power(&input, table).ok()?;
-            let score = power_station_score(result.charge_speed_pct, result.virtual_power_produced);
             Some(PowerSearchHit {
                 name: entry.name.clone(),
-                charge_speed_pct: result.charge_speed_pct,
+                final_efficiency: result.final_efficiency,
                 mood_drain_delta: result.mood_drain_delta,
                 virtual_power_produced: result.virtual_power_produced,
-                score,
-                breakdown: PowerScoreBreakdown {
-                    charge_speed_pct: result.charge_speed_pct,
-                    charge_speed_base_pct: result.charge_speed_base_pct,
-                    charge_ramp_pct: result.charge_ramp_pct,
+                breakdown: PowerEfficiencyBreakdown {
+                    base_efficiency: result.base_efficiency,
+                    skill_efficiency: result.skill_efficiency,
+                    ramp_efficiency: result.ramp_efficiency,
+                    final_efficiency: result.final_efficiency,
                     virtual_power_produced: result.virtual_power_produced,
                     virtual_power_equiv: result.virtual_power_produced * VIRTUAL_POWER_MANU_EQUIV,
-                    score,
                 },
             })
         })
@@ -224,8 +208,7 @@ pub fn search_power_top(
 
     hits.sort_by(|a, b| {
         power_efficiency_sort_key(b)
-            .partial_cmp(&power_efficiency_sort_key(a))
-            .unwrap_or(std::cmp::Ordering::Equal)
+            .cmp(&power_efficiency_sort_key(a))
             .then_with(|| low_priority_power_name(&a.name).cmp(&low_priority_power_name(&b.name)))
             .then_with(|| a.name.cmp(&b.name))
     });
@@ -241,20 +224,20 @@ mod tests {
     fn power_search_score_is_charge_speed_sort_key() {
         let hit = PowerSearchHit {
             name: "a".into(),
-            charge_speed_pct: 20.0,
+            final_efficiency: Efficiency::from_decimal(1.200),
             mood_drain_delta: 0.0,
             virtual_power_produced: 1.0,
-            score: power_station_score(20.0, 1.0),
-            breakdown: PowerScoreBreakdown {
-                charge_speed_pct: 20.0,
+            breakdown: PowerEfficiencyBreakdown {
+                base_efficiency: Efficiency::ONE,
+                skill_efficiency: Efficiency::from_decimal(0.200),
+                final_efficiency: Efficiency::from_decimal(1.200),
                 virtual_power_produced: 1.0,
                 virtual_power_equiv: VIRTUAL_POWER_MANU_EQUIV,
-                score: 20.0,
                 ..Default::default()
             },
         };
-        assert_eq!(power_efficiency_sort_key(&hit), hit.charge_speed_pct);
-        assert_eq!(hit.score, hit.breakdown.charge_speed_pct);
+        assert_eq!(power_efficiency_sort_key(&hit), hit.final_efficiency);
+        assert_eq!(hit.final_efficiency, hit.breakdown.final_efficiency);
     }
     use crate::instances::{default_instances_path, OperatorInstances};
     use crate::layout::resolve_search_baseline_layout;
@@ -288,7 +271,7 @@ mod tests {
         assert!(greyy2.virtual_power_produced > 0.0, "E2 晨曦应产出虚拟发电");
         // 纯充能排序：承曦格雷伊 13.5% < 格雷伊 20%
         assert!(
-            greyy.score > greyy2.score,
+            greyy.final_efficiency > greyy2.final_efficiency,
             "纯充能排序: greyy=20% > greyy2=13.5% (vpower 在制造站 resolve 体现)"
         );
     }
@@ -356,6 +339,9 @@ mod tests {
         let report = search_power_assignment(&pool, &table, &opts).unwrap();
 
         assert_eq!(report.assignments[0].hit.name, "协律");
-        assert_eq!(report.assignments[0].hit.charge_speed_pct, 15.0);
+        assert_eq!(
+            report.assignments[0].hit.final_efficiency,
+            Efficiency::from_decimal(1.150)
+        );
     }
 }

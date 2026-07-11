@@ -602,11 +602,12 @@ mod tests {
             &table,
         )
         .unwrap();
-        assert_eq!(result.trade_shortcut, None);
+        assert_eq!(result.rule_id, None);
         assert!(
-            (result.order_eff_total - 129.0).abs() < 0.01,
+            (((result.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0) - 129.0).abs()
+                < 0.01,
             "灵知+市井孑+银灰+琳琅应自然算出 129，got {}",
-            result.order_eff_total
+            ((result.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0)
         );
     }
 
@@ -666,9 +667,9 @@ mod tests {
         };
         let manu_result = solve_manufacture(&manu_input, &table).unwrap();
         assert!(
-            (manu_result.prod_skill - 56.0).abs() < 0.01,
+            ((manu_result.skill_efficiency.as_f64() * 100.0) - 56.0).abs() < 0.01,
             "迷迭香跨设施感知 → +56% 生产力, got {}",
-            manu_result.prod_skill
+            (manu_result.skill_efficiency.as_f64() * 100.0)
         );
 
         // 黑键贸易房同样扣回自产 → 读全量 56；怅惘和声 /2 = +28%。
@@ -739,9 +740,9 @@ mod tests {
         )
         .unwrap();
         assert!(
-            (manu_result.prod_skill - 76.0).abs() < 0.01,
+            ((manu_result.skill_efficiency.as_f64() * 100.0) - 76.0).abs() < 0.01,
             "迷迭香感知链 → +76% 生产力, got {}",
-            manu_result.prod_skill
+            (manu_result.skill_efficiency.as_f64() * 100.0)
         );
 
         // 黑键房读全量 76；怅惘和声 /2 = +38% 贸易效率（文档 §7.2 ~37.5-40%）。
@@ -988,14 +989,17 @@ mod tests {
         );
         eprintln!(
             "prod_base={} prod_skill={} prod_total={} storage={}",
-            result.prod_base, result.prod_skill, result.prod_total, result.storage_limit
+            (result.occupancy_efficiency.as_f64() * 100.0),
+            (result.skill_efficiency.as_f64() * 100.0),
+            ((result.final_efficiency.as_f64() - 1.0) * 100.0),
+            result.storage_limit
         );
         // 目标：冬时30 + 清流40 + 温蒂4×15=60 → prod_skill 130
         assert!(
-            (result.prod_skill - 130.0).abs() < 1.0,
+            ((result.skill_efficiency.as_f64() * 100.0) - 130.0).abs() < 1.0,
             "full resolve prod_skill={} prod_total={}",
-            result.prod_skill,
-            result.prod_total
+            (result.skill_efficiency.as_f64() * 100.0),
+            ((result.final_efficiency.as_f64() - 1.0) * 100.0)
         );
     }
 

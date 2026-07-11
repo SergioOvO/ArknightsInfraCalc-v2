@@ -393,10 +393,11 @@ mod tests {
     };
     use crate::pool::ManuPool;
     use crate::search::{
-        ManuScoreBreakdown, ManuSearchHit, ManuSearchOptions, MATATABI_CONSUMER_NAME,
+        ManuEfficiencyBreakdown, ManuSearchHit, ManuSearchOptions, MATATABI_CONSUMER_NAME,
     };
     use crate::skill_table::{default_skill_table_path, SkillTable};
     use crate::types::RecipeKind;
+    use crate::Efficiency;
 
     const GONGSUN_GOLD_MANU_TEAM: [&str; 3] = ["清流", "温蒂", "森蚺"];
 
@@ -620,7 +621,7 @@ mod tests {
         assert!(trace.rejected);
         assert_eq!(trace.rejection_reason.as_deref(), Some("tier_gate_not_met"));
         assert!(
-            trace.raw_score.is_some(),
+            trace.final_efficiency.is_some(),
             "low-progress candidate can still be evaluated"
         );
         let linked = trace
@@ -666,10 +667,10 @@ mod tests {
             names: vec!["清流".to_string(), "温蒂".to_string(), "冬时".to_string()],
             gold_names: vec![],
             battle_record_names: vec![],
-            composite_score: 430.0,
+            final_efficiency: Efficiency::from_decimal(5.300),
             per_station: crate::manufacture::ManuProdBreakdown::default(),
             storage: crate::manufacture::ManuStorageBreakdown::default(),
-            breakdown: ManuScoreBreakdown::default(),
+            breakdown: ManuEfficiencyBreakdown::default(),
         };
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let layout = crate::layout::context::LayoutContext::search_baseline();
@@ -738,7 +739,10 @@ mod tests {
             !names.contains("褐果") && !names.contains("卡达"),
             "低效白名单组合不应压过扩展候选池中的爬升技能: {hit:?}"
         );
-        assert!(hit.breakdown.prod_skill > 50.0, "hit={hit:?}");
+        assert!(
+            (hit.breakdown.skill_efficiency.as_f64() * 100.0) > 50.0,
+            "hit={hit:?}"
+        );
     }
 
     #[test]
@@ -975,8 +979,14 @@ mod tests {
             .room_assignment(&RoomId::from("manu_1"))
             .expect("room committed");
         let snapshot = room.efficiency.as_ref().expect("manufacture snapshot");
-        assert_eq!(snapshot.manu_prod_total, hit.breakdown.prod_total);
-        assert_eq!(snapshot.manu_prod_skill, hit.breakdown.prod_skill);
+        assert_eq!(
+            snapshot.manufacture_final_efficiency,
+            hit.breakdown.final_efficiency
+        );
+        assert_eq!(
+            snapshot.manufacture_skill_efficiency,
+            hit.breakdown.skill_efficiency
+        );
         let fen = room
             .operators
             .iter()
@@ -1450,7 +1460,9 @@ mod tests {
             &table,
         )
         .unwrap()
-        .prod_skill;
+        .skill_efficiency
+        .as_f64()
+            * 100.0;
         assert!(
             (gold_skill - 140.0).abs() <= 1.0,
             "清流金线纸面约 140，got {gold_skill:.1}"

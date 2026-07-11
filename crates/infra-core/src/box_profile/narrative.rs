@@ -19,7 +19,7 @@ pub fn render_box_profile_narrative(profile: &BoxProfile) -> String {
     ));
     out.push_str(&format!(
         "  可建模池：贸易 {} 人 · 制造 {} 人\n\n",
-        profile.summary.trade_pool_ready, profile.summary.manu_pool_ready
+        profile.summary.trade_pool_ready, profile.summary.manufacture_pool_ready
     ));
 
     out.push_str("【总体评价】\n");
@@ -33,13 +33,13 @@ pub fn render_box_profile_narrative(profile: &BoxProfile) -> String {
 
     out.push_str("【24h 三队轮休加权】\n");
     out.push_str(&format!(
-        "  贸易 {:.2}（参考 {:.2}）· 制造 {:.1}（参考 {:.1}）· 发电 {:.1}（参考 {:.1}）\n\n",
-        profile.rotation.daily_trade,
-        profile.baseline_rotation.daily_trade,
-        profile.rotation.daily_manu,
-        profile.baseline_rotation.daily_manu,
-        profile.rotation.daily_power,
-        profile.baseline_rotation.daily_power,
+        "  贸易 {}（参考 {}）· 制造 {}（参考 {}）· 发电 {}（参考 {}）\n\n",
+        profile.rotation.daily_trade_efficiency,
+        profile.baseline_rotation.daily_trade_efficiency,
+        profile.rotation.daily_manufacture_efficiency,
+        profile.baseline_rotation.daily_manufacture_efficiency,
+        profile.rotation.daily_power_efficiency,
+        profile.baseline_rotation.daily_power_efficiency,
     ));
 
     if !profile.actions.is_empty() {
@@ -103,7 +103,7 @@ fn overall_assessment(profile: &BoxProfile) -> String {
     if profile.flags.iter().any(|f| f == "trade_gold_ok") {
         s.push_str("赤金贸易架构基本正确。");
     }
-    if profile.flags.iter().any(|f| f == "manu_bottleneck") {
+    if profile.flags.iter().any(|f| f == "manufacture_bottleneck") {
         s.push_str("建议优先投入制造相关练度。");
     }
 
@@ -122,13 +122,13 @@ fn format_domain_line(d: &DomainMetric) -> String {
     } else {
         format!(" [{}]", d.current.operators.join("+"))
     };
-    let extra = match (d.current.trade_pct, d.current.gold_pct) {
-        (Some(t), Some(g)) => format!(" trade={:.0}% gold={:.0}%", t, g),
-        (Some(t), None) => format!(" trade={:.0}%", t),
-        _ => String::new(),
-    };
+    let extra = d
+        .current
+        .mechanic_equivalent_efficiency
+        .map(|value| format!(" mechanic={value}"))
+        .unwrap_or_default();
     format!(
-        "  {} {}  {:.2} → 参考 {:.2}（{:+.0}%）{combo}{extra}\n",
-        mark, d.label, d.current.score, d.baseline.score, pct,
+        "  {} {}  {} → 参考 {}（{:+.0}%）{combo}{extra}\n",
+        mark, d.label, d.current.final_efficiency, d.baseline.final_efficiency, pct,
     )
 }

@@ -1,188 +1,51 @@
-# 评分口径审计（Scoring Model Audit）
+# 评分口径审计
 
-> 状态：最终效率口径版（2026-07-11）
-> 配套计划：[SCORING_REFACTOR_PLAN.md](SCORING_REFACTOR_PLAN.md)  
-> 目标：记录项目中所有参与搜索、排序、排班汇总、CLI 展示的评分字段，明确其单位、用途和排序策略。当前结论是**不需要贸易-制造平衡公式**；跨域输出保留分量。
+> 状态：直接效率硬切版（2026-07-11）
+> 完整数值架构见 [EFFICIENCY_MODEL.md](EFFICIENCY_MODEL.md)。
 
----
+## 1. 生产域排序
 
-## 1. 口径分类
+| 模块 | 排序字段 | 单位 | 说明 |
+|---|---|---|---|
+| 贸易搜索 | `TradeSearchHit.final_efficiency` | 直接效率 | 可直接乘三级贸易基准日产出与时长 |
+| 制造搜索 | `ManuSearchHit.final_efficiency` | 直接效率 | 单线为房间效率，多线为各产线效率和 |
+| 发电搜索 | `PowerSearchHit.final_efficiency` | 直接效率 | 基础、技能与爬升后的充能效率 |
 
-| 分类 | 单位 | 说明 |
-|------|------|------|
-| 贸易最终效率 | multiplier | `TradeSearchHit.score` / `final_efficiency`，可直接乘三级基准日产出与时长占比 |
-| 贸易最终效率 `%` | percent | `trade_pct = final_efficiency × 100`，只作兼容展示 |
-| 贸易赤金解释分量 `%` | percent | 如 `mechanic_equiv_eff_pct` / shortcut `gold_pct`，用于解释赤金需求或机制收益 |
-| 贸易单位产出倍率 | multiplier | 社区加强单位产出 / 三级普通站 `10265` |
-| 制造赤金效率 `%` | percent | 赤金产线 `prod_total` |
-| 制造经验效率 `%` | percent | 经验书产线 `prod_total` |
-| 发电效率 `%` | percent | 如 `charge_speed_pct`，无人机充能速度 |
-| 全局注入分量 `%` | percent | 中枢或跨设施向贸易/制造写入的效率注入，按 trade/manu_gold/manu_br 拆分 |
-| 局部排序 key `%` | percent | 命名 policy 的排序键，例如 `ControlInjectRawSumV0` |
-| 时长折算效率 | percent × hours/24 | 日排班汇总用，不改变原量纲 |
+三者都使用 `Efficiency` 千分整数排序。不存在生产域匿名 `score`，也不存在
+`trade_pct`、`prod_total`、`charge_speed_pct` 的输出别名。
 
----
+## 2. 排班汇总
 
-## 2. 总览表
+`ShiftEfficiencies` 分别保存：
 
-| 模块 | 字段 / 函数 | 当前值来源 | 单位 | 当前用途 | 是否排序 | 后续处理 |
-|------|-------------|------------|------|----------|----------|----------|
-| trade search | `TradeSearchHit.score` | `result.efficiency.final_efficiency` | 最终效率 multiplier | 贸易三人组排序主键、产出预估 | 是 | 当前真源 |
-| trade search | `TradeSearchHit.trade_pct` | `score × 100` | 完整最终效率 % | 兼容展示 | 否 | 保留 |
-| trade search | `TradeScoreBreakdown.effective_eff_multiplier` | `result.efficiency.final_efficiency` | 最终效率 multiplier | 兼容字段 | 否 | 与 score 同值 |
-| trade search | `unit_trade_per_day` | `result.production.unit.unit_trade_per_day` | 产量/天 | 展示 | 否 | 保留 |
-| trade search | `mechanic_equiv_eff_pct` | `result.order_mechanic.mechanic_equiv_eff_pct` | 贸易赤金解释分量 % | 解释订单机制 | 否 | 与 `gold_pct` 同类解释，不参与跨域合成 |
-| manufacture search | `ManuSearchHit.composite_score` | 单配方 `prod_total`；多线按线数加权 | 制造效率 % | 制造三人组排序主键 | 是 | 字段名后续可降歧义 |
-| manufacture search | `ManuScoreBreakdown.prod_total` | `prod_base + prod_skill + prod_global` | 制造效率 % | 展示/解释 | 否 | 按赤金/经验配方解释 |
-| power search | `PowerSearchHit.score` | `charge_speed_pct` | 发电效率 % | 发电站排序主键 | 是 | 保留 |
-| power search | `virtual_power_equiv` | `virtual_power * VIRTUAL_POWER_MANU_EQUIV` | 临时解释值 | breakdown 展示 | 否 | 不参与当前排序；若要排序需新增 policy |
-| control search | `ControlScoreBreakdown.total_score` | 普通：`current_control_inject_sort_score(...)` 维持 raw-sum；补位：`ancillary_score` | 局部排序 key % | 中枢组合排序 | 是 | 标注 policy，不称公式 |
-| schedule scoring | `ShiftScores.trade_score` | sum of `final_efficiency` per trade room | 贸易最终效率汇总 | 排班评估/展示 | 否 | 逐房可直接估产 |
-| schedule scoring | `ShiftScores.manu_prod_sum` | sum of `prod_total` | 制造效率 % 汇总 | 排班评估/展示 | 否 | 保留 |
-| schedule scoring | `ShiftScores.power_charge_sum` | sum of `charge_speed_pct` | 发电效率 % 汇总 | 排班评估/展示 | 否 | 保留 |
-| schedule scoring | `weighted_*` | `score * shift_hours / 24` | 时长折算 | 日汇总展示 | 否 | 保留 |
+- `trade_efficiency`；
+- `manufacture_efficiency`；
+- `power_efficiency`。
 
----
+每项是同类房间直接效率之和。`weighted_*` 按分钟执行整数时长折算，
+`DailyTotals` 仍分开保存贸易、制造和发电，不做跨域相加。
 
-## 3. 贸易搜索审计
+`RoomEfficiencySnapshot` 保存 solver / search 的直接效率结果，避免 CLI 或排班层再次
+解释公式。手写 assignment 没有快照时才调用相应 solver 重算。
 
-文件：`crates/infra-core/src/search/trade.rs`
+## 3. 非生产 heuristic
 
-当前排序：
+中枢普通排序仍使用具名 policy `ControlInjectRawSumV0`：
 
-```rust
-score: result.efficiency.final_efficiency,
-trade_pct: result.efficiency.final_efficiency * 100.0,
-gold_pct: result.order_mechanic.mechanic_equiv_eff_pct,
+```text
+trade_inject + manu_gold + manu_br
 ```
 
-`search_trade_single_order(...)` 中按 `trade_efficiency_sort_key(hit)` 排序。
+它是局部补位 heuristic，不是生产效率，也不进入三类每日总计。虚拟发电同样作为独立
+资源注入制造 resolve，不预支成匿名综合分。中枢搜索结果通过
+`breakdown.policy = ControlInjectRawSumV0` 与 `breakdown.policy_sort_key` 暴露排序依据，
+不提供 `score` / `total_score` 或 `final_efficiency`。
 
-当前含义：
+## 4. 输出约束
 
-- `score` 等于可直接参与产出预估的 `final_efficiency`；
-- `trade_pct` 是 `score × 100` 的兼容展示；
-- 纸面效率完整包含基础 100%、人头、技能与中枢；
-- 龙舌兰、可露希尔、但书等特殊机制通过社区单位产出规则生成倍率；
-- `gold_pct` 仅作机制解释，不参与最终效率乘法；
-- `unit_trade_per_day` / `output_multiplier` 用于解释社区单位产出倍率。
-
-当前约定：
-
-- 贸易 meta 复杂组合上不上班走 L3 shortcut / 编排认领；
-- CLI 与文档应拆开展示贸易赤金订单效率与赤金解释分量；
-- `effective_eff_multiplier` 为兼容字段，与 `final_efficiency` 同值。
-- role pick、普通搜索和排班落位全部按 `final_efficiency` 选择候选；`unit_trade_per_day` 只解释特殊订单乘区，不作为选人排序键。
-
----
-
-## 4. 制造搜索审计
-
-文件：`crates/infra-core/src/search/manufacture.rs`
-
-当前排序：
-
-- 单配方搜索按该配方 `prod_total` 排序；
-- 多产线模式按赤金线数 / 经验线数对各自 `prod_total` 加权。
-
-当前含义：
-
-- 单配方：制造赤金或制造经验效率；
-- 多产线：按产线数汇总当前布局下的制造效率；
-- `storage` 仅作为 tie-break 或展示，不是主排序口径。
-
-后续处理：
-
-- 输出上尽量拆为 `manu_gold_eff` / `manu_battle_record_eff`；
-- 字段名 `composite_score` 容易被误读为跨域综合分，后续可改名或在 JSON 文档中标注。
-
----
-
-## 5. 发电搜索审计
-
-文件：`crates/infra-core/src/search/power.rs`
-
-当前排序：
-
-```rust
-pub fn power_station_score(charge_speed_pct: f64, _virtual_power_produced: f64) -> f64 {
-    charge_speed_pct
-}
-```
-
-当前含义：
-
-- 发电站排序只看 `charge_speed_pct`；
-- `virtual_power_produced` 当前不影响排序；
-- `virtual_power_equiv` 在 breakdown 中保留解释，但不是当前排序依据。
-
-后续处理：
-
-- 如果虚拟发电需要参与某个局部排序，新增命名 policy；
-- 不把虚拟发电塞进制造效率总分。
-
----
-
-## 6. 中枢搜索审计
-
-文件：`crates/infra-core/src/search/control.rs`
-
-当前排序：
-
-- `ControlFillPolicy::HrAndMood`：`total_score = ancillary_score`
-- 默认 `Efficiency` 策略：
-  - 分量：`trade_inject` / `manu_gold` / `manu_br`
-  - policy：`ControlInjectRawSumV0`
-  - sort key：`trade_inject + manu_gold + manu_br`
-
-当前含义：
-
-中枢普通排序仍使用历史 raw-sum，原因是这是局部补位选择，不是全局经济理论。该行为已通过 `scoring::current_control_inject_sort_score(...)` 标记为命名 policy。
-
-风险：
-
-`trade_inject`、`manu_gold`、`manu_br` 虽然都是 `%`，但不是一个需要长期宣称为“最终总分”的同质贡献。输出和文档必须保留分量，不能只给 raw-sum。
-
----
-
-## 7. 排班层评分审计
-
-文件：
-
-- `crates/infra-core/src/schedule/base_rotation.rs`
-- `crates/infra-core/src/schedule/team_rotation.rs`
-
-当前评分：
-
-- 贸易：`trade_score += result.efficiency.final_efficiency`；兼容字段 `effective_eff_multiplier` 与其同值
-- 制造：`manu_prod_sum += result.prod_total`
-- 发电：`power_charge_sum += charge_speed_pct`
-
-自动排班生成的生产房间会在 `RoomAssignment.efficiency` 中保存求解阶段命中的效率快照：
-
-- 贸易房保存 `trade_score` / `trade_pct` / `trade_skill_pct` / `trade_gold_pct`；
-- 制造房保存 `manu_prod_total` / `manu_prod_skill` / `manu_storage_limit`；
-- 发电房保存 `power_charge_speed_pct`。
-
-`score_base_assignment` 优先读取该快照；只有手写或旧版 assignment 没有快照时才回退到 `resolve_base + solve_*` 重算。这样 CLI / 轮换展示不再成为第二套求解入口，也不会因为 assignment 只保存干员名导致 tier/progress 丢失。
-
-`ShiftScores::weighted_*` 只做时长折算：
-
-```rust
-score * shift_hours / 24.0
-```
-
-当前含义：
-
-排班层保留三类分量，不硬合成一个全局分。该设计应保留。
-
----
-
-## 8. 后续审计 TODO
-
-- [ ] 审计 `schedule/trade_rotation.rs` 的 `total_score` 是否只是 trade hit score 求和；
-- [ ] 审计 `layout/assign.rs` 中各设施落位是否使用了正确排序字段；
-- [ ] 审计 `box_profile/eval.rs` 是否混用了产量和效率；
-- [ ] 审计 CLI 输出字段命名是否会误导用户；
-- [ ] 确认 `data/trade_shortcuts.json` 中 shortcut 的效率口径；
-- [ ] 继续补公孙等效效率锚点和实例。
+- CLI / CSV：效率固定三位小数；
+- JSON：效率是量化到三位小数的数值；
+- 产量、赤金消耗、心情等非效率物理量保留各自单位；
+- `rule_id` 只用于社区换算审计；
+- `mechanic_equivalent_efficiency` 只作解释，不二次乘入最终效率。
+- 排班 JSON 的班次结算字段为 `efficiencies`，不使用泛型 `scores`。

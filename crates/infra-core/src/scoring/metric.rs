@@ -27,12 +27,12 @@ impl From<f64> for EffPct {
 
 /// Sort-key output produced by a named scoring policy.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-pub struct ComponentScore {
+pub struct PolicyEvaluation {
     pub policy: ScoringPolicyId,
     pub sort_key_pct: f64,
 }
 
-impl ComponentScore {
+impl PolicyEvaluation {
     pub const fn new(policy: ScoringPolicyId, sort_key_pct: f64) -> Self {
         Self {
             policy,

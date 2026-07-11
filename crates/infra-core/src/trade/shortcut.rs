@@ -4,6 +4,7 @@ use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
+use crate::efficiency::Efficiency;
 use crate::error::Result;
 use crate::global_resource::GlobalInjectManifest;
 use crate::skill_table::data_path;
@@ -25,15 +26,15 @@ pub enum ShortcutTailorTier {
 pub struct ShortcutMatchRule {
     pub kind: String,
     #[serde(default)]
-    pub station_trade_pct: Option<i32>,
+    pub station_bonus_efficiency_anchor: Option<Efficiency>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TradeShortcutEntry {
     pub id: String,
     pub label: String,
-    pub trade_pct: f64,
-    pub gold_pct: f64,
+    #[serde(default)]
+    pub mechanic_equivalent_efficiency: Efficiency,
     #[serde(default = "default_tailor_tier")]
     pub tailor_tier: ShortcutTailorTier,
     #[serde(default)]
@@ -118,9 +119,9 @@ pub fn load_trade_shortcuts(path: &Path) -> Result<Vec<TradeShortcutEntry>> {
     crate::profile::record_shortcut_json_load();
     let raw = std::fs::read_to_string(path)?;
     let file: TradeShortcutFile = serde_json::from_str(&raw)?;
-    if file.version != 3 {
+    if file.version != 4 {
         return Err(crate::error::Error::msg(format!(
-            "unsupported trade_shortcuts version {}, expected 3",
+            "unsupported trade_shortcuts version {}, expected 4",
             file.version
         )));
     }
@@ -145,9 +146,6 @@ fn validate_trade_shortcuts(entries: &[TradeShortcutEntry]) -> std::result::Resu
     for entry in entries {
         if !ids.insert(entry.id.as_str()) {
             return Err(format!("duplicate trade shortcut id {}", entry.id));
-        }
-        if !entry.trade_pct.is_finite() || !entry.gold_pct.is_finite() {
-            return Err(format!("{} has non-finite legacy percentages", entry.id));
         }
         if entry_requires_community_unit_output(entry) && entry.unit_output.is_none() {
             return Err(format!(
@@ -324,7 +322,7 @@ pub fn is_closure_station(ops: &[TradeOperator], table: &SkillTable) -> bool {
     has_closure(ops, table) && !has_witch_e2(ops, table) && !room_has_docus_mechanic(ops, table)
 }
 
-/// 公孙：但书单走最终效率 ≈ 纸面工具效率 × 1.55 → `gold_pct=55` 固定，`trade_pct=order_eff_pre`。
+/// 公孙：但书单走最终效率 = 纸面效率 × 社区单位产出倍率。
 pub const DOCUS_MECHANIC_GOLD_PCT: f64 = 55.0;
 
 /// **L3 组合短路**（见 `docs/EFFECT_ATOM_DESIGN.md` §8.7）：工具人表最优解查表。
@@ -363,7 +361,7 @@ fn resolve_trade_shortcut_inner(
     if let Some(m) = crate::trade::segment::match_registered_trade_segment(ops, table, inject) {
         return Some(m);
     }
-    if let Some(m) = match_docus_solo_shortcut(ops, table, order_eff_pre) {
+    if let Some(m) = match_docus_solo_shortcut(ops, table) {
         return Some(m);
     }
     if let Some(m) = match_witch_group_shortcut(ops, table) {
@@ -499,14 +497,12 @@ pub fn match_vina_lungmen_shortcut(
 pub fn match_docus_solo_shortcut(
     ops: &[TradeOperator],
     table: &SkillTable,
-    order_eff_pre: f64,
 ) -> Option<TradeShortcutMatch> {
     if !is_docus_solo_station(ops, table) {
         return None;
     }
     let cache = trade_shortcut_cache()?;
-    let mut entry = cache.get_by_id("gsl_docus_solo")?.clone();
-    entry.trade_pct = order_eff_pre;
+    let entry = cache.get_by_id("gsl_docus_solo")?.clone();
     Some(TradeShortcutMatch { entry })
 }
 
@@ -787,12 +783,11 @@ fn match_closure_shortcut(
     }
     let cache = trade_shortcut_cache()?;
     let tiers: Vec<_> = cache.closure_entries().collect();
-    let best = tiers.iter().min_by(|a, b| {
-        let da = (order_eff_pre - closure_tier(a) as f64).abs();
-        let db = (order_eff_pre - closure_tier(b) as f64).abs();
-        da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
-    })?;
-    if (order_eff_pre - closure_tier(best) as f64).abs() > 25.0 {
+    let station_bonus = Efficiency::from_percent_points(order_eff_pre);
+    let best = tiers
+        .iter()
+        .min_by_key(|entry| (station_bonus.millis() - closure_tier(entry).millis()).abs())?;
+    if (station_bonus.millis() - closure_tier(best).millis()).abs() > 250 {
         return None;
     }
     Some(TradeShortcutMatch {
@@ -800,16 +795,16 @@ fn match_closure_shortcut(
     })
 }
 
-fn closure_tier(entry: &TradeShortcutEntry) -> i32 {
-    station_trade_pct_anchor(entry)
+fn closure_tier(entry: &TradeShortcutEntry) -> Efficiency {
+    station_bonus_efficiency_anchor(entry)
 }
 
-fn station_trade_pct_anchor(entry: &TradeShortcutEntry) -> i32 {
+fn station_bonus_efficiency_anchor(entry: &TradeShortcutEntry) -> Efficiency {
     entry
         .r#match
         .as_ref()
-        .and_then(|m| m.station_trade_pct)
-        .unwrap_or(0)
+        .and_then(|m| m.station_bonus_efficiency_anchor)
+        .unwrap_or(Efficiency::ZERO)
 }
 
 fn distribution_for_tier(tier: ShortcutTailorTier, level: u8) -> GoldDistribution {
@@ -884,12 +879,6 @@ impl TradeShortcutMatch {
         })
     }
 
-    pub fn effective_multiplier(&self) -> f64 {
-        let trade = 1.0 + self.entry.trade_pct / 100.0;
-        let gold = 1.0 + self.entry.gold_pct / 100.0;
-        trade * gold
-    }
-
     pub fn build_mechanic_result(&self, trade_level: u8) -> OrderMechanicResult {
         let dist = distribution_for_tier(self.entry.tailor_tier, trade_level);
         let long_avg = long_invest_bonus_avg(self.entry.tailor_tier, &dist);
@@ -900,7 +889,7 @@ impl TradeShortcutMatch {
             dominant_kind: SpecialOrderKind::NormalGold,
             gold_distribution: dist,
             originium_distribution: None,
-            mechanic_equiv_eff_pct: self.entry.gold_pct,
+            mechanic_equivalent_efficiency: self.entry.mechanic_equivalent_efficiency,
             gold_per_order_avg: gold_avg,
             originium_per_order_avg: 0.0,
             minutes_per_gold: mpg,
@@ -990,7 +979,7 @@ mod tests {
         inject.record_daifeen_e2_in_control();
         let with_segment = resolve_trade_shortcut(&ops, &table, 80.0, 3, &inject).expect("segment");
         assert_eq!(with_segment.entry.id, "gsl_vina_lungmen");
-        assert!((with_segment.entry.trade_pct - 135.0).abs() < 0.01);
+        assert_eq!(with_segment.entry.id, "gsl_vina_lungmen");
     }
 
     #[test]
@@ -1007,8 +996,10 @@ mod tests {
         ];
         let m = match_witch_group_shortcut(&ops, &table).expect("match");
         assert_eq!(m.entry.id, "gsl_witch_long_beta");
-        assert!((m.entry.trade_pct - 138.0).abs() < 0.01);
-        assert!((m.effective_multiplier() - 2.38 * 1.46).abs() < 0.03);
+        assert_eq!(
+            m.entry.mechanic_equivalent_efficiency,
+            Efficiency::from_decimal(0.460)
+        );
     }
 
     #[test]
@@ -1061,7 +1052,7 @@ mod tests {
         ];
         let m = match_witch_group_shortcut(&ops, &table).expect("match");
         assert_eq!(m.entry.id, "gsl_witch_beta_blank");
-        assert!((m.entry.trade_pct - 93.0).abs() < 0.01);
+        assert_eq!(m.entry.mechanic_equivalent_efficiency, Efficiency::ZERO);
     }
 
     #[test]
@@ -1091,8 +1082,10 @@ mod tests {
         ];
         let m = match_blackkey_closure_shortcut(&ops, &table).expect("match");
         assert_eq!(m.entry.id, "gsl_blackkey_closure");
-        assert!((m.entry.trade_pct - 114.0).abs() < f64::EPSILON);
-        assert!((m.entry.gold_pct - 38.4).abs() < f64::EPSILON);
+        assert_eq!(
+            m.entry.mechanic_equivalent_efficiency,
+            Efficiency::from_decimal(0.384)
+        );
         let resolved =
             resolve_trade_shortcut(&ops, &table, 82.0, 3, &GlobalInjectManifest::default())
                 .expect("resolve");
@@ -1189,13 +1182,18 @@ mod tests {
         with_haru.record_haru_e2_in_control();
         let m = resolve_trade_shortcut(&trio, &table, 80.0, 3, &with_haru).expect("match");
         assert_eq!(m.entry.id, "gsl_docus_syracusa");
-        assert!((m.entry.trade_pct - 200.0).abs() < 0.01);
-        assert!((m.entry.gold_pct - 55.0).abs() < 0.01);
+        assert_eq!(
+            m.entry.mechanic_equivalent_efficiency,
+            Efficiency::from_decimal(0.550)
+        );
 
         let without_haru = GlobalInjectManifest::default();
         let m2 = resolve_trade_shortcut(&trio, &table, 80.0, 3, &without_haru).expect("match");
         assert_eq!(m2.entry.id, "gsl_docus_solo");
-        assert!((m2.entry.trade_pct - 80.0).abs() < 0.01);
+        assert_eq!(
+            m2.entry.mechanic_equivalent_efficiency,
+            Efficiency::from_decimal(0.550)
+        );
     }
 
     #[test]
@@ -1215,7 +1213,10 @@ mod tests {
         let pre = 55.0;
         let m = resolve_trade_shortcut(&ops, &table, pre, 3, &inject).expect("match");
         assert_eq!(m.entry.id, "gsl_docus_solo");
-        assert!((m.entry.trade_pct - pre).abs() < 0.01);
+        assert_eq!(
+            m.entry.mechanic_equivalent_efficiency,
+            Efficiency::from_decimal(0.550)
+        );
     }
 
     #[test]
@@ -1238,8 +1239,10 @@ mod tests {
         let m = resolve_trade_shortcut(&ops, &table, pre, 3, &GlobalInjectManifest::default())
             .expect("match");
         assert_eq!(m.entry.id, "gsl_docus_solo");
-        assert!((m.entry.trade_pct - pre).abs() < 0.01);
-        assert!((m.effective_multiplier() - (1.0 + pre / 100.0) * 1.55).abs() < 0.02);
+        assert_eq!(
+            m.entry.mechanic_equivalent_efficiency,
+            Efficiency::from_decimal(0.550)
+        );
     }
 
     #[test]
@@ -1294,8 +1297,7 @@ mod tests {
             r#"{
                 "id":"broken_closure",
                 "label":"broken",
-                "trade_pct":100.0,
-                "gold_pct":0.0,
+                "mechanic_equivalent_efficiency":0.0,
                 "match":{"kind":"closure"}
             }"#,
         )

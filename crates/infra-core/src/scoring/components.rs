@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use super::ComponentScore;
+use super::PolicyEvaluation;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum ScoringPolicyId {
@@ -10,6 +10,12 @@ pub enum ScoringPolicyId {
     /// This is a local sorting heuristic for central-control candidates, not a
     /// trade/manufacture balance formula.
     ControlInjectRawSumV0,
+}
+
+impl Default for ScoringPolicyId {
+    fn default() -> Self {
+        Self::ControlInjectRawSumV0
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Default)]
@@ -27,8 +33,8 @@ pub struct TradeManuEfficiencyComponents {
 /// The three efficiency components remain separately meaningful. The returned
 /// sort key preserves historical behavior only for ranking control-room fill
 /// candidates.
-pub fn current_control_inject_sort_score(input: TradeManuEfficiencyComponents) -> ComponentScore {
-    ComponentScore::new(
+pub fn evaluate_control_inject_policy(input: TradeManuEfficiencyComponents) -> PolicyEvaluation {
+    PolicyEvaluation::new(
         ScoringPolicyId::ControlInjectRawSumV0,
         input.trade_eff_pct + input.gold_manu_eff_pct + input.battle_record_manu_eff_pct,
     )
@@ -40,7 +46,7 @@ mod tests {
 
     #[test]
     fn control_inject_raw_sum_reports_policy_and_current_sort_key() {
-        let score = current_control_inject_sort_score(TradeManuEfficiencyComponents {
+        let score = evaluate_control_inject_policy(TradeManuEfficiencyComponents {
             trade_eff_pct: 7.0,
             gold_manu_eff_pct: 2.0,
             battle_record_manu_eff_pct: 3.0,

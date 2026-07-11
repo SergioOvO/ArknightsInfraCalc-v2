@@ -3,6 +3,8 @@
 
 use serde::Serialize;
 
+use crate::efficiency::Efficiency;
+
 use super::efficiency::{TradeEfficiency, GOLD_TRADE_REFERENCE_OUTPUT_PER_DAY};
 use super::interpreter::{MechanicCaps, TradeContext};
 use super::order_mechanic::{
@@ -77,11 +79,9 @@ pub struct TradeDailyYield {
     pub drone_trade_lmd: f64,
     pub drone_gold_spent: f64,
     pub shift_hours: f64,
-    pub paper_efficiency: f64,
-    pub final_efficiency: f64,
+    pub paper_efficiency: Efficiency,
+    pub final_efficiency: Efficiency,
     pub time_factor: f64,
-    /// 兼容字段：最终效率乘工作时长占比。
-    pub eff_factor: f64,
 }
 
 /// 公孙工具人表产出口径：产出 = 三级基准日产出 × 最终效率 × (上班/24)。
@@ -91,26 +91,23 @@ pub fn daily_yield(
     shift_hours: f64,
 ) -> TradeDailyYield {
     let time_factor = shift_hours / 24.0;
-    let eff_factor = efficiency.final_efficiency * time_factor;
-    let paper_factor = if efficiency.final_efficiency > 0.0
-        && efficiency.production_basis.unit_output_multiplier > 0.0
-    {
-        efficiency.final_efficiency / efficiency.production_basis.unit_output_multiplier
+    let final_factor = efficiency.final_efficiency.as_f64() * time_factor;
+    let paper_factor = if efficiency.applies_paper_efficiency {
+        efficiency.paper.paper_efficiency.as_f64()
     } else {
         1.0
     };
     TradeDailyYield {
-        trade_lmd: efficiency.production_basis.reference_unit_output_per_day * eff_factor,
+        trade_lmd: efficiency.production_basis.reference_unit_output_per_day * final_factor,
         gold_spent: unit.unit_gold_per_day * paper_factor * time_factor,
         drone_trade_lmd: efficiency.production_basis.reference_unit_output_per_day
-            * eff_factor
+            * final_factor
             * DRONE_TRADE_FACTOR,
         drone_gold_spent: unit.drone_unit_gold_per_day * paper_factor * time_factor,
         shift_hours,
         paper_efficiency: efficiency.paper.paper_efficiency,
         final_efficiency: efficiency.final_efficiency,
         time_factor,
-        eff_factor,
     }
 }
 
@@ -196,7 +193,7 @@ mod tests {
     use crate::trade::order_mechanic::{resolve_order_mechanic, SpecialOrderKind};
     use crate::trade::solve_trade;
 
-    fn solve_unit(level: u8, operators: Vec<TradeOperator>) -> (TradeUnitOutput, f64) {
+    fn solve_unit(level: u8, operators: Vec<TradeOperator>) -> (TradeUnitOutput, Efficiency) {
         let table =
             SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
         let input = TradeRoomInput::with_operators(level, operators);
@@ -299,7 +296,10 @@ mod tests {
         ]);
         let with_limits = solve_trade(&with_limit_tools, &table).unwrap();
         assert!(
-            (with_limits.effective_eff_multiplier - solo.effective_eff_multiplier).abs() < 1e-6,
+            (with_limits.efficiency.final_efficiency.as_f64()
+                - solo.efficiency.final_efficiency.as_f64())
+            .abs()
+                < 1e-6,
             "pepe score unchanged with limit-only roommates"
         );
         assert!(

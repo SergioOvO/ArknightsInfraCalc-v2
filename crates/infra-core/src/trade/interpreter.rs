@@ -1858,10 +1858,14 @@ mod tests {
         );
 
         let r = solve_trade_with_shift(&input, &table, 24.0).unwrap();
-        assert_eq!(r.trade_shortcut.as_deref(), None);
+        assert_eq!(r.rule_id.as_deref(), None);
         assert_eq!(r.final_order_limit, 18);
-        assert!((r.order_eff_total - 129.0).abs() < 0.01);
-        assert!((r.order_eff_pre_shortcut - 129.0).abs() < 0.01);
+        assert!(
+            (((r.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0) - 129.0).abs() < 0.01
+        );
+        assert!(
+            (((r.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0) - 129.0).abs() < 0.01
+        );
     }
 
     #[test]
@@ -1875,12 +1879,14 @@ mod tests {
         ] {
             let input = ling_jie_input(third);
             let r = solve_trade_with_shift(&input, &table, 24.0).unwrap();
-            assert_eq!(r.trade_shortcut.as_deref(), None, "{label}");
+            assert_eq!(r.rule_id.as_deref(), None, "{label}");
             assert_eq!(r.final_order_limit, expect_limit, "{label}");
             assert!(
-                (r.order_eff_total - expect_trade).abs() < 0.01,
+                (((r.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0) - expect_trade)
+                    .abs()
+                    < 0.01,
                 "{label}: trade={}",
-                r.order_eff_total
+                ((r.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0)
             );
         }
     }

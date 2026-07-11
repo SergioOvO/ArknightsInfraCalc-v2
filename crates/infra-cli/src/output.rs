@@ -7,11 +7,9 @@ use csv::Writer;
 use infra_core::box_profile::{render_box_profile_narrative, BoxProfile};
 use infra_core::layout::BaseAssignment;
 use infra_core::pool::PoolSkip;
-use infra_core::schedule::{
-    BaseRotationReport, BaseShiftRole, TeamLabel, TeamRotationReport, TradeRotationReport,
-    TradeStationRole,
-};
+use infra_core::schedule::{TeamLabel, TeamRotationReport};
 use infra_core::search::{ManuSearchHit, ManuSearchReport, TradeSearchHit, TradeSearchReport};
+use infra_core::Efficiency;
 use infra_core::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,18 +68,6 @@ fn flush_csv(mut wtr: Writer<Box<dyn Write>>) -> Result<(), Error> {
     Ok(())
 }
 
-fn role_label(role: TradeStationRole) -> &'static str {
-    match role {
-        TradeStationRole::Witch => "巫恋核",
-        TradeStationRole::WitchFallback => "巫恋兜底",
-        TradeStationRole::Closure => "可露希尔",
-        TradeStationRole::Docus => "但书",
-        TradeStationRole::Vina => "推王组",
-        TradeStationRole::JieE0Lead => "孑带队",
-        TradeStationRole::Plain => "常规",
-    }
-}
-
 fn skip_reason_label(reason: &PoolSkip) -> String {
     match reason {
         PoolSkip::NoTradeBinding => "无技能绑定".to_string(),
@@ -103,8 +89,8 @@ fn section_label(section: &str) -> &str {
         "trade_gold_line" => "贸易赤金线",
         "trade_originium_line" => "贸易源石线",
         "manufacture" => "制造",
-        "manu_gold_line" => "制造赤金线",
-        "manu_exp_line" => "制造经验线",
+        "manufacture_gold_line" => "制造赤金线",
+        "manufacture_battle_record_line" => "制造经验线",
         "station" => "站点",
         "bench" => "基准测试",
         other => other,
@@ -133,6 +119,7 @@ fn elapsed_secs(d: Duration) -> String {
 
 // ── pool ────────────────────────────────────────────────────────────────────
 
+#[derive(serde::Serialize)]
 pub struct PoolSummary<'a> {
     pub facility: &'a str,
     pub operbox: Option<&'a str>,
@@ -265,14 +252,13 @@ fn write_trade_search_csv(
     wtr.write_record([
         "区块",
         "排名",
-        "排序分",
-        "贸易效率%",
-        "赤金效率%",
+        "最终效率",
+        "机制等效效率",
+        "单位产出倍率",
         "日贸易量",
         "日赤金消耗",
         "日固源岩",
-        "单位产出比(调试)",
-        "短路ID",
+        "规则ID",
         "干员组合",
         "赤金线干员",
         "源石线干员",
@@ -285,7 +271,6 @@ fn write_trade_search_csv(
     ])?;
     wtr.write_record([
         section_label("meta"),
-        "",
         "",
         "",
         "",
@@ -328,14 +313,16 @@ fn write_trade_hit_row(
     wtr.write_record([
         section,
         &rank.to_string(),
-        &format!("{:.3}", hit.score),
-        &format!("{:.1}", hit.trade_pct),
-        &format!("{:.1}", hit.gold_pct),
+        &hit.final_efficiency.to_string(),
+        &hit.mechanic_equivalent_efficiency.to_string(),
+        &hit.breakdown
+            .as_ref()
+            .map(|b| b.unit_output_multiplier.to_string())
+            .unwrap_or_default(),
         &format!("{:.0}", hit.unit_trade_per_day),
         &format!("{:.1}", hit.unit_gold_per_day),
         &format!("{:.1}", hit.unit_originium_per_day),
-        &format!("{:.3}", hit.output_multiplier),
-        hit.shortcut.as_deref().unwrap_or(""),
+        hit.rule_id.as_deref().unwrap_or(""),
         &join_ops(&hit.names),
         &join_ops(&hit.gold_names),
         &join_ops(&hit.originium_names),
@@ -368,36 +355,33 @@ fn write_trade_search_text(meta: &SearchMeta<'_>, report: &TradeSearchReport) ->
     for (i, hit) in report.top.iter().enumerate() {
         if !hit.gold_names.is_empty() || !hit.originium_names.is_empty() {
             eprintln!(
-                "  #{:<2} sort={:.3} trade_eff={:.1}% gold_eff={:.1}%",
+                "  #{:<2} final_efficiency={} mechanic_efficiency={}",
                 i + 1,
-                hit.score,
-                hit.trade_pct,
-                hit.gold_pct,
+                hit.final_efficiency,
+                hit.mechanic_equivalent_efficiency,
             );
             eprintln!("         gold_ops={:?}", hit.gold_names);
             eprintln!("         ori_ops={:?}", hit.originium_names);
         } else {
             eprintln!(
-                "  #{:<2} sort={:.3} trade_eff={:.1}% gold_eff={:.1}% unit_trade={:.0} unit_ratio(debug)={:.3} shortcut={:?} ops={:?}",
+                "  #{:<2} final_efficiency={} mechanic_efficiency={} unit_trade={:.0} unit_multiplier={} rule_id={:?} ops={:?}",
                 i + 1,
-                hit.score,
-                hit.trade_pct,
-                hit.gold_pct,
+                hit.final_efficiency,
+                hit.mechanic_equivalent_efficiency,
                 hit.unit_trade_per_day,
-                hit.output_multiplier,
-                hit.shortcut,
+                hit.breakdown.as_ref().map(|b| b.unit_output_multiplier).unwrap_or_default(),
+                hit.rule_id,
                 hit.names
             );
         }
     }
     if let (Some(gold), Some(ori)) = (&report.gold_order_line, &report.originium_order_line) {
         eprintln!(
-            "  (split) gold_line sort={:.3} trade_eff={:.1}% gold_eff={:.1}% {:?}  ori_line sort={:.3} {:?} ori/day={:.1}",
-            gold.score,
-            gold.trade_pct,
-            gold.gold_pct,
+            "  (split) gold_line={} mechanic={} {:?}  ori_line={} {:?} ori/day={:.1}",
+            gold.final_efficiency,
+            gold.mechanic_equivalent_efficiency,
             gold.names,
-            ori.score,
+            ori.final_efficiency,
             ori.names,
             ori.unit_originium_per_day,
         );
@@ -407,6 +391,7 @@ fn write_trade_search_text(meta: &SearchMeta<'_>, report: &TradeSearchReport) ->
 
 // ── bench ───────────────────────────────────────────────────────────────────
 
+#[derive(serde::Serialize)]
 pub struct BenchMeta<'a> {
     pub operbox: &'a str,
     pub owned: usize,
@@ -435,9 +420,21 @@ pub fn emit_bench(
         OutputFormat::Text => {
             write_bench_text(meta, &trade_pool, trade_report, &manu_pool, manu_report)
         }
-        OutputFormat::Json => Err(Error::msg(
-            "bench does not support --json; use --format csv",
-        )),
+        OutputFormat::Json => {
+            let value = serde_json::json!({
+                "meta": meta,
+                "trade": {
+                    "pool": trade_pool,
+                    "report": trade_report,
+                },
+                "manufacture": {
+                    "pool": manu_pool,
+                    "report": manu_report,
+                },
+            });
+            println!("{}", serde_json::to_string_pretty(&value)?);
+            Ok(())
+        }
     }
 }
 
@@ -454,20 +451,22 @@ fn write_bench_csv(
         "区块",
         "域",
         "排名",
-        "排序分",
-        "贸易效率%",
-        "赤金效率%",
-        "日固源岩",
-        "综合分",
-        "赤金产出%",
+        "最终效率",
+        "基础效率",
+        "人头效率",
+        "技能效率",
+        "全局/中枢效率",
+        "机制等效效率",
+        "单位产出倍率",
+        "赤金线效率",
         "赤金仓储",
-        "经验产出%",
+        "经验线效率",
         "经验仓储",
         "干员组合",
         "赤金线干员",
         "源石线干员",
         "经验线干员",
-        "短路ID",
+        "规则ID",
         "组合总数",
         "评估数",
         "耗时秒",
@@ -478,67 +477,19 @@ fn write_bench_csv(
         "池跳过数",
         "池三人组合数",
     ])?;
-    wtr.write_record([
-        section_label("meta"),
-        section_label("bench"),
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        meta.operbox,
-        &meta.owned.to_string(),
-        &format!(
-            "layout:{};trade:{};manu:{}",
-            meta.layout.unwrap_or("search_baseline"),
-            meta.trade_order_mode,
-            meta.manufacture_scenario
-        ),
-        "",
-        "",
-        "",
-    ])?;
-    wtr.write_record([
-        section_label("pool"),
-        domain_label("trade"),
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        &trade_pool.ready.to_string(),
-        &trade_pool.skipped.to_string(),
-        &trade_pool.combinations_3.to_string(),
-    ])?;
+    let mut meta_row = vec![String::new(); 28];
+    meta_row[0] = section_label("meta").to_string();
+    meta_row[1] = section_label("bench").to_string();
+    meta_row[22] = meta.operbox.to_string();
+    meta_row[23] = meta.owned.to_string();
+    meta_row[24] = format!(
+        "layout:{};trade:{};manufacture:{}",
+        meta.layout.unwrap_or("search_baseline"),
+        meta.trade_order_mode,
+        meta.manufacture_scenario
+    );
+    wtr.write_record(meta_row)?;
+    write_bench_pool_row(&mut wtr, "trade", trade_pool)?;
     for (i, hit) in trade_report.top.iter().enumerate() {
         write_bench_trade_row(&mut wtr, section_label("trade"), i + 1, hit, trade_report)?;
     }
@@ -560,34 +511,7 @@ fn write_bench_csv(
             trade_report,
         )?;
     }
-    wtr.write_record([
-        section_label("pool"),
-        domain_label("manufacture"),
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        &manu_pool.ready.to_string(),
-        &manu_pool.skipped.to_string(),
-        &manu_pool.combinations_3.to_string(),
-    ])?;
+    write_bench_pool_row(&mut wtr, "manufacture", manu_pool)?;
     for (i, hit) in manu_report.top.iter().enumerate() {
         write_bench_manu_row(
             &mut wtr,
@@ -600,7 +524,7 @@ fn write_bench_csv(
     if let Some(hit) = &manu_report.gold_line {
         write_bench_manu_row(
             &mut wtr,
-            section_label("manu_gold_line"),
+            section_label("manufacture_gold_line"),
             1,
             hit,
             manu_report,
@@ -609,13 +533,28 @@ fn write_bench_csv(
     if let Some(hit) = &manu_report.battle_record_line {
         write_bench_manu_row(
             &mut wtr,
-            section_label("manu_exp_line"),
+            section_label("manufacture_battle_record_line"),
             1,
             hit,
             manu_report,
         )?;
     }
     flush_csv(wtr)
+}
+
+fn write_bench_pool_row(
+    wtr: &mut Writer<Box<dyn Write>>,
+    domain: &str,
+    pool: &PoolSummary<'_>,
+) -> Result<(), Error> {
+    let mut row = vec![String::new(); 28];
+    row[0] = section_label("pool").to_string();
+    row[1] = domain_label(domain).to_string();
+    row[25] = pool.ready.to_string();
+    row[26] = pool.skipped.to_string();
+    row[27] = pool.combinations_3.to_string();
+    wtr.write_record(row)?;
+    Ok(())
 }
 
 fn write_bench_trade_row(
@@ -625,34 +564,27 @@ fn write_bench_trade_row(
     hit: &TradeSearchHit,
     report: &TradeSearchReport,
 ) -> Result<(), Error> {
-    wtr.write_record([
-        section,
-        domain_label("trade"),
-        &rank.to_string(),
-        &format!("{:.3}", hit.score),
-        &format!("{:.1}", hit.trade_pct),
-        &format!("{:.1}", hit.gold_pct),
-        &format!("{:.1}", hit.unit_originium_per_day),
-        "",
-        "",
-        "",
-        "",
-        "",
-        &join_ops(&hit.names),
-        &join_ops(&hit.gold_names),
-        &join_ops(&hit.originium_names),
-        "",
-        hit.shortcut.as_deref().unwrap_or(""),
-        &report.combinations.to_string(),
-        &report.evaluated.to_string(),
-        &elapsed_secs(report.elapsed),
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-    ])?;
+    let mut row = vec![String::new(); 28];
+    row[0] = section.to_string();
+    row[1] = domain_label("trade").to_string();
+    row[2] = rank.to_string();
+    row[3] = hit.final_efficiency.to_string();
+    if let Some(breakdown) = hit.breakdown.as_ref() {
+        row[4] = breakdown.base_efficiency.to_string();
+        row[5] = breakdown.occupancy_efficiency.to_string();
+        row[6] = breakdown.skill_efficiency.to_string();
+        row[7] = breakdown.control_efficiency.to_string();
+        row[9] = breakdown.unit_output_multiplier.to_string();
+    }
+    row[8] = hit.mechanic_equivalent_efficiency.to_string();
+    row[14] = join_ops(&hit.names);
+    row[15] = join_ops(&hit.gold_names);
+    row[16] = join_ops(&hit.originium_names);
+    row[18] = hit.rule_id.clone().unwrap_or_default();
+    row[19] = report.combinations.to_string();
+    row[20] = report.evaluated.to_string();
+    row[21] = elapsed_secs(report.elapsed);
+    wtr.write_record(row)?;
     Ok(())
 }
 
@@ -663,34 +595,26 @@ fn write_bench_manu_row(
     hit: &ManuSearchHit,
     report: &ManuSearchReport,
 ) -> Result<(), Error> {
-    wtr.write_record([
-        section,
-        domain_label("manufacture"),
-        &rank.to_string(),
-        "",
-        "",
-        "",
-        "",
-        &format!("{:.1}", hit.composite_score),
-        &format!("{:.1}", hit.per_station.gold),
-        &hit.storage.gold.to_string(),
-        &format!("{:.1}", hit.per_station.battle_record),
-        &hit.storage.battle_record.to_string(),
-        &join_ops(&hit.names),
-        &join_ops(&hit.gold_names),
-        "",
-        &join_ops(&hit.battle_record_names),
-        "",
-        &report.combinations.to_string(),
-        &report.evaluated.to_string(),
-        &elapsed_secs(report.elapsed),
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-    ])?;
+    let mut row = vec![String::new(); 28];
+    row[0] = section.to_string();
+    row[1] = domain_label("manufacture").to_string();
+    row[2] = rank.to_string();
+    row[3] = hit.final_efficiency.to_string();
+    row[4] = hit.breakdown.base_efficiency.to_string();
+    row[5] = hit.breakdown.occupancy_efficiency.to_string();
+    row[6] = hit.breakdown.skill_efficiency.to_string();
+    row[7] = hit.breakdown.global_efficiency.to_string();
+    row[10] = hit.per_station.gold.to_string();
+    row[11] = hit.storage.gold.to_string();
+    row[12] = hit.per_station.battle_record.to_string();
+    row[13] = hit.storage.battle_record.to_string();
+    row[14] = join_ops(&hit.names);
+    row[15] = join_ops(&hit.gold_names);
+    row[17] = join_ops(&hit.battle_record_names);
+    row[19] = report.combinations.to_string();
+    row[20] = report.evaluated.to_string();
+    row[21] = elapsed_secs(report.elapsed);
+    wtr.write_record(row)?;
     Ok(())
 }
 
@@ -735,9 +659,9 @@ fn write_bench_text(
     for (i, hit) in manu_report.top.iter().enumerate() {
         if !hit.gold_names.is_empty() || !hit.battle_record_names.is_empty() {
             eprintln!(
-                "  manu #{:<2} composite={:.1} gold={:.1}% stor={} exp={:.1}% stor={}",
+                "  manufacture #{:<2} final_efficiency={} gold_efficiency={} storage={} battle_record_efficiency={} storage={}",
                 i + 1,
-                hit.composite_score,
+                hit.final_efficiency,
                 hit.per_station.gold,
                 hit.storage.gold,
                 hit.per_station.battle_record,
@@ -747,9 +671,9 @@ fn write_bench_text(
             eprintln!("         exp_ops={:?}", hit.battle_record_names);
         } else {
             eprintln!(
-                "  manu #{:<2} composite={:.1} gold={:.1}% stor={} exp={:.1}% stor={} ops={:?}",
+                "  manufacture #{:<2} final_efficiency={} gold_efficiency={} storage={} battle_record_efficiency={} storage={} ops={:?}",
                 i + 1,
-                hit.composite_score,
+                hit.final_efficiency,
                 hit.per_station.gold,
                 hit.storage.gold,
                 hit.per_station.battle_record,
@@ -760,128 +684,40 @@ fn write_bench_text(
     }
     if let (Some(gold), Some(br)) = (&manu_report.gold_line, &manu_report.battle_record_line) {
         eprintln!(
-            "  (split) gold_line={:.1}% {:?}  exp_line={:.1}% {:?}",
-            gold.composite_score, gold.names, br.composite_score, br.names
+            "  (split) gold_line={} {:?}  battle_record_line={} {:?}",
+            gold.final_efficiency, gold.names, br.final_efficiency, br.names
         );
     }
     Ok(())
 }
 
-// ── schedule ────────────────────────────────────────────────────────────────
-
-pub fn emit_schedule(
-    opts: &OutputOptions,
-    owned: usize,
-    report: &TradeRotationReport,
-) -> Result<(), Error> {
-    match opts.format {
-        OutputFormat::Csv => write_schedule_csv(opts.path.as_deref(), owned, report),
-        OutputFormat::Text => write_schedule_text(owned, report),
-        OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(report)?);
-            Ok(())
-        }
-    }
-}
-
-fn write_schedule_csv(
-    path: Option<&Path>,
-    owned: usize,
-    report: &TradeRotationReport,
-) -> Result<(), Error> {
-    let mut wtr = csv_writer(path)?;
-    wtr.write_record([
-        "区块",
-        "班次",
-        "班次排序分",
-        "复用班次",
-        "本班干员",
-        "贸易站",
-        "角色",
-        "排序分",
-        "贸易效率%",
-        "赤金效率%",
-        "日贸易量",
-        "单位产出比(调试)",
-        "短路ID",
-        "干员组合",
-        "拥有数",
-        "耗时秒",
-    ])?;
-    wtr.write_record([
-        section_label("meta"),
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        &owned.to_string(),
-        &elapsed_secs(report.elapsed),
-    ])?;
-    for shift in &report.shifts {
-        let workers = join_ops(&shift.workers);
-        let reused = shift
-            .reused_from_shift
-            .map(|i| (i + 1).to_string())
-            .unwrap_or_default();
-        for station in &shift.stations {
-            let hit = &station.hit;
-            wtr.write_record([
-                section_label("station"),
-                &(shift.index + 1).to_string(),
-                &format!("{:.3}", shift.total_score),
-                &reused,
-                &workers,
-                &(station.station_index + 1).to_string(),
-                role_label(station.role),
-                &format!("{:.3}", hit.score),
-                &format!("{:.1}", hit.trade_pct),
-                &format!("{:.1}", hit.gold_pct),
-                &format!("{:.0}", hit.unit_trade_per_day),
-                &format!("{:.3}", hit.output_multiplier),
-                hit.shortcut.as_deref().unwrap_or(""),
-                &join_ops(&hit.names),
-                "",
-                "",
-            ])?;
-        }
-    }
-    flush_csv(wtr)
-}
-
 // ── trade yield ─────────────────────────────────────────────────────────────
 
+#[derive(serde::Serialize)]
 pub struct TradeYieldRow<'a> {
     pub fixture: &'a str,
     pub level: u8,
     pub shift_hours: f64,
-    pub paper_eff_pct: f64,
-    pub final_efficiency: f64,
-    pub shortcut: Option<&'a str>,
+    pub paper_efficiency: Efficiency,
+    pub final_efficiency: Efficiency,
+    pub mechanic_equivalent_efficiency: Efficiency,
+    pub rule_id: Option<&'a str>,
     pub unit_trade: f64,
     pub unit_gsl_gold: f64,
-    pub multiplier: f64,
+    pub unit_output_multiplier: Efficiency,
     pub daily_trade: f64,
     pub daily_gold: f64,
     pub drone_trade: f64,
-    pub pre_shortcut: f64,
 }
 
 pub fn emit_trade_yield(opts: &OutputOptions, row: &TradeYieldRow<'_>) -> Result<(), Error> {
     match opts.format {
         OutputFormat::Csv => write_trade_yield_csv(opts.path.as_deref(), row),
         OutputFormat::Text => write_trade_yield_text(row),
-        OutputFormat::Json => Err(Error::msg(
-            "trade yield does not support --json; use --format csv",
-        )),
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(row)?);
+            Ok(())
+        }
     }
 }
 
@@ -891,135 +727,55 @@ fn write_trade_yield_csv(path: Option<&Path>, row: &TradeYieldRow<'_>) -> Result
         "夹具",
         "贸易站等级",
         "上班时长",
-        "纸面效率%",
+        "纸面效率",
         "最终效率",
-        "短路ID",
+        "机制等效效率",
+        "规则ID",
         "日贸易量",
         "日GSL赤金",
-        "单位产出比(调试)",
+        "单位产出倍率",
         "日产贸易",
         "日产赤金",
         "无人机贸易",
-        "短路前效率%",
     ])?;
     wtr.write_record([
         row.fixture,
         &row.level.to_string(),
         &format!("{:.1}", row.shift_hours),
-        &format!("{:.1}", row.paper_eff_pct),
-        &format!("{:.6}", row.final_efficiency),
-        row.shortcut.unwrap_or(""),
+        &row.paper_efficiency.to_string(),
+        &row.final_efficiency.to_string(),
+        &row.mechanic_equivalent_efficiency.to_string(),
+        row.rule_id.unwrap_or(""),
         &format!("{:.1}", row.unit_trade),
         &format!("{:.1}", row.unit_gsl_gold),
-        &format!("{:.3}", row.multiplier),
+        &row.unit_output_multiplier.to_string(),
         &format!("{:.0}", row.daily_trade),
         &format!("{:.1}", row.daily_gold),
         &format!("{:.0}", row.drone_trade),
-        &format!("{:.1}", row.pre_shortcut),
     ])?;
     flush_csv(wtr)
 }
 
 fn write_trade_yield_text(row: &TradeYieldRow<'_>) -> Result<(), Error> {
     eprintln!(
-        "fixture={} level={} shift={}h paper_eff={:.1}% final_eff={:.6} ({:.2}%) shortcut={:?}",
+        "fixture={} level={} shift={}h paper_efficiency={} final_efficiency={} mechanic_efficiency={} rule_id={:?}",
         row.fixture,
         row.level,
         row.shift_hours,
-        row.paper_eff_pct,
+        row.paper_efficiency,
         row.final_efficiency,
-        row.final_efficiency * 100.0,
-        row.shortcut
+        row.mechanic_equivalent_efficiency,
+        row.rule_id
     );
     eprintln!(
-        "  unit_trade={:.1} unit_gsl_gold={:.1} unit_ratio(debug)={:.3}",
-        row.unit_trade, row.unit_gsl_gold, row.multiplier
+        "  unit_trade={:.1} unit_gsl_gold={:.1} unit_output_multiplier={}",
+        row.unit_trade, row.unit_gsl_gold, row.unit_output_multiplier
     );
     eprintln!(
-        "  daily_trade={:.0} daily_gold={:.1} drone_trade={:.0} pre_shortcut={:.1}",
-        row.daily_trade, row.daily_gold, row.drone_trade, row.pre_shortcut
+        "  daily_trade={:.0} daily_gold={:.1} drone_trade={:.0}",
+        row.daily_trade, row.daily_gold, row.drone_trade
     );
     Ok(())
-}
-
-// ── base rotation (full base A-B-A) ─────────────────────────────────────────
-
-pub fn emit_base_rotation(
-    opts: &OutputOptions,
-    layout: &str,
-    operbox: &str,
-    owned: usize,
-    report: &BaseRotationReport,
-) -> Result<(), Error> {
-    match opts.format {
-        OutputFormat::Csv => {
-            write_base_rotation_csv(opts.path.as_deref(), layout, operbox, owned, report)
-        }
-        OutputFormat::Text => write_base_rotation_text(layout, operbox, owned, report),
-        OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(report)?);
-            Ok(())
-        }
-    }
-}
-
-pub fn print_base_rotation_text(
-    layout: &str,
-    operbox: &str,
-    owned: usize,
-    report: &BaseRotationReport,
-) -> Result<(), Error> {
-    write_base_rotation_text(layout, operbox, owned, report)
-}
-
-fn write_base_rotation_csv(
-    path: Option<&Path>,
-    layout: &str,
-    operbox: &str,
-    owned: usize,
-    report: &BaseRotationReport,
-) -> Result<(), Error> {
-    let mut wtr = csv_writer(path)?;
-    wtr.write_record([
-        "layout",
-        "operbox",
-        "owned",
-        "班次",
-        "班型",
-        "复用班次",
-        "贸易分",
-        "制造prod合计",
-        "轮换人数",
-        "轮换干员",
-        "耗时秒",
-    ])?;
-    for shift in &report.shifts {
-        let reused = shift
-            .reused_from_shift
-            .map(|i| (i + 1).to_string())
-            .unwrap_or_default();
-        wtr.write_record([
-            layout,
-            operbox,
-            &owned.to_string(),
-            &(shift.index + 1).to_string(),
-            shift_role_label(shift.role),
-            &reused,
-            &format!("{:.3}", shift.scores.trade_score),
-            &format!("{:.1}", shift.scores.manu_prod_sum),
-            &shift.rotating_workers.len().to_string(),
-            &shift.rotating_workers.join("|"),
-            &elapsed_secs(report.elapsed),
-        ])?;
-    }
-    flush_csv(wtr)
-}
-
-fn shift_role_label(role: BaseShiftRole) -> &'static str {
-    match role {
-        BaseShiftRole::Peak => "peak",
-        BaseShiftRole::Recovery => "recovery",
-    }
 }
 
 fn team_label(label: TeamLabel) -> &'static str {
@@ -1104,20 +860,20 @@ fn format_shift_station_line(
     let label = room_display_name(room_id);
     // 查找该房间的评分
     let score_hint = shift
-        .scores
+        .efficiencies
         .room_lines
         .iter()
         .find(|r| r.room_id == room_id)
         .map(|r| {
-            if r.trade_score != 0.0 {
+            if !r.trade_efficiency.is_zero() {
                 format!(
-                    " [贸易倍率{:.2}x / 最终效率{:.0}% / 技能{:.0}%]",
-                    r.trade_score, r.trade_pct, r.trade_skill_pct
+                    " [贸易效率{} / 技能效率{}]",
+                    r.trade_efficiency, r.trade_skill_efficiency
                 )
-            } else if r.manu_score != 0.0 {
-                format!(" [产出{:.0}%]", r.manu_score)
-            } else if r.power_score != 0.0 {
-                format!(" [充能{:.0}%]", r.power_score)
+            } else if !r.manufacture_efficiency.is_zero() {
+                format!(" [制造效率{}]", r.manufacture_efficiency)
+            } else if !r.power_efficiency.is_zero() {
+                format!(" [发电效率{}]", r.power_efficiency)
             } else {
                 String::new()
             }
@@ -1190,9 +946,9 @@ fn write_team_rotation_csv(
         "时长h",
         "上岗队",
         "休息队",
-        "贸易分",
-        "制造prod合计",
-        "发电充能%合计",
+        "贸易效率",
+        "制造效率",
+        "发电效率",
         "贸易加权",
         "制造加权",
         "发电加权",
@@ -1221,12 +977,12 @@ fn write_team_rotation_csv(
             &format!("{:.0}", shift.duration_hours),
             &active.join("+"),
             team_label(shift.resting_team),
-            &format!("{:.3}", shift.scores.trade_score),
-            &format!("{:.1}", shift.scores.manu_prod_sum),
-            &format!("{:.1}", shift.scores.power_charge_sum),
-            &format!("{:.3}", shift.weighted_trade),
-            &format!("{:.1}", shift.weighted_manu),
-            &format!("{:.1}", shift.weighted_power),
+            &shift.efficiencies.trade_efficiency.to_string(),
+            &shift.efficiencies.manufacture_efficiency.to_string(),
+            &shift.efficiencies.power_efficiency.to_string(),
+            &shift.weighted_trade.to_string(),
+            &shift.weighted_manufacture.to_string(),
+            &shift.weighted_power.to_string(),
             &peak_eta,
             peak_bottleneck,
             &elapsed_secs(report.elapsed),
@@ -1282,8 +1038,8 @@ fn write_team_rotation_text(
         }
     }
     report_line(&format!(
-        "  每日加权产出（三类分开评分）: 贸易={:.3}  制造={:.1}  发电={:.1}",
-        report.daily.trade, report.daily.manu, report.daily.power
+        "  每日加权效率（三类分开）: 贸易={}  制造={}  发电={}",
+        report.daily.trade, report.daily.manufacture, report.daily.power
     ));
 
     report_line("\n--- 三队花名册（每班两队上岗、一队休息；设施始终满编不空转）---");
@@ -1325,12 +1081,17 @@ fn write_team_rotation_text(
             resting.operators.join(", ")
         ));
         report_line(&format!(
-            "  分数(原值): trade={:.3}  manu={:.1}  power={:.1}",
-            shift.scores.trade_score, shift.scores.manu_prod_sum, shift.scores.power_charge_sum,
+            "  效率(原值): trade={}  manufacture={}  power={}",
+            shift.efficiencies.trade_efficiency,
+            shift.efficiencies.manufacture_efficiency,
+            shift.efficiencies.power_efficiency,
         ));
         report_line(&format!(
-            "  分数(按{:.0}h加权): trade={:.3}  manu={:.1}  power={:.1}",
-            shift.duration_hours, shift.weighted_trade, shift.weighted_manu, shift.weighted_power,
+            "  效率(按{:.0}h加权): trade={}  manufacture={}  power={}",
+            shift.duration_hours,
+            shift.weighted_trade,
+            shift.weighted_manufacture,
+            shift.weighted_power,
         ));
 
         report_line("\n  【各设施上岗情况】");
@@ -1340,127 +1101,8 @@ fn write_team_rotation_text(
     }
 
     report_line(&format!(
-        "\n每日加权产出（三类分开，12h×αβ + 6h×βγ + 6h×γα）: 贸易={:.3}  制造={:.1}  发电={:.1}",
-        report.daily.trade, report.daily.manu, report.daily.power
+        "\n每日加权效率（三类分开，12h×αβ + 6h×βγ + 6h×γα）: 贸易={}  制造={}  发电={}",
+        report.daily.trade, report.daily.manufacture, report.daily.power
     ));
-    Ok(())
-}
-
-fn write_base_rotation_text(
-    layout: &str,
-    operbox: &str,
-    owned: usize,
-    report: &BaseRotationReport,
-) -> Result<(), Error> {
-    eprintln!(
-        "base rotation A-B-A: layout={} operbox={} owned={} elapsed={:.2?}",
-        layout, operbox, owned, report.elapsed
-    );
-    for shift in &report.shifts {
-        let reuse = shift
-            .reused_from_shift
-            .map(|i| format!(" (reuse shift {})", i + 1))
-            .unwrap_or_default();
-        eprintln!(
-            "\n=== Shift {} {:?}{} trade={:.3} manu={:.1} rotating={} ===",
-            shift.index + 1,
-            shift.role,
-            reuse,
-            shift.scores.trade_score,
-            shift.scores.manu_prod_sum,
-            shift.rotating_workers.len()
-        );
-        eprintln!("  rotating_workers: {:?}", shift.rotating_workers);
-        eprintln!("  【各设施上岗情况】");
-        for room_id in SHIFT_STATION_ORDER {
-            let score_hint = shift
-                .scores
-                .room_lines
-                .iter()
-                .find(|r| r.room_id == *room_id)
-                .map(|r| {
-                    if r.trade_score != 0.0 {
-                        format!(
-                            " [贸易倍率{:.2}x / 最终效率{:.0}% / 技能{:.0}%]",
-                            r.trade_score, r.trade_pct, r.trade_skill_pct
-                        )
-                    } else if r.manu_score != 0.0 {
-                        format!(" [产出{:.0}%]", r.manu_score)
-                    } else if r.power_score != 0.0 {
-                        format!(" [充能{:.0}%]", r.power_score)
-                    } else {
-                        String::new()
-                    }
-                })
-                .unwrap_or_default();
-            if let Some(ops) = assignment_room_ops(&shift.assignment, room_id) {
-                let names = ops.join(", ");
-                eprintln!("  {}: {}{}", room_display_name(room_id), names, score_hint);
-            }
-        }
-        for room in &shift.assignment.rooms {
-            if room.operators.is_empty() {
-                continue;
-            }
-            if SHIFT_STATION_ORDER.contains(&room.room_id.0.as_str()) {
-                continue;
-            }
-            let names: Vec<_> = room.operators.iter().map(|o| o.name.as_str()).collect();
-            eprintln!(
-                "  {}: {}",
-                room_display_name(&room.room_id.0),
-                names.join(", ")
-            );
-        }
-    }
-    let avg_trade: f64 = report
-        .shifts
-        .iter()
-        .map(|s| s.scores.trade_score)
-        .sum::<f64>()
-        / report.shifts.len() as f64;
-    let avg_manu: f64 = report
-        .shifts
-        .iter()
-        .map(|s| s.scores.manu_prod_sum)
-        .sum::<f64>()
-        / report.shifts.len() as f64;
-    eprintln!("\n3-shift avg: trade={:.3} manu={:.1}", avg_trade, avg_manu);
-    Ok(())
-}
-
-fn write_schedule_text(owned: usize, report: &TradeRotationReport) -> Result<(), Error> {
-    eprintln!(
-        "trade rotation A-B-A: owned={} elapsed={:.2?}",
-        owned, report.elapsed
-    );
-    for shift in &report.shifts {
-        let reuse = shift
-            .reused_from_shift
-            .map(|i| format!(" (reuse shift {})", i + 1))
-            .unwrap_or_default();
-        eprintln!(
-            "\n=== Shift {} score={:.3}{} ===",
-            shift.index + 1,
-            shift.total_score,
-            reuse
-        );
-        eprintln!("  workers: {:?}", shift.workers);
-        for station in &shift.stations {
-            let hit = &station.hit;
-            eprintln!(
-                "  trade_{} role={:?} sort={:.3} trade_eff={:.1}% gold_eff={:.1}% unit_trade={:.0} unit_ratio(debug)={:.3} shortcut={:?} ops={:?}",
-                station.station_index + 1,
-                station.role,
-                hit.score,
-                hit.trade_pct,
-                hit.gold_pct,
-                hit.unit_trade_per_day,
-                hit.output_multiplier,
-                hit.shortcut,
-                hit.names
-            );
-        }
-    }
     Ok(())
 }

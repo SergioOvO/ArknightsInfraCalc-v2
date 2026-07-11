@@ -3,6 +3,7 @@ pub mod box_profile;
 pub mod candidate;
 pub mod cross_facility;
 pub mod eff_ramp;
+pub mod efficiency;
 pub mod error;
 pub mod global_resource;
 pub mod instances;
@@ -35,16 +36,13 @@ pub use box_profile::{
     baseline_path_or_default, build_box_profile, render_box_profile_narrative, ActionKind,
     BoxProfile, BoxProfileOptions, GapSeverity, ProfileAction,
 };
-pub use candidate::{
-    CandidateScore, CandidateSource, CandidateStationKind, TeamCandidate, TeamColumn,
-};
+pub use candidate::{CandidateSource, CandidateStationKind, TeamCandidate, TeamMetric};
 pub use control::{
     apply_control_to_layout, solve_control, ControlCenterResult, ControlOperator, ControlRoomInput,
 };
+pub use efficiency::Efficiency;
 pub use error::{Error, Result};
-pub use export::{
-    build_from_base_rotation, build_from_team_rotation, MaaExportOptions, MaaSchedule,
-};
+pub use export::{build_from_team_rotation, MaaExportOptions, MaaSchedule};
 pub use global_resource::{
     GlobalInjectManifest, GlobalResourceConversion, GlobalResourceEntry, GlobalResourceKey,
     GlobalResourcePool, GlobalResourceTier, CONVERSIONS, INJECT_FAMILY_MANU_GLOBAL_ALL,
@@ -59,8 +57,9 @@ pub use layout::{
     SharedLayout, DEFAULT_DORM_OCCUPANT_COUNT,
 };
 pub use manufacture::{
-    score_manu_composite, solve_manufacture, ManuCompositeScore, ManuLineScenario, ManuOperator,
-    ManuProdBreakdown, ManuResult, ManuRoomInput, ManuSearchRecipeMode, ManuStorageBreakdown,
+    evaluate_manufacture_lines, solve_manufacture, ManuLineEfficiency, ManuLineScenario,
+    ManuOperator, ManuProdBreakdown, ManuResult, ManuRoomInput, ManuSearchRecipeMode,
+    ManuStorageBreakdown,
 };
 pub use mood::{
     dorm_recovery_rates, facility_key as mood_facility_key, operator_net_drain, shift_eta,
@@ -82,15 +81,11 @@ pub use power::{
 };
 pub use roster::{OperatorProgress, Roster};
 pub use schedule::{
-    operator_team_map, schedule_base_rotation_a_b_a, schedule_jie_remainder_shift_from_pool,
-    schedule_meta_shift_from_pool, schedule_team_rotation, schedule_trade_rotation_a_b_a,
-    schedule_trade_shift, score_base_assignment, BaseRotationReport, BaseShiftPlan, BaseShiftRole,
-    DailyTotals, ShiftScores, TeamAssignment, TeamLabel, TeamRotationReport, TeamShiftResult,
-    TradeRotationReport, TradeShiftPlan, TradeStationPlan, TradeStationRole,
-    TRADE_STATIONS_PER_SHIFT, WORKERS_PER_SHIFT,
+    evaluate_base_assignment_efficiencies, operator_team_map, schedule_team_rotation, DailyTotals,
+    ShiftEfficiencies, TeamAssignment, TeamLabel, TeamRotationReport, TeamShiftResult,
 };
 pub use scoring::{
-    current_control_inject_sort_score, ComponentScore, EffPct, ScoringPolicyId,
+    evaluate_control_inject_policy, EffPct, PolicyEvaluation, ScoringPolicyId,
     TradeManuEfficiencyComponents,
 };
 pub use search::{

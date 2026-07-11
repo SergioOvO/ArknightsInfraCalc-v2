@@ -36,5 +36,5 @@ unit_output
 
 - 但书、可露希尔、黑键可露希尔和巫恋 shortcut 必须配置 `unit_output`、来源与精度。
 - 配置缺失、重复、非正数或非有限数时，solver 直接报错，不回退到旧 `trade_pct` 推算。
-- `trade_pct` / `gold_pct` 继续用于旧回归和解释展示，不参与最终产出计算。
+- 旧 `trade_pct` / `gold_pct` 已删除；解释值统一为小数 `mechanic_equivalent_efficiency`。
 - 最终产出统一为 `10265 × final_efficiency × shift_hours / 24`。

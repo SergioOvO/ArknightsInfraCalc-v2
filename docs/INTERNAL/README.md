@@ -12,4 +12,4 @@
 
 制造站 L1 与贸易站对称，见 [MANUFACTURE_STATUS.md](../MANUFACTURE_STATUS.md)（入口 `manufacture/interpreter.rs`，结构类似 TRADE_INTERPRETER）。
 
-CLI 输出层：`infra-cli/src/output.rs` 按 `emit_pool` / `emit_trade_search` / `emit_bench` / `emit_schedule` / `emit_trade_yield` / `emit_base_rotation` / `emit_team_rotation` 等函数名定位，无需通读全文。
+CLI 输出层：`infra-cli/src/output.rs` 按 `emit_pool` / `emit_trade_search` / `emit_bench` / `emit_trade_yield` / `emit_team_rotation` 等函数名定位，无需通读全文。

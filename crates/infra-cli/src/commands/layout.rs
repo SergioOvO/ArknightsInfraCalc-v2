@@ -3,14 +3,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::output::{
-    emit_base_rotation, emit_bench, emit_team_rotation, print_base_rotation_text,
-    print_box_profile_report, print_team_rotation_text, BenchMeta, OutputFormat, OutputOptions,
-    PoolSummary,
+    emit_bench, emit_team_rotation, print_box_profile_report, print_team_rotation_text, BenchMeta,
+    OutputFormat, OutputOptions, PoolSummary,
 };
 use infra_core::box_profile::{baseline_path_or_default, build_box_profile, BoxProfileOptions};
-use infra_core::export::{
-    build_from_base_rotation, build_from_team_rotation, MaaExportOptions, MaaSchedule,
-};
+use infra_core::export::{build_from_team_rotation, MaaExportOptions, MaaSchedule};
 use infra_core::instances::{default_instances_path, OperatorInstances};
 use infra_core::layout::{
     assign_base_greedy, assign_shift_with_plan_and_trace, explain_assignment_systems, resolve_base,
@@ -21,7 +18,7 @@ use infra_core::manufacture::solve_manufacture;
 use infra_core::manufacture::ManuSearchRecipeMode;
 use infra_core::operbox::OperBox;
 use infra_core::pool::{build_manufacture_pool, build_trade_pool};
-use infra_core::schedule::{schedule_base_rotation_a_b_a, schedule_team_rotation};
+use infra_core::schedule::schedule_team_rotation;
 use infra_core::search::{
     search_manufacture_triples, search_trade_triples, ManuSearchOptions, TradeSearchOptions,
 };
@@ -35,7 +32,6 @@ pub fn layout_cmd(args: &[String]) -> Result<(), Error> {
         Some("test") => layout_test_cmd(&args[1..]),
         Some("analyze") => layout_analyze_cmd(&args[1..]),
         Some("eval") => layout_eval_cmd(&args[1..]),
-        Some("rotation") => layout_rotation_cmd(&args[1..]),
         Some("team-rotation") => layout_team_rotation_cmd(&args[1..]),
         _ => {
             eprintln!(
@@ -48,12 +44,12 @@ pub fn layout_cmd(args: &[String]) -> Result<(), Error> {
                 "       infra-cli layout eval --layout <path> --operbox <path> --assignment <path> [--text]"
             );
             eprintln!(
-                "       infra-cli layout rotation --layout <path> --operbox <path> [--top <n>] [--output-dir <dir>] [--maa-out <file.json>] [-o <file.csv>] [--text|--json]"
-            );
-            eprintln!(
                 "       infra-cli layout team-rotation --layout <path> --operbox <path> [--top <n>] [--output-dir <dir>] [--maa-out <file.json>] [--maa-title <title>] [-o <file.csv>] [--text|--json]"
             );
-            Ok(())
+            Err(Error::msg(format!(
+                "unknown layout command {:?}",
+                args.first().map(String::as_str)
+            )))
         }
     }
 }
@@ -156,92 +152,6 @@ fn should_emit_primary_output(out: &OutputOptions, wrote_maa: bool) -> bool {
         return true;
     }
     out.path.is_some() || out.format != OutputFormat::Csv
-}
-
-fn layout_rotation_cmd(args: &[String]) -> Result<(), Error> {
-    eprintln!(
-        "警告: `layout rotation`（A-B-A）已废弃，请改用 `layout team-rotation`（αβγ ABC 轮换）。见 docs/SCHEDULE_ROTATION.md"
-    );
-    let out = OutputOptions::from_args(args);
-    let layout_path = layout_path_from_args(args)?;
-    let operbox_path = operbox_path_from_args(args)?;
-    let top_k = args
-        .windows(2)
-        .find(|w| w[0] == "--top")
-        .and_then(|w| w[1].parse().ok())
-        .unwrap_or(20);
-
-    let blueprint = BaseBlueprint::load(&layout_path)?;
-    let operbox = OperBox::load(&operbox_path)?;
-    let instances = OperatorInstances::load(&default_instances_path()?)?;
-    let table = SkillTable::load(&default_skill_table_path()?)?;
-
-    let report = schedule_base_rotation_a_b_a(
-        &blueprint,
-        &operbox,
-        &instances,
-        &table,
-        &AssignBaseOptions {
-            top_k,
-            ..AssignBaseOptions::default()
-        },
-    )?;
-
-    if let Some(dir) = output_dir_from_args(args) {
-        write_rotation_assignments(&dir, &report)?;
-    }
-
-    let layout_str = layout_path.to_string_lossy();
-    let operbox_str = operbox_path.to_string_lossy();
-    let owned = operbox.owned_count();
-    let maa_path = maa_out_from_args(args);
-
-    if let Some(ref maa_path) = maa_path {
-        let maa_opts = maa_export_options(args, &blueprint);
-        let schedule = build_from_base_rotation(&blueprint, &report, &maa_opts)?;
-        write_maa_schedule(maa_path, &schedule)?;
-        if out.format != OutputFormat::Text {
-            print_base_rotation_text(layout_str.as_ref(), operbox_str.as_ref(), owned, &report)?;
-        }
-        emit_maa_hint(maa_path, layout_str.as_ref(), operbox_str.as_ref(), owned);
-    }
-
-    if should_emit_primary_output(&out, maa_path.is_some()) {
-        emit_base_rotation(
-            &out,
-            layout_str.as_ref(),
-            operbox_str.as_ref(),
-            owned,
-            &report,
-        )?;
-    }
-    Ok(())
-}
-
-fn write_rotation_assignments(
-    dir: &Path,
-    report: &infra_core::schedule::BaseRotationReport,
-) -> Result<(), Error> {
-    fs::create_dir_all(dir)?;
-    for shift in &report.shifts {
-        let role = match shift.role {
-            infra_core::schedule::BaseShiftRole::Peak => "peak",
-            infra_core::schedule::BaseShiftRole::Recovery => "recovery",
-        };
-        let reuse = shift
-            .reused_from_shift
-            .map(|i| format!("_reuse{}", i + 1))
-            .unwrap_or_default();
-        let path = dir.join(format!(
-            "assignment_{}_{}{}.json",
-            shift.index + 1,
-            role,
-            reuse
-        ));
-        shift.assignment.save(&path)?;
-        eprintln!("wrote {}", path.display());
-    }
-    Ok(())
 }
 
 fn layout_team_rotation_cmd(args: &[String]) -> Result<(), Error> {
@@ -629,7 +539,7 @@ fn layout_eval_cmd(args: &[String]) -> Result<(), Error> {
         );
     }
 
-    let mut trade_total = 0.0;
+    let mut trade_total = infra_core::Efficiency::ZERO;
     for room in &resolved.trade_rooms {
         if room.operators.is_empty() {
             continue;
@@ -646,24 +556,23 @@ fn layout_eval_cmd(args: &[String]) -> Result<(), Error> {
             active_order_kind: room.order,
         };
         let result = solve_trade_with_shift(&input, &table, 24.0)?;
-        trade_total += result.effective_eff_multiplier;
+        trade_total += result.efficiency.final_efficiency;
         if text {
             let names: Vec<_> = room.operators.iter().map(|o| o.name.as_str()).collect();
             eprintln!(
-                "  trade {} {:?} ops={:?} final_eff={:.3} ({:.1}%) paper={:.1}% gold%={:.1} shortcut={:?}",
+                "  trade {} {:?} ops={:?} final_efficiency={} paper_efficiency={} mechanic_efficiency={} rule_id={:?}",
                 room.id.0,
                 room.order,
                 names,
-                result.effective_eff_multiplier,
-                result.efficiency.final_efficiency_pct(),
-                result.efficiency.paper.paper_efficiency * 100.0,
-                result.order_mechanic.mechanic_equiv_eff_pct,
-                result.trade_shortcut
+                result.efficiency.final_efficiency,
+                result.efficiency.paper.paper_efficiency,
+                result.order_mechanic.mechanic_equivalent_efficiency,
+                result.rule_id
             );
         }
     }
 
-    let mut manu_total = 0.0;
+    let mut manu_total = infra_core::Efficiency::ZERO;
     for room in &resolved.manu_rooms {
         if room.operators.is_empty() {
             continue;
@@ -676,25 +585,29 @@ fn layout_eval_cmd(args: &[String]) -> Result<(), Error> {
             layout: Arc::new(room.layout.clone()),
         };
         let result = solve_manufacture(&input, &table)?;
-        manu_total += result.prod_total;
+        manu_total += result.final_efficiency;
         if text {
             let names: Vec<_> = room.operators.iter().map(|o| o.name.as_str()).collect();
             eprintln!(
-                "  manu {} {:?} ops={:?} prod%={:.1} storage={}",
-                room.id.0, room.recipe, names, result.prod_total, result.storage_limit
+                "  manu {} {:?} ops={:?} final_efficiency={} storage={}",
+                room.id.0, room.recipe, names, result.final_efficiency, result.storage_limit
             );
         }
     }
 
     if text {
         eprintln!(
-            "  total trade_score={:.3} manu_prod_sum={:.1}",
+            "  total trade_efficiency={} manufacture_efficiency={}",
             trade_total, manu_total
         );
     } else {
         println!(
-            "{{\"trade_score\":{trade_total:.6},\"manu_prod_sum\":{manu_total:.6},\"durin_in_base\":{}}}",
-            resolved.layout.durin_in_base
+            "{}",
+            serde_json::json!({
+                "trade_efficiency": trade_total,
+                "manufacture_efficiency": manu_total,
+                "durin_in_base": resolved.layout.durin_in_base,
+            })
         );
     }
     Ok(())

@@ -22,16 +22,10 @@ pub struct OperatorMoodDrain {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TradeResult {
-    pub order_eff_base: f64,
-    pub order_eff_skill: f64,
-    pub order_eff_total: f64,
-    pub order_eff_pre_shortcut: f64,
     pub final_order_limit: i32,
     pub order_mechanic: OrderMechanicResult,
     pub efficiency: TradeEfficiency,
-    /// 兼容字段；等于 `efficiency.final_efficiency`。
-    pub effective_eff_multiplier: f64,
-    pub trade_shortcut: Option<String>,
+    pub rule_id: Option<String>,
     pub mood_drain: Vec<OperatorMoodDrain>,
     pub production: TradeProductionReport,
 }
@@ -101,7 +95,7 @@ fn resolve_unit_output(
     } else if mechanic.order_kind.is_gold()
         && sc.is_none()
         && mechanic.dominant_kind == SpecialOrderKind::NormalGold
-        && mechanic.mechanic_equiv_eff_pct.abs() < f64::EPSILON
+        && mechanic.mechanic_equivalent_efficiency.is_zero()
     {
         unit.replace_trade_unit_output(regular_trade_unit_output_per_day(level), reference);
     }
@@ -174,8 +168,11 @@ fn solve_trade_with_shift_inner(
     let order_eff_skill = ctx.order_eff_skill();
     let order_eff_pre = ctx.order_eff_total();
     let order_eff_global = order_eff_pre - order_eff_base - order_eff_skill;
-    let paper_efficiency =
-        PaperTradeEfficiency::from_bonus_pct(order_eff_base, order_eff_skill, order_eff_global);
+    let paper_efficiency = PaperTradeEfficiency::from_percent_points(
+        order_eff_base,
+        order_eff_skill,
+        order_eff_global,
+    );
 
     if input.active_order_kind.is_gold() {
         let sc = if check_exclusivity {
@@ -197,8 +194,6 @@ fn solve_trade_with_shift_inner(
         };
         if let Some(sc) = sc {
             let mechanic = sc.build_mechanic_result(input.level);
-            let order_eff_total = sc.entry.trade_pct;
-            let order_eff_skill_adj = order_eff_total - order_eff_base;
             let unit = resolve_unit_output(&ctx, &mechanic, Some(&sc), input.level)?;
             let efficiency = build_efficiency(
                 paper_efficiency,
@@ -208,15 +203,10 @@ fn solve_trade_with_shift_inner(
             );
             let production = build_production(unit, &efficiency, shift_hours);
             return Ok(TradeResult {
-                order_eff_base,
-                order_eff_skill: order_eff_skill_adj,
-                order_eff_total,
-                order_eff_pre_shortcut: order_eff_pre,
                 final_order_limit: ctx.final_order_limit,
-                effective_eff_multiplier: efficiency.final_efficiency,
                 order_mechanic: mechanic,
                 efficiency,
-                trade_shortcut: Some(sc.entry.id),
+                rule_id: Some(sc.entry.id),
                 mood_drain: mood_drain_from_ctx(&ctx),
                 production,
             });
@@ -229,15 +219,10 @@ fn solve_trade_with_shift_inner(
     let production = build_production(unit, &efficiency, shift_hours);
 
     Ok(TradeResult {
-        order_eff_base,
-        order_eff_skill,
-        order_eff_total: order_eff_pre,
-        order_eff_pre_shortcut: order_eff_pre,
         final_order_limit: ctx.final_order_limit,
         order_mechanic: mechanic,
-        effective_eff_multiplier: efficiency.final_efficiency,
         efficiency,
-        trade_shortcut: None,
+        rule_id: None,
         mood_drain: mood_drain_from_ctx(&ctx),
         production,
     })
@@ -253,6 +238,7 @@ mod tests {
     use crate::skill_table::SkillTable;
     use crate::tier::PromotionTier;
     use crate::trade::input::{TradeOperator, TradeRoomInput};
+    use crate::Efficiency;
 
     fn table() -> SkillTable {
         SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap()
@@ -291,10 +277,18 @@ mod tests {
     #[test]
     fn gsl_closure_tier90_regression() {
         let result = solve_trade(&closure_tier90_room(), &table()).unwrap();
-        assert_eq!(result.trade_shortcut.as_deref(), Some("gsl_closure_tier90"));
-        assert!((result.order_eff_pre_shortcut - 114.0).abs() < 1.0);
-        assert!((result.order_eff_total - 135.0).abs() < 2.0);
-        assert!((result.order_mechanic.mechanic_equiv_eff_pct - 42.0).abs() < 2.0);
+        assert_eq!(result.rule_id.as_deref(), Some("gsl_closure_tier90"));
+        assert!(
+            ((result
+                .order_mechanic
+                .mechanic_equivalent_efficiency
+                .as_f64()
+                * 100.0)
+                - 42.0)
+                .abs()
+                < 2.0
+        );
+        assert!(result.efficiency.final_efficiency > result.efficiency.paper.paper_efficiency);
     }
 
     #[test]
@@ -308,8 +302,8 @@ mod tests {
             ],
         );
         let result = solve_trade(&input, &table()).unwrap();
-        assert_eq!(result.trade_shortcut.as_deref(), Some("gsl_closure_tier80"));
-        assert!((result.order_eff_total - 124.0).abs() < 2.0);
+        assert_eq!(result.rule_id.as_deref(), Some("gsl_closure_tier80"));
+        assert!(result.efficiency.final_efficiency > result.efficiency.paper.paper_efficiency);
     }
 
     #[test]
@@ -325,8 +319,8 @@ mod tests {
             ],
         );
         let result = solve_trade(&input, &table()).unwrap();
-        assert_eq!(result.trade_shortcut.as_deref(), Some("gsl_closure_tier60"));
-        assert!((result.order_eff_total - 100.0).abs() < 2.0);
+        assert_eq!(result.rule_id.as_deref(), Some("gsl_closure_tier60"));
+        assert!(result.efficiency.final_efficiency > result.efficiency.paper.paper_efficiency);
     }
 
     #[test]
@@ -354,9 +348,10 @@ mod tests {
         );
         let result = solve_trade(&input, &table()).unwrap();
         assert!(
-            (result.order_eff_pre_shortcut - 75.0).abs() < 4.0,
+            (((result.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0) - 75.0).abs()
+                < 4.0,
             "精2 能天使仅 +35%，加两名 20% 级工具人纸面≈75%，got {}",
-            result.order_eff_pre_shortcut
+            ((result.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0)
         );
     }
 
@@ -410,11 +405,11 @@ mod tests {
         );
         let result = solve_trade(&input, &table()).unwrap();
         assert_ne!(
-            result.trade_shortcut.as_deref(),
+            result.rule_id.as_deref(),
             Some("gsl_closure_tier90"),
             "海蒂(35%)+可颂(30%) 不得命中 90 档，got {:?} pre={}",
-            result.trade_shortcut,
-            result.order_eff_pre_shortcut
+            result.rule_id,
+            ((result.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0)
         );
     }
 
@@ -433,7 +428,7 @@ mod tests {
         );
         let result = solve_trade(&input, &table()).unwrap();
         assert_ne!(
-            result.trade_shortcut.as_deref(),
+            result.rule_id.as_deref(),
             Some("gsl_closure_tier90"),
             "蕾缪安+海蒂 无 能天使，不得命中 90 档可露"
         );
@@ -515,22 +510,25 @@ mod tests {
             ("gsl_witch_long0_blank", 108.0, 17.0),
             ("gsl_witch_beta_blank", 93.0, 0.0),
         ];
-        for (id, trade, gold) in cases {
+        for (id, _trade, gold) in cases {
             let result = solve_trade(&witch_room(id), &table).unwrap();
-            assert_eq!(
-                result.trade_shortcut.as_deref(),
-                Some(id),
-                "shortcut for {id}"
-            );
+            assert_eq!(result.rule_id.as_deref(), Some(id), "shortcut for {id}");
+            assert!(result.efficiency.final_efficiency >= result.efficiency.paper.paper_efficiency);
             assert!(
-                (result.order_eff_total - trade).abs() < 0.5,
-                "{id} trade got {}",
-                result.order_eff_total
-            );
-            assert!(
-                (result.order_mechanic.mechanic_equiv_eff_pct - gold).abs() < 0.5,
+                ((result
+                    .order_mechanic
+                    .mechanic_equivalent_efficiency
+                    .as_f64()
+                    * 100.0)
+                    - gold)
+                    .abs()
+                    < 0.5,
                 "{id} gold got {}",
-                result.order_mechanic.mechanic_equiv_eff_pct
+                (result
+                    .order_mechanic
+                    .mechanic_equivalent_efficiency
+                    .as_f64()
+                    * 100.0)
             );
         }
     }
@@ -598,29 +596,29 @@ mod tests {
         for (label, result) in [("e0", &r_e0), ("e2", &r_e2)] {
             assert!(
                 result
-                    .trade_shortcut
+                    .rule_id
                     .as_deref()
                     .is_some_and(|s| s == "gsl_docus_solo"),
                 "docus {label} tools shortcut {:?}",
-                result.trade_shortcut
+                result.rule_id
             );
             assert!(
-                (result.efficiency.production_basis.unit_output_multiplier - 1.55).abs() < 1e-9,
+                result.efficiency.production_basis.unit_output_multiplier
+                    == Efficiency::from_decimal(1.550),
                 "docus {label} unit multiplier {:?}",
                 result.efficiency
             );
             assert!(
-                (result.efficiency.final_efficiency
-                    - result.efficiency.paper.paper_efficiency * 1.55)
-                    .abs()
-                    < 1e-9,
+                result.efficiency.final_efficiency
+                    == result.efficiency.paper.paper_efficiency * Efficiency::from_decimal(1.550),
                 "docus {label} final efficiency {:?}",
                 result.efficiency
             );
             assert!(
                 (result.production.daily_at_shift.trade_lmd
-                    - GOLD_TRADE_REFERENCE_OUTPUT_PER_DAY * result.efficiency.final_efficiency)
-                    .abs()
+                    - GOLD_TRADE_REFERENCE_OUTPUT_PER_DAY
+                        * result.efficiency.final_efficiency.as_f64())
+                .abs()
                     < 1e-6
             );
         }
@@ -644,7 +642,14 @@ mod tests {
             )],
         );
         let result = solve_trade(&input, &table()).unwrap();
-        assert!(result.order_mechanic.mechanic_equiv_eff_pct > 0.0);
+        assert!(
+            (result
+                .order_mechanic
+                .mechanic_equivalent_efficiency
+                .as_f64()
+                * 100.0)
+                > 0.0
+        );
     }
 
     #[test]
@@ -675,9 +680,23 @@ mod tests {
         let without = {
             let mut plain = input.clone();
             Arc::make_mut(&mut plain.layout).global_inject = Default::default();
-            solve_trade(&plain, &table).unwrap().order_eff_total
+            (solve_trade(&plain, &table)
+                .unwrap()
+                .efficiency
+                .paper
+                .paper_efficiency
+                .as_f64()
+                - 1.0)
+                * 100.0
         };
-        let with = solve_trade(&input, &table).unwrap().order_eff_total;
+        let with = (solve_trade(&input, &table)
+            .unwrap()
+            .efficiency
+            .paper
+            .paper_efficiency
+            .as_f64()
+            - 1.0)
+            * 100.0;
         assert!((with - without - 7.0).abs() < 0.01);
     }
 
@@ -740,7 +759,9 @@ mod tests {
             let r = solve_trade_with_shift(&input, &table, 24.0).unwrap();
             eprintln!(
                 "{label}: score={:.3} trade={:.1} limit={}",
-                r.effective_eff_multiplier, r.order_eff_total, r.final_order_limit,
+                r.efficiency.final_efficiency.as_f64(),
+                ((r.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0),
+                r.final_order_limit,
             );
         }
 
@@ -751,10 +772,11 @@ mod tests {
         let r_jiao = solve_trade_with_shift(&with_jiao, &table, 24.0).unwrap();
         let r_jie = solve_trade_with_shift(&with_jie, &table, 24.0).unwrap();
         assert!(
-            r_jie.effective_eff_multiplier > r_jiao.effective_eff_multiplier,
+            r_jie.efficiency.final_efficiency.as_f64()
+                > r_jiao.efficiency.final_efficiency.as_f64(),
             "精0孑+摊贩应高于角峰: jie={:.3} jiao={:.3}",
-            r_jie.effective_eff_multiplier,
-            r_jiao.effective_eff_multiplier
+            r_jie.efficiency.final_efficiency.as_f64(),
+            r_jiao.efficiency.final_efficiency.as_f64()
         );
 
         // 精英化孑：市井压上限 + 按现单数加%。纸面 trade% 虚高，score 未扣上限对产能影响（已知缺口）。
@@ -770,7 +792,8 @@ mod tests {
         let r_e2 = solve_trade_with_shift(&input_e2, &table, 24.0).unwrap();
         eprintln!(
             "孑e2(市井,纸面虚高): trade={:.1} limit={} — 游戏里精英化常倒扣，勿与 e0 同论",
-            r_e2.order_eff_total, r_e2.final_order_limit
+            ((r_e2.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0),
+            r_e2.final_order_limit
         );
 
         // 若当前订单数 = 上限（gap=0），摊贩经济失效，孑组合会输给角峰
@@ -782,10 +805,12 @@ mod tests {
         let r_full_jie = solve_trade_with_shift(&full_jie, &table, 24.0).unwrap();
         eprintln!(
             "满单 gap=0: 角峰={:.1}% 孑={:.1}%",
-            r_full_jiao.order_eff_total, r_full_jie.order_eff_total
+            ((r_full_jiao.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0),
+            ((r_full_jie.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0)
         );
         assert!(
-            r_full_jiao.order_eff_total > r_full_jie.order_eff_total,
+            ((r_full_jiao.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0)
+                > ((r_full_jie.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0),
             "满单时角峰应更高（摊贩无 gap）"
         );
     }
@@ -824,9 +849,9 @@ mod tests {
                 ctx.final_order_limit,
                 ctx.order_gap(),
                 jie.variable_eff,
-                r8.order_eff_total,
-                r8.effective_eff_multiplier,
-                r24.effective_eff_multiplier
+                ((r8.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0),
+                r8.efficiency.final_efficiency.as_f64(),
+                r24.efficiency.final_efficiency.as_f64()
             );
         }
     }

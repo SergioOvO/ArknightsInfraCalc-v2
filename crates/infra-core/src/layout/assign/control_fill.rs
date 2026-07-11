@@ -132,7 +132,7 @@ pub(crate) fn assign_control(
         layout: layout.clone(),
         matatabi_consumer_active: assignment_has_matatabi_consumer(assignment),
         must_include: pinned.clone(),
-        fill_policy: ControlFillPolicy::HrAndMood,
+        fill_policy: ControlFillPolicy::LayeredFill,
     };
 
     let base_pool = if options.skip_standalone_control || !pinned.is_empty() {
@@ -185,7 +185,7 @@ fn filter_control_pool_for_fill(
             .iter()
             .filter(|e| {
                 (!used.contains(&e.name) || pinned.contains(&e.name))
-                    && (fill_policy != ControlFillPolicy::HrAndMood
+                    && (fill_policy != ControlFillPolicy::LayeredFill
                         || pinned.contains(&e.name)
                         || control_entry_plugin_fill(e))
             })

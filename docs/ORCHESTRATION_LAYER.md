@@ -272,7 +272,7 @@ Producer 前提（跨房，非 global pool）：
 | 文档 | 内容 |
 |------|------|
 | [BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md) | 现行单班编制流水线 |
-| [SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md) | αβγ ABC 轮换、shift_bind、A-B-A 废弃说明 |
+| [SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md) | αβγ ABC 轮换、shift_bind、现行排班入口 |
 | [SYSTEM_CHAINS.md](SYSTEM_CHAINS.md) | 迷迭香/自动化/推王等体系链参考 |
 | [INTERNAL/SHORTCUT_MATCHING.md](INTERNAL/SHORTCUT_MATCHING.md) | L3 匹配与 segment 注册表 |
 | [INTERNAL/CROSS_FACILITY.md](INTERNAL/CROSS_FACILITY.md) | global atom 编排（resolve 内） |

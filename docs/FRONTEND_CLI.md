@@ -138,11 +138,11 @@ infra-cli plan \
 
 ### 4.1 用户画像 JSON（`--profile-out`）
 
-`--profile-out` 当前稳定契约为 `schema_version: 2`。前端应把它作为结构化用户画像读取；stdout / stderr 只用于日志和人类可读报告。
+`--profile-out` 当前稳定契约为 `schema_version: 4`。前端应把它作为结构化用户画像读取；stdout / stderr 只用于日志和人类可读报告。
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 4,
   "layout_label": "data/fixtures/243/layout.json",
   "operbox_label": "data/fixtures/243/operbox_full_e2.json",
   "baseline_label": "data/fixtures/243/schedule_export.json (full_e2)",
@@ -150,7 +150,7 @@ infra-cli plan \
     "owned": 418,
     "tier_up_owned": 418,
     "trade_pool_ready": 75,
-    "manu_pool_ready": 90
+    "manufacture_pool_ready": 90
   },
   "domains": [
     {
@@ -158,29 +158,27 @@ infra-cli plan \
       "label": "贸易·赤金线",
       "current": {
         "operators": ["巫恋", "龙舌兰", "卡夫卡"],
-        "score": 3.4748,
-        "trade_pct": 138.0,
-        "gold_pct": 46.0
+        "final_efficiency": 2.482,
+        "mechanic_equivalent_efficiency": 0.460
       },
       "baseline": {
         "operators": ["巫恋", "龙舌兰", "卡夫卡"],
-        "score": 3.4748,
-        "trade_pct": 138.0,
-        "gold_pct": 46.0
+        "final_efficiency": 2.482,
+        "mechanic_equivalent_efficiency": 0.460
       },
       "gap_ratio": 0.0,
       "severity": "ok"
     }
   ],
   "rotation": {
-    "daily_trade": 6.48335,
-    "daily_manu": 482.625,
-    "daily_power": 51.375
+    "daily_trade_efficiency": 5.288,
+    "daily_manufacture_efficiency": 9.175,
+    "daily_power_efficiency": 3.552
   },
   "baseline_rotation": {
-    "daily_trade": 5.84553,
-    "daily_manu": 465.75,
-    "daily_power": 55.125
+    "daily_trade_efficiency": 4.968,
+    "daily_manufacture_efficiency": 8.951,
+    "daily_power_efficiency": 3.552
   },
   "actions": [],
   "flags": ["trade_gold_ok"],
@@ -190,15 +188,15 @@ infra-cli plan \
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `schema_version` | `2` | 用户画像契约版本；不兼容变更必须升版本 |
+| `schema_version` | `4` | 直接效率契约版本；不兼容变更必须升版本 |
 | `layout_label` / `operbox_label` / `baseline_label` | `string` | 展示用来源标签，不作为路径依赖 |
-| `summary` | object | 账号概览：`owned`、`tier_up_owned`、`trade_pool_ready`、`manu_pool_ready` |
+| `summary` | object | 账号概览：`owned`、`tier_up_owned`、`trade_pool_ready`、`manufacture_pool_ready` |
 | `domains[]` | array | 分域对比，UI 主表使用 |
-| `domains[].id` | string | 稳定域 ID；已知值：`trade_gold`、`trade_originium`、`manu_composite`、`manu_gold`、`manu_exp`、`rotation_trade`、`rotation_manu` |
-| `domains[].current` / `baseline` | object | 当前 / 参考快照：`operators[]`、`score`，贸易域可带 `trade_pct` / `gold_pct` |
-| `domains[].gap_ratio` | number | `(current.score - baseline.score) / baseline.score` |
+| `domains[].id` | string | 稳定域 ID；已知值：`trade_gold`、`trade_originium`、`manufacture_total`、`manufacture_gold`、`manufacture_battle_record`、`rotation_trade`、`rotation_manufacture` |
+| `domains[].current` / `baseline` | object | 当前 / 参考快照：`operators[]`、`final_efficiency`，贸易域可带 `mechanic_equivalent_efficiency` |
+| `domains[].gap_ratio` | number | `(current.final_efficiency - baseline.final_efficiency) / baseline.final_efficiency` |
 | `domains[].severity` | `"ok" | "warn" | "critical"` | 缺口等级 |
-| `rotation` / `baseline_rotation` | object | 24h 三队轮休加权：`daily_trade`、`daily_manu`、`daily_power` |
+| `rotation` / `baseline_rotation` | object | 24h 三队轮休加权：`daily_trade_efficiency`、`daily_manufacture_efficiency`、`daily_power_efficiency` |
 | `actions[]` | array | 提升建议，元素含 `priority`、`kind`、`operator`、`domain_id`、`message` |
 | `flags[]` | string[] | 机器可读状态标记 |
 | `narration_hints[]` | string[] | 面向用户的补充说明 |
@@ -391,8 +389,7 @@ JSON **数组**，每项一名干员：
 | `layout team-rotation` | 仅 αβγ 三队排班 + MAA |
 | `layout test` | 单班贸易/制造 Top-K 搜索（无轮换） |
 | `layout analyze` | 账号画像（不写 MAA） |
-| `layout eval` | 给定 `--assignment` 评估分数 |
-| **`layout rotation`** | **已废弃**（A-B-A）；请用 `team-rotation` 或 `plan` |
+| `layout eval` | 给定 `--assignment` 结算直接效率 |
 
 前端若做「练度导入 → 分析 → 排班 → 导出 MAA」，**用 `plan` 一条命令即可**。
 
@@ -432,7 +429,9 @@ async function runPlan({ cliPath, repoRoot, operbox, layout, maaOut, profileOut 
 
 排班 core 的 JSON 输出（`layout team-rotation --json`）另包含
 `peak_mood_eta`：`eta_hours` 是最高效率 peak 班从满心情开始的最长工作时间，
-`bottleneck` 是首个心情瓶颈，`per_op` 提供逐干员明细。MAA 文件本身仍只保留执行所需字段。
+`bottleneck` 是首个心情瓶颈，`per_op` 提供逐干员明细。每班直接效率位于
+`shifts[].efficiencies`，时长折算后分别为 `weighted_trade`、
+`weighted_manufacture`、`weighted_power`；日汇总位于 `daily`。MAA 文件本身仍只保留执行所需字段。
 
 ### 8.2 `layout team-rotation`（仅排班）
 import { spawn } from "node:child_process";

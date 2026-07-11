@@ -41,7 +41,7 @@
 | 贸易 / 制造池缺人 | `cargo run -q -p infra-cli -- pool --trade --manufacture --operbox <operbox> --text` |
 | 性能回退 | `cargo run -q -p infra-cli -- profile layout-full --layout <layout> --operbox <operbox>` |
 
-不要用 `layout rotation` 或 `schedule rotation` 复现当前三队轮换 bug；这两个是 legacy A-B-A 路径。
+A-B-A 的 `layout rotation` / `schedule rotation` 已移除；三队轮换 bug 只走 `plan` 或 `layout team-rotation` 复现。
 
 ## 3. 分层定位
 
@@ -156,9 +156,9 @@ ManuRoomInput
 
 | 域 | 文件 | 当前排序口径 |
 |----|------|--------------|
-| 贸易 | `search/trade.rs` | `trade_pct`，即 `order_eff_total` |
-| 制造 | `search/manufacture.rs` | `prod_total` / 产线加权 composite |
-| 发电 | `search/power.rs` | `charge_speed_pct` |
+| 贸易 | `search/trade.rs` | `final_efficiency` 直接效率 |
+| 制造 | `search/manufacture.rs` | `final_efficiency`；多产线为各线直接效率和 |
+| 发电 | `search/power.rs` | `final_efficiency` 直接充能效率 |
 | 中枢 | `search/control.rs` | `ControlInjectRawSumV0`：`trade + manu_gold + manu_br` |
 
 如果用户觉得排序“不符合直觉”，先确认是不是展示分量不清，而不是直接改排序。
@@ -277,7 +277,7 @@ cargo run -q -p infra-cli -- bake validate
 - 不要为单一 bug 引入新的全局抽象。
 - 不要新增匿名混合权重。
 - 不要把复杂降级体系塞回 `base_systems.json`；迷迭香仍走 `system_integrity`。
-- 不要用 `layout rotation` / `schedule rotation` 代表当前轮换结果。
+- A-B-A 入口已移除，不再作为复现或对照路径。
 - 不要提交用户私有 operbox、xlsx、debug bundle，除非用户明确允许并已脱敏。
 - 不要用 `git add .`。
 

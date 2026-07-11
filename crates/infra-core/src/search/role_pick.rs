@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use crate::efficiency::Efficiency;
 use crate::error::Result;
 use crate::layout::LayoutContext;
 use crate::pool::{filter_trade_pool, TradePool};
@@ -17,11 +18,11 @@ use super::trade::{
 const KARLAN_TRADE_NAMES: &[&str] = &["银灰", "崖心", "讯使", "角峰"];
 
 pub fn hit_docus_syracusa_shortcut(hit: &TradeSearchHit) -> bool {
-    hit.shortcut.as_deref() == Some("gsl_docus_syracusa")
+    hit.rule_id.as_deref() == Some("gsl_docus_syracusa")
 }
 
 pub fn hit_shortcut_id(hit: &TradeSearchHit, shortcut_id: &str) -> bool {
-    hit.shortcut.as_deref() == Some(shortcut_id)
+    hit.rule_id.as_deref() == Some(shortcut_id)
 }
 
 /// Meta 站落位：按 `roles[].pick_steps` 顺序尝试。
@@ -234,16 +235,12 @@ fn pick_disjoint_trade_hit(
     top.into_iter()
         .chain(std::iter::once(best))
         .filter(|hit| trade_hit_names(hit).iter().all(|n| !used.contains(n)))
-        .max_by(|a, b| {
-            role_pick_sort_key(a)
-                .partial_cmp(&role_pick_sort_key(b))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
+        .max_by_key(|hit| role_pick_sort_key(hit))
         .ok_or_else(|| crate::error::Error::msg("no disjoint trade triple"))
 }
 
-fn role_pick_sort_key(hit: &TradeSearchHit) -> f64 {
-    hit.score
+fn role_pick_sort_key(hit: &TradeSearchHit) -> Efficiency {
+    hit.final_efficiency
 }
 
 fn trade_hit_names(hit: &TradeSearchHit) -> &[String] {
@@ -326,7 +323,7 @@ mod tests {
         .unwrap();
         assert!(hit.names.iter().any(|n| n == "可露希尔"), "{hit:?}");
         assert!(
-            hit.shortcut
+            hit.rule_id
                 .as_deref()
                 .is_none_or(|id| id.starts_with("gsl_closure")),
             "{hit:?}"
@@ -349,7 +346,7 @@ mod tests {
         .unwrap();
         assert!(hit.names.iter().any(|n| n == "巫恋"), "{hit:?}");
         assert!(hit.names.iter().any(|n| n == "龙舌兰"), "{hit:?}");
-        assert_eq!(hit.shortcut.as_deref(), Some("gsl_witch_long_blank"));
+        assert_eq!(hit.rule_id.as_deref(), Some("gsl_witch_long_blank"));
     }
 
     #[test]
@@ -382,7 +379,7 @@ mod tests {
         )
         .unwrap();
         assert!(hit.names.iter().any(|n| n == "巫恋"), "{hit:?}");
-        assert_eq!(hit.shortcut.as_deref(), Some("gsl_witch_beta_blank"));
+        assert_eq!(hit.rule_id.as_deref(), Some("gsl_witch_beta_blank"));
     }
 
     #[test]
@@ -413,8 +410,8 @@ mod tests {
 
         assert!(hit.names.iter().any(|n| n == "孑"), "{hit:?}");
         assert!(hit.names.iter().any(|n| n == "银灰"), "{hit:?}");
-        assert_eq!(hit.shortcut, None);
-        assert!(hit.trade_pct >= 120.0, "{hit:?}");
+        assert_eq!(hit.rule_id, None);
+        assert!((hit.final_efficiency.as_f64() * 100.0) >= 120.0, "{hit:?}");
     }
 
     #[test]
@@ -434,7 +431,7 @@ mod tests {
 
         assert!(hit.names.iter().any(|n| n == "德克萨斯"), "{hit:?}");
         assert!(hit.names.iter().any(|n| n == "拉普兰德"), "{hit:?}");
-        assert_eq!(hit.shortcut.as_deref(), Some("gsl_penguin_texlap_e0"));
+        assert_eq!(hit.rule_id.as_deref(), Some("gsl_penguin_texlap_e0"));
     }
 
     #[test]
@@ -476,9 +473,13 @@ mod tests {
         for name in ["推进之王", "摩根", "维娜·维多利亚"] {
             assert!(hit.names.iter().any(|n| n == name), "{hit:?}");
         }
-        assert_eq!(hit.shortcut.as_deref(), Some("gsl_vina_lungmen"));
-        assert!(hit.score > 2.0, "{hit:?}");
-        assert!((hit.trade_pct - hit.score * 100.0).abs() < 0.01, "{hit:?}");
+        assert_eq!(hit.rule_id.as_deref(), Some("gsl_vina_lungmen"));
+        assert!(hit.final_efficiency.as_f64() > 2.0, "{hit:?}");
+        assert!(
+            ((hit.final_efficiency.as_f64() * 100.0) - hit.final_efficiency.as_f64() * 100.0).abs()
+                < 0.01,
+            "{hit:?}"
+        );
     }
 
     #[test]
@@ -504,9 +505,15 @@ mod tests {
         assert!(hit.names.iter().any(|n| n == "但书"), "{hit:?}");
         assert!(hit.names.iter().any(|n| n == "石英"), "{hit:?}");
         assert!(hit.names.iter().any(|n| n == "空弦"), "{hit:?}");
-        assert_eq!(hit.shortcut.as_deref(), Some("gsl_docus_solo"));
-        assert!((hit.breakdown.unit_output_multiplier - 1.55).abs() < 0.001);
-        assert!(hit.score > hit.breakdown.paper_efficiency, "{hit:?}");
+        assert_eq!(hit.rule_id.as_deref(), Some("gsl_docus_solo"));
+        assert_eq!(
+            hit.breakdown.as_ref().unwrap().unit_output_multiplier,
+            Efficiency::from_decimal(1.550)
+        );
+        assert!(
+            hit.final_efficiency > hit.breakdown.as_ref().unwrap().paper_efficiency,
+            "{hit:?}"
+        );
     }
 
     #[test]
@@ -515,15 +522,13 @@ mod tests {
             names: vec![format!("score-{score}")],
             gold_names: vec![],
             originium_names: vec![],
-            score,
-            trade_pct: score * 100.0,
-            gold_pct: 0.0,
-            shortcut: None,
+            final_efficiency: Efficiency::from_decimal(score),
+            mechanic_equivalent_efficiency: Efficiency::ZERO,
+            rule_id: None,
             unit_trade_per_day,
             unit_gold_per_day: 0.0,
             unit_originium_per_day: 0.0,
-            output_multiplier: 1.0,
-            breakdown: Default::default(),
+            breakdown: Some(Default::default()),
         };
         let high_unit_low_final = hit(1.8, 20_000.0);
         let low_unit_high_final = hit(2.1, 12_000.0);

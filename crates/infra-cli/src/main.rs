@@ -15,7 +15,6 @@ use infra_core::manufacture::ManuSearchRecipeMode;
 use infra_core::operbox::OperBox;
 use infra_core::pool::{build_manufacture_pool, build_trade_pool};
 use infra_core::roster::Roster;
-use infra_core::schedule::schedule_trade_rotation_a_b_a;
 use infra_core::search::{
     search_manufacture_triples, search_trade_triples, ManuSearchOptions, TradeSearchOptions,
 };
@@ -25,8 +24,8 @@ use infra_core::trade::solve_trade_with_shift;
 use infra_core::types::RecipeKind;
 use infra_core::Error;
 use output::{
-    emit_bench, emit_pool, emit_schedule, emit_trade_search, emit_trade_yield, BenchMeta,
-    OutputOptions, PoolSummary, SearchMeta, TradeYieldRow,
+    emit_bench, emit_pool, emit_trade_search, emit_trade_yield, BenchMeta, OutputOptions,
+    PoolSummary, SearchMeta, TradeYieldRow,
 };
 use verify::unit_fixture;
 
@@ -53,14 +52,16 @@ fn run() -> Result<(), Error> {
         "verify" => verify_cmd(&args[2..])?,
         "pool" => pool_cmd(&args[2..])?,
         "search" => search_cmd(&args[2..])?,
-        "schedule" => schedule_cmd(&args[2..])?,
         "trade" => trade_cmd(&args[2..])?,
         "bench" => bench_cmd(&args[2..])?,
         "bake" => bake_cmd(&args[2..])?,
         "serve" => serve_cmd(&args[2..])?,
         "layout" => layout_cmd(&args[2..])?,
         "profile" => profile_cmd(&args[2..])?,
-        _ => print_usage(),
+        other => {
+            print_usage();
+            return Err(Error::msg(format!("unknown command {other:?}")));
+        }
     }
     Ok(())
 }
@@ -82,13 +83,11 @@ fn print_usage() {
     eprintln!("  infra-cli bake [all|trade|manufacture] [--out <dir>] [--limit-per-signature <n>]");
     eprintln!("  infra-cli bake validate [--out <dir>]");
     eprintln!("  infra-cli serve");
-    eprintln!("  infra-cli schedule rotation --operbox <path> [--layout-baseline] [-o <file.csv>] [--text|--json]");
     eprintln!("  infra-cli layout test --layout <path> --operbox <path> [--assignment <path>] [--top <n>] [-o <file.csv>] [--text]");
     eprintln!("  infra-cli layout analyze --layout <path> --operbox <path> [--baseline <operbox>] [--top <n>] [-o profile.json] [--json]");
     eprintln!(
         "  infra-cli layout eval --layout <path> --operbox <path> --assignment <path> [--text]"
     );
-    eprintln!("  infra-cli layout rotation --layout <path> --operbox <path> [--top <n>] [--output-dir <dir>] [-o <file.csv>] [--text|--json]");
     eprintln!("  infra-cli profile layout-full [--layout <path>] [--operbox <path>] [--top <n>] [--runs <n>] [--label <name>]");
     eprintln!("  infra-cli profile analyze-compare [--layout <path>] [--operbox <path>] [--schedule <path>] [--runs <n>]");
     eprintln!("  infra-cli trade yield <fixture> [--level <n>] [--shift <hours>] [-o <file.csv>] [--text]");
@@ -352,30 +351,6 @@ fn operbox_path_from_args(args: &[String]) -> Result<PathBuf, Error> {
         .ok_or_else(|| Error::msg("missing --operbox <path>"))
 }
 
-fn schedule_cmd(args: &[String]) -> Result<(), Error> {
-    if args.first().map(String::as_str) != Some("rotation") {
-        eprintln!("usage: infra-cli schedule rotation --operbox <path> [--layout-baseline] [-o <file.csv>] [--text|--json]");
-        return Ok(());
-    }
-    let out = OutputOptions::from_args(args);
-    let operbox_path = operbox_path_from_args(args)?;
-    let layout_baseline = args.iter().any(|a| a == "--layout-baseline");
-
-    let operbox = OperBox::load(&operbox_path)?;
-    let instances = OperatorInstances::load(&default_instances_path()?)?;
-    let table = SkillTable::load(&default_skill_table_path()?)?;
-
-    let mut options = TradeSearchOptions::default();
-    if layout_baseline {
-        options.layout = Arc::new(LayoutContext::search_baseline());
-    }
-    Arc::make_mut(&mut options.layout)
-        .apply_durin_dorm_planning(operbox.durin_dorm_planning_count(&instances));
-
-    let report = schedule_trade_rotation_a_b_a(&operbox, &instances, &table, &options)?;
-    emit_schedule(&out, operbox.owned_count(), &report)
-}
-
 fn search_cmd(args: &[String]) -> Result<(), Error> {
     if args.first().map(String::as_str) != Some("trade") {
         eprintln!("usage: infra-cli search trade [--roster <path>] [--operbox <path>] [--top <n>] [-o <file.csv>] [--text|--json]");
@@ -428,7 +403,7 @@ fn search_cmd(args: &[String]) -> Result<(), Error> {
 
 fn trade_cmd(args: &[String]) -> Result<(), Error> {
     if args.first().map(String::as_str) != Some("yield") {
-        eprintln!("usage: infra-cli trade yield <fixture> [--level <n>] [--shift <hours>] [-o <file.csv>] [--text]");
+        eprintln!("usage: infra-cli trade yield <fixture> [--level <n>] [--shift <hours>] [-o <file.csv>] [--text|--json]");
         return Ok(());
     }
     let out = OutputOptions::from_args(args);
@@ -454,16 +429,16 @@ fn trade_cmd(args: &[String]) -> Result<(), Error> {
             fixture,
             level,
             shift_hours: shift,
-            paper_eff_pct: result.efficiency.paper.paper_efficiency * 100.0,
+            paper_efficiency: result.efficiency.paper.paper_efficiency,
             final_efficiency: result.efficiency.final_efficiency,
-            shortcut: result.trade_shortcut.as_deref(),
+            mechanic_equivalent_efficiency: result.order_mechanic.mechanic_equivalent_efficiency,
+            rule_id: result.rule_id.as_deref(),
             unit_trade: u.unit_trade_per_day,
             unit_gsl_gold: u.gsl_unit_gold(),
-            multiplier: result.efficiency.production_basis.unit_output_multiplier,
+            unit_output_multiplier: result.efficiency.production_basis.unit_output_multiplier,
             daily_trade: d.trade_lmd,
             daily_gold: d.gold_spent,
             drone_trade: d.drone_trade_lmd,
-            pre_shortcut: result.order_eff_pre_shortcut,
         },
     )
 }

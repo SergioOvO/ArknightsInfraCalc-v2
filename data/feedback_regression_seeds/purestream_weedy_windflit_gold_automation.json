@@ -29,10 +29,10 @@
     "product": "gold",
     "operators": ["斑点", "清流", "至简"],
     "metrics": {
-      "manu_prod_total": 105,
-      "manu_prod_skill": 100,
-      "manu_storage_limit": 20,
-      "manu_gold_current_score": 110.25
+      "manufacture_final_efficiency": 2.050,
+      "manufacture_skill_efficiency": 1.000,
+      "manufacture_storage_limit": 20,
+      "manufacture_gold_current_efficiency": 2.103
     }
   },
   "user_expectation": {
