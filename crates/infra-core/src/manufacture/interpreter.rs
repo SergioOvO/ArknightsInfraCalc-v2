@@ -1389,6 +1389,20 @@ mod tests {
             (br.skill_efficiency.as_f64() * 100.0)
         );
 
+        let pinus_gold_input = ManuRoomInput {
+            level: br_room.level,
+            operators: br_room.operators.clone(),
+            active_recipe: RecipeKind::Gold,
+            mood: 24.0,
+            layout: std::sync::Arc::new(br_room.layout.clone()),
+        };
+        let pinus_gold =
+            crate::manufacture::solver::solve_manufacture(&pinus_gold_input, &table).unwrap();
+        assert!(
+            ((pinus_gold.skill_efficiency.as_f64() * 100.0) - 66.0).abs() < 0.5,
+            "红松三人赤金技能效率应为 75 本体 - 30 焰尾 + 21 薇薇安娜"
+        );
+
         let gravel_room = resolved
             .manu_rooms
             .iter()

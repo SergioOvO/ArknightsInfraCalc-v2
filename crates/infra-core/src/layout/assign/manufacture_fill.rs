@@ -407,6 +407,36 @@ pub(super) fn assign_manufacture_lines(
         };
         let opts = manu_options(layout, options, recipe, room.level);
         let existing = assignment.operators_in(&room.id);
+        if existing.len() > 1 {
+            let anchors: Vec<_> = existing
+                .iter()
+                .map(|operator| {
+                    pool.entry(&operator.name).cloned().ok_or_else(|| {
+                        Error::msg(format!(
+                            "manufacture {} anchor {} missing from pool",
+                            room.id.0, operator.name
+                        ))
+                    })
+                })
+                .collect::<Result<_>>()?;
+            for anchor in &anchors {
+                used.remove(&anchor.name);
+            }
+            assign_manu_room_with_anchors(
+                assignment,
+                &room.id,
+                anchors,
+                pool,
+                table,
+                layout,
+                options,
+                recipe,
+                room.level,
+                used,
+                &[],
+            )?;
+            continue;
+        }
         let hit = if existing.is_empty() {
             pick_manu_hit(&candidate_pool, table, opts.clone(), used, options.top_k)
                 .or_else(|_| pick_manu_hit(pool, table, opts, used, options.top_k))

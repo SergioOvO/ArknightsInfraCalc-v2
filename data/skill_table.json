@@ -5348,6 +5348,19 @@
           },
           "phase": "global_inject",
           "phase_order": 10
+        },
+        {
+          "id": "control_mp_psk[000]:pinus_gold",
+          "action": {
+            "kind": "global_inject_manu_tagged_eff",
+            "params": {
+              "value": -10,
+              "target_tag": "cc.g.pinus",
+              "recipe": "gold"
+            }
+          },
+          "phase": "global_inject",
+          "phase_order": 10
         }
       ]
     },

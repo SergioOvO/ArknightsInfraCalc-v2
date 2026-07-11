@@ -1870,6 +1870,62 @@ mod tests {
         (blueprint, operbox, instances, table)
     }
 
+    fn assert_pinus_rotation(
+        report: &TeamRotationReport,
+        blueprint: &BaseBlueprint,
+        manufacturers: &[&str],
+    ) {
+        use crate::schedule::shift_bind::team_of_operator;
+
+        let mut bound = vec!["焰尾", "薇薇安娜"];
+        bound.extend_from_slice(manufacturers);
+        let team = team_of_operator(report, "焰尾").expect("焰尾应进入轮换队");
+        for name in &bound {
+            assert_eq!(
+                team_of_operator(report, name),
+                Some(team),
+                "红松核心应同队上二休一: {name}"
+            );
+        }
+
+        let mut active_shifts = 0;
+        for shift in &report.shifts {
+            let active = shift.resting_team != team;
+            active_shifts += usize::from(active);
+            for name in &bound {
+                let room = shift
+                    .assignment
+                    .rooms
+                    .iter()
+                    .find(|room| room.operators.iter().any(|op| op.name == *name));
+                if !active {
+                    assert!(room.is_none(), "休息班不应安排红松核心: {name}");
+                    continue;
+                }
+                let room = room.unwrap_or_else(|| panic!("工作班缺少红松核心: {name}"));
+                let room_blueprint = blueprint.room(&room.room_id).expect("room exists");
+                if manufacturers.contains(name) {
+                    assert!(
+                        matches!(
+                            room_blueprint.product,
+                            Some(crate::layout::RoomProduct::Factory {
+                                recipe: crate::types::RecipeKind::BattleRecord
+                            })
+                        ),
+                        "红松制造成员只能进入作战记录站: {name}"
+                    );
+                } else {
+                    assert_eq!(
+                        room_blueprint.kind,
+                        FacilityKind::ControlCenter,
+                        "中枢双核心必须实际进入中枢: {name}"
+                    );
+                }
+            }
+        }
+        assert_eq!(active_shifts, 2, "红松核心应工作两班、休息一班");
+    }
+
     fn build_test_manu_ctx(
         blueprint: &BaseBlueprint,
         operbox: &OperBox,
@@ -2997,6 +3053,94 @@ mod tests {
             Some(team),
             "迷迭香与黑键应同队"
         );
+    }
+
+    #[test]
+    fn team_rotation_pinus_two_manufacturers_end_to_end() {
+        let (blueprint, full_operbox, instances, table) = fixtures();
+        let operbox = OperBox::from_entries(
+            full_operbox
+                .entries
+                .into_iter()
+                .filter(|entry| entry.name != "野鬃")
+                .collect(),
+        );
+        let report = schedule_team_rotation(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 5,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert!(report
+            .peak_plan
+            .activated
+            .iter()
+            .any(|system| system.system_id == "pinus_sylvestris"));
+        assert_pinus_rotation(&report, &blueprint, &["灰毫", "远牙"]);
+        assert!(
+            report
+                .teams
+                .iter()
+                .all(|team| !team.operators.iter().any(|name| name == "野鬃")),
+            "未拥有的野鬃不得进入轮换"
+        );
+    }
+
+    #[test]
+    fn team_rotation_pinus_three_manufacturers_span_battle_record_rooms() {
+        let (mut blueprint, operbox, instances, table) = fixtures();
+        for room in &mut blueprint.rooms {
+            if matches!(
+                room.product,
+                Some(crate::layout::RoomProduct::Factory {
+                    recipe: crate::types::RecipeKind::BattleRecord
+                })
+            ) {
+                room.level = 2;
+            }
+        }
+        let report = schedule_team_rotation(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 5,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let manufacturers = ["灰毫", "远牙", "野鬃"];
+        assert_pinus_rotation(&report, &blueprint, &manufacturers);
+        for shift in &report.shifts {
+            if shift.assignment.rooms.iter().any(|room| {
+                room.operators
+                    .iter()
+                    .any(|op| manufacturers.contains(&op.name.as_str()))
+            }) {
+                let occupied_rooms = shift
+                    .assignment
+                    .rooms
+                    .iter()
+                    .filter(|room| {
+                        room.operators
+                            .iter()
+                            .any(|op| manufacturers.contains(&op.name.as_str()))
+                    })
+                    .count();
+                assert!(
+                    occupied_rooms >= 2,
+                    "标准 243 满配应证明红松成员允许跨作战记录站分布"
+                );
+            }
+        }
     }
 
     #[test]
