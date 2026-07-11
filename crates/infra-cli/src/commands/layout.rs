@@ -650,12 +650,13 @@ fn layout_eval_cmd(args: &[String]) -> Result<(), Error> {
         if text {
             let names: Vec<_> = room.operators.iter().map(|o| o.name.as_str()).collect();
             eprintln!(
-                "  trade {} {:?} ops={:?} score={:.3} trade%={:.1} gold%={:.1} shortcut={:?}",
+                "  trade {} {:?} ops={:?} final_eff={:.3} ({:.1}%) paper={:.1}% gold%={:.1} shortcut={:?}",
                 room.id.0,
                 room.order,
                 names,
                 result.effective_eff_multiplier,
-                result.order_eff_total,
+                result.efficiency.final_efficiency_pct(),
+                result.efficiency.paper.paper_efficiency * 100.0,
                 result.order_mechanic.mechanic_equiv_eff_pct,
                 result.trade_shortcut
             );

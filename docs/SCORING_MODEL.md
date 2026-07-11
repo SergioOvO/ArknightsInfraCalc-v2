@@ -1,6 +1,6 @@
 # 评分口径审计（Scoring Model Audit）
 
-> 状态：分量化口径版（2026-06-24）  
+> 状态：最终效率口径版（2026-07-11）
 > 配套计划：[SCORING_REFACTOR_PLAN.md](SCORING_REFACTOR_PLAN.md)  
 > 目标：记录项目中所有参与搜索、排序、排班汇总、CLI 展示的评分字段，明确其单位、用途和排序策略。当前结论是**不需要贸易-制造平衡公式**；跨域输出保留分量。
 
@@ -10,9 +10,10 @@
 
 | 分类 | 单位 | 说明 |
 |------|------|------|
-| 贸易赤金订单效率 `%` | percent | 如 `order_eff_total` / `trade_pct`，含龙舌兰、可露希尔、但书等已折算等效效率 |
+| 贸易最终效率 | multiplier | `TradeSearchHit.score` / `final_efficiency`，可直接乘三级基准日产出与时长占比 |
+| 贸易最终效率 `%` | percent | `trade_pct = final_efficiency × 100`，只作兼容展示 |
 | 贸易赤金解释分量 `%` | percent | 如 `mechanic_equiv_eff_pct` / shortcut `gold_pct`，用于解释赤金需求或机制收益 |
-| 贸易调试乘积 `multiplier` | multiplier | 如 `effective_eff_multiplier`，内部调试值，不替代 trade_pct / gold_pct |
+| 贸易单位产出倍率 | multiplier | 社区加强单位产出 / 三级普通站 `10265` |
 | 制造赤金效率 `%` | percent | 赤金产线 `prod_total` |
 | 制造经验效率 `%` | percent | 经验书产线 `prod_total` |
 | 发电效率 `%` | percent | 如 `charge_speed_pct`，无人机充能速度 |
@@ -26,9 +27,9 @@
 
 | 模块 | 字段 / 函数 | 当前值来源 | 单位 | 当前用途 | 是否排序 | 后续处理 |
 |------|-------------|------------|------|----------|----------|----------|
-| trade search | `TradeSearchHit.score` | `result.order_eff_total` | 贸易赤金订单效率 % | 贸易三人组排序主键 | 是 | 保留或改名为 `sort_eff_pct` |
-| trade search | `TradeSearchHit.trade_pct` | `result.order_eff_total` | 贸易赤金订单效率 % | 展示/解释 | 否 | 保留 |
-| trade search | `TradeScoreBreakdown.effective_eff_multiplier` | `result.effective_eff_multiplier` | 调试乘积 | 内部排查单位产出/机制用 | 否 | 不作为用户侧最终倍率 |
+| trade search | `TradeSearchHit.score` | `result.efficiency.final_efficiency` | 最终效率 multiplier | 贸易三人组排序主键、产出预估 | 是 | 当前真源 |
+| trade search | `TradeSearchHit.trade_pct` | `score × 100` | 完整最终效率 % | 兼容展示 | 否 | 保留 |
+| trade search | `TradeScoreBreakdown.effective_eff_multiplier` | `result.efficiency.final_efficiency` | 最终效率 multiplier | 兼容字段 | 否 | 与 score 同值 |
 | trade search | `unit_trade_per_day` | `result.production.unit.unit_trade_per_day` | 产量/天 | 展示 | 否 | 保留 |
 | trade search | `mechanic_equiv_eff_pct` | `result.order_mechanic.mechanic_equiv_eff_pct` | 贸易赤金解释分量 % | 解释订单机制 | 否 | 与 `gold_pct` 同类解释，不参与跨域合成 |
 | manufacture search | `ManuSearchHit.composite_score` | 单配方 `prod_total`；多线按线数加权 | 制造效率 % | 制造三人组排序主键 | 是 | 字段名后续可降歧义 |
@@ -36,7 +37,7 @@
 | power search | `PowerSearchHit.score` | `charge_speed_pct` | 发电效率 % | 发电站排序主键 | 是 | 保留 |
 | power search | `virtual_power_equiv` | `virtual_power * VIRTUAL_POWER_MANU_EQUIV` | 临时解释值 | breakdown 展示 | 否 | 不参与当前排序；若要排序需新增 policy |
 | control search | `ControlScoreBreakdown.total_score` | 普通：`current_control_inject_sort_score(...)` 维持 raw-sum；补位：`ancillary_score` | 局部排序 key % | 中枢组合排序 | 是 | 标注 policy，不称公式 |
-| schedule scoring | `ShiftScores.trade_score` | sum of `effective_eff_multiplier` per trade room | 贸易调试/汇总值 | 排班评估/展示 | 否 | 用户侧优先看逐房 trade_pct / gold_pct |
+| schedule scoring | `ShiftScores.trade_score` | sum of `final_efficiency` per trade room | 贸易最终效率汇总 | 排班评估/展示 | 否 | 逐房可直接估产 |
 | schedule scoring | `ShiftScores.manu_prod_sum` | sum of `prod_total` | 制造效率 % 汇总 | 排班评估/展示 | 否 | 保留 |
 | schedule scoring | `ShiftScores.power_charge_sum` | sum of `charge_speed_pct` | 发电效率 % 汇总 | 排班评估/展示 | 否 | 保留 |
 | schedule scoring | `weighted_*` | `score * shift_hours / 24` | 时长折算 | 日汇总展示 | 否 | 保留 |
@@ -50,8 +51,8 @@
 当前排序：
 
 ```rust
-score: result.order_eff_total,
-trade_pct: result.order_eff_total,
+score: result.efficiency.final_efficiency,
+trade_pct: result.efficiency.final_efficiency * 100.0,
 gold_pct: result.order_mechanic.mechanic_equiv_eff_pct,
 ```
 
@@ -59,18 +60,18 @@ gold_pct: result.order_mechanic.mechanic_equiv_eff_pct,
 
 当前含义：
 
-- `score` 当前等于贸易赤金订单效率 `order_eff_total`；
-- `trade_pct` 与 `score` 同值；
-- 龙舌兰、可露希尔、但书等特殊机制由 L2/L3 或 shortcut 折算进贸易站效率；
-- `effective_eff_multiplier` 存在于 breakdown，但当前不作为排序主键，也不作为用户侧结论；
-- `unit_trade_per_day` / `output_multiplier` 用于调试产出，不参与当前排序；
-- L3 shortcut 命中时，`trade_pct` / `gold_pct` 以公孙长乐等效效率锚点为准。
+- `score` 等于可直接参与产出预估的 `final_efficiency`；
+- `trade_pct` 是 `score × 100` 的兼容展示；
+- 纸面效率完整包含基础 100%、人头、技能与中枢；
+- 龙舌兰、可露希尔、但书等特殊机制通过社区单位产出规则生成倍率；
+- `gold_pct` 仅作机制解释，不参与最终效率乘法；
+- `unit_trade_per_day` / `output_multiplier` 用于解释社区单位产出倍率。
 
 当前约定：
 
 - 贸易 meta 复杂组合上不上班走 L3 shortcut / 编排认领；
 - CLI 与文档应拆开展示贸易赤金订单效率与赤金解释分量；
-- `effective_eff_multiplier` 仅保留为内部调试乘积，用于核对 solver / unit output。
+- `effective_eff_multiplier` 为兼容字段，与 `final_efficiency` 同值。
 
 ---
 
@@ -152,7 +153,7 @@ pub fn power_station_score(charge_speed_pct: f64, _virtual_power_produced: f64) 
 
 当前评分：
 
-- 贸易：`trade_score += result.effective_eff_multiplier`（历史内部调试/汇总字段；用户侧输出应优先展示逐房 `trade_pct` / `gold_pct`）
+- 贸易：`trade_score += result.efficiency.final_efficiency`；兼容字段 `effective_eff_multiplier` 与其同值
 - 制造：`manu_prod_sum += result.prod_total`
 - 发电：`power_charge_sum += charge_speed_pct`
 

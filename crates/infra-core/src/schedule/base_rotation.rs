@@ -29,10 +29,10 @@ pub enum BaseShiftRole {
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct RoomScoreLine {
     pub room_id: String,
-    /// 仅贸易站填写：effective_eff_multiplier（产出倍率）
+    /// 仅贸易站填写：可直接用于产出预估的最终效率。
     #[serde(default, skip_serializing_if = "is_zero_f64")]
     pub trade_score: f64,
-    /// 仅贸易站填写：纸面效率%（order_eff_total，含人头+技能+全局）
+    /// 仅贸易站填写：完整最终效率百分比。
     #[serde(default, skip_serializing_if = "is_zero_f64")]
     pub trade_pct: f64,
     /// 仅贸易站填写：技能效率%（order_eff_skill，不含人头/全局）
@@ -155,9 +155,9 @@ pub fn score_base_assignment(
             let result = solve_trade_with_shift(&input, table, shift_hours)?;
             trade_score += result.effective_eff_multiplier;
             line.trade_score = result.effective_eff_multiplier;
-            line.trade_pct = result.order_eff_total;
+            line.trade_pct = result.efficiency.final_efficiency_pct();
             // 社区惯例：逐房展示只看技能面，不含人头与中枢全局注入。
-            line.trade_skill_pct = result.order_eff_skill;
+            line.trade_skill_pct = result.efficiency.paper.operator_skill_bonus * 100.0;
         }
         room_lines.push(line);
     }

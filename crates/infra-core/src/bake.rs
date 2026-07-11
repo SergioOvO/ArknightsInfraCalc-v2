@@ -33,7 +33,7 @@ use crate::trade::solver::solve_trade_with_shift_prevalidated;
 use crate::types::RecipeKind;
 use crate::FacilityKind;
 
-pub const BAKE_SCHEMA_VERSION: u32 = 7;
+pub const BAKE_SCHEMA_VERSION: u32 = 8;
 
 pub type BakeProgressCallback = Arc<dyn Fn(BakeProgressEvent) + Send + Sync>;
 
@@ -751,21 +751,19 @@ fn trade_combo_row(
         names,
         operator_indices,
         operator_mask,
-        sort_score: result.order_eff_total,
+        sort_score: result.efficiency.final_efficiency,
         order_kind: Some(order_kind),
         recipe: None,
-        trade_pct: Some(result.order_eff_total),
+        trade_pct: Some(result.efficiency.final_efficiency_pct()),
         gold_pct: Some(result.order_mechanic.mechanic_equiv_eff_pct),
         shortcut: result.trade_shortcut.clone(),
         unit_trade_per_day: Some(result.production.unit.unit_trade_per_day),
         unit_gold_per_day: Some(result.production.unit.unit_gold_per_day),
         unit_originium_per_day: Some(result.production.unit.unit_originium_per_day),
         output_multiplier: Some(result.production.unit.multiplier_vs_lv3_regular),
-        trade_order_eff_base: Some(result.order_eff_base),
-        trade_order_eff_skill: Some(result.order_eff_skill),
-        trade_order_eff_global: Some(
-            result.order_eff_total - result.order_eff_base - result.order_eff_skill,
-        ),
+        trade_order_eff_base: Some(result.efficiency.paper.occupancy_bonus * 100.0),
+        trade_order_eff_skill: Some(result.efficiency.paper.operator_skill_bonus * 100.0),
+        trade_order_eff_global: Some(result.efficiency.paper.control_bonus * 100.0),
         trade_effective_eff_multiplier: Some(result.effective_eff_multiplier),
         manu_prod_total: None,
         manu_prod_base: None,
@@ -1313,13 +1311,27 @@ fn row_to_trade_hit(row: &BakedComboRow) -> Option<TradeSearchHit> {
     let unit_trade_per_day = row.unit_trade_per_day.unwrap_or(0.0);
     let unit_gold_per_day = row.unit_gold_per_day.unwrap_or(0.0);
     let output_multiplier = row.output_multiplier.unwrap_or(0.0);
-    let eff_factor = 1.0 + trade_pct / 100.0;
-    let mech_factor = 1.0 + gold_pct / 100.0;
+    let paper_efficiency = 1.0
+        + (row
+            .trade_order_eff_base
+            .unwrap_or(row.operator_capacity as f64)
+            + row.trade_order_eff_skill.unwrap_or(0.0)
+            + row.trade_order_eff_global.unwrap_or(0.0))
+            / 100.0;
+    let unit_output_multiplier = output_multiplier;
+    let final_efficiency = row.trade_effective_eff_multiplier.unwrap_or(row.sort_score);
+    let equivalent_operator_skill_bonus = final_efficiency
+        - (1.0
+            + row
+                .trade_order_eff_base
+                .unwrap_or(row.operator_capacity as f64)
+                / 100.0
+            + row.trade_order_eff_global.unwrap_or(0.0) / 100.0);
     Some(TradeSearchHit {
         names: row.names.clone(),
         gold_names: vec![],
         originium_names: vec![],
-        score: trade_pct,
+        score: row.sort_score,
         trade_pct,
         gold_pct,
         shortcut: row.shortcut.clone(),
@@ -1333,13 +1345,15 @@ fn row_to_trade_hit(row: &BakedComboRow) -> Option<TradeSearchHit> {
                 .unwrap_or(row.operator_capacity as f64),
             order_eff_skill: row.trade_order_eff_skill.unwrap_or(0.0),
             order_eff_global: row.trade_order_eff_global.unwrap_or(0.0),
-            order_eff_total_pct: trade_pct,
+            order_eff_total_pct: paper_efficiency * 100.0,
             mechanic_equiv_eff_pct: gold_pct,
-            eff_factor,
-            mech_factor,
-            effective_eff_multiplier: row
-                .trade_effective_eff_multiplier
-                .unwrap_or(output_multiplier),
+            eff_factor: paper_efficiency,
+            mech_factor: unit_output_multiplier,
+            effective_eff_multiplier: final_efficiency,
+            paper_efficiency,
+            unit_output_multiplier,
+            final_efficiency,
+            equivalent_operator_skill_bonus,
             unit_trade_per_day,
             unit_gold_per_day,
             shortcut_id: row.shortcut.clone(),

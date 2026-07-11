@@ -19,17 +19,11 @@ use crate::trade::solver::solve_trade_with_shift_prevalidated;
 
 /// 贸易站评分的完整分解。
 ///
-/// 当前搜索排序主键是 [`TradeSearchHit::score`]，其口径为贸易效率
-/// `order_eff_total_pct`。对 L3 shortcut 命中的复杂贸易组合，该值来自
-/// `data/trade_shortcuts.json` 的公孙长乐等效贸易效率；赤金侧等效值单独放在
-/// `mechanic_equiv_eff_pct` / [`TradeSearchHit::gold_pct`]。
-///
-/// `effective_eff_multiplier` 仅是内部调试用的乘积解释值，不作为用户侧结论；
-/// CLI 应优先展示「贸易效率%」和「赤金效率%」，不要把乘积称为最终倍率。
-/// PepeExclusive 订单走固定节奏，调试倍率 = 日产量 / 基准日产量。
+/// 当前搜索排序主键是 [`TradeSearchHit::score`]，其口径为可直接参与产出预估的
+/// `final_efficiency`：三级贸易基准日产出 × final_efficiency × 工作时长占比。
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct TradeScoreBreakdown {
-    /// 基础效率 (每名干员 +100%)
+    /// 人头效率（每名干员 +1%）。
     pub order_eff_base: f64,
     /// 技能效率总和
     pub order_eff_skill: f64,
@@ -45,6 +39,14 @@ pub struct TradeScoreBreakdown {
     pub mech_factor: f64,
     /// 内部调试用乘积解释值；用户侧以 trade_pct / gold_pct 拆开阅读。
     pub effective_eff_multiplier: f64,
+    /// 包含基础 100%、人头、技能和中枢的完整纸面效率。
+    pub paper_efficiency: f64,
+    /// 社区加强单位产出相对统一基准的倍率。
+    pub unit_output_multiplier: f64,
+    /// 可直接用于排序和产出预估的最终效率。
+    pub final_efficiency: f64,
+    /// 报表展示用的等效技能加成（无量纲）。
+    pub equivalent_operator_skill_bonus: f64,
     /// 实际日产量（龙门币/天）
     pub unit_trade_per_day: f64,
     /// 实际日耗赤金
@@ -60,8 +62,9 @@ pub struct TradeSearchHit {
     pub gold_names: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub originium_names: Vec<String>,
-    /// 搜索排序主键：贸易效率 `order_eff_total`（%）；shortcut 命中时为公孙等效贸易效率。
+    /// 搜索排序主键：可直接参与产出预估的最终效率，`1.0` 表示三级普通站 100%。
     pub score: f64,
+    /// 兼容展示字段：完整最终效率百分比，如 `190.65` 表示 `1.9065`。
     pub trade_pct: f64,
     pub gold_pct: f64,
     pub shortcut: Option<String>,
@@ -247,7 +250,7 @@ fn search_trade_split_stations(
 }
 
 fn trade_efficiency_sort_key(hit: &TradeSearchHit) -> f64 {
-    hit.trade_pct
+    hit.score
 }
 
 fn search_trade_single_order(
@@ -437,22 +440,23 @@ fn eval_combo_hit(
     let result = solve_trade_with_shift_prevalidated(&input, table, options.shift_hours).ok()?;
     let names: Vec<String> = input.operators.iter().map(|o| o.name.clone()).collect();
 
-    let order_eff_global = result.order_eff_total - result.order_eff_base - result.order_eff_skill;
-    let eff_factor = if result.order_mechanic.ignores_order_eff() {
-        1.0
-    } else {
-        1.0 + result.order_eff_total / 100.0
-    };
-    let mech_factor = 1.0 + result.order_mechanic.mechanic_equiv_eff_pct / 100.0;
+    let efficiency = &result.efficiency;
+    let order_eff_global = efficiency.paper.control_bonus * 100.0;
+    let eff_factor = efficiency.paper.paper_efficiency;
+    let mech_factor = efficiency.production_basis.unit_output_multiplier;
     let breakdown = TradeScoreBreakdown {
-        order_eff_base: result.order_eff_base,
-        order_eff_skill: result.order_eff_skill,
+        order_eff_base: efficiency.paper.occupancy_bonus * 100.0,
+        order_eff_skill: efficiency.paper.operator_skill_bonus * 100.0,
         order_eff_global,
-        order_eff_total_pct: result.order_eff_total,
+        order_eff_total_pct: efficiency.paper.paper_efficiency * 100.0,
         mechanic_equiv_eff_pct: result.order_mechanic.mechanic_equiv_eff_pct,
         eff_factor,
         mech_factor,
         effective_eff_multiplier: result.effective_eff_multiplier,
+        paper_efficiency: efficiency.paper.paper_efficiency,
+        unit_output_multiplier: efficiency.production_basis.unit_output_multiplier,
+        final_efficiency: efficiency.final_efficiency,
+        equivalent_operator_skill_bonus: efficiency.equivalent_operator_skill_bonus,
         unit_trade_per_day: result.production.unit.unit_trade_per_day,
         unit_gold_per_day: result.production.unit.unit_gold_per_day,
         shortcut_id: result.trade_shortcut.clone(),
@@ -462,8 +466,8 @@ fn eval_combo_hit(
         names,
         gold_names: vec![],
         originium_names: vec![],
-        score: result.order_eff_total,
-        trade_pct: result.order_eff_total,
+        score: efficiency.final_efficiency,
+        trade_pct: efficiency.final_efficiency_pct(),
         gold_pct: result.order_mechanic.mechanic_equiv_eff_pct,
         shortcut: result.trade_shortcut,
         unit_trade_per_day: result.production.unit.unit_trade_per_day,
@@ -628,12 +632,12 @@ mod tests {
     }
 
     #[test]
-    fn trade_search_score_is_paper_efficiency_sort_key() {
+    fn trade_search_score_is_final_efficiency_sort_key() {
         let hit = TradeSearchHit {
             names: vec!["a".into()],
             gold_names: vec![],
             originium_names: vec![],
-            score: 123.0,
+            score: 1.23,
             trade_pct: 123.0,
             gold_pct: 45.0,
             shortcut: None,
@@ -643,12 +647,14 @@ mod tests {
             output_multiplier: 3.14,
             breakdown: TradeScoreBreakdown {
                 order_eff_total_pct: 123.0,
-                effective_eff_multiplier: 3.14,
+                effective_eff_multiplier: 1.23,
+                final_efficiency: 1.23,
                 ..Default::default()
             },
         };
-        assert_eq!(trade_efficiency_sort_key(&hit), hit.trade_pct);
-        assert_eq!(hit.score, hit.breakdown.order_eff_total_pct);
+        assert_eq!(trade_efficiency_sort_key(&hit), hit.score);
+        assert_eq!(hit.score, hit.breakdown.final_efficiency);
+        assert_eq!(hit.trade_pct, hit.score * 100.0);
     }
 
     #[test]
@@ -740,7 +746,8 @@ mod tests {
             "{:?}",
             best.names
         );
-        assert!((best.trade_pct - 129.0).abs() < 0.01, "best={best:?}");
+        assert!((best.score - 2.29).abs() < 0.01, "best={best:?}");
+        assert!((best.breakdown.order_eff_skill - 129.0).abs() < 0.01);
     }
 
     #[test]

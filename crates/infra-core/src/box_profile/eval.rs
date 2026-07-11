@@ -290,19 +290,16 @@ fn eval_trade_room(
         (vec![], names.clone())
     };
     let unit = &result.production.unit;
-    let order_eff_global = result.order_eff_total - result.order_eff_base - result.order_eff_skill;
-    let eff_factor = if result.order_mechanic.ignores_order_eff() {
-        1.0
-    } else {
-        1.0 + result.order_eff_total / 100.0
-    };
-    let mech_factor = 1.0 + result.order_mechanic.mechanic_equiv_eff_pct / 100.0;
+    let efficiency = &result.efficiency;
+    let order_eff_global = efficiency.paper.control_bonus * 100.0;
+    let eff_factor = efficiency.paper.paper_efficiency;
+    let mech_factor = efficiency.production_basis.unit_output_multiplier;
     Ok(TradeSearchHit {
         names,
         gold_names,
         originium_names,
-        score: result.order_eff_total,
-        trade_pct: result.order_eff_total,
+        score: efficiency.final_efficiency,
+        trade_pct: efficiency.final_efficiency_pct(),
         gold_pct: result.order_mechanic.mechanic_equiv_eff_pct,
         shortcut: result.trade_shortcut.clone(),
         unit_trade_per_day: unit.unit_trade_per_day,
@@ -310,14 +307,18 @@ fn eval_trade_room(
         unit_originium_per_day: unit.unit_originium_per_day,
         output_multiplier: unit.multiplier_vs_lv3_regular,
         breakdown: TradeScoreBreakdown {
-            order_eff_base: result.order_eff_base,
-            order_eff_skill: result.order_eff_skill,
+            order_eff_base: efficiency.paper.occupancy_bonus * 100.0,
+            order_eff_skill: efficiency.paper.operator_skill_bonus * 100.0,
             order_eff_global,
-            order_eff_total_pct: result.order_eff_total,
+            order_eff_total_pct: efficiency.paper.paper_efficiency * 100.0,
             mechanic_equiv_eff_pct: result.order_mechanic.mechanic_equiv_eff_pct,
             eff_factor,
             mech_factor,
             effective_eff_multiplier: result.effective_eff_multiplier,
+            paper_efficiency: efficiency.paper.paper_efficiency,
+            unit_output_multiplier: efficiency.production_basis.unit_output_multiplier,
+            final_efficiency: efficiency.final_efficiency,
+            equivalent_operator_skill_bonus: efficiency.equivalent_operator_skill_bonus,
             unit_trade_per_day: unit.unit_trade_per_day,
             unit_gold_per_day: unit.unit_gold_per_day,
             shortcut_id: result.trade_shortcut.clone(),

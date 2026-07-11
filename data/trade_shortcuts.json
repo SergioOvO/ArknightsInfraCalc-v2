@@ -9,7 +9,11 @@
       "gold_pct": 46.0,
       "tailor_tier": "beta",
       "unit_trade_anchor": 12288.8,
-      "unit_gsl_gold_anchor": 1915.52,
+      "unit_gsl_gold_anchor": 2328.77,
+      "unit_output": {
+        "kind": "enhanced_unit_output_per_day",
+        "value": 12739.73
+      },
       "match": {
         "kind": "witch"
       }
@@ -93,6 +97,12 @@
       "trade_pct": 200.0,
       "gold_pct": 55.0,
       "tailor_tier": "docus",
+      "unit_output": {
+        "kind": "enhanced_unit_output_by_level",
+        "lv1": 20000.0,
+        "lv2": 18591.55,
+        "lv3": 15910.75
+      },
       "match": {
         "kind": "docus_syracusa"
       }
@@ -104,6 +114,12 @@
       "gold_pct": 55.0,
       "tailor_tier": "docus",
       "unit_trade_anchor": 16747.8,
+      "unit_output": {
+        "kind": "enhanced_unit_output_by_level",
+        "lv1": 20000.0,
+        "lv2": 18591.55,
+        "lv3": 15910.75
+      },
       "match": {
         "kind": "docus"
       }

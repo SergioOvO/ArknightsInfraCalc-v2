@@ -2,12 +2,16 @@ use serde::Serialize;
 
 use crate::error::Result;
 use crate::skill_table::SkillTable;
+use crate::trade::efficiency::{
+    PaperTradeEfficiency, TradeEfficiency, GOLD_TRADE_REFERENCE_OUTPUT_PER_DAY,
+};
 use crate::trade::input::TradeRoomInput;
 use crate::trade::interpreter::{apply_trade_phases, TradeContext};
-use crate::trade::order_mechanic::{self, OrderMechanicResult};
+use crate::trade::order_mechanic::{self, OrderMechanicResult, SpecialOrderKind};
 use crate::trade::shortcut;
 use crate::trade::unit_output::{
-    baseline_unit_trade_lv3_regular, compute_unit_output, daily_yield, TradeDailyYield,
+    compute_unit_output, daily_yield, regular_trade_unit_output_per_day, TradeDailyYield,
+    TradeUnitOutput,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -24,6 +28,8 @@ pub struct TradeResult {
     pub order_eff_pre_shortcut: f64,
     pub final_order_limit: i32,
     pub order_mechanic: OrderMechanicResult,
+    pub efficiency: TradeEfficiency,
+    /// 兼容字段；等于 `efficiency.final_efficiency`。
     pub effective_eff_multiplier: f64,
     pub trade_shortcut: Option<String>,
     pub mood_drain: Vec<OperatorMoodDrain>,
@@ -47,45 +53,85 @@ fn mood_drain_from_ctx(ctx: &TradeContext) -> Vec<OperatorMoodDrain> {
 }
 
 fn build_production(
-    ctx: &TradeContext,
-    mechanic: &OrderMechanicResult,
-    order_eff_total: f64,
+    unit: TradeUnitOutput,
+    efficiency: &TradeEfficiency,
     shift_hours: f64,
 ) -> TradeProductionReport {
-    let caps = ctx.mechanic_caps();
-    let unit = compute_unit_output(ctx, &mechanic.gold_distribution, &caps, mechanic);
     TradeProductionReport {
-        daily_at_shift: daily_yield(
-            &unit,
-            order_eff_total,
-            shift_hours,
-            mechanic.ignores_order_eff(),
-        ),
+        daily_at_shift: daily_yield(&unit, efficiency, shift_hours),
         unit,
     }
 }
 
-fn build_production_shortcut(
+fn resolve_unit_output(
     ctx: &TradeContext,
     mechanic: &OrderMechanicResult,
-    sc: &shortcut::TradeShortcutMatch,
-    order_eff_total: f64,
-    shift_hours: f64,
-) -> TradeProductionReport {
-    let base = baseline_unit_trade_lv3_regular();
-    let unit = sc.unit_output_from_anchor(base).unwrap_or_else(|| {
+    sc: Option<&shortcut::TradeShortcutMatch>,
+    paper: &PaperTradeEfficiency,
+    level: u8,
+) -> TradeUnitOutput {
+    let reference = if mechanic.order_kind.is_gold() {
+        GOLD_TRADE_REFERENCE_OUTPUT_PER_DAY
+    } else {
+        order_mechanic::baseline_unit_trade_lv3_originium()
+    };
+    let docus = mechanic.order_kind.is_gold() && ctx.mechanic_caps().law;
+    let mut unit = if docus {
         let caps = ctx.mechanic_caps();
         compute_unit_output(ctx, &mechanic.gold_distribution, &caps, mechanic)
-    });
-    TradeProductionReport {
-        daily_at_shift: daily_yield(
-            &unit,
-            order_eff_total,
-            shift_hours,
-            mechanic.ignores_order_eff(),
-        ),
-        unit,
+    } else {
+        sc.and_then(|m| m.unit_output_from_anchor(reference))
+            .unwrap_or_else(|| {
+                let caps = ctx.mechanic_caps();
+                compute_unit_output(ctx, &mechanic.gold_distribution, &caps, mechanic)
+            })
+    };
+
+    let community_trade_unit = if docus {
+        shortcut::community_unit_trade_per_day_by_id("gsl_docus_solo", level, reference)
+    } else {
+        sc.and_then(|m| m.community_unit_trade_per_day(level, reference))
+    };
+
+    if let Some(unit_trade_per_day) = community_trade_unit {
+        unit.replace_trade_unit_output(unit_trade_per_day, reference);
+    } else if let Some(sc) = sc.filter(|m| m.entry.trade_pct > 0.0) {
+        // 兼容尚未迁移为 unit_output 的社区等效锚点：旧 trade_pct 表示等效技能加成。
+        let non_skill_anchor = paper.base_efficiency + paper.occupancy_bonus;
+        let paper_anchor = non_skill_anchor + paper.operator_skill_bonus;
+        let final_anchor = non_skill_anchor + sc.entry.trade_pct / 100.0;
+        if paper_anchor > 0.0 {
+            unit.replace_trade_unit_output(reference * final_anchor / paper_anchor, reference);
+        }
+    } else if mechanic.order_kind.is_gold()
+        && sc.is_none()
+        && mechanic.dominant_kind == SpecialOrderKind::NormalGold
+        && mechanic.mechanic_equiv_eff_pct.abs() < f64::EPSILON
+    {
+        unit.replace_trade_unit_output(regular_trade_unit_output_per_day(level), reference);
     }
+
+    unit
+}
+
+fn build_efficiency(
+    paper: PaperTradeEfficiency,
+    unit: &TradeUnitOutput,
+    mechanic: &OrderMechanicResult,
+    rule_id: Option<String>,
+) -> TradeEfficiency {
+    let reference = if mechanic.order_kind.is_gold() {
+        GOLD_TRADE_REFERENCE_OUTPUT_PER_DAY
+    } else {
+        order_mechanic::baseline_unit_trade_lv3_originium()
+    };
+    TradeEfficiency::new(
+        paper,
+        reference,
+        unit.unit_trade_per_day,
+        rule_id,
+        !mechanic.ignores_order_eff(),
+    )
 }
 
 pub fn solve_trade(input: &TradeRoomInput, table: &SkillTable) -> Result<TradeResult> {
@@ -128,6 +174,9 @@ fn solve_trade_with_shift_inner(
     let order_eff_base = ctx.order_eff_base();
     let order_eff_skill = ctx.order_eff_skill();
     let order_eff_pre = ctx.order_eff_total();
+    let order_eff_global = order_eff_pre - order_eff_base - order_eff_skill;
+    let paper_efficiency =
+        PaperTradeEfficiency::from_bonus_pct(order_eff_base, order_eff_skill, order_eff_global);
 
     if input.active_order_kind.is_gold() {
         let sc = if check_exclusivity {
@@ -151,16 +200,24 @@ fn solve_trade_with_shift_inner(
             let mechanic = sc.build_mechanic_result(input.level);
             let order_eff_total = sc.entry.trade_pct;
             let order_eff_skill_adj = order_eff_total - order_eff_base;
-            let production =
-                build_production_shortcut(&ctx, &mechanic, &sc, order_eff_total, shift_hours);
+            let unit =
+                resolve_unit_output(&ctx, &mechanic, Some(&sc), &paper_efficiency, input.level);
+            let efficiency = build_efficiency(
+                paper_efficiency,
+                &unit,
+                &mechanic,
+                Some(sc.entry.id.clone()),
+            );
+            let production = build_production(unit, &efficiency, shift_hours);
             return Ok(TradeResult {
                 order_eff_base,
                 order_eff_skill: order_eff_skill_adj,
                 order_eff_total,
                 order_eff_pre_shortcut: order_eff_pre,
                 final_order_limit: ctx.final_order_limit,
-                effective_eff_multiplier: sc.effective_multiplier(),
+                effective_eff_multiplier: efficiency.final_efficiency,
                 order_mechanic: mechanic,
+                efficiency,
                 trade_shortcut: Some(sc.entry.id),
                 mood_drain: mood_drain_from_ctx(&ctx),
                 production,
@@ -169,8 +226,9 @@ fn solve_trade_with_shift_inner(
     }
 
     let mechanic = order_mechanic::resolve_order_mechanic(&ctx, order_eff_pre);
-    let effective_eff_multiplier = mechanic.effective_eff_multiplier(order_eff_pre);
-    let production = build_production(&ctx, &mechanic, order_eff_pre, shift_hours);
+    let unit = resolve_unit_output(&ctx, &mechanic, None, &paper_efficiency, input.level);
+    let efficiency = build_efficiency(paper_efficiency, &unit, &mechanic, None);
+    let production = build_production(unit, &efficiency, shift_hours);
 
     Ok(TradeResult {
         order_eff_base,
@@ -179,7 +237,8 @@ fn solve_trade_with_shift_inner(
         order_eff_pre_shortcut: order_eff_pre,
         final_order_limit: ctx.final_order_limit,
         order_mechanic: mechanic,
-        effective_eff_multiplier,
+        effective_eff_multiplier: efficiency.final_efficiency,
+        efficiency,
         trade_shortcut: None,
         mood_drain: mood_drain_from_ctx(&ctx),
         production,
@@ -546,6 +605,25 @@ mod tests {
                     .is_some_and(|s| s == "gsl_docus_solo"),
                 "docus {label} tools shortcut {:?}",
                 result.trade_shortcut
+            );
+            assert!(
+                (result.efficiency.production_basis.unit_output_multiplier - 1.55).abs() < 1e-9,
+                "docus {label} unit multiplier {:?}",
+                result.efficiency
+            );
+            assert!(
+                (result.efficiency.final_efficiency
+                    - result.efficiency.paper.paper_efficiency * 1.55)
+                    .abs()
+                    < 1e-9,
+                "docus {label} final efficiency {:?}",
+                result.efficiency
+            );
+            assert!(
+                (result.production.daily_at_shift.trade_lmd
+                    - GOLD_TRADE_REFERENCE_OUTPUT_PER_DAY * result.efficiency.final_efficiency)
+                    .abs()
+                    < 1e-6
             );
         }
         assert!(

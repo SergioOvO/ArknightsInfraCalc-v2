@@ -10,7 +10,7 @@
 
 1. 取 `order_eff_pre = ctx.order_eff_total()`
 2. 若赤金订单 → `resolve_trade_shortcut(..., &layout.global_inject)`
-3. 命中则走 L3：`sc.build_mechanic_result` + 表内 `trade_pct` / `gold_pct`，**覆盖** L2 的 `resolve_order_mechanic`
+3. 命中则走 L3：`sc.build_mechanic_result` + 社区 `unit_output`；旧 `trade_pct` / `gold_pct` 仅保留兼容解释
 4. 未命中则走 L2 `order_mechanic::resolve_order_mechanic`
 
 互斥违规在 solver 入口直接 `Err`（`trade_station_exclusive_violation`）。
@@ -79,7 +79,9 @@ None → 走 L2
 
 - 条件：`is_docus_solo_station` — ≥3 人、有但书机制 buff、无巫恋侧。
 - `trade_pct` **运行时覆盖**为 L1 算出的 `order_eff_pre`。
-- `gold_pct` 固定锚点 `DOCUS_MECHANIC_GOLD_PCT = 55`（纸面工具效率 ×1.55 机制等效）。
+- `unit_output` 按贸易站等级提供社区加强日产出；三级站相对 `10265` 为 `×1.55`。
+- 最终得分为完整纸面效率（基础 100% + 人头 + 技能 + 中枢）乘单位产出倍率。
+- `gold_pct=55` 仅保留旧回归解释，不再参与排序或产出乘法。
 
 ## 巫恋核（`gsl_witch_*`）
 
@@ -118,11 +120,12 @@ None → 走 L2
 | 字段 | 含义 |
 |------|------|
 | `id` | 回归 `expect_shortcut`、solver 输出 `trade_shortcut` |
-| `trade_pct` / `gold_pct` | L3 锚定效率（但书 solo 的 trade 运行时覆盖） |
+| `trade_pct` / `gold_pct` | 旧兼容锚点，不再作为最终得分或产出输入 |
 | `tailor_tier` | 裁缝档 → `GoldDistribution` |
 | `match.kind` | `closure` 等匹配器类型 |
 | `match.station_trade_pct` | 可露希尔分档纸面 trade% 锚点 |
 | `unit_trade_anchor` / `unit_gsl_gold_anchor` | 产量层锚点（L3 未展开巫恋核等） |
+| `unit_output` | 正式社区单位产出规则：倍率、固定日产出或分等级日产出 |
 
 ## 回归夹具映射
 

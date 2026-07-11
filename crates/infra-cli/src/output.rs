@@ -864,6 +864,7 @@ pub struct TradeYieldRow<'a> {
     pub level: u8,
     pub shift_hours: f64,
     pub paper_eff_pct: f64,
+    pub final_efficiency: f64,
     pub shortcut: Option<&'a str>,
     pub unit_trade: f64,
     pub unit_gsl_gold: f64,
@@ -891,6 +892,7 @@ fn write_trade_yield_csv(path: Option<&Path>, row: &TradeYieldRow<'_>) -> Result
         "贸易站等级",
         "上班时长",
         "纸面效率%",
+        "最终效率",
         "短路ID",
         "日贸易量",
         "日GSL赤金",
@@ -905,6 +907,7 @@ fn write_trade_yield_csv(path: Option<&Path>, row: &TradeYieldRow<'_>) -> Result
         &row.level.to_string(),
         &format!("{:.1}", row.shift_hours),
         &format!("{:.1}", row.paper_eff_pct),
+        &format!("{:.6}", row.final_efficiency),
         row.shortcut.unwrap_or(""),
         &format!("{:.1}", row.unit_trade),
         &format!("{:.1}", row.unit_gsl_gold),
@@ -919,8 +922,14 @@ fn write_trade_yield_csv(path: Option<&Path>, row: &TradeYieldRow<'_>) -> Result
 
 fn write_trade_yield_text(row: &TradeYieldRow<'_>) -> Result<(), Error> {
     eprintln!(
-        "fixture={} level={} shift={}h paper_eff={:.1}% shortcut={:?}",
-        row.fixture, row.level, row.shift_hours, row.paper_eff_pct, row.shortcut
+        "fixture={} level={} shift={}h paper_eff={:.1}% final_eff={:.6} ({:.2}%) shortcut={:?}",
+        row.fixture,
+        row.level,
+        row.shift_hours,
+        row.paper_eff_pct,
+        row.final_efficiency,
+        row.final_efficiency * 100.0,
+        row.shortcut
     );
     eprintln!(
         "  unit_trade={:.1} unit_gsl_gold={:.1} unit_ratio(debug)={:.3}",

@@ -43,6 +43,30 @@ pub struct TradeShortcutEntry {
     pub unit_trade_anchor: Option<f64>,
     #[serde(default)]
     pub unit_gsl_gold_anchor: Option<f64>,
+    #[serde(default)]
+    pub unit_output: Option<CommunityUnitOutputRule>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CommunityUnitOutputRule {
+    UnitOutputMultiplier { value: f64 },
+    EnhancedUnitOutputPerDay { value: f64 },
+    EnhancedUnitOutputByLevel { lv1: f64, lv2: f64, lv3: f64 },
+}
+
+impl CommunityUnitOutputRule {
+    pub fn unit_trade_per_day(&self, level: u8, reference: f64) -> f64 {
+        match self {
+            Self::UnitOutputMultiplier { value } => reference * value,
+            Self::EnhancedUnitOutputPerDay { value } => *value,
+            Self::EnhancedUnitOutputByLevel { lv1, lv2, lv3 } => match level {
+                1 => *lv1,
+                2 => *lv2,
+                _ => *lv3,
+            },
+        }
+    }
 }
 
 fn default_tailor_tier() -> ShortcutTailorTier {
@@ -102,6 +126,18 @@ impl TradeShortcutCache {
     }
 }
 
+pub(crate) fn community_unit_trade_per_day_by_id(
+    id: &str,
+    level: u8,
+    reference: f64,
+) -> Option<f64> {
+    trade_shortcut_cache()?
+        .get_by_id(id)?
+        .unit_output
+        .as_ref()
+        .map(|rule| rule.unit_trade_per_day(level, reference))
+}
+
 static TRADE_SHORTCUT_CACHE: OnceLock<Option<TradeShortcutCache>> = OnceLock::new();
 
 pub(crate) fn trade_shortcut_cache() -> Option<&'static TradeShortcutCache> {
@@ -149,11 +185,15 @@ pub fn trade_station_exclusive_violation(ops: &[TradeOperator], table: &SkillTab
     let docus = room_has_docus_mechanic(ops, table);
     let closure = has_closure(ops, table);
     let witch = has_witch_e2(ops, table);
+    let pepe = room_has_pepe_exclusive(ops, table);
 
     if docus_tailor_exclusive_violation(ops, table) {
         return true;
     }
     if pepe_station_trade_eff_violation(ops, table) {
+        return true;
+    }
+    if pepe && (docus || closure || room_has_witch_side_group(ops, table)) {
         return true;
     }
     if docus && closure {
@@ -717,6 +757,13 @@ fn expected_from_dist(dist: &GoldDistribution, long_bonus: f64) -> (f64, f64) {
 }
 
 impl TradeShortcutMatch {
+    pub fn community_unit_trade_per_day(&self, level: u8, reference: f64) -> Option<f64> {
+        self.entry
+            .unit_output
+            .as_ref()
+            .map(|rule| rule.unit_trade_per_day(level, reference))
+    }
+
     pub fn unit_output_from_anchor(
         &self,
         baseline_unit_trade: f64,
@@ -1113,6 +1160,21 @@ mod tests {
                 2,
                 vec!["trade_ord_spd[010]", "trade_ord_spd[020]"],
             ),
+        ];
+        assert!(trade_station_exclusive_violation(&mix, &table));
+    }
+
+    #[test]
+    fn pepe_and_closure_are_mutually_exclusive() {
+        let table = table();
+        let mix = vec![
+            mk_op(
+                "佩佩",
+                2,
+                vec!["trade_ord_limit&trade&lv[000]", "trade_ord_pepe[000]"],
+            ),
+            mk_op("可露希尔", 2, vec!["trade_ord_closure[000]"]),
+            mk_op("黑键", 2, vec!["trade_ord_spd_bd[010]"]),
         ];
         assert!(trade_station_exclusive_violation(&mix, &table));
     }

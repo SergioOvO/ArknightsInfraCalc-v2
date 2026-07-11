@@ -3,6 +3,7 @@
 
 use serde::Serialize;
 
+use super::efficiency::{TradeEfficiency, GOLD_TRADE_REFERENCE_OUTPUT_PER_DAY};
 use super::interpreter::{MechanicCaps, TradeContext};
 use super::order_mechanic::{
     unit_per_slot_per_day, GoldDistribution, OrderMechanicResult, SpecialOrderKind,
@@ -15,6 +16,14 @@ pub use super::order_mechanic::baseline_unit_trade_lv3_regular;
 pub const DRONE_TRADE_FACTOR: f64 = 0.685;
 /// 工具人表「单位赤金产出」与内部日消耗量的换算（closure 锚点 20→2000）。
 pub const GSL_GOLD_UNIT_SCALE: f64 = 100.0;
+
+pub fn regular_trade_unit_output_per_day(level: u8) -> f64 {
+    match level {
+        1 => 10_000.0,
+        2 => 10_141.0,
+        _ => GOLD_TRADE_REFERENCE_OUTPUT_PER_DAY,
+    }
+}
 
 const MINUTES_PER_DAY: f64 = 1440.0;
 
@@ -44,6 +53,16 @@ impl TradeUnitOutput {
     pub fn gsl_unit_gold(&self) -> f64 {
         self.unit_gold_per_day * GSL_GOLD_UNIT_SCALE
     }
+
+    pub fn replace_trade_unit_output(&mut self, unit_trade_per_day: f64, reference: f64) {
+        self.unit_trade_per_day = unit_trade_per_day;
+        self.multiplier_vs_lv3_regular = if reference > 0.0 {
+            unit_trade_per_day / reference
+        } else {
+            1.0
+        };
+        self.drone_unit_trade_per_day = unit_trade_per_day * DRONE_TRADE_FACTOR;
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -53,29 +72,39 @@ pub struct TradeDailyYield {
     pub drone_trade_lmd: f64,
     pub drone_gold_spent: f64,
     pub shift_hours: f64,
+    pub paper_efficiency: f64,
+    pub final_efficiency: f64,
+    pub time_factor: f64,
+    /// 兼容字段：最终效率乘工作时长占比。
     pub eff_factor: f64,
 }
 
-/// 公孙工具人表产出口径：产出 = 效率总和 × (上班/24) × 加强单位产出。
-/// 此处 `order_eff_total_pct` 即贸易站赤金订单效率总和%。
-/// 佩佩独占单固定 cadence，`ignore_order_eff=true` 时仅按 `(shift/24)` 缩放。
+/// 公孙工具人表产出口径：产出 = 三级基准日产出 × 最终效率 × (上班/24)。
 pub fn daily_yield(
     unit: &TradeUnitOutput,
-    order_eff_total_pct: f64,
+    efficiency: &TradeEfficiency,
     shift_hours: f64,
-    ignore_order_eff: bool,
 ) -> TradeDailyYield {
-    let eff_factor = if ignore_order_eff {
-        shift_hours / 24.0
+    let time_factor = shift_hours / 24.0;
+    let eff_factor = efficiency.final_efficiency * time_factor;
+    let paper_factor = if efficiency.final_efficiency > 0.0
+        && efficiency.production_basis.unit_output_multiplier > 0.0
+    {
+        efficiency.final_efficiency / efficiency.production_basis.unit_output_multiplier
     } else {
-        (order_eff_total_pct / 100.0) * (shift_hours / 24.0)
+        1.0
     };
     TradeDailyYield {
-        trade_lmd: unit.unit_trade_per_day * eff_factor,
-        gold_spent: unit.unit_gold_per_day * eff_factor,
-        drone_trade_lmd: unit.drone_unit_trade_per_day * eff_factor,
-        drone_gold_spent: unit.drone_unit_gold_per_day * eff_factor,
+        trade_lmd: efficiency.production_basis.reference_unit_output_per_day * eff_factor,
+        gold_spent: unit.unit_gold_per_day * paper_factor * time_factor,
+        drone_trade_lmd: efficiency.production_basis.reference_unit_output_per_day
+            * eff_factor
+            * DRONE_TRADE_FACTOR,
+        drone_gold_spent: unit.drone_unit_gold_per_day * paper_factor * time_factor,
         shift_hours,
+        paper_efficiency: efficiency.paper.paper_efficiency,
+        final_efficiency: efficiency.final_efficiency,
+        time_factor,
         eff_factor,
     }
 }
@@ -167,7 +196,10 @@ mod tests {
             SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
         let input = TradeRoomInput::with_operators(level, operators);
         let result = solve_trade(&input, &table).unwrap();
-        (result.production.unit.clone(), result.order_eff_total)
+        (
+            result.production.unit.clone(),
+            result.efficiency.final_efficiency,
+        )
     }
 
     #[test]
@@ -184,8 +216,7 @@ mod tests {
         );
         let result = solve_trade(&input, &table).unwrap();
         let unit = &result.production.unit;
-        let eff = result.order_eff_total;
-        let daily = daily_yield(unit, eff, 24.0, false);
+        let daily = &result.production.daily_at_shift;
         assert!(
             (unit.unit_trade_per_day - 12_000.0).abs() < 800.0,
             "closure unit trade got {:.1}",
@@ -223,9 +254,9 @@ mod tests {
             u2.unit_trade_per_day,
             u3.unit_trade_per_day
         );
-        assert!((u3.unit_trade_per_day - 15_929.2).abs() < 3_000.0);
-        assert!((u2.unit_trade_per_day - 18_591.55).abs() < 3_500.0);
-        assert!((u1.unit_trade_per_day - 20_000.0).abs() < 3_500.0);
+        assert!((u3.unit_trade_per_day - 15_910.75).abs() < 0.01);
+        assert!((u2.unit_trade_per_day - 18_591.55).abs() < 0.01);
+        assert!((u1.unit_trade_per_day - 20_000.0).abs() < 0.01);
     }
 
     #[test]

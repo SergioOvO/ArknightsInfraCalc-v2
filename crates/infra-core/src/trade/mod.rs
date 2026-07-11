@@ -1,3 +1,4 @@
+pub mod efficiency;
 pub mod gold_flow;
 pub mod input;
 pub mod interpreter;
@@ -7,6 +8,10 @@ pub mod shortcut;
 pub mod solver;
 pub mod unit_output;
 
+pub use efficiency::{
+    PaperTradeEfficiency, TradeEfficiency, TradeProductionBasis,
+    GOLD_TRADE_REFERENCE_OUTPUT_PER_DAY,
+};
 pub use input::{
     LayoutContext, TradeLayoutContext, TradeOperator, TradeOrderKind, TradeRoomInput,
     TradeSearchOrderMode, TradeStationScenario,

@@ -481,7 +481,8 @@ mod tests {
             assert!(hit.names.iter().any(|n| n == name), "{hit:?}");
         }
         assert_eq!(hit.shortcut.as_deref(), Some("gsl_vina_lungmen"));
-        assert!((hit.trade_pct - 135.0).abs() < 0.01, "{hit:?}");
+        assert!(hit.score > 2.0, "{hit:?}");
+        assert!((hit.trade_pct - hit.score * 100.0).abs() < 0.01, "{hit:?}");
     }
 
     #[test]
@@ -508,6 +509,7 @@ mod tests {
         assert!(hit.names.iter().any(|n| n == "石英"), "{hit:?}");
         assert!(hit.names.iter().any(|n| n == "空弦"), "{hit:?}");
         assert_eq!(hit.shortcut.as_deref(), Some("gsl_docus_solo"));
-        assert!(hit.unit_trade_per_day >= 16_000.0, "{hit:?}");
+        assert!((hit.breakdown.unit_output_multiplier - 1.55).abs() < 0.001);
+        assert!(hit.score > hit.breakdown.paper_efficiency, "{hit:?}");
     }
 }

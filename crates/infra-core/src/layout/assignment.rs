@@ -69,10 +69,10 @@ fn is_zero_i32(v: &i32) -> bool {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RoomEfficiencySnapshot {
-    /// 贸易调试倍率 `effective_eff_multiplier`。
+    /// 可直接用于产出预估的贸易最终效率，`1.0` 表示三级普通站 100%。
     #[serde(default, skip_serializing_if = "is_zero_f64")]
     pub trade_score: f64,
-    /// 贸易订单效率总量纲 `%`。
+    /// 完整贸易最终效率百分比，例如 `190.65` 表示 `1.9065`。
     #[serde(default, skip_serializing_if = "is_zero_f64")]
     pub trade_pct: f64,
     /// 贸易技能效率 `%`，不含人头与全局注入。
