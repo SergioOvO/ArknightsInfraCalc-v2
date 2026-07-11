@@ -354,7 +354,7 @@ JSON **数组**，每项一名干员：
 |------|------|
 | `name` | 如 `Shift 1 · 12h · α+β` |
 | `description` | 班次说明 |
-| `Fiammetta` | 常规 CLI 导出按 `但书 > 巫恋 > 龙舌兰 > 清流 > 可露希尔` 选择当前班首个在岗目标；命中时 `enable: true`、`order: pre`，无候选时关闭 |
+| `Fiammetta` | ABC 排班按 `但书 > 巫恋 > 龙舌兰 > 清流 > 可露希尔` 选择一次 peak 主力回岗；只有实际执行回岗的 plan 为 `enable: true`、`order: pre` |
 | `drones` | 默认赤金制造站无人机；`room`/`index`/`order` |
 | `rooms` | 见下表 |
 
@@ -430,6 +430,10 @@ async function runPlan({ cliPath, repoRoot, operbox, layout, maaOut, profileOut 
 }
 ```
 
+排班 core 的 JSON 输出（`layout team-rotation --json`）另包含
+`peak_mood_eta`：`eta_hours` 是最高效率 peak 班从满心情开始的最长工作时间，
+`bottleneck` 是首个心情瓶颈，`per_op` 提供逐干员明细。MAA 文件本身仍只保留执行所需字段。
+
 ### 8.2 `layout team-rotation`（仅排班）
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -465,7 +469,7 @@ async function runTeamRotation({ cliPath, repoRoot, layout, operbox, maaOut, tit
 ## 9. 限制（告知产品 / UI）
 
 - 干员名必须为**客户端语言**（国服中文）。
-- 不建模完整心情曲线和宿管恢复。当前只逐 plan 导出菲亚梅塔单目标线性优先级，不保证该时间点已经回满；布局动态排序、龙巫成组服务和实际宿舍操作尚未实现，详见 [Fiammetta.md](Fiammetta.md)。
+- 不建模完整心情曲线和宿管恢复。当前每个 ABC 周期只安排一次菲亚主力回岗，并优先让被换下者进入宿舍；布局动态排序、龙巫成组服务和跨周期就绪模拟尚未实现，详见 [Fiammetta.md](Fiammetta.md)。
 - 会客室若 solver 未分配人，导出为 `autofill: true`。
 - 首次 243 全精2 operbox 排班约 **5–15 秒**（CPU 搜索）；前端应加 loading。
 

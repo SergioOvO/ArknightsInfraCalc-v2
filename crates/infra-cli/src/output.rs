@@ -1187,10 +1187,23 @@ fn write_team_rotation_csv(
         "贸易加权",
         "制造加权",
         "发电加权",
+        "peak最长工作h",
+        "peak瓶颈",
         "耗时秒",
     ])?;
     for shift in &report.shifts {
         let active: Vec<&str> = shift.active_teams.iter().map(|t| team_label(*t)).collect();
+        let peak_eta = report
+            .peak_mood_eta
+            .as_ref()
+            .and_then(|eta| eta.eta_hours)
+            .map(|hours| format!("{hours:.2}"))
+            .unwrap_or_default();
+        let peak_bottleneck = report
+            .peak_mood_eta
+            .as_ref()
+            .and_then(|eta| eta.bottleneck.as_deref())
+            .unwrap_or("");
         wtr.write_record([
             layout,
             operbox,
@@ -1205,6 +1218,8 @@ fn write_team_rotation_csv(
             &format!("{:.3}", shift.weighted_trade),
             &format!("{:.1}", shift.weighted_manu),
             &format!("{:.1}", shift.weighted_power),
+            &peak_eta,
+            peak_bottleneck,
             &elapsed_secs(report.elapsed),
         ])?;
     }
@@ -1233,6 +1248,14 @@ fn write_team_rotation_text(
         "αβγ team rotation: layout={layout} operbox={operbox} owned={owned} elapsed={:.2?}",
         report.elapsed
     ));
+    if let Some(eta) = &report.peak_mood_eta {
+        match (eta.eta_hours, eta.bottleneck.as_deref()) {
+            (Some(hours), Some(bottleneck)) => report_line(&format!(
+                "  peak 主力最长工作时间: {hours:.2}h（首个瓶颈: {bottleneck}）"
+            )),
+            _ => report_line("  peak 主力最长工作时间: 无有限瓶颈"),
+        }
+    }
     if !report.peak_plan.registry_claims.is_empty() {
         let systems: Vec<&str> = report.peak_plan.registry_system_ids();
         report_line(&format!("  peak 编排体系: {}", systems.join(", ")));

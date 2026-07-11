@@ -11,6 +11,7 @@ use crate::layout::{
     AssignShiftMode, AssignedOperator, AssignmentPlan, BaseAssignment, BaseBlueprint, FacilityKind,
     LayoutContext, RoomAssignment, RoomId, RoomProduct, SlotFill,
 };
+use crate::mood::{shift_eta, MoodModel, ShiftEta};
 use crate::operbox::OperBox;
 use crate::pool::{
     add_jie_market_to_trade_pool, build_control_pool, build_manufacture_pool, build_power_pool,
@@ -43,6 +44,17 @@ pub struct TeamAssignment {
     pub operators: Vec<String>,
 }
 
+/// 菲亚梅塔在某个班次执行的一次主力回岗覆盖。
+#[derive(Debug, Clone, Serialize)]
+pub struct FiammettaShiftAction {
+    /// 获得换心情并重新回到原岗位的主力。
+    pub target: String,
+    /// 被主力替换下岗、应进入休息区的原当班干员。
+    pub displaced: String,
+    /// 主力在 peak 班中的原房间，也是本次替换发生的房间。
+    pub room_id: RoomId,
+}
+
 /// 单个班次结果：当班两队合起来铺满全部设施。
 #[derive(Debug, Clone, Serialize)]
 pub struct TeamShiftResult {
@@ -51,6 +63,9 @@ pub struct TeamShiftResult {
     pub active_teams: Vec<TeamLabel>,
     pub resting_team: TeamLabel,
     pub assignment: BaseAssignment,
+    /// 菲亚梅塔使休息队主力额外回岗的单次覆盖；没有可接受目标时为 `None`。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fiammetta: Option<FiammettaShiftAction>,
     pub scores: ShiftScores,
     /// 贸易分按时长折算（三类各自独立，不混合量纲）。
     pub weighted_trade: f64,
@@ -73,6 +88,9 @@ pub struct DailyTotals {
 pub struct TeamRotationReport {
     /// peak 班编排计划（只读；α/β 切半与 γ 贸易 role 填充均据此对齐）。
     pub peak_plan: AssignmentPlan,
+    /// 最高效率 peak 编制从满心情工作到首个瓶颈触发的最长时间。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peak_mood_eta: Option<ShiftEta>,
     pub teams: Vec<TeamAssignment>,
     pub shifts: Vec<TeamShiftResult>,
     /// 三类各自的每日加权产出（12h×αβ + 6h×βγ + 6h×γα，分别汇总）。
@@ -194,6 +212,144 @@ fn clear_room_efficiency(assignment: &mut BaseAssignment, room_id: &RoomId) {
     {
         room.efficiency = None;
     }
+}
+
+/// 当前轻量策略每个 24h αβγ 周期只安排一次菲亚梅塔回岗。
+///
+/// 顺序是公孙长乐确认的常规线性 fallback；布局动态排序和龙巫成组服务留给
+/// 后续完整心情排班器。
+pub const FIAMMETTA_RETURN_PRIORITY: [&str; 5] = ["但书", "巫恋", "龙舌兰", "清流", "可露希尔"];
+
+fn production_score(scores: &ShiftScores, kind: FacilityKind) -> Option<f64> {
+    match kind {
+        FacilityKind::TradePost => Some(scores.trade_score),
+        FacilityKind::Factory => Some(scores.manu_prod_sum),
+        FacilityKind::PowerPlant => Some(scores.power_charge_sum),
+        _ => None,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_fiammetta_return(
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+    durin_plan: u8,
+    peak: &BaseAssignment,
+    teams: &[TeamAssignment],
+    shifts: &mut [TeamShiftResult],
+) -> Result<()> {
+    if !operbox.owns("菲亚梅塔") {
+        return Ok(());
+    }
+
+    for target_name in FIAMMETTA_RETURN_PRIORITY {
+        let Some(source_room) = peak
+            .rooms
+            .iter()
+            .find(|room| room.operators.iter().any(|op| op.name == target_name))
+        else {
+            continue;
+        };
+        let Some(room_blueprint) = blueprint.room(&source_room.room_id) else {
+            continue;
+        };
+        if !matches!(
+            room_blueprint.kind,
+            FacilityKind::TradePost | FacilityKind::Factory | FacilityKind::PowerPlant
+        ) {
+            continue;
+        }
+        let Some(target_op) = source_room
+            .operators
+            .iter()
+            .find(|op| op.name == target_name)
+            .cloned()
+        else {
+            continue;
+        };
+        let Some(target_team) = teams
+            .iter()
+            .find(|team| team.operators.iter().any(|name| name == target_name))
+            .map(|team| team.label)
+        else {
+            continue;
+        };
+        let Some(shift_index) = shifts
+            .iter()
+            .position(|shift| shift.resting_team == target_team)
+        else {
+            continue;
+        };
+        if shifts[shift_index]
+            .assignment
+            .operator_names()
+            .contains(target_name)
+        {
+            continue;
+        }
+
+        let hours = shifts[shift_index].duration_hours;
+        let Some(current_room) = shifts[shift_index]
+            .assignment
+            .room_assignment(&source_room.room_id)
+        else {
+            continue;
+        };
+
+        let mut best: Option<(BaseAssignment, ShiftScores, AssignedOperator, f64)> = None;
+        for slot in 0..current_room.operators.len() {
+            let mut candidate = shifts[shift_index].assignment.clone();
+            let Some(room) = candidate
+                .rooms
+                .iter_mut()
+                .find(|room| room.room_id == source_room.room_id)
+            else {
+                continue;
+            };
+            let displaced = room.operators[slot].clone();
+            room.operators[slot] = target_op.clone();
+            room.efficiency = None;
+
+            let Ok(scores) = score_base_assignment(
+                blueprint,
+                &candidate,
+                instances,
+                table,
+                hours,
+                Some(durin_plan),
+            ) else {
+                continue;
+            };
+            let candidate_score = production_score(&scores, room_blueprint.kind)
+                .expect("production room kind checked above");
+            let replace = best
+                .as_ref()
+                .is_none_or(|(_, _, _, best_score)| candidate_score > *best_score + 1e-9);
+            if replace {
+                best = Some((candidate, scores, displaced, candidate_score));
+            }
+        }
+
+        let Some((assignment, scores, displaced, _)) = best else {
+            continue;
+        };
+        let shift = &mut shifts[shift_index];
+        shift.assignment = assignment;
+        shift.weighted_trade = scores.weighted_trade(hours);
+        shift.weighted_manu = scores.weighted_manu(hours);
+        shift.weighted_power = scores.weighted_power(hours);
+        shift.scores = scores;
+        shift.fiammetta = Some(FiammettaShiftAction {
+            target: target_name.to_string(),
+            displaced: displaced.name,
+            room_id: source_room.room_id.clone(),
+        });
+        break;
+    }
+
+    Ok(())
 }
 
 // ── 深海链 S2 短班入口 ──
@@ -940,6 +1096,8 @@ pub fn schedule_team_rotation(
     )?;
     let peak = peak_result.assignment;
     let peak_plan = peak_result.plan;
+    let mood_model = MoodModel::load_default()?;
+    let peak_mood_eta = Some(shift_eta(&mood_model, blueprint, &peak));
     let shared = pinned_assignment(&peak, blueprint);
     let scaffold_used: HashSet<String> = operators_of(&shared).into_iter().collect();
     let t1 = Instant::now();
@@ -1203,7 +1361,6 @@ pub fn schedule_team_rotation(
     ];
 
     let mut shifts = Vec::with_capacity(3);
-    let mut daily = DailyTotals::default();
     let mut control_options = options.clone();
     control_options.skip_standalone_control = true;
     let mut warmup_sticky_rooms: HashMap<String, RoomId> = HashMap::new();
@@ -1465,15 +1622,13 @@ pub fn schedule_team_rotation(
             let weighted_trade = scores.weighted_trade(hours);
             let weighted_manu = scores.weighted_manu(hours);
             let weighted_power = scores.weighted_power(hours);
-            daily.trade += weighted_trade;
-            daily.manu += weighted_manu;
-            daily.power += weighted_power;
             shifts.push(TeamShiftResult {
                 index,
                 duration_hours: hours,
                 active_teams: active.to_vec(),
                 resting_team: resting,
                 assignment,
+                fiammetta: None,
                 scores,
                 weighted_trade,
                 weighted_manu,
@@ -1505,15 +1660,13 @@ pub fn schedule_team_rotation(
             let weighted_trade = scores.weighted_trade(hours);
             let weighted_manu = scores.weighted_manu(hours);
             let weighted_power = scores.weighted_power(hours);
-            daily.trade += weighted_trade;
-            daily.manu += weighted_manu;
-            daily.power += weighted_power;
             shifts.push(TeamShiftResult {
                 index,
                 duration_hours: hours,
                 active_teams: active.to_vec(),
                 resting_team: resting,
                 assignment,
+                fiammetta: None,
                 scores,
                 weighted_trade,
                 weighted_manu,
@@ -1521,6 +1674,22 @@ pub fn schedule_team_rotation(
             });
         }
     }
+
+    apply_fiammetta_return(
+        blueprint,
+        operbox,
+        instances,
+        table,
+        durin_plan,
+        &peak,
+        &teams,
+        &mut shifts,
+    )?;
+    let daily = DailyTotals {
+        trade: shifts.iter().map(|shift| shift.weighted_trade).sum(),
+        manu: shifts.iter().map(|shift| shift.weighted_manu).sum(),
+        power: shifts.iter().map(|shift| shift.weighted_power).sum(),
+    };
     let t4 = Instant::now();
 
     fn ms(a: Instant, b: Instant) -> f64 {
@@ -1534,6 +1703,7 @@ pub fn schedule_team_rotation(
 
     Ok(TeamRotationReport {
         peak_plan,
+        peak_mood_eta,
         teams,
         shifts,
         daily,
@@ -2363,18 +2533,87 @@ mod tests {
                         .get(&op.name)
                         .copied()
                         .unwrap_or_else(|| panic!("上岗干员 {} 缺少 α/β/γ 归属", op.name));
-                    assert_ne!(
-                        team,
-                        shift.resting_team,
-                        "shift {} 房间 {} 使用了休息队 {:?} 干员 {}",
-                        shift.index + 1,
-                        room.room_id.0,
-                        shift.resting_team,
-                        op.name
-                    );
+                    if team == shift.resting_team {
+                        assert_eq!(
+                            shift
+                                .fiammetta
+                                .as_ref()
+                                .map(|action| action.target.as_str()),
+                            Some(op.name.as_str()),
+                            "shift {} 房间 {} 非菲亚目标的休息队干员 {} 被错误排回",
+                            shift.index + 1,
+                            room.room_id.0,
+                            op.name
+                        );
+                    }
                 }
             }
         }
+    }
+
+    #[test]
+    fn team_rotation_fiammetta_returns_peak_core_and_rests_replacement() {
+        let (blueprint, operbox, instances, table) = fixtures();
+        let report = schedule_team_rotation(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 5,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let actions: Vec<_> = report
+            .shifts
+            .iter()
+            .filter_map(|shift| shift.fiammetta.as_ref().map(|action| (shift, action)))
+            .collect();
+        assert_eq!(actions.len(), 1, "每个 24h 周期只应安排一次菲亚回岗");
+
+        let (shift, action) = actions[0];
+        assert_eq!(action.target, "但书");
+        assert!(
+            shift
+                .assignment
+                .operators_in(&action.room_id)
+                .iter()
+                .any(|op| op.name == action.target),
+            "菲亚目标必须回到 peak 原房间"
+        );
+        assert!(
+            !shift
+                .assignment
+                .operator_names()
+                .contains(&action.displaced),
+            "被替换者必须离开当班 assignment"
+        );
+        assert_eq!(
+            crate::schedule::team_of_operator(&report, &action.target),
+            Some(shift.resting_team),
+            "菲亚回岗应是休息队主力的显式例外"
+        );
+    }
+
+    #[test]
+    fn team_rotation_without_fiammetta_does_not_create_return_action() {
+        let (blueprint, operbox, instances, table) = fixtures();
+        let no_fiammetta = operbox.excluding(&HashSet::from(["菲亚梅塔".to_string()]));
+        let report = schedule_team_rotation(
+            &blueprint,
+            &no_fiammetta,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 5,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert!(report.shifts.iter().all(|shift| shift.fiammetta.is_none()));
     }
 
     #[test]
@@ -2402,6 +2641,30 @@ mod tests {
                 report.peak_plan.registry_system_ids()
             );
         }
+    }
+
+    #[test]
+    fn team_rotation_reports_peak_mood_eta() {
+        let (blueprint, operbox, instances, table) = fixtures();
+        let report = schedule_team_rotation(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 5,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let eta = report
+            .peak_mood_eta
+            .as_ref()
+            .expect("peak 主力班必须输出 mood ETA");
+        assert!(!eta.per_op.is_empty());
+        assert!(eta.bottleneck.is_some());
+        assert!(eta.eta_hours.is_some_and(|hours| hours > 0.0));
     }
 
     #[test]

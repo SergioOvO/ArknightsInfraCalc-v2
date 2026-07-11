@@ -36,6 +36,9 @@ team_ctrl += core inject / hr-mood control candidates         # 效率注入/公
 S1 (12h): shared + control(α+β) + α(H1) + β(H2)   休息 γ
 S2 (6h):  shared + control(β+γ) + β(H2) + γ(H1)   休息 α
 S3 (6h):  shared + control(γ+α) + γ(H2) + α(H1)   休息 β
+
+菲亚覆盖：三班组装完成后，从 peak 主力按确认优先级选择一人，在其所属队伍
+原本休息的班次中放回原房间，并换下一个当前在岗干员。
 ```
 
 γ 替补贸易与 peak `assign_trade_remainder` 同路径：金单先尝试 `docus → closure → witch → meta_vina → witch_fallback → karlan → penguin`，再 plain；制造/发电仍站绑定贪心。
@@ -156,6 +159,38 @@ cargo run -p infra-cli -- layout team-rotation \
 - 黑键贸易站：`blackkey_closure` 仍是 L3 shortcut / segment 锚点；排班入口由 `closure` role 选择，不再作为 fixed registry 早占站。
 
 `TeamRotationReport.peak_plan` 携带完整 `AssignmentPlan`（JSON 可序列化）；text 输出打印已选体系与贸易 meta 房间。
+
+### 7.1 peak 主力最长工作时间
+
+`schedule_team_rotation` 在最高效率 peak assignment 生成后立即调用 mood ETA 内核，
+把以下信息写入 `TeamRotationReport.peak_mood_eta`：
+
+- 每名在岗生产/功能干员的净心情消耗；
+- 每名干员从满心情到休息阈值的可工作时间；
+- 首个瓶颈干员；
+- peak 主力班的最长工作时间。
+
+CLI 文本和 CSV 会展示该锚点，JSON 保留完整 `per_op` 明细。当前固定
+`12h + 6h + 6h` 尚未据此改变；下一步才用它设计和校验短班。
+
+### 7.2 菲亚梅塔主力回岗覆盖
+
+当前 ABC 主路径已接入一次轻量菲亚覆盖：
+
+1. 账号必须拥有菲亚梅塔；
+2. 从 peak 主力按 `但书 > 巫恋 > 龙舌兰 > 清流 > 可露希尔` 查找目标；
+3. 定位该主力所属队伍的休息班；
+4. 将主力放回 peak 原房间，在所有合法替换位中选择该设施评分最高的一种；
+5. 被换下的干员离开当班 assignment，并在 MAA 宿舍列表中优先获得床位；
+6. 重新计算该班分数、加权产出与全日 totals；
+7. MAA 只在实际发生回岗的 plan 中输出 `Fiammetta.enable=true`。
+
+每个 24 小时 αβγ 周期当前只安排一次回岗。布局动态优先级、龙巫成组服务、
+菲亚实时心情与多次使用序列仍属于后续完整心情排班器。
+
+当前固定业务优先级高于单班瞬时分数门槛：系统会在合法替换位中选分数最高者，
+但不会用当前仍待校正的局部效率数值取消已确认的主力回岗。全周期收益仍应结合
+主力最长工作时间、替补持续时间和宿舍恢复计算。
 
 ---
 

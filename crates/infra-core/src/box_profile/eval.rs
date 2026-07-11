@@ -239,6 +239,7 @@ fn probe_shell(
         manu_report,
         rotation: TeamRotationReport {
             peak_plan: AssignmentPlan::recovery(AssignShiftMode::Peak),
+            peak_mood_eta: None,
             teams: vec![],
             shifts: vec![],
             daily,

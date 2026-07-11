@@ -9,7 +9,9 @@ use crate::layout::{
     RoomProduct,
 };
 use crate::operbox::OperBox;
-use crate::schedule::{BaseRotationReport, BaseShiftRole, TeamLabel, TeamRotationReport};
+use crate::schedule::{
+    BaseRotationReport, BaseShiftRole, TeamLabel, TeamRotationReport, FIAMMETTA_RETURN_PRIORITY,
+};
 use crate::trade::input::TradeOrderKind;
 use crate::types::RecipeKind;
 
@@ -40,7 +42,7 @@ impl MaaExportOptions {
 
     /// 启用公孙长乐确认的菲亚梅塔常规目标顺序。
     pub fn enable_gongsun_fiammetta_priority(&mut self) {
-        self.fiammetta_priority = ["但书", "巫恋", "龙舌兰", "清流", "可露希尔"]
+        self.fiammetta_priority = FIAMMETTA_RETURN_PRIORITY
             .into_iter()
             .map(str::to_owned)
             .collect();
@@ -113,11 +115,11 @@ pub struct MaaRoomSlot {
 
 struct PlanInput<'a> {
     index: usize,
-    duration_hours: f64,
     assignment: &'a BaseAssignment,
     name: String,
     description: String,
     resting: Vec<String>,
+    fiammetta_target: Option<&'a str>,
     fiammetta_priority: &'a [String],
 }
 
@@ -151,10 +153,16 @@ pub fn build_from_team_rotation(
                 .iter()
                 .map(|team| team_label_zh(*team))
                 .collect();
-            let resting = resting_team_operators(report, shift.resting_team, &shift.assignment);
+            let mut resting = resting_team_operators(report, shift.resting_team, &shift.assignment);
+            if let Some(action) = &shift.fiammetta {
+                if !resting.contains(&action.displaced) {
+                    // 被菲亚主力顶下来的干员必须优先拿到宿舍位，不能排在整支休息队
+                    // 后面因床位截断而丢失。
+                    resting.insert(0, action.displaced.clone());
+                }
+            }
             PlanInput {
                 index: shift.index,
-                duration_hours: shift.duration_hours,
                 assignment: &shift.assignment,
                 name: format!(
                     "Shift {} · {:.0}h · {}",
@@ -168,7 +176,12 @@ pub fn build_from_team_rotation(
                     team_label_zh(shift.resting_team)
                 ),
                 resting,
-                fiammetta_priority: &opts.fiammetta_priority,
+                fiammetta_target: shift
+                    .fiammetta
+                    .as_ref()
+                    .map(|action| action.target.as_str()),
+                // ABC 主路径只执行 schedule 已确认的回岗动作；没有动作就保持关闭。
+                fiammetta_priority: &[],
             }
         })
         .map(|input| build_plan(blueprint, &input))
@@ -195,11 +208,11 @@ pub fn build_from_base_rotation(
                 .unwrap_or_default();
             PlanInput {
                 index: shift.index,
-                duration_hours: 12.0,
                 assignment: &shift.assignment,
                 name: format!("Shift {} · {role}{reuse}", shift.index + 1),
                 description: format!("ABA {role} 班；下次约 12 小时后换班"),
                 resting: shift.rotating_workers.clone(),
+                fiammetta_target: None,
                 fiammetta_priority: &opts.fiammetta_priority,
             }
         })
@@ -220,9 +233,20 @@ fn build_plan(blueprint: &BaseBlueprint, input: &PlanInput) -> MaaPlan {
     MaaPlan {
         name: input.name.clone(),
         description: input.description.clone(),
-        fiammetta: resolve_fiammetta(input.fiammetta_priority, input.assignment),
+        fiammetta: input
+            .fiammetta_target
+            .map(resolve_scheduled_fiammetta)
+            .unwrap_or_else(|| resolve_fiammetta(input.fiammetta_priority, input.assignment)),
         drones: drone_defaults(blueprint),
         rooms: build_rooms(blueprint, input.assignment, &input.resting),
+    }
+}
+
+fn resolve_scheduled_fiammetta(target: &str) -> MaaFiammetta {
+    MaaFiammetta {
+        enable: true,
+        target: target.to_string(),
+        order: "pre",
     }
 }
 
@@ -630,6 +654,7 @@ mod tests {
             peak_plan: crate::layout::AssignmentPlan::recovery(
                 crate::layout::AssignShiftMode::Peak,
             ),
+            peak_mood_eta: None,
             teams: vec![TeamAssignment {
                 label: TeamLabel::Gamma,
                 operators: vec!["休息干员".into()],
@@ -640,6 +665,11 @@ mod tests {
                 active_teams: vec![TeamLabel::Alpha, TeamLabel::Beta],
                 resting_team: TeamLabel::Gamma,
                 assignment,
+                fiammetta: Some(crate::schedule::FiammettaShiftAction {
+                    target: "但书".into(),
+                    displaced: "被换下干员".into(),
+                    room_id: RoomId::new("trade_1"),
+                }),
                 scores: ShiftScores::default(),
                 weighted_trade: 0.0,
                 weighted_manu: 0.0,
@@ -661,7 +691,7 @@ mod tests {
         );
         assert_eq!(
             schedule.plans[0].rooms.dormitory[0].operators,
-            vec!["休息干员"]
+            vec!["被换下干员", "休息干员"]
         );
         assert_eq!(schedule.plans[0].drones.index, 1);
         assert!(schedule.plans[0].fiammetta.enable);

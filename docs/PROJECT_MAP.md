@@ -31,7 +31,8 @@
 
 域详情：**制造** → [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)；**全局资源** → [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) §8.13；**评分口径/分量化策略** → [SCORING_MODEL.md](SCORING_MODEL.md)、[SCORING_REFACTOR_PLAN.md](SCORING_REFACTOR_PLAN.md)。
 
-**非目标**（由上层规划器负责）：心情排班、宿管恢复、全基建连班优化。见设计文档 §8.12。
+**当前边界**：mood 内核与 peak 主力最长工作时间已接入；宿管分配、按 ETA 改写短班、
+全基建连续心情最优化仍由后续上层规划器负责。见 [mood_eta_design.md](../plans/mood_eta_design.md)。
 
 **全基建单班进驻编制**（`assign_shift` → `build_plan` / `execute_plan`、并行搜 + `used` 顺序落位）：现行见 **[BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md)**；**编排层 Phase 0–3 / 5 已落地**（`layout/orchestrate/`、`base_systems.json`）。剩余 Phase 计划在维护期默认冻结，除非用户明确要求继续功能建设。
 
