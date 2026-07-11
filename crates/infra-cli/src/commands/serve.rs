@@ -5,8 +5,8 @@ use std::thread;
 use std::time::Instant;
 
 use infra_core::bake::{
-    bake_catalogs, default_baked_out_dir, validate_baked_catalog, warm_runtime_baked_table,
-    BakeGeneratorFingerprint, BakeOptions, BakeProgressEvent,
+    bake_catalogs, default_baked_out_dir, set_runtime_bake_in_progress, validate_baked_catalog,
+    warm_runtime_baked_table, BakeGeneratorFingerprint, BakeOptions, BakeProgressEvent,
 };
 use infra_core::box_profile::{
     baseline_path_or_default, build_box_profile_from_current_probe, run_user_rotation_probe,
@@ -81,6 +81,7 @@ fn spawn_background_bake() -> Option<thread::JoinHandle<()>> {
         "infra-cli serve: baked catalog missing or stale, baking in background -> {}",
         out_dir.display()
     );
+    set_runtime_bake_in_progress(true);
     Some(thread::spawn(move || {
         let mut options = BakeOptions::default();
         options.out_dir = out_dir;
@@ -89,6 +90,7 @@ fn spawn_background_bake() -> Option<thread::JoinHandle<()>> {
         if let Err(err) = bake_catalogs(&options) {
             eprintln!("infra-cli serve background bake failed: {err}");
         }
+        set_runtime_bake_in_progress(false);
     }))
 }
 

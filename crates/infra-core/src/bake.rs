@@ -3,6 +3,7 @@ use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 use std::time::Instant as StdInstant;
@@ -1202,7 +1203,18 @@ pub fn warm_runtime_baked_table() -> Result<bool> {
     Ok(load_runtime_baked_table()?.is_some())
 }
 
+static RUNTIME_BAKE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+
+pub fn set_runtime_bake_in_progress(in_progress: bool) {
+    RUNTIME_BAKE_IN_PROGRESS.store(in_progress, Ordering::Release);
+}
+
 fn load_runtime_baked_table() -> Result<Option<&'static RuntimeBakedComboTable>> {
+    // The background baker writes several files into the catalog directory. Do
+    // not cache or consume a catalog until that write set is complete.
+    if RUNTIME_BAKE_IN_PROGRESS.load(Ordering::Acquire) {
+        return Ok(None);
+    }
     static CACHE: OnceLock<Option<RuntimeBakedComboTable>> = OnceLock::new();
     if let Some(table) = CACHE.get() {
         return Ok(table.as_ref());
