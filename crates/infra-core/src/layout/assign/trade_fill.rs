@@ -170,7 +170,7 @@ pub(super) fn assign_trade_remainder(
         .iter()
         .filter(|r| r.kind == FacilityKind::TradePost)
         .collect();
-    prioritize_docus_trade_rooms(&mut rooms, assignment, used);
+    prioritize_docus_trade_rooms(&mut rooms, pool, assignment, used);
 
     for room in rooms {
         if assignment.operators_in(&room.id).len() >= room.operator_capacity() {
@@ -205,10 +205,15 @@ pub(super) fn assign_trade_remainder(
 
 pub(super) fn prioritize_docus_trade_rooms(
     rooms: &mut Vec<&RoomBlueprint>,
+    pool: &TradePool,
     assignment: &BaseAssignment,
     used: &HashSet<String>,
 ) {
-    if used.contains(DOCUS_TRADE_NAME) {
+    if used.contains(DOCUS_TRADE_NAME)
+        || pool
+            .entry(DOCUS_TRADE_NAME)
+            .is_none_or(|entry| entry.elite < 2)
+    {
         return;
     }
     rooms.sort_by_key(|room| {
@@ -256,7 +261,12 @@ pub(super) fn pick_trade_meta_then_plain(
     room_level: u8,
     used: &mut HashSet<String>,
 ) -> Result<TradeSearchHit> {
-    if order == TradeOrderKind::Gold && !used.contains(DOCUS_TRADE_NAME) {
+    if order == TradeOrderKind::Gold
+        && !used.contains(DOCUS_TRADE_NAME)
+        && pool
+            .entry(DOCUS_TRADE_NAME)
+            .is_some_and(|entry| entry.elite >= 2)
+    {
         if let Ok(hit) = pick_docus_trade_hit(
             pool,
             table,

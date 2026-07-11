@@ -108,7 +108,7 @@ fn assign_team_trade_meta_rooms(
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    prioritize_docus_trade_rooms(&mut rooms, assignment, used);
+    prioritize_docus_trade_rooms(&mut rooms, trade_pool, assignment, used);
 
     for room in rooms {
         if !assignment.operators_in(&room.id).is_empty() {

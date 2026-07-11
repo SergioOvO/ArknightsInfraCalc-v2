@@ -140,7 +140,9 @@ pub fn pick_trade_role_hit(
     )))
 }
 
-/// 但书 meta 站（`roles.docus`）。
+/// 精二但书核心站：只约束必须包含但书，队友按最终效率统一排序。
+///
+/// `gsl_docus_*` shortcut 只参与组合结算，不参与候选优先级。
 pub fn pick_docus_trade_hit(
     pool: &TradePool,
     table: &SkillTable,
@@ -149,6 +151,9 @@ pub fn pick_docus_trade_hit(
     used: &HashSet<String>,
     top_k: usize,
 ) -> Result<TradeSearchHit> {
+    if pool.entry("但书").is_none_or(|entry| entry.elite < 2) {
+        return Err(crate::error::Error::msg("docus role requires elite 2 但书"));
+    }
     pick_trade_role_hit("docus", pool, table, search_opts, layout, used, top_k)
 }
 
@@ -483,16 +488,18 @@ mod tests {
     }
 
     #[test]
-    fn docus_role_can_use_high_eff_tools_when_they_outscore_penguin_pair() {
-        let (pool, table, layout) = fixtures(&[
+    fn docus_role_uses_highest_final_efficiency_even_when_syracusa_shortcut_is_available() {
+        let (pool, table, mut layout) = fixtures(&[
             ("但书", 2),
+            ("伺夜", 2),
+            ("贝洛内", 2),
             ("德克萨斯", 2),
             ("拉普兰德", 2),
             ("空弦", 2),
             ("石英", 2),
         ]);
-        let hit = pick_trade_role_hit(
-            "docus",
+        layout.global_inject.record_haru_e2_in_control();
+        let hit = pick_docus_trade_hit(
             &pool,
             &table,
             gold_opts(&layout),
@@ -503,8 +510,8 @@ mod tests {
         .unwrap();
 
         assert!(hit.names.iter().any(|n| n == "但书"), "{hit:?}");
-        assert!(hit.names.iter().any(|n| n == "石英"), "{hit:?}");
         assert!(hit.names.iter().any(|n| n == "空弦"), "{hit:?}");
+        assert!(!hit.names.iter().any(|n| n == "贝洛内"), "{hit:?}");
         assert_eq!(hit.rule_id.as_deref(), Some("gsl_docus_solo"));
         assert_eq!(
             hit.breakdown.as_ref().unwrap().unit_output_multiplier,
@@ -514,6 +521,22 @@ mod tests {
             hit.final_efficiency > hit.breakdown.as_ref().unwrap().paper_efficiency,
             "{hit:?}"
         );
+    }
+
+    #[test]
+    fn docus_role_requires_elite_two_docus() {
+        let (pool, table, layout) = fixtures(&[("但书", 1), ("空弦", 2), ("石英", 2)]);
+        let err = pick_docus_trade_hit(
+            &pool,
+            &table,
+            gold_opts(&layout),
+            &layout,
+            &HashSet::new(),
+            20,
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("elite 2 但书"), "{err}");
     }
 
     #[test]

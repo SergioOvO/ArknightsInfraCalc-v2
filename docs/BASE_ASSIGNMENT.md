@@ -79,7 +79,7 @@ operbox + blueprint
 
 同类型多房间：按蓝图 `rooms` 数组顺序或稳定 `room_id` 字典序。
 
-**贸易 core priority**：但书、可露希尔、龙巫不是固定三人组。`assign_shift` 会跳过 `witch_long_beta`、`blackkey_closure`、企鹅、推王等旧 registry 早占站条目，改在贸易余站调用 `trade_segments.roles`。叙拉古 registry 只锚定八幡海铃 + 伺夜/贝洛内同站 meta；但书若在三级站自然与伺夜/贝洛内同房才命中 `gsl_docus_syracusa` shortcut，缺链时但书仍配最高可用工具人。可露缺黑键仍上可露；龙巫必须同时包含巫恋 + 龙舌兰，缺裁缝 β 时走 α / 空白第三人 fallback；无龙舌兰的巫恋兜底低于推王组。
+**贸易 core priority**：精二但书是所有金单贸易站的第一核心；存在空二级金单站时先把该站交给但书，再在所有可用干员中按 `final_efficiency` 选择最高效率队友。该规则不要求凑任何固定组合。`gsl_docus_solo` / `gsl_docus_syracusa` 只在求解候选组合时提供机制结算，不参与队友候选的优先顺序。可露希尔、龙巫同样不是固定三人组；可露缺黑键仍上可露，龙巫必须同时包含巫恋 + 龙舌兰，缺裁缝 β 时走 α / 空白第三人 fallback；无龙舌兰的巫恋兜底低于推王组。
 
 ---
 
