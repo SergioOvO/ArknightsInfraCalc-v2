@@ -12,6 +12,7 @@
 |------|------|
 | [../AGENTS.md](../AGENTS.md) | Agent 操作规则、维护期默认动作、验证命令 |
 | [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md) | bug 修复流程、分层定位、回归与验收矩阵 |
+| [SYSTEM_AUDIT_WORKFLOW.md](SYSTEM_AUDIT_WORKFLOW.md) | 公孙长乐体系逐项审计、用户裁决、批准后 subagent 修复与完成证明 |
 | [PROJECT_MAP.md](PROJECT_MAP.md) | 项目结构、模块索引、数据真源 |
 | [GONGSUN_RUNTIME_OVERVIEW.md](GONGSUN_RUNTIME_OVERVIEW.md) | 给懂基建但不懂代码的公孙长乐解释项目运行流程 |
 | [TODO/README.md](TODO/README.md) | 历史建设期 TODO；默认冻结，除非用户明确要求继续 |
@@ -26,6 +27,7 @@
 | 修 bug / 结果不对 / 回归失败 | [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)，再按现象读下列领域文档 |
 | 改效率 / 评分 / 排序口径 | 先读 [EFFICIENCY_MODEL.md](EFFICIENCY_MODEL.md)、[SCORING_MODEL.md](SCORING_MODEL.md)；历史贸易设计见 [TODO/TRADE_EQUIVALENT_EFFICIENCY_ARCHITECTURE.md](TODO/TRADE_EQUIVALENT_EFFICIENCY_ARCHITECTURE.md)，社区单位产出真源见 [INTERNAL/TRADE_COMMUNITY_UNIT_OUTPUT.md](INTERNAL/TRADE_COMMUNITY_UNIT_OUTPUT.md) |
 | 改编排 / 体系 / meta 组合 | [ADR/0001-layout-assignment-decomposition.md](ADR/0001-layout-assignment-decomposition.md)、[ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md)、[BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md) |
+| 逐个核对公孙长乐体系是否严格实现 | [SYSTEM_AUDIT_WORKFLOW.md](SYSTEM_AUDIT_WORKFLOW.md)，再读 `公孙长乐的体系分析文档/` 中当前体系文档 |
 | 用户明确要求继续历史体系 Phase | [TODO/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md](TODO/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md)、[TODO/SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md](TODO/SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md) |
 | 新生产反馈 / 已关闭反馈回归 | [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)、[../feedback/TRACKING.md](../feedback/TRACKING.md)、[TODO/TRUST_RECOVERY_PLAN.md](TODO/TRUST_RECOVERY_PLAN.md) |
 | 用户明确要求恢复 90 → 95 / 体系烘焙 / 候选架构 | [TODO/QUALITY_90_TO_95_PLAN.md](TODO/QUALITY_90_TO_95_PLAN.md)、[MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)、[ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md)、[INTERNAL/CROSS_FACILITY.md](INTERNAL/CROSS_FACILITY.md) |
