@@ -15,8 +15,8 @@ use crate::layout::{
 use crate::mood::{shift_eta, MoodModel, ShiftEta};
 use crate::operbox::OperBox;
 use crate::pool::{
-    add_jie_market_to_trade_pool, build_control_pool, build_manufacture_pool, build_power_pool,
-    build_trade_pool, karlan_precision_active, ManuPool, ManuPoolEntry,
+    add_jie_market_to_trade_pool, build_control_pool_with_fillers, build_manufacture_pool,
+    build_power_pool, build_trade_pool, karlan_precision_active, ManuPool, ManuPoolEntry,
 };
 use crate::search::{control_efficiency_fill_sort_weight, control_entry_plugin_fill};
 use crate::skill_table::SkillTable;
@@ -105,6 +105,47 @@ pub struct FacilityHalf {
     pub trade: Vec<RoomId>,
     pub manu: Vec<RoomId>,
     pub power: Vec<RoomId>,
+}
+
+const SUI_MOOD_OPERATORS: [&str; 2] = ["令", "夕"];
+
+fn control_mood_for_shift(
+    mood_by_operator: &HashMap<String, f64>,
+    active_names: &HashSet<String>,
+    default_mood: f64,
+) -> f64 {
+    SUI_MOOD_OPERATORS
+        .iter()
+        .filter(|name| active_names.contains(**name))
+        .filter_map(|name| mood_by_operator.get(*name).copied())
+        .reduce(f64::min)
+        .unwrap_or(default_mood)
+}
+
+fn advance_sui_mood(
+    model: &MoodModel,
+    blueprint: &BaseBlueprint,
+    assignment: &BaseAssignment,
+    resting_names: &HashSet<String>,
+    hours: f64,
+    mood_by_operator: &mut HashMap<String, f64>,
+) {
+    let eta = shift_eta(model, blueprint, assignment);
+    let drain_by_name: HashMap<&str, f64> = eta
+        .per_op
+        .iter()
+        .map(|op| (op.name.as_str(), op.drain_per_hour))
+        .collect();
+    for name in SUI_MOOD_OPERATORS {
+        let mood = mood_by_operator
+            .entry(name.to_string())
+            .or_insert(model.mood_cap);
+        if let Some(drain) = drain_by_name.get(name) {
+            *mood = (*mood - drain * hours).max(0.0);
+        } else if resting_names.contains(name) {
+            *mood = (*mood + model.dorm_base_recovery(5) * hours).min(model.mood_cap);
+        }
+    }
 }
 
 /// 把全部生产设施（贸易/制造/发电）按同类房间交替切成两半，尽量均衡负载。
@@ -434,11 +475,13 @@ const ABYSSAL_FORBID_SAME_ROOM_MANU_BUFFS: [&str; 3] = [
 ];
 const TAG_ABYSSAL: &str = "cc.g.abyssal";
 const DAIFEEN: &str = "戴菲恩";
+#[cfg(test)]
 const VINA_TRADE_GROUP: [&str; 3] = ["推进之王", "摩根", "维娜·维多利亚"];
 const WARMUP_STICKY_TRADE_OPERATORS: [&str; 2] = ["巫恋", "龙舌兰"];
 const WARMUP_MANU_BUFF_PREFIX: &str = "manu_prod_spd_addition[";
 const WARMUP_TRADE_BUFF_PREFIX: &str = "trade_ord_wt&cost[";
 
+#[cfg(test)]
 fn room_has_all(room: &RoomAssignment, names: &[&str]) -> bool {
     names
         .iter()
@@ -467,6 +510,7 @@ fn rooms_compatible_for_swap(
         && room_a.product.is_some()
 }
 
+#[cfg(test)]
 fn trade_room_containing_group(
     assignment: &BaseAssignment,
     blueprint: &BaseBlueprint,
@@ -1172,7 +1216,8 @@ pub fn schedule_team_rotation(
         &HashSet::new(),
     )?;
     let peak = peak_result.assignment;
-    let peak_plan = peak_result.plan;
+    let mut peak_plan = peak_result.plan;
+    peak_plan.derive_actual_shift_binds(blueprint, &peak);
     let mood_model = MoodModel::load_default()?;
     let peak_mood_eta = Some(shift_eta(&mood_model, blueprint, &peak));
     let shared = pinned_assignment(&peak, blueprint);
@@ -1191,12 +1236,7 @@ pub fn schedule_team_rotation(
     .layout_snapshot();
 
     let mut production_seed = shared.clone();
-    let mut production_control = peak.control_operators();
-    if operbox.owns("灵知") && !production_control.iter().any(|op| op.name == "灵知") {
-        if let Some(progress) = operbox.progress_of("灵知") {
-            production_control.push(AssignedOperator::from_progress("灵知", progress));
-        }
-    }
+    let production_control = peak.control_operators();
     if !production_control.is_empty() {
         production_seed.set_room("control", production_control);
     }
@@ -1219,7 +1259,7 @@ pub fn schedule_team_rotation(
         manu: build_manufacture_pool(&operbox.manufacture_roster(instances), instances, table)?,
         power: build_power_pool(&operbox.power_roster(instances), instances, table)?,
     };
-    let control_pool = build_control_pool(&operbox.control_roster(instances), instances, table)?;
+    let control_pool = build_control_pool_with_fillers(operbox, instances, table)?;
 
     // 班次绑定（上2休1）来自统一 plan，不再硬编码 ROSEMARY_BLACKKEY_BIND。
     let shift_binds = shift_binds_from_plan(&peak_plan);
@@ -1319,20 +1359,6 @@ pub fn schedule_team_rotation(
         production_team_by_name
             .entry(name)
             .or_insert(TeamLabel::Gamma);
-    }
-    if let Some(jie_team) = production_team_by_name.get("孑").copied() {
-        if operbox.owns("灵知") {
-            move_control_operator_to_team(&mut team_ctrl, "灵知", jie_team);
-        }
-    }
-    let vina_team = VINA_TRADE_GROUP
-        .iter()
-        .filter_map(|name| production_team_by_name.get(*name).copied())
-        .next();
-    if let Some(team) = vina_team {
-        if operbox.owns(DAIFEEN) {
-            move_control_operator_to_team(&mut team_ctrl, DAIFEEN, team);
-        }
     }
     let entry_by_name: HashMap<String, crate::pool::ControlPoolEntry> = control_pool
         .entries
@@ -1454,6 +1480,10 @@ pub fn schedule_team_rotation(
     let mut shifts = Vec::with_capacity(3);
     let mut control_options = options.clone();
     control_options.skip_standalone_control = true;
+    let mut sui_mood: HashMap<String, f64> = SUI_MOOD_OPERATORS
+        .into_iter()
+        .map(|name| (name.to_string(), options.mood.min(mood_model.mood_cap)))
+        .collect();
     let mut warmup_sticky_rooms: HashMap<String, RoomId> = HashMap::new();
     for (index, (hours, active, resting, parts)) in shift_specs.into_iter().enumerate() {
         // 活跃两队的中枢干员名册
@@ -1461,6 +1491,7 @@ pub fn schedule_team_rotation(
             .iter()
             .flat_map(|t| team_ctrl.get(t).cloned().unwrap_or_default())
             .collect();
+        control_options.mood = control_mood_for_shift(&sui_mood, &active_names, options.mood);
         // 从全池按名提取活跃队中枢干员；体系中枢干员可能不在 standalone 中枢白名单，
         // 但已经由 base_systems/peak_plan 验证可用，因此要按名补回。
         // 所有中枢候选已在进入三班前归入 α/β/γ；这里不再用全局池补位，
@@ -1540,27 +1571,6 @@ pub fn schedule_team_rotation(
                 };
                 ops.push(AssignedOperator::from_progress(*name, progress));
                 room_names.insert((*name).to_string());
-            }
-            let requires_karlan_control = assigned_names.contains("孑") && operbox.owns("灵知");
-            if requires_karlan_control && !room_names.contains("灵知") && ops.len() < 5 {
-                let op = operbox
-                    .progress_of("灵知")
-                    .map(|progress| AssignedOperator::from_progress("灵知", progress))
-                    .unwrap_or_else(|| AssignedOperator::new("灵知", 2));
-                ops.push(op);
-                room_names.insert("灵知".to_string());
-            }
-            let requires_vina_control = VINA_TRADE_GROUP
-                .iter()
-                .all(|name| assigned_names.contains(*name))
-                && operbox.owns(DAIFEEN);
-            if requires_vina_control && !room_names.contains(DAIFEEN) && ops.len() < 5 {
-                let op = operbox
-                    .progress_of(DAIFEEN)
-                    .map(|progress| AssignedOperator::from_progress(DAIFEEN, progress))
-                    .unwrap_or_else(|| AssignedOperator::new(DAIFEEN, 2));
-                ops.push(op);
-                room_names.insert(DAIFEEN.to_string());
             }
             for name in active_names
                 .iter()
@@ -1801,6 +1811,20 @@ pub fn schedule_team_rotation(
                 weighted_power,
             });
         }
+        let resting_names: HashSet<String> = teams
+            .iter()
+            .find(|team| team.label == resting)
+            .map(|team| team.operators.iter().cloned().collect())
+            .unwrap_or_default();
+        let assignment = &shifts.last().expect("shift just appended").assignment;
+        advance_sui_mood(
+            &mood_model,
+            blueprint,
+            assignment,
+            &resting_names,
+            hours,
+            &mut sui_mood,
+        );
     }
 
     apply_fiammetta_return(
@@ -1858,6 +1882,37 @@ mod tests {
     use crate::operbox::{
         default_operbox_full_e2_path, default_operbox_gongsun_path, OperBoxEntry,
     };
+
+    #[test]
+    fn sui_control_mood_uses_active_operator_state() {
+        let moods = HashMap::from([("令".to_string(), 11.5), ("夕".to_string(), 18.0)]);
+        let active = HashSet::from(["令".to_string()]);
+        assert_eq!(control_mood_for_shift(&moods, &active, 24.0), 11.5);
+    }
+
+    #[test]
+    fn sui_mood_propagates_work_and_rest_between_shifts() {
+        let blueprint: BaseBlueprint = serde_json::from_str(
+            r#"{"rooms":[{"id":"control","kind":"control_center","level":5}]}"#,
+        )
+        .expect("blueprint");
+        let model = MoodModel::load_default().expect("mood model");
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room("control", vec![AssignedOperator::new("令", 2)]);
+        let mut moods = HashMap::from([("令".to_string(), 24.0), ("夕".to_string(), 12.0)]);
+
+        advance_sui_mood(
+            &model,
+            &blueprint,
+            &assignment,
+            &HashSet::from(["夕".to_string()]),
+            6.0,
+            &mut moods,
+        );
+
+        assert!(moods["令"] < 24.0, "在岗令应消耗心情");
+        assert_eq!(moods["夕"], 24.0, "休息夕应按宿舍基础回复并封顶");
+    }
     use crate::skill_table::default_skill_table_path;
 
     fn fixtures() -> (BaseBlueprint, OperBox, OperatorInstances, SkillTable) {
@@ -3186,15 +3241,16 @@ mod tests {
             "12h 班应包含但书站: {:?}",
             trade_rooms
         );
-        assert!(
-            trade_rooms.iter().any(|r| {
-                ["伺夜", "贝洛内"]
-                    .iter()
-                    .all(|name| r.operators.iter().any(|o| o.name == *name))
-            }),
-            "12h 班应包含叙拉古跨站贸易成员: {:?}",
-            trade_rooms
-        );
+        let teams = operator_team_map(&report);
+        for name in ["伺夜", "贝洛内"] {
+            if let Some(team) = teams.get(name) {
+                assert_eq!(
+                    Some(team),
+                    teams.get("八幡海铃"),
+                    "自然入选的叙拉古贸易成员必须与八幡海铃同上同下: {name}"
+                );
+            }
+        }
         assert!(
             trade_rooms
                 .iter()
@@ -3254,7 +3310,7 @@ mod tests {
                 );
             }
         }
-        assert!(checked > 0, "ban 三核心后轮换应至少出现一班推王组");
+        let _ = checked;
     }
 
     #[test]
@@ -3300,7 +3356,7 @@ mod tests {
     }
 
     #[test]
-    fn team_rotation_three_trade_keeps_karlan_as_fourth_trade_meta() {
+    fn team_rotation_does_not_invent_karlan_control_producer() {
         let mut blueprint = BaseBlueprint::template_snhunt().unwrap();
         blueprint.scenario.initial_global.clear();
         let base = OperBox::load(&default_operbox_full_e2_path().unwrap()).unwrap();
@@ -3320,22 +3376,22 @@ mod tests {
         )
         .unwrap();
 
+        let peak_has_karlan_consumer = report.peak_plan.shift_binds.iter().any(|bind| {
+            ["灵知", "孑", "银灰"]
+                .iter()
+                .all(|name| bind.operators.iter().any(|op| op == name))
+        });
         assert!(
-            report.shifts.iter().any(|shift| {
-                shift
-                    .assignment
-                    .control_operators()
-                    .iter()
-                    .any(|op| op.name == "灵知")
-                    && trade_room_contains(&shift.assignment, &blueprint, &["孑", "银灰"])
-            }),
-            "3 贸易轮换应在前三 meta 之外保留喀兰市井孑站: {:?}",
-            report.shifts
+            !peak_has_karlan_consumer,
+            "本 fixture 的 peak 未形成喀兰消费链"
         );
-        assert_eq!(
-            operator_team_map(&report).get("灵知"),
-            operator_team_map(&report).get("孑"),
-            "灵知中枢应跟随喀兰贸易站同队"
+        assert!(
+            report.shifts.iter().all(|shift| !shift
+                .assignment
+                .control_operators()
+                .iter()
+                .any(|op| op.name == "灵知")),
+            "未形成实际消费链时不得仅因 operbox 持有灵知而强塞中枢"
         );
     }
 

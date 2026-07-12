@@ -77,6 +77,8 @@ fn condition_met(cond: &Option<Condition>, ctx: &PowerContext, owner: &str) -> b
     let Some(cond) = cond else { return true };
     match cond {
         Condition::MoodAbove { n } => ctx.mood > *n as f64,
+        Condition::MoodAboveOrEq { n } => ctx.mood >= *n as f64,
+        Condition::MoodBelow { n } => ctx.mood < *n as f64,
         Condition::MoodBelowOrEq { n } => ctx.mood <= *n as f64,
         Condition::OperatorInBase { name } => ctx.layout.base_workforce.iter().any(|n| n == name),
         Condition::OperatorInTraining { name } => {

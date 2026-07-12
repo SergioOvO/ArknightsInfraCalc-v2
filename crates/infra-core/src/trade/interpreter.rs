@@ -366,6 +366,8 @@ fn condition_met(
         Condition::OrderHasTag { tag } => ctx.order_tags.iter().any(|t| t == tag),
         Condition::OrderNotHasTag { tag } => !ctx.order_tags.iter().any(|t| t == tag),
         Condition::MoodAbove { n } => ctx.mood > *n as f64,
+        Condition::MoodAboveOrEq { n } => ctx.mood >= *n as f64,
+        Condition::MoodBelow { n } => ctx.mood < *n as f64,
         Condition::MoodBelowOrEq { n } => ctx.mood <= *n as f64,
         Condition::PartnerInRoom { name } => names.iter().any(|n| n == name),
         Condition::TagPresentInRoom { tag } => ctx

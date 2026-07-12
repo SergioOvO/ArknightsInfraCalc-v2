@@ -278,6 +278,8 @@ fn condition_met(cond: &Option<Condition>, ctx: &ManuContext, owner: &str) -> bo
     match cond {
         Condition::ActiveRecipe { kind } => ctx.active_recipe == *kind,
         Condition::MoodAbove { n } => ctx.mood > *n as f64,
+        Condition::MoodAboveOrEq { n } => ctx.mood >= *n as f64,
+        Condition::MoodBelow { n } => ctx.mood < *n as f64,
         Condition::MoodBelowOrEq { n } => ctx.mood <= *n as f64,
         Condition::OwnerLacksBuff { buff_id } => ctx
             .operators

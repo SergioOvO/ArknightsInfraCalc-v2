@@ -8,6 +8,7 @@ use crate::skill_table::SkillTable;
 use crate::tier::PromotionTier;
 
 use crate::layout::tier::OperatorTier;
+use crate::operbox::OperBox;
 
 use super::base::{build_roster_pool, filter_pool, HasName, HasProgress, PoolCore, TierTagged};
 pub use super::trade::PoolSkip;
@@ -67,6 +68,44 @@ pub fn build_control_pool(
     build_roster_pool(roster, instances, table, |_| 0.0, try_entry)
 }
 
+/// Build the modeled control pool plus a bounded set of skill-less legal fillers.
+pub fn build_control_pool_with_fillers(
+    operbox: &OperBox,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+) -> Result<ControlPool> {
+    let mut pool = build_control_pool(&operbox.control_roster(instances), instances, table)?;
+    let existing: HashSet<String> = pool
+        .entries
+        .iter()
+        .map(|entry| entry.name.clone())
+        .collect();
+    let roster = operbox.roster();
+    for name in roster
+        .names()
+        .filter(|name| !existing.contains(*name))
+        .take(5)
+    {
+        let Some(progress) = roster.progress(name) else {
+            continue;
+        };
+        let tier = PromotionTier::from_progress(progress);
+        let tags = instances
+            .get(name, tier)
+            .map(|instance| instance.tags.clone())
+            .unwrap_or_default();
+        pool.entries.push(ControlPoolEntry {
+            name: name.to_string(),
+            elite: progress.elite,
+            progress,
+            buff_ids: Vec::new(),
+            tags,
+            tier: OperatorTier::Standalone,
+        });
+    }
+    Ok(pool)
+}
+
 pub fn filter_control_pool(pool: &ControlPool, exclude: &HashSet<String>) -> ControlPool {
     filter_pool(pool, exclude)
 }
@@ -79,15 +118,7 @@ fn try_entry(
 ) -> std::result::Result<ControlPoolEntry, PoolSkip> {
     let tier = PromotionTier::from_progress(progress);
     let inst = instances.get(name, tier);
-    if inst.is_none_or(|i| !i.facilities.contains_key("control")) {
-        return Err(PoolSkip::NoTradeBinding);
-    }
-
     let buff_ids = instances.resolve_control_buff_ids(name, tier);
-    if buff_ids.is_empty() {
-        return Err(PoolSkip::NoTradeBinding);
-    }
-
     for bid in &buff_ids {
         let Some(skill) = table.get(bid) else {
             return Err(PoolSkip::UnmodeledBuff(bid.clone()));
@@ -107,4 +138,28 @@ fn try_entry(
         tags,
         tier: OperatorTier::Standalone,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn account_control_pool_adds_bounded_skillless_fillers() {
+        let operbox =
+            OperBox::load(&crate::operbox::default_operbox_full_e2_path().unwrap()).unwrap();
+        let instances =
+            OperatorInstances::load(&crate::instances::default_instances_path().unwrap()).unwrap();
+        let table =
+            SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
+        let skilled =
+            build_control_pool(&operbox.control_roster(&instances), &instances, &table).unwrap();
+        let with_fillers = build_control_pool_with_fillers(&operbox, &instances, &table).unwrap();
+
+        assert!(with_fillers.entries.len() <= skilled.entries.len() + 5);
+        assert!(with_fillers
+            .entries
+            .iter()
+            .any(|entry| entry.buff_ids.is_empty()));
+    }
 }

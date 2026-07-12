@@ -141,22 +141,9 @@ fn control_efficiency_inject_buff(buff_id: &str) -> bool {
 }
 
 pub fn control_efficiency_fill_sort_weight(entry: &crate::pool::ControlPoolEntry) -> f64 {
-    let mut weight = 0.0;
-    for bid in &entry.buff_ids {
-        if bid.starts_with("control_tra_spd") || bid == "control_token_tra_spd[000]" {
-            weight += 100.0;
-        } else if bid.starts_with("control_prod_spd")
-            || bid.starts_with("control_token_prod_spd")
-            || bid == "control_bd_spd[000]"
-        {
-            weight += 80.0;
-        } else if bid.starts_with("control_tra_limit&spd") || bid == "control_prod_tra_spd[000]" {
-            weight += 60.0;
-        } else if bid == "control_hire_spd&bd[000]" {
-            weight += 10.0;
-        }
-    }
-    weight
+    // 旧调用点仍需要稳定排序 API；实际候选优劣统一由组合 solver 决定。
+    let _ = entry;
+    0.0
 }
 
 fn control_mood_cost_buff(buff_id: &str) -> bool {
@@ -263,10 +250,8 @@ fn control_layered_fill_scores(
     for op in operators {
         for bid in &op.buff_ids {
             match bid.as_str() {
-                // 喀兰贸易路线入口：单独放中枢时本身不产数值，但会解锁孑/银灰路线。
-                "control_tra_limit&spd[000]" => scores.loose_piece += 8.0,
-                // 八幡海铃·可靠伙伴：单走时按散件层处理，但低于直接 +2/+7 产能。
-                "control_hire_spd&bd[000]" => scores.loose_piece += 1.0,
+                // 跨设施入口本身不预支人工估值；实际收益由完整编制的 solver 结算。
+                "control_tra_limit&spd[000]" | "control_hire_spd&bd[000]" => {}
                 // 中枢内全员心情 +0.05/h；EW / 玛恩纳等也归心情层。
                 "control_mp_cost[007]"
                 | "control_mp_cost[010]"
@@ -384,23 +369,36 @@ fn evaluate_control_policy(
     }
 }
 
-/// 中枢 C(n,k)，k ∈ [1, max_operators]；按全局注入与资源池评分。
+/// 中枢满编组合搜索；可用人数不足上限时使用全部可用角色。
 pub fn search_control_combos(
     pool: &ControlPool,
     table: &SkillTable,
     options: &ControlSearchOptions,
 ) -> Result<Vec<ControlSearchHit>> {
-    let n = pool.entries.len();
+    // Skill-less operators are equivalent for control output. Keep only enough
+    // stable-name fallbacks to fill the room, avoiding C(account_size, 5).
+    let mut entries: Vec<_> = pool
+        .entries
+        .iter()
+        .filter(|entry| !entry.buff_ids.is_empty() || options.must_include.contains(&entry.name))
+        .collect();
+    let fallback_slots = usize::from(options.max_operators.min(5));
+    entries.extend(
+        pool.entries
+            .iter()
+            .filter(|entry| {
+                entry.buff_ids.is_empty() && !options.must_include.contains(&entry.name)
+            })
+            .take(fallback_slots),
+    );
+    let n = entries.len();
     if n == 0 {
         return Ok(Vec::new());
     }
 
     let start = Instant::now();
     let max_k = options.max_operators.min(5).min(n as u8) as usize;
-    let mut combos: Vec<Vec<usize>> = Vec::new();
-    for k in 1..=max_k {
-        combos.extend(combinations_indices(n, k));
-    }
+    let combos: Vec<Vec<usize>> = combinations_indices(n, max_k).collect();
 
     let layout = options.layout.clone();
     let mood = options.mood;
@@ -410,7 +408,7 @@ pub fn search_control_combos(
         .filter_map(|idxs| {
             let operators: Vec<_> = idxs
                 .iter()
-                .map(|i| pool.entries[*i].to_control_operator())
+                .map(|i| entries[*i].to_control_operator())
                 .collect();
             let mut names: Vec<String> = operators.iter().map(|o| o.name.clone()).collect();
             names.sort();
@@ -639,5 +637,61 @@ mod tests {
 
         assert!(control_entry_plugin_fill(pool.entry("八幡海铃").unwrap()));
         assert!(!control_entry_plugin_fill(pool.entry("三角初华").unwrap()));
+    }
+
+    #[test]
+    fn control_search_fills_to_capacity_when_pool_is_large_enough() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            ["阿米娅", "诗怀雅", "玛恩纳", "Mon3tr", "明椒", "焰尾"]
+                .into_iter()
+                .map(|name| (name.to_string(), 2))
+                .collect(),
+        );
+        let pool = build_control_pool(&roster, &instances, &table).unwrap();
+
+        let hits = search_control_combos(
+            &pool,
+            &table,
+            &ControlSearchOptions {
+                max_operators: 5,
+                top_k: 20,
+                fill_policy: ControlFillPolicy::LayeredFill,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert!(!hits.is_empty());
+        assert!(hits.iter().all(|hit| hit.names.len() == 5));
+    }
+
+    #[test]
+    fn control_search_uses_every_operator_when_pool_is_under_capacity() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            ["阿米娅", "诗怀雅", "玛恩纳"]
+                .into_iter()
+                .map(|name| (name.to_string(), 2))
+                .collect(),
+        );
+        let pool = build_control_pool(&roster, &instances, &table).unwrap();
+
+        let hits = search_control_combos(
+            &pool,
+            &table,
+            &ControlSearchOptions {
+                max_operators: 5,
+                top_k: 20,
+                fill_policy: ControlFillPolicy::LayeredFill,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].names.len(), 3);
     }
 }

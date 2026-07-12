@@ -13,12 +13,12 @@ use crate::layout::orchestrate::{execute_plan, AssignmentPlan};
 use crate::layout::shift::AssignShiftMode;
 use crate::operbox::OperBox;
 use crate::pool::{
-    add_jie_market_to_trade_pool, build_control_pool, build_manufacture_pool, build_power_pool,
-    build_trade_pool, karlan_precision_active,
+    add_jie_market_to_trade_pool, build_control_pool_with_fillers, build_manufacture_pool,
+    build_power_pool, build_trade_pool, karlan_precision_active,
 };
 use crate::skill_table::SkillTable;
 
-use super::control_fill::{assign_control, pin_daifeen_for_vina_priority};
+use super::control_fill::assign_control;
 use super::manufacture_fill::{assign_manufacture_lines, ManufactureSystemCandidateTrace};
 use super::power_fill::assign_power_stations;
 use super::producer_fill::{
@@ -66,14 +66,10 @@ pub(super) fn run_shift_pipeline(
     let producer_layout = run.resolve_snapshot(false)?;
     timer.mark("resolve(1st)");
 
-    // 中枢补位（仅 Peak）。推王组第 4 优先需要戴菲恩 producer；中枢已满时也允许
-    // 用戴菲恩替换低优先龙门制造注入位，然后普通搜索补齐剩余空位。
-    if mode == AssignShiftMode::Peak {
-        pin_daifeen_for_vina_priority(blueprint, operbox, &mut run.assignment, &mut run.used);
-    }
+    // 中枢补位（仅 Peak）。跨设施体系位由 AssignmentPlan 预先认领；
+    // fill 只能补空位，不得按干员名替换 required anchor。
     if mode == AssignShiftMode::Peak && run.assignment.control_operators().len() < 5 {
-        let mut control_pool =
-            build_control_pool(&operbox.control_roster(instances), instances, table)?;
+        let mut control_pool = build_control_pool_with_fillers(operbox, instances, table)?;
         tag_pool_from_plan(plan, &mut control_pool);
         assign_control(
             &mut run.assignment,

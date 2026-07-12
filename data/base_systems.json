@@ -38,7 +38,6 @@
       "tier": "cross_station",
       "priority": 20,
       "segment_id": "docus_syracusa",
-      "exclusive_group": "meta_chain",
       "shift_modes": ["peak"],
       "slots": [
         {

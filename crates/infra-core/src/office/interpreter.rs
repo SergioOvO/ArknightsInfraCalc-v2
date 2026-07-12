@@ -41,6 +41,8 @@ fn condition_met(condition: Option<&Condition>, mood: f64) -> bool {
     match condition {
         None => true,
         Some(Condition::MoodAbove { n }) => mood > f64::from(*n),
+        Some(Condition::MoodAboveOrEq { n }) => mood >= f64::from(*n),
+        Some(Condition::MoodBelow { n }) => mood < f64::from(*n),
         Some(Condition::MoodBelowOrEq { n }) => mood <= f64::from(*n),
         _ => false,
     }

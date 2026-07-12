@@ -2,16 +2,13 @@ use std::collections::HashSet;
 
 use crate::error::{Error, Result};
 use crate::layout::assignment::{AssignedOperator, BaseAssignment};
-use crate::layout::blueprint::{BaseBlueprint, FacilityKind, RoomId, RoomProduct};
+use crate::layout::blueprint::{FacilityKind, RoomId};
 use crate::layout::context::LayoutContext;
-use crate::operbox::OperBox;
 use crate::pool::{try_filter_standalone, ControlPool};
 use crate::search::{
-    control_entry_plugin_fill, search_control_combos, ControlFillPolicy, ControlSearchOptions,
-    MATATABI_CONSUMER_NAME,
+    search_control_combos, ControlFillPolicy, ControlSearchOptions, MATATABI_CONSUMER_NAME,
 };
 use crate::skill_table::SkillTable;
-use crate::trade::input::TradeOrderKind;
 
 use super::AssignBaseOptions;
 
@@ -20,87 +17,6 @@ fn assignment_has_matatabi_consumer(assignment: &BaseAssignment) -> bool {
         room.operators
             .iter()
             .any(|op| op.name == MATATABI_CONSUMER_NAME)
-    })
-}
-
-const DOCUS: &str = "但书";
-const CLOSURE: &str = "可露希尔";
-const WITCH: &str = "巫恋";
-const LONGSPRING: &str = "龙舌兰";
-const DAIFEEN: &str = "戴菲恩";
-const SIEGE: &str = "推进之王";
-const MORGAN: &str = "摩根";
-const VINA: &str = "维娜·维多利亚";
-
-pub(super) fn pin_daifeen_for_vina_priority(
-    blueprint: &BaseBlueprint,
-    operbox: &OperBox,
-    assignment: &mut BaseAssignment,
-    used: &mut HashSet<String>,
-) {
-    if used.contains(DAIFEEN)
-        || assignment
-            .control_operators()
-            .iter()
-            .any(|o| o.name == DAIFEEN)
-    {
-        return;
-    }
-    if !vina_priority_active(blueprint, operbox, assignment) {
-        return;
-    }
-    let Some(progress) = operbox.progress_of(DAIFEEN) else {
-        return;
-    };
-    let mut control = assignment.control_operators();
-    if control.len() >= 5 {
-        let Some(idx) = control
-            .iter()
-            .position(|op| op.name == "诗怀雅")
-            .or_else(|| control.iter().position(|op| op.name == "斩业星熊"))
-        else {
-            return;
-        };
-        let removed = control.remove(idx);
-        used.remove(&removed.name);
-    }
-    control.push(AssignedOperator::from_progress(DAIFEEN, progress));
-    assignment.set_room(RoomId::from("control"), control);
-    used.insert(DAIFEEN.to_string());
-}
-
-fn vina_priority_active(
-    blueprint: &BaseBlueprint,
-    operbox: &OperBox,
-    assignment: &BaseAssignment,
-) -> bool {
-    !higher_trade_core_available(operbox)
-        && [DAIFEEN, SIEGE, MORGAN, VINA]
-            .iter()
-            .all(|name| operbox.elite_of(name).is_some_and(|elite| elite >= 2))
-        && has_available_lv3_gold_trade_room(blueprint, assignment)
-}
-
-fn higher_trade_core_available(operbox: &OperBox) -> bool {
-    operbox.owns(DOCUS)
-        || operbox.owns(CLOSURE)
-        || (operbox.owns(WITCH) && operbox.owns(LONGSPRING))
-}
-
-fn has_available_lv3_gold_trade_room(
-    blueprint: &BaseBlueprint,
-    assignment: &BaseAssignment,
-) -> bool {
-    blueprint.rooms.iter().any(|room| {
-        room.kind == FacilityKind::TradePost
-            && room.level == 3
-            && matches!(
-                room.product,
-                Some(RoomProduct::Trade {
-                    order: TradeOrderKind::Gold
-                })
-            )
-            && assignment.operators_in(&room.id).len() < room.operator_capacity()
     })
 }
 
@@ -138,10 +54,14 @@ pub(crate) fn assign_control(
     let base_pool = if options.skip_standalone_control || !pinned.is_empty() {
         pool.clone()
     } else {
-        try_filter_standalone(pool, FacilityKind::ControlCenter, 1)
+        let preferred = try_filter_standalone(pool, FacilityKind::ControlCenter, 1);
+        if preferred.entries.len() >= MAX_CONTROL {
+            preferred
+        } else {
+            pool.clone()
+        }
     };
-    let filtered_pool =
-        filter_control_pool_for_fill(&base_pool, used, &pinned, control_opts.fill_policy);
+    let filtered_pool = filter_control_pool_for_fill(&base_pool, used, &pinned);
 
     let hit = if pinned.is_empty() {
         let combos = search_control_combos(&filtered_pool, table, &control_opts)?;
@@ -177,18 +97,12 @@ fn filter_control_pool_for_fill(
     pool: &ControlPool,
     used: &HashSet<String>,
     pinned: &HashSet<String>,
-    fill_policy: ControlFillPolicy,
 ) -> ControlPool {
     ControlPool {
         entries: pool
             .entries
             .iter()
-            .filter(|e| {
-                (!used.contains(&e.name) || pinned.contains(&e.name))
-                    && (fill_policy != ControlFillPolicy::LayeredFill
-                        || pinned.contains(&e.name)
-                        || control_entry_plugin_fill(e))
-            })
+            .filter(|e| !used.contains(&e.name) || pinned.contains(&e.name))
             .cloned()
             .collect(),
         skipped: pool.skipped.clone(),
@@ -249,4 +163,27 @@ fn commit_control_combo(
         .collect::<Result<Vec<_>>>()?;
     assignment.set_room(room_id.clone(), ops);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::instances::{default_instances_path, OperatorInstances};
+    use crate::pool::build_control_pool;
+    use crate::roster::Roster;
+    use crate::skill_table::{default_skill_table_path, SkillTable};
+
+    #[test]
+    fn final_control_pool_keeps_legal_operator_without_control_buff() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map([("阿米娅".to_string(), 2)].into_iter().collect());
+        let mut pool = build_control_pool(&roster, &instances, &table).unwrap();
+        pool.entries[0].buff_ids.clear();
+
+        let filtered = filter_control_pool_for_fill(&pool, &HashSet::new(), &HashSet::new());
+
+        assert_eq!(filtered.entries.len(), 1);
+        assert!(filtered.entries[0].buff_ids.is_empty());
+    }
 }

@@ -345,18 +345,27 @@ fn explain_slot_operators(
         match spec {
             SystemOperatorSpec::Fixed(fixed) => {
                 if slot_used.contains(&fixed.name) {
+                    if slot.fill == SlotFillMode::Search {
+                        continue;
+                    }
                     return Err(SystemExplainReason::new(
                         "operator_already_used",
                         format!("{} is already assigned", fixed.name),
                     ));
                 }
                 let Some(progress) = operbox.progress_of(&fixed.name) else {
+                    if slot.fill == SlotFillMode::Search {
+                        continue;
+                    }
                     return Err(SystemExplainReason::new(
                         "missing_operator",
                         format!("{} is not owned", fixed.name),
                     ));
                 };
                 if progress.elite < fixed.elite {
+                    if slot.fill == SlotFillMode::Search {
+                        continue;
+                    }
                     return Err(SystemExplainReason::new(
                         "elite_requirement",
                         format!(
@@ -366,6 +375,9 @@ fn explain_slot_operators(
                     ));
                 }
                 if fixed.max_elite.is_some_and(|max| progress.elite > max) {
+                    if slot.fill == SlotFillMode::Search {
+                        continue;
+                    }
                     return Err(SystemExplainReason::new(
                         "elite_requirement",
                         format!(
@@ -384,6 +396,9 @@ fn explain_slot_operators(
             }
             SystemOperatorSpec::PickOne(pick) => {
                 let Some(op) = resolve_pick_one(operbox, pick, &slot_used) else {
+                    if slot.fill == SlotFillMode::Search {
+                        continue;
+                    }
                     let names: Vec<_> = pick.pick_one.iter().map(|c| c.name()).collect();
                     return Err(SystemExplainReason::new(
                         "missing_operator",
@@ -1169,7 +1184,7 @@ mod tests {
     }
 
     #[test]
-    fn exclusive_meta_chain_prefers_syracusa_over_ling_jie() {
+    fn syracusa_claim_pins_only_control_producer() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = ideal_e2_operbox();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
@@ -1188,15 +1203,9 @@ mod tests {
         .unwrap();
 
         assert!(!used.contains("灵知"));
-        let has_syracusa_trade = assignment.rooms.iter().any(|r| {
-            blueprint
-                .rooms
-                .iter()
-                .any(|b| b.id == r.room_id && b.kind == FacilityKind::TradePost)
-                && r.operators.iter().any(|o| o.name == "伺夜")
-                && r.operators.iter().any(|o| o.name == "贝洛内")
-        });
-        assert!(has_syracusa_trade, "叙拉古同站 meta 应认领某一贸易站");
+        assert!(used.contains("八幡海铃"));
+        assert!(!used.contains("伺夜"));
+        assert!(!used.contains("贝洛内"));
     }
 
     #[test]

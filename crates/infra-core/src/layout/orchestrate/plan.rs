@@ -137,6 +137,105 @@ pub struct AssignmentPlan {
 }
 
 impl AssignmentPlan {
+    /// Derive cross-facility rotation binds from operators that actually made the peak assignment.
+    /// This constrains rotation without turning a bind into an admission requirement.
+    pub fn derive_actual_shift_binds(
+        &mut self,
+        blueprint: &crate::layout::BaseBlueprint,
+        assignment: &crate::layout::BaseAssignment,
+    ) {
+        let in_control = |name: &str| {
+            assignment
+                .control_operators()
+                .iter()
+                .any(|op| op.name == name)
+        };
+        let together_in = |facility: FacilityKind, names: &[&str]| {
+            blueprint.rooms.iter().any(|room| {
+                room.kind == facility
+                    && names.iter().all(|name| {
+                        assignment
+                            .operators_in(&room.id)
+                            .iter()
+                            .any(|op| op.name == *name)
+                    })
+            })
+        };
+        let anywhere_in = |facility: FacilityKind, names: &[&str]| {
+            names.iter().all(|name| {
+                blueprint.rooms.iter().any(|room| {
+                    room.kind == facility
+                        && assignment
+                            .operators_in(&room.id)
+                            .iter()
+                            .any(|op| op.name == *name)
+                })
+            })
+        };
+        let perception_active = self.activated.iter().any(|system| {
+            matches!(
+                system.system_id.as_str(),
+                "rosemary_perception" | "rosemary_perception_core"
+            )
+        });
+
+        let mut add = |operators: &[&str]| {
+            if self.shift_binds.iter().any(|bind| {
+                operators
+                    .iter()
+                    .all(|name| bind.operators.iter().any(|bound| bound == name))
+            }) {
+                return;
+            }
+            self.shift_binds.push(ShiftBind {
+                operators: operators.iter().map(|name| (*name).to_string()).collect(),
+                on_shifts: 2,
+                off_shifts: 1,
+            });
+        };
+
+        if in_control("戴菲恩") && together_in(FacilityKind::TradePost, &["推进之王", "摩根"])
+        {
+            add(&["戴菲恩", "推进之王", "摩根"]);
+        }
+        if in_control("灵知") && together_in(FacilityKind::TradePost, &["孑", "银灰"]) {
+            add(&["灵知", "孑", "银灰"]);
+        }
+        if in_control("涤火杰西卡")
+            && anywhere_in(FacilityKind::Factory, &["水月", "香草", "杰西卡"])
+        {
+            add(&["涤火杰西卡", "水月", "香草", "杰西卡"]);
+        }
+        if in_control("八幡海铃") {
+            let mut operators = vec!["八幡海铃"];
+            for name in ["伺夜", "贝洛内"] {
+                if anywhere_in(FacilityKind::TradePost, &[name]) {
+                    operators.push(name);
+                }
+            }
+            if operators.len() > 1 {
+                add(&operators);
+            }
+        }
+
+        let wuyou_active = anywhere_in(FacilityKind::TradePost, &["乌有"]);
+        if perception_active && wuyou_active && in_control("重岳") && in_control("令") {
+            add(&["重岳", "令", "乌有"]);
+        } else if !perception_active && wuyou_active && anywhere_in(FacilityKind::Office, &["桑葚"])
+        {
+            let mut operators = vec!["桑葚", "乌有"];
+            if in_control("重岳") {
+                operators.push("重岳");
+            }
+            if in_control("令") {
+                operators.push("令");
+            }
+            if operators.len() >= 3 {
+                add(&operators);
+            }
+        }
+    }
+
     pub fn recovery(mode: AssignShiftMode) -> Self {
         Self {
             mode,
@@ -236,5 +335,57 @@ pub fn registry_as_activated(claim: &RegistrySystemClaim) -> ActivatedSystem {
         priority: claim.priority,
         tier: claim.tier,
         slots,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layout::{AssignedOperator, BaseAssignment, BaseBlueprint};
+
+    fn set_trade_group(assignment: &mut BaseAssignment, names: &[&str]) {
+        assignment.set_room(
+            "trade_1",
+            names
+                .iter()
+                .map(|name| AssignedOperator::new(*name, 2))
+                .collect(),
+        );
+    }
+
+    #[test]
+    fn actual_vina_bind_requires_control_producer_and_both_trade_consumers() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room("control", vec![AssignedOperator::new("戴菲恩", 2)]);
+        set_trade_group(&mut assignment, &["推进之王", "摩根"]);
+
+        let mut plan = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        plan.derive_actual_shift_binds(&blueprint, &assignment);
+        assert!(plan.shift_binds.iter().any(|bind| {
+            ["戴菲恩", "推进之王", "摩根"]
+                .iter()
+                .all(|name| bind.operators.iter().any(|bound| bound == name))
+        }));
+
+        set_trade_group(&mut assignment, &["推进之王"]);
+        let mut missing = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        missing.derive_actual_shift_binds(&blueprint, &assignment);
+        assert!(missing.shift_binds.is_empty());
+    }
+
+    #[test]
+    fn actual_karlan_bind_does_not_admit_missing_control_producer() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let mut assignment = BaseAssignment::default();
+        set_trade_group(&mut assignment, &["孑", "银灰"]);
+
+        let mut plan = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        plan.derive_actual_shift_binds(&blueprint, &assignment);
+        assert!(plan.shift_binds.is_empty());
+
+        assignment.set_room("control", vec![AssignedOperator::new("灵知", 2)]);
+        plan.derive_actual_shift_binds(&blueprint, &assignment);
+        assert_eq!(plan.shift_binds.len(), 1);
     }
 }

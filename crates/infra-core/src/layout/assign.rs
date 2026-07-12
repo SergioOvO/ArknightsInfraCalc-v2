@@ -1099,7 +1099,7 @@ mod tests {
     }
 
     #[test]
-    fn assign_full_e2_without_top_three_trade_cores_uses_vina_before_karlan() {
+    fn assign_vina_consumers_never_run_without_daifeen_producer() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = OperBox::load(&default_operbox_full_e2_path().unwrap()).unwrap();
         let operbox = operbox.excluding(&HashSet::from([
@@ -1133,16 +1133,14 @@ mod tests {
             .into_iter()
             .map(|o| o.name)
             .collect();
-        assert!(control.contains("戴菲恩"), "control: {:?}", control);
-
         let vina_room = assignment.rooms.iter().find(|r| {
             ["推进之王", "摩根", "维娜·维多利亚"]
                 .iter()
                 .all(|name| r.operators.iter().any(|o| o.name == *name))
         });
         assert!(
-            vina_room.is_some(),
-            "推王摩根维娜应优先于灵知孑上站: {:?}",
+            vina_room.is_none() || control.contains("戴菲恩"),
+            "推王消费方实际上岗时必须有戴菲恩 producer: {:?}",
             assignment.rooms
         );
     }

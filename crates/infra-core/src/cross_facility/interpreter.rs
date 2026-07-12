@@ -51,6 +51,8 @@ fn condition_met(
     };
     match cond {
         Condition::MoodAbove { n: _ } => true, // 跨设施编排暂不关心心情，视为满足
+        Condition::MoodAboveOrEq { n: _ } => true,
+        Condition::MoodBelow { n: _ } => false,
         Condition::MoodBelowOrEq { n: _ } => false,
         Condition::PartnerInRoom { name: _ } => true, // scope=Global 的跨设施 atom 不依赖同房条件
         _ => true,                                    // 其他条件视为满足（跨设施场景简化处理）

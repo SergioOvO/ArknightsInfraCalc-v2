@@ -154,6 +154,12 @@ pub enum Condition {
     MoodAbove {
         n: u8,
     },
+    MoodAboveOrEq {
+        n: u8,
+    },
+    MoodBelow {
+        n: u8,
+    },
     MoodBelowOrEq {
         n: u8,
     },

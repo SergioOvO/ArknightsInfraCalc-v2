@@ -6,7 +6,10 @@ mod standalone;
 mod trade;
 
 pub use base::{filter_pool, HasName, HasProgress, PoolCore, TierTagged};
-pub use control::{build_control_pool, filter_control_pool, ControlPool, ControlPoolEntry};
+pub use control::{
+    build_control_pool, build_control_pool_with_fillers, filter_control_pool, ControlPool,
+    ControlPoolEntry,
+};
 pub use manufacture::{
     build_manufacture_pool, expand_manufacture_candidate_pool,
     filter_general_manufacture_search_pool, filter_manufacture_pool, ManuPool, ManuPoolEntry,

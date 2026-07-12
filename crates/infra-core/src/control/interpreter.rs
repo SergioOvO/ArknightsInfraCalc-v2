@@ -110,6 +110,8 @@ fn condition_met(cond: &Option<Condition>, ctx: &ControlContext, owner: &str) ->
     let Some(cond) = cond else { return true };
     match cond {
         Condition::MoodAbove { n } => ctx.mood > *n as f64,
+        Condition::MoodAboveOrEq { n } => ctx.mood >= *n as f64,
+        Condition::MoodBelow { n } => ctx.mood < *n as f64,
         Condition::MoodBelowOrEq { n } => ctx.mood <= *n as f64,
         Condition::OperatorInBase { name } => ctx.layout.base_workforce.iter().any(|n| n == name),
         Condition::OperatorInPower { name } => ctx.layout.power_workforce.iter().any(|n| n == name),
@@ -585,6 +587,32 @@ mod tests {
             "mood={}",
             result.operator_mood_drains["夕"]
         );
+    }
+
+    #[test]
+    fn sui_mood_boundary_at_twelve() {
+        let layout = LayoutContext::default();
+        let ling = solve_control(
+            &ControlRoomInput {
+                operators: vec![control_op("令", 2)],
+                mood: 12.0,
+                layout: layout.clone(),
+            },
+            &table(),
+        );
+        assert_eq!(ling.global.get(GlobalResourceKey::Perception), 10.0);
+        assert_eq!(ling.global.get(GlobalResourceKey::HumanFireworks), 0.0);
+
+        let xi = solve_control(
+            &ControlRoomInput {
+                operators: vec![control_op("夕", 2)],
+                mood: 12.0,
+                layout,
+            },
+            &table(),
+        );
+        assert_eq!(xi.global.get(GlobalResourceKey::Perception), 10.0);
+        assert_eq!(xi.global.get(GlobalResourceKey::HumanFireworks), 0.0);
     }
 
     #[test]

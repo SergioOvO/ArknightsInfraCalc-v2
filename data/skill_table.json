@@ -4939,7 +4939,7 @@
       "atoms": [
         {
           "condition": {
-            "mood_below_or_eq": {
+            "mood_below": {
               "n": 12
             }
           },
@@ -5124,7 +5124,7 @@
       "atoms": [
         {
           "condition": {
-            "mood_above": {
+            "mood_above_or_eq": {
               "n": 12
             }
           },
