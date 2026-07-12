@@ -353,6 +353,18 @@ pub fn rotating_workers(assignment: &BaseAssignment, blueprint: &BaseBlueprint) 
 ///
 /// 中枢在 `schedule_team_rotation` 中按 αβγ 队伍轮休重分配，不在这里钉死。
 pub fn pinned_assignment(assignment: &BaseAssignment, blueprint: &BaseBlueprint) -> BaseAssignment {
+    pinned_assignment_excluding(assignment, blueprint, &HashSet::new())
+}
+
+/// 宿舍与不参与体系轮换的办公室共享脚手架。
+///
+/// `excluded` 来自实际 `shift_bind` 中已在办公室落位的成员；这些岗位由 schedule
+/// 按 cohort 每班重新填充，不能在 shared 阶段再次钉死。
+pub fn pinned_assignment_excluding(
+    assignment: &BaseAssignment,
+    blueprint: &BaseBlueprint,
+    excluded: &HashSet<String>,
+) -> BaseAssignment {
     let mut pinned = BaseAssignment::default();
     for room in &assignment.rooms {
         let Some(bp) = blueprint.rooms.iter().find(|r| r.id == room.room_id) else {
@@ -361,10 +373,12 @@ pub fn pinned_assignment(assignment: &BaseAssignment, blueprint: &BaseBlueprint)
         if !matches!(bp.kind, FacilityKind::Dormitory | FacilityKind::Office) {
             continue;
         }
+        let mut room = room.clone();
+        room.operators.retain(|op| !excluded.contains(&op.name));
         if room.operators.is_empty() {
             continue;
         }
-        pinned.set_room_assignment(room.clone());
+        pinned.set_room_assignment(room);
     }
     pinned
 }

@@ -8,7 +8,8 @@ mod select;
 
 pub use execute::{execute_plan, ExecuteResult};
 pub use plan::{
-    ActivatedSystem, AssignmentPlan, ProducerSlot, SlotFill, SystemAnchor, SystemConstraint,
+    ActivatedSystem, AssignmentPlan, ControlCandidateRequirement, ProducerSlot, SlotFill,
+    SystemAnchor, SystemConstraint,
 };
 pub use select::build_plan;
 
@@ -37,6 +38,177 @@ mod tests {
         .unwrap();
         assert!(plan.activated.is_empty());
         assert!(plan.registry_claims.is_empty());
+    }
+
+    #[test]
+    fn pure_fireworks_declares_solver_candidate_requirement() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let full = OperBox::load(&crate::operbox::default_operbox_full_e2_path().unwrap()).unwrap();
+        let operbox = full.excluding(&std::collections::HashSet::from([
+            "迷迭香".to_string(),
+            "黑键".to_string(),
+        ]));
+        let plan = build_plan(
+            &blueprint,
+            &operbox,
+            AssignShiftMode::Peak,
+            &BaseAssignment::default(),
+            &std::collections::HashSet::new(),
+        )
+        .unwrap();
+
+        assert!(plan.registry_system_ids().contains(&"human_fireworks_pure"));
+        assert!(plan
+            .control_candidate_requirements
+            .iter()
+            .any(|requirement| {
+                requirement.min_count == 1
+                    && requirement.candidates.contains(&"重岳".to_string())
+                    && requirement.candidates.contains(&"令".to_string())
+            }));
+        let fixed_control_count: usize = plan
+            .registry_claims
+            .iter()
+            .flat_map(|claim| &claim.slots)
+            .filter(|slot| {
+                slot.facility == crate::layout::FacilityKind::ControlCenter
+                    && slot.fill != crate::layout::system::SlotFillMode::Search
+            })
+            .map(|slot| slot.operators.len())
+            .sum();
+        let control_anchors = plan
+            .anchors
+            .iter()
+            .filter(|anchor| anchor.facility == crate::layout::FacilityKind::ControlCenter)
+            .count();
+        assert!(
+            control_anchors + fixed_control_count + 1 <= 5,
+            "代码化 anchor、registry fixed 与 required_count 不得超卖中枢容量"
+        );
+        assert!(plan
+            .registry_operator_names()
+            .iter()
+            .all(|name| !name.starts_with("__control_reservation_")));
+    }
+
+    #[test]
+    fn perception_fireworks_requires_both_control_candidates() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let operbox =
+            OperBox::load(&crate::operbox::default_operbox_full_e2_path().unwrap()).unwrap();
+        let plan = build_plan(
+            &blueprint,
+            &operbox,
+            AssignShiftMode::Peak,
+            &BaseAssignment::default(),
+            &std::collections::HashSet::new(),
+        )
+        .unwrap();
+
+        assert!(!plan.registry_system_ids().contains(&"human_fireworks_pure"));
+        assert!(plan
+            .registry_system_ids()
+            .contains(&"human_fireworks_perception"));
+        assert!(plan
+            .control_candidate_requirements
+            .iter()
+            .any(|requirement| {
+                requirement.min_count == 2
+                    && requirement.candidates.contains(&"重岳".to_string())
+                    && requirement.candidates.contains(&"令".to_string())
+            }));
+        let fixed_control_count: usize = plan
+            .registry_claims
+            .iter()
+            .flat_map(|claim| &claim.slots)
+            .filter(|slot| {
+                slot.facility == crate::layout::FacilityKind::ControlCenter
+                    && slot.fill != crate::layout::system::SlotFillMode::Search
+            })
+            .map(|slot| slot.operators.len())
+            .sum();
+        let control_anchors = plan
+            .anchors
+            .iter()
+            .filter(|anchor| anchor.facility == crate::layout::FacilityKind::ControlCenter)
+            .count();
+        assert!(
+            control_anchors + fixed_control_count + 2 <= 5,
+            "感知分支必须跨代码化/registry 两条路径预留两个 solver 席位"
+        );
+    }
+
+    #[test]
+    fn fireworks_branches_close_when_required_members_are_missing() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let full = OperBox::load(&crate::operbox::default_operbox_full_e2_path().unwrap()).unwrap();
+        let build = |operbox: &OperBox| {
+            build_plan(
+                &blueprint,
+                operbox,
+                AssignShiftMode::Peak,
+                &BaseAssignment::default(),
+                &std::collections::HashSet::new(),
+            )
+            .unwrap()
+        };
+        let assert_closed = |plan: &AssignmentPlan, system_id: &str| {
+            assert!(!plan.registry_system_ids().contains(&system_id));
+            assert!(plan
+                .control_candidate_requirements
+                .iter()
+                .all(|requirement| {
+                    !requirement.candidates.contains(&"重岳".to_string())
+                        && !requirement.candidates.contains(&"令".to_string())
+                }));
+        };
+
+        let pure_base = full.excluding(&std::collections::HashSet::from([
+            "迷迭香".to_string(),
+            "黑键".to_string(),
+        ]));
+        for missing in [vec!["桑葚"], vec!["重岳", "令"]] {
+            let operbox = pure_base.excluding(&std::collections::HashSet::from_iter(
+                missing.into_iter().map(str::to_string),
+            ));
+            assert_closed(&build(&operbox), "human_fireworks_pure");
+        }
+        let mut low_wuyou_entries = pure_base.entries.clone();
+        low_wuyou_entries
+            .iter_mut()
+            .filter(|entry| entry.name == "乌有")
+            .for_each(|entry| entry.elite = 0);
+        assert_closed(
+            &build(&OperBox::from_entries(low_wuyou_entries)),
+            "human_fireworks_pure",
+        );
+
+        for missing in ["重岳", "令"] {
+            let operbox = full.excluding(&std::collections::HashSet::from([missing.to_string()]));
+            assert_closed(&build(&operbox), "human_fireworks_perception");
+        }
+        assert_closed(
+            &build(&full.excluding(&std::collections::HashSet::from(["乌有".to_string()]))),
+            "human_fireworks_perception",
+        );
+        let mut low_wuyou_entries = full.entries.clone();
+        low_wuyou_entries
+            .iter_mut()
+            .filter(|entry| entry.name == "乌有")
+            .for_each(|entry| entry.elite = 0);
+        assert_closed(
+            &build(&OperBox::from_entries(low_wuyou_entries)),
+            "human_fireworks_perception",
+        );
+
+        let no_mulberry = full.excluding(&std::collections::HashSet::from(["桑葚".to_string()]));
+        let perception_without_mulberry = build(&no_mulberry);
+        assert!(perception_without_mulberry
+            .registry_system_ids()
+            .contains(&"human_fireworks_perception"));
+        assert!(!perception_without_mulberry
+            .registry_system_ids()
+            .contains(&"human_fireworks_pure"));
     }
 
     #[test]

@@ -6,13 +6,16 @@ use serde::Serialize;
 use crate::efficiency::Efficiency;
 use crate::error::{Error, Result};
 use crate::instances::OperatorInstances;
+#[cfg(test)]
+use crate::layout::RoomAssignment;
 use crate::layout::{
     assign_control, assign_manu_room_with_anchors, assign_shift_with_plan_skip,
-    assign_team_gamma_half, pinned_assignment, resolve_base, ActivatedSystem, AssignBaseOptions,
-    AssignShiftMode, AssignedOperator, AssignmentPlan, BaseAssignment, BaseBlueprint, FacilityKind,
-    LayoutContext, RoomAssignment, RoomId, RoomProduct, SlotFill,
+    assign_team_gamma_half, pinned_assignment_excluding, resolve_base, ActivatedSystem,
+    AssignBaseOptions, AssignShiftMode, AssignedOperator, AssignmentPlan, BaseAssignment,
+    BaseBlueprint, FacilityKind, LayoutContext, RoomId, RoomProduct, SlotFill,
 };
 use crate::mood::{shift_eta, MoodModel, ShiftEta};
+use crate::office::{solve_office, OfficeOperator, OfficeRoomInput};
 use crate::operbox::OperBox;
 use crate::pool::{
     add_jie_market_to_trade_pool, build_control_pool_with_fillers, build_manufacture_pool,
@@ -146,6 +149,138 @@ fn advance_sui_mood(
             *mood = (*mood + model.dorm_base_recovery(5) * hours).min(model.mood_cap);
         }
     }
+}
+
+fn bound_office_operators(
+    blueprint: &BaseBlueprint,
+    peak: &BaseAssignment,
+    binds: &[RuntimeShiftBind],
+) -> HashSet<String> {
+    binds
+        .iter()
+        .flat_map(|bind| &bind.operators)
+        .filter(|name| {
+            peak.rooms.iter().any(|room| {
+                blueprint
+                    .room(&room.room_id)
+                    .is_some_and(|bp| bp.kind == FacilityKind::Office)
+                    && room.operators.iter().any(|op| op.name == **name)
+            })
+        })
+        .cloned()
+        .collect()
+}
+
+fn office_candidates(
+    operbox: &OperBox,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+    layout: &LayoutContext,
+    mood: f64,
+) -> Vec<AssignedOperator> {
+    let roster = operbox.roster();
+    let mut candidates: Vec<(f64, AssignedOperator)> = roster
+        .names()
+        .filter_map(|name| {
+            let progress = roster.progress(name)?;
+            let buff_ids =
+                instances.resolve_office_buff_ids(name, PromotionTier::from_progress(progress));
+            let score = if buff_ids.is_empty() {
+                0.0
+            } else {
+                solve_office(
+                    &OfficeRoomInput {
+                        operators: vec![OfficeOperator {
+                            name: name.clone(),
+                            elite: progress.elite,
+                            buff_ids,
+                        }],
+                        mood,
+                        layout: layout.clone(),
+                    },
+                    table,
+                )
+                .hire_spd_pct
+            };
+            Some((score, AssignedOperator::from_progress(name, progress)))
+        })
+        .collect();
+    candidates.sort_by(|(a_score, a), (b_score, b)| {
+        b_score
+            .partial_cmp(a_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    candidates.into_iter().map(|(_, op)| op).collect()
+}
+
+fn assign_rotating_offices(
+    assignment: &mut BaseAssignment,
+    blueprint: &BaseBlueprint,
+    active_teams: &[TeamLabel],
+    rotating_team: &HashMap<String, TeamLabel>,
+    bound_names: &HashSet<String>,
+    candidates: &[AssignedOperator],
+) -> Result<()> {
+    let mut used = assignment.operator_names();
+    let mut active_rotating: Vec<&String> = rotating_team
+        .iter()
+        .filter(|(_, team)| active_teams.contains(team))
+        .map(|(name, _)| name)
+        .collect();
+    active_rotating.sort_by_key(|name| (!bound_names.contains(*name), name.as_str()));
+    for room in blueprint
+        .rooms
+        .iter()
+        .filter(|room| room.kind == FacilityKind::Office)
+    {
+        let mut operators = assignment.operators_in(&room.id).to_vec();
+        while operators.len() < room.operator_capacity() {
+            let rotating = active_rotating
+                .iter()
+                .find(|name| !used.contains(name.as_str()));
+            let replacement = candidates
+                .iter()
+                .find(|op| !used.contains(&op.name) && !rotating_team.contains_key(&op.name));
+            let Some(op) = rotating
+                .and_then(|name| candidates.iter().find(|op| op.name == name.as_str()))
+                .or(replacement)
+                .cloned()
+            else {
+                return Err(Error::msg(format!(
+                    "office {} has no legal rotating operator or replacement",
+                    room.id.0
+                )));
+            };
+            used.insert(op.name.clone());
+            operators.push(op);
+        }
+        assignment.set_room(room.id.clone(), operators);
+    }
+    Ok(())
+}
+
+fn active_control_candidate_count(
+    by_team: &HashMap<TeamLabel, Vec<String>>,
+    active_teams: &[TeamLabel],
+    unavailable: &HashSet<String>,
+) -> usize {
+    active_teams
+        .iter()
+        .flat_map(|team| by_team.get(team).into_iter().flatten())
+        .filter(|name| !unavailable.contains(*name))
+        .collect::<HashSet<_>>()
+        .len()
+}
+
+fn least_available_control_team(
+    by_team: &HashMap<TeamLabel, Vec<String>>,
+    unavailable: &HashSet<String>,
+) -> TeamLabel {
+    TeamLabel::ALL
+        .into_iter()
+        .min_by_key(|team| active_control_candidate_count(by_team, &[*team], unavailable))
+        .unwrap_or(TeamLabel::Alpha)
 }
 
 /// 把全部生产设施（贸易/制造/发电）按同类房间交替切成两半，尽量均衡负载。
@@ -1187,7 +1322,7 @@ fn move_control_operator_to_team(
 /// - **设施每班全部满编，绝不空转**：每班由当班两队合力铺满所有贸易/制造/发电站。
 /// - 生产设施切成两半 H1/H2：α 跑 H1、β 跑 H2；γ 作为轮换替补，第 2 班接 H1、第 3 班接 H2。
 /// - 班次结构 12h + 6h + 6h；每队休息一个班次（α 休 S2、β 休 S3、γ 休 S1）。
-/// - 宿舍 / 办公室为共享脚手架，三班钉死。
+/// - 宿舍与未绑定办公室成员共享；绑定办公室成员按消费方 cohort 上二休一。
 /// - 中枢按 αβγ 队伍轮休重分配：每班只用活跃两队候选，体系中枢先 pin，再补满 5 人。
 pub fn schedule_team_rotation(
     blueprint: &BaseBlueprint,
@@ -1218,9 +1353,11 @@ pub fn schedule_team_rotation(
     let peak = peak_result.assignment;
     let mut peak_plan = peak_result.plan;
     peak_plan.derive_actual_shift_binds(blueprint, &peak);
+    let shift_binds = shift_binds_from_plan(&peak_plan);
+    let rotating_office_names = bound_office_operators(blueprint, &peak, &shift_binds);
     let mood_model = MoodModel::load_default()?;
     let peak_mood_eta = Some(shift_eta(&mood_model, blueprint, &peak));
-    let shared = pinned_assignment(&peak, blueprint);
+    let shared = pinned_assignment_excluding(&peak, blueprint, &rotating_office_names);
     let scaffold_used: HashSet<String> = operators_of(&shared).into_iter().collect();
     let t1 = Instant::now();
 
@@ -1261,8 +1398,7 @@ pub fn schedule_team_rotation(
     };
     let control_pool = build_control_pool_with_fillers(operbox, instances, table)?;
 
-    // 班次绑定（上2休1）来自统一 plan，不再硬编码 ROSEMARY_BLACKKEY_BIND。
-    let shift_binds = shift_binds_from_plan(&peak_plan);
+    // 班次绑定（上2休1）来自统一 plan，不再硬编码具体体系。
     let [h1, h2] = split_production_facilities(blueprint, &peak, &shift_binds)?;
 
     // 3) α/β 从 peak 编制按 H1/H2 切半（保留编排已认领的 meta 锚点）；γ 走贸易 role 替补。
@@ -1314,7 +1450,15 @@ pub fn schedule_team_rotation(
         .iter()
         .map(|o| o.name.clone())
         .collect();
-    let system_ctrl_names = system_control_operators(&peak_plan);
+    let mut system_ctrl_names = system_control_operators(&peak_plan);
+    system_ctrl_names.extend(
+        peak_plan
+            .control_candidate_requirements
+            .iter()
+            .flat_map(|requirement| &requirement.candidates)
+            .filter(|name| peak_ctrl.contains(name))
+            .cloned(),
+    );
     let mut team_ctrl = build_team_control_map(&peak_ctrl, &peak_plan, &h1);
     for sys in &peak_plan.activated {
         let team = system_control_team(sys, &h1).unwrap_or(TeamLabel::Alpha);
@@ -1360,6 +1504,23 @@ pub fn schedule_team_rotation(
             .entry(name)
             .or_insert(TeamLabel::Gamma);
     }
+    let mut rotating_office_team = HashMap::new();
+    for bind in &shift_binds {
+        let Some(team) = bind
+            .operators
+            .iter()
+            .find_map(|name| production_team_by_name.get(name).copied())
+        else {
+            continue;
+        };
+        for name in bind
+            .operators
+            .iter()
+            .filter(|name| rotating_office_names.contains(*name))
+        {
+            rotating_office_team.insert(name.clone(), team);
+        }
+    }
     let entry_by_name: HashMap<String, crate::pool::ControlPoolEntry> = control_pool
         .entries
         .iter()
@@ -1369,6 +1530,7 @@ pub fn schedule_team_rotation(
         .entries
         .iter()
         .filter(|entry| !team_ctrl.values().any(|names| names.contains(&entry.name)))
+        .filter(|entry| !production_team_by_name.contains_key(&entry.name))
         .filter(|entry| control_rotation_candidate(entry, table, &layout, options.mood))
         .collect();
     plugin_entries.sort_by(|a, b| {
@@ -1409,6 +1571,70 @@ pub fn schedule_team_rotation(
         names.sort();
         names.dedup();
     }
+    let unavailable_for_control: HashSet<String> = production_team_by_name
+        .keys()
+        .cloned()
+        .chain(scaffold_used.iter().cloned())
+        .chain(rotating_office_names.iter().cloned())
+        .collect();
+    let active_pair_has_five = |by_team: &HashMap<TeamLabel, Vec<String>>| {
+        TeamLabel::ALL.iter().all(|resting| {
+            let active: Vec<_> = TeamLabel::ALL
+                .iter()
+                .filter(|team| *team != resting)
+                .copied()
+                .collect();
+            active_control_candidate_count(by_team, &active, &unavailable_for_control) >= 5
+        })
+    };
+    let mut assigned_control: HashSet<String> = team_ctrl.values().flatten().cloned().collect();
+    let mut skillless_fillers: Vec<_> = control_pool
+        .entries
+        .iter()
+        .filter(|entry| entry.buff_ids.is_empty())
+        .filter(|entry| !assigned_control.contains(&entry.name))
+        .filter(|entry| !production_team_by_name.contains_key(&entry.name))
+        .filter(|entry| !scaffold_used.contains(&entry.name))
+        .filter(|entry| !rotating_office_names.contains(&entry.name))
+        .collect();
+    skillless_fillers.sort_by(|a, b| a.name.cmp(&b.name));
+    for entry in skillless_fillers {
+        if active_pair_has_five(&team_ctrl) {
+            break;
+        }
+        let team = least_available_control_team(&team_ctrl, &unavailable_for_control);
+        team_ctrl.entry(team).or_default().push(entry.name.clone());
+        assigned_control.insert(entry.name.clone());
+    }
+    let office_pool = office_candidates(operbox, instances, table, &layout, options.mood);
+    let mut reserved: HashSet<String> = operators_of(&alpha)
+        .into_iter()
+        .chain(operators_of(&beta))
+        .chain(operators_of(&gamma_h1))
+        .chain(operators_of(&gamma_h2))
+        .chain(team_ctrl.values().flatten().cloned())
+        .chain(operators_of(&shared))
+        .chain(rotating_office_names.iter().cloned())
+        .collect();
+    let bound_office_teams: Vec<TeamLabel> = rotating_office_names
+        .iter()
+        .filter_map(|name| rotating_office_team.get(name).copied())
+        .collect();
+    for bound_team in bound_office_teams {
+        let replacement = office_pool.iter().find(|op| !reserved.contains(&op.name));
+        let replacement_team = TeamLabel::ALL.into_iter().find(|team| *team != bound_team);
+        match (replacement, replacement_team) {
+            (Some(op), Some(team)) => {
+                rotating_office_team.insert(op.name.clone(), team);
+                reserved.insert(op.name.clone());
+            }
+            _ => {
+                return Err(Error::msg(
+                    "rotating office has no legal replacement cohort",
+                ))
+            }
+        }
+    }
 
     // 队伍花名册（cohort）。生产干员 + 中枢归队干员共同构成轮休队伍。
     let mut alpha_ops = operators_of(&alpha);
@@ -1434,6 +1660,19 @@ pub fn schedule_team_rotation(
             .cloned()
             .unwrap_or_default(),
     );
+    gamma_ops.sort();
+    gamma_ops.dedup();
+    for (name, team) in &rotating_office_team {
+        match team {
+            TeamLabel::Alpha => alpha_ops.push(name.clone()),
+            TeamLabel::Beta => beta_ops.push(name.clone()),
+            TeamLabel::Gamma => gamma_ops.push(name.clone()),
+        }
+    }
+    alpha_ops.sort();
+    alpha_ops.dedup();
+    beta_ops.sort();
+    beta_ops.dedup();
     gamma_ops.sort();
     gamma_ops.dedup();
 
@@ -1617,7 +1856,7 @@ pub fn schedule_team_rotation(
                     tier: crate::layout::tier::OperatorTier::CrossStation,
                 });
             }
-            assign_control(a, &final_pool, table, &layout, &control_options, used)?;
+            assign_control(a, &final_pool, table, &layout, &control_options, &[], used)?;
             ensure_control_inject_coverage(a, &final_pool, &system_ctrl_names, &entry_by_name);
 
             let mut ops = a.control_operators();
@@ -1655,6 +1894,14 @@ pub fn schedule_team_rotation(
             for part in parts {
                 merge_rooms(&mut base, part);
             }
+            assign_rotating_offices(
+                &mut base,
+                blueprint,
+                &active,
+                &rotating_office_team,
+                &rotating_office_names,
+                &office_pool,
+            )?;
             clear_room(&mut base, "control");
             let mut base_used = base.operator_names();
             assign_ctrl(&mut base, &mut base_used, &[])?;
@@ -1693,6 +1940,14 @@ pub fn schedule_team_rotation(
                 HashMap<String, RoomId>,
             )> = None;
             for mut candidate in abyssal_candidates {
+                assign_rotating_offices(
+                    &mut candidate.assignment,
+                    blueprint,
+                    &active,
+                    &rotating_office_team,
+                    &rotating_office_names,
+                    &office_pool,
+                )?;
                 clear_room(&mut candidate.assignment, "control");
                 let mut aby_used = candidate.assignment.operator_names();
                 assign_ctrl(&mut candidate.assignment, &mut aby_used, &[ABYSSAL_GLADIIA])?;
@@ -1777,6 +2032,14 @@ pub fn schedule_team_rotation(
             for part in parts {
                 merge_rooms(&mut assignment, part);
             }
+            assign_rotating_offices(
+                &mut assignment,
+                blueprint,
+                &active,
+                &rotating_office_team,
+                &rotating_office_names,
+                &office_pool,
+            )?;
             clear_room(&mut assignment, "control");
             let mut s13_used = assignment.operator_names();
             assign_ctrl(&mut assignment, &mut s13_used, &[])?;
@@ -1913,6 +2176,112 @@ mod tests {
         assert!(moods["令"] < 24.0, "在岗令应消耗心情");
         assert_eq!(moods["夕"], 24.0, "休息夕应按宿舍基础回复并封顶");
     }
+
+    #[test]
+    fn rotating_office_uses_bound_member_then_replacement() {
+        let blueprint: BaseBlueprint =
+            serde_json::from_str(r#"{"rooms":[{"id":"office_any","kind":"office","level":3}]}"#)
+                .expect("blueprint");
+        let candidates = vec![
+            AssignedOperator::new("体系办公室", 2),
+            AssignedOperator::new("办公室替补", 2),
+        ];
+        let teams = HashMap::from([
+            ("体系办公室".to_string(), TeamLabel::Alpha),
+            ("办公室替补".to_string(), TeamLabel::Beta),
+        ]);
+        let bound = HashSet::from(["体系办公室".to_string()]);
+
+        let mut active = BaseAssignment::default();
+        assign_rotating_offices(
+            &mut active,
+            &blueprint,
+            &[TeamLabel::Alpha, TeamLabel::Beta],
+            &teams,
+            &bound,
+            &candidates,
+        )
+        .expect("active office");
+        assert_eq!(
+            active.operators_in(&RoomId::from("office_any"))[0].name,
+            "体系办公室"
+        );
+
+        let mut resting = BaseAssignment::default();
+        assign_rotating_offices(
+            &mut resting,
+            &blueprint,
+            &[TeamLabel::Beta, TeamLabel::Gamma],
+            &teams,
+            &bound,
+            &candidates,
+        )
+        .expect("replacement office");
+        assert_eq!(
+            resting.operators_in(&RoomId::from("office_any"))[0].name,
+            "办公室替补"
+        );
+    }
+
+    #[test]
+    fn control_coverage_does_not_count_production_or_shared_members() {
+        let by_team = HashMap::from([
+            (
+                TeamLabel::Alpha,
+                vec![
+                    "可用甲".to_string(),
+                    "生产占用".to_string(),
+                    "共享占用".to_string(),
+                ],
+            ),
+            (
+                TeamLabel::Beta,
+                vec!["可用乙".to_string(), "绑定办公室".to_string()],
+            ),
+        ]);
+        let unavailable = HashSet::from([
+            "生产占用".to_string(),
+            "共享占用".to_string(),
+            "绑定办公室".to_string(),
+        ]);
+
+        assert_eq!(
+            active_control_candidate_count(
+                &by_team,
+                &[TeamLabel::Alpha, TeamLabel::Beta],
+                &unavailable,
+            ),
+            2
+        );
+    }
+
+    #[test]
+    fn control_filler_targets_least_available_not_shortest_raw_roster() {
+        let by_team = HashMap::from([
+            (
+                TeamLabel::Alpha,
+                vec![
+                    "占用甲".to_string(),
+                    "占用乙".to_string(),
+                    "占用丙".to_string(),
+                ],
+            ),
+            (TeamLabel::Beta, vec!["可用乙".to_string()]),
+            (TeamLabel::Gamma, vec!["可用丙".to_string()]),
+        ]);
+        let unavailable = HashSet::from([
+            "占用甲".to_string(),
+            "占用乙".to_string(),
+            "占用丙".to_string(),
+        ]);
+
+        assert_eq!(
+            least_available_control_team(&by_team, &unavailable),
+            TeamLabel::Alpha,
+            "A raw roster 最长但真实可用为0，filler必须优先投A"
+        );
+    }
+
     use crate::skill_table::default_skill_table_path;
 
     fn fixtures() -> (BaseBlueprint, OperBox, OperatorInstances, SkillTable) {
@@ -3108,6 +3477,216 @@ mod tests {
             Some(team),
             "迷迭香与黑键应同队"
         );
+    }
+
+    #[test]
+    fn team_rotation_pure_fireworks_rotates_office_trade_and_control_together() {
+        use crate::schedule::shift_bind::team_of_operator;
+
+        let (blueprint, full_operbox, instances, table) = fixtures();
+        let operbox = OperBox::from_entries(
+            full_operbox
+                .entries
+                .into_iter()
+                .filter(|entry| entry.name != "迷迭香")
+                .collect(),
+        );
+        let report = schedule_team_rotation(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 5,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert!(report
+            .peak_plan
+            .activated
+            .iter()
+            .any(|system| system.system_id == "human_fireworks_pure"));
+        let bind = report
+            .peak_plan
+            .shift_binds
+            .iter()
+            .find(|bind| {
+                bind.operators.iter().any(|name| name == "桑葚")
+                    && bind.operators.iter().any(|name| name == "乌有")
+            })
+            .expect("纯人间烟火应产生包含桑葚和乌有的实际 shift bind");
+        let control_name = ["重岳", "令"]
+            .into_iter()
+            .find(|name| bind.operators.iter().any(|bound| bound == name))
+            .expect("纯人间烟火 bind 应包含实际入驻中枢的重岳或令");
+        let team = team_of_operator(&report, "桑葚").expect("桑葚应归入轮换队伍");
+        assert_eq!(
+            report
+                .teams
+                .iter()
+                .flat_map(|cohort| &cohort.operators)
+                .filter(|name| name.as_str() == "桑葚")
+                .count(),
+            1,
+            "绑定办公室成员只能归属一个 cohort"
+        );
+        for name in ["乌有", control_name] {
+            assert_eq!(
+                team_of_operator(&report, name),
+                Some(team),
+                "纯烟火成员应与桑葚同队: {name}"
+            );
+        }
+
+        let in_facility = |shift: &TeamShiftResult, facility: FacilityKind, name: &str| {
+            shift.assignment.rooms.iter().any(|room| {
+                blueprint
+                    .room(&room.room_id)
+                    .is_some_and(|bp| bp.kind == facility)
+                    && room.operators.iter().any(|op| op.name == name)
+            })
+        };
+        let mut active_count = 0;
+        for shift in &report.shifts {
+            assert_eq!(shift.assignment.control_operators().len(), 5);
+            let mangberry_active = in_facility(shift, FacilityKind::Office, "桑葚");
+            let wuyou_active = in_facility(shift, FacilityKind::TradePost, "乌有");
+            let control_active = in_facility(shift, FacilityKind::ControlCenter, control_name);
+            let resolve_fireworks = |assignment: &BaseAssignment| {
+                resolve_base(
+                    &blueprint,
+                    assignment,
+                    Some(&instances),
+                    Some(&table),
+                    24.0,
+                    None,
+                )
+                .unwrap()
+                .layout
+                .global
+                .get(crate::global_resource::GlobalResourceKey::HumanFireworks)
+            };
+            let actual_fireworks = resolve_fireworks(&shift.assignment);
+            let office_id = blueprint
+                .rooms
+                .iter()
+                .find(|room| room.kind == FacilityKind::Office)
+                .unwrap()
+                .id
+                .clone();
+            let mut counterfactual = shift.assignment.clone();
+            counterfactual.set_room(
+                office_id,
+                if mangberry_active {
+                    Vec::new()
+                } else {
+                    vec![AssignedOperator::new("桑葚", 2)]
+                },
+            );
+            let counterfactual_fireworks = resolve_fireworks(&counterfactual);
+            assert_eq!(
+                (wuyou_active, control_active),
+                (mangberry_active, mangberry_active),
+                "纯烟火办公室、贸易和中枢成员必须同上同下"
+            );
+
+            if shift.resting_team == team {
+                assert!(!mangberry_active, "桑葚休息班不得继续占用办公室");
+                let offices: Vec<_> = shift
+                    .assignment
+                    .rooms
+                    .iter()
+                    .filter(|room| {
+                        blueprint
+                            .room(&room.room_id)
+                            .is_some_and(|bp| bp.kind == FacilityKind::Office)
+                    })
+                    .collect();
+                assert!(!offices.is_empty(), "布局应包含办公室");
+                assert!(
+                    offices.iter().all(|room| !room.operators.is_empty()),
+                    "桑葚休息时办公室必须由其他干员补位"
+                );
+                assert!(offices.iter().all(|room| {
+                    room.operators
+                        .iter()
+                        .all(|operator| operator.name != "桑葚")
+                }));
+                assert!(
+                    (counterfactual_fireworks - actual_fireworks - 20.0).abs() < 0.001,
+                    "休班替补不得暗含桑葚的 +20 烟火"
+                );
+            } else {
+                active_count += 1;
+                assert!(mangberry_active, "桑葚所属队当班时应进入办公室");
+                assert!(
+                    (actual_fireworks - counterfactual_fireworks - 20.0).abs() < 0.001,
+                    "最终班次 resolve 必须看到桑葚办公室的 +20 烟火"
+                );
+            }
+        }
+        assert_eq!(active_count, 2, "纯烟火绑定组应上二休一");
+    }
+
+    #[test]
+    fn team_rotation_perception_fireworks_keeps_full_core_together() {
+        use crate::schedule::shift_bind::team_of_operator;
+
+        let (blueprint, operbox, instances, table) = fixtures();
+        let report = schedule_team_rotation(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 5,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert!(report
+            .peak_plan
+            .registry_system_ids()
+            .contains(&"human_fireworks_perception"));
+        assert!(!report
+            .peak_plan
+            .registry_system_ids()
+            .contains(&"human_fireworks_pure"));
+        let team = team_of_operator(&report, "乌有").expect("乌有应归入感知烟火 cohort");
+        for name in ["重岳", "令"] {
+            assert_eq!(team_of_operator(&report, name), Some(team));
+        }
+
+        let in_facility = |shift: &TeamShiftResult, facility: FacilityKind, name: &str| {
+            shift.assignment.rooms.iter().any(|room| {
+                blueprint
+                    .room(&room.room_id)
+                    .is_some_and(|bp| bp.kind == facility)
+                    && room.operators.iter().any(|op| op.name == name)
+            })
+        };
+        let mut active_count = 0;
+        for shift in &report.shifts {
+            assert_eq!(shift.assignment.control_operators().len(), 5);
+            let wuyou = in_facility(shift, FacilityKind::TradePost, "乌有");
+            let zhongyue = in_facility(shift, FacilityKind::ControlCenter, "重岳");
+            let ling = in_facility(shift, FacilityKind::ControlCenter, "令");
+            assert_eq!((zhongyue, ling), (wuyou, wuyou));
+            assert!(
+                !in_facility(shift, FacilityKind::Office, "桑葚"),
+                "感知分支与纯烟火桑葚办公室分支必须互斥"
+            );
+            assert!(blueprint
+                .rooms
+                .iter()
+                .filter(|room| room.kind == FacilityKind::Office)
+                .all(|room| !shift.assignment.operators_in(&room.id).is_empty()));
+            active_count += usize::from(wuyou);
+        }
+        assert_eq!(active_count, 2);
     }
 
     #[test]

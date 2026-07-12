@@ -61,6 +61,8 @@ pub enum Selector {
     LimitExcess,
     /// Trade post facility level (1–3); used by 佩佩/瑰盐·每级+1 上限.
     FacilityLevel,
+    /// Office level minus one (extra recruitment slots).
+    FacilityLevelMinusOne,
     /// Count of room peers carrying `tag` (摩根/新约能天使).
     TaggedCountInRoom {
         tag: String,
@@ -161,6 +163,12 @@ pub enum Condition {
         n: u8,
     },
     MoodBelowOrEq {
+        n: u8,
+    },
+    OwnerEliteGte {
+        n: u8,
+    },
+    OwnerEliteBelow {
         n: u8,
     },
     PartnerInRoom {

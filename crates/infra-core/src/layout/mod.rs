@@ -17,8 +17,8 @@ pub use assign::{
     assign_shift_with_plan, assign_shift_with_plan_and_trace, assign_shift_with_plan_skip,
     assign_shift_with_plan_skip_and_trace, assign_team_gamma_half, assign_team_producer_rooms,
     assignment_operator_names, blackkey_witch_same_trade_room, explain_assignment_systems,
-    pinned_assignment, rotating_workers, AssignBaseOptions, AssignShiftResult,
-    ManufactureLinkedProducer, ManufactureSystemCandidateTrace,
+    pinned_assignment, pinned_assignment_excluding, rotating_workers, AssignBaseOptions,
+    AssignShiftResult, ManufactureLinkedProducer, ManufactureSystemCandidateTrace,
 };
 pub use assignment::{AssignedOperator, BaseAssignment, RoomAssignment, RoomEfficiencySnapshot};
 pub use blueprint::{
@@ -28,7 +28,8 @@ pub use context::{
     trade_station_tagged_gte_key, LayoutContext, SharedLayout, DEFAULT_DORM_OCCUPANT_COUNT,
 };
 pub use orchestrate::{
-    build_plan, execute_plan, ActivatedSystem, AssignmentPlan, ExecuteResult, SlotFill,
+    build_plan, execute_plan, ActivatedSystem, AssignmentPlan, ControlCandidateRequirement,
+    ExecuteResult, SlotFill,
 };
 pub use resolve::{
     resolve_automation_group_1_layout, resolve_base, resolve_search_baseline_layout,

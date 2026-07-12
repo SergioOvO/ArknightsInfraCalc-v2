@@ -41,13 +41,6 @@ pub const CONVERSIONS: &[GlobalResourceConversion] = &[
     // 感知是全基建共享的累加值，黑键与迷迭香各自读取全量、互不扣减（PRTS：90 感知 → 迷迭香 90% / 黑键 45%）。
     // 这两条转化在各自设施房内由 `state_convert` atom 就地完成（读 `layout.global` 快照），
     // 切勿放回全局 CONVERSIONS——否则固定点迭代会让先跑的一条吃光感知，另一条恒为 0（race）。
-    GlobalResourceConversion {
-        from: GlobalResourceKey::HumanFireworks,
-        to: GlobalResourceKey::WitchcraftCrystal,
-        from_per: 5.0,
-        to_per: 1.0,
-        skill_hint: "截云·古老巫术",
-    },
 ];
 
 /// 建模优先级（求解器落地顺序）。
@@ -105,7 +98,13 @@ pub const REGISTRY: &[GlobalResourceEntry] = &[
         key: GlobalResourceKey::HumanFireworks,
         tier: GlobalResourceTier::P0,
         primary_producers: &["中枢·令/夕/重岳", "办公室·桑葚", "贸易·乌有"],
-        primary_consumers: &["铎铃", "截云→巫术结晶", "黍", "训练室·余"],
+        primary_consumers: &[
+            "贸易·乌有",
+            "铎铃",
+            "截云（房内局部换算）",
+            "黍",
+            "训练室·余",
+        ],
         notes: "",
     },
     GlobalResourceEntry {
@@ -148,7 +147,7 @@ pub const REGISTRY: &[GlobalResourceEntry] = &[
         tier: GlobalResourceTier::P0,
         primary_producers: &["制造·截云古老巫术"],
         primary_consumers: &["截云·逐水草/问枯荣"],
-        notes: "5 人间烟火 → 1",
+        notes: "截云房内局部读取：5 人间烟火 → 1；不进入全局 conversion，不扣减共享烟火",
     },
     GlobalResourceEntry {
         key: GlobalResourceKey::ThoughtChainRing,

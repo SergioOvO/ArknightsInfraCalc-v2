@@ -5662,6 +5662,65 @@
       "atoms": []
     },
     {
+      "id": "hire_spd_cost[100]",
+      "skill_name": "救援队·珠算",
+      "facility": "office",
+      "tier": "tier_0",
+      "atoms": [
+        {
+          "condition": {
+            "owner_elite_below": { "n": 1 }
+          },
+          "action": {
+            "kind": "add_flat_eff",
+            "params": { "value": 10.0 }
+          },
+          "phase": "constant",
+          "phase_order": 10
+        }
+      ]
+    },
+    {
+      "id": "hire_spd_cost[110]",
+      "skill_name": "救援队·资源清点",
+      "facility": "office",
+      "tier": "tier_up",
+      "atoms": [
+        {
+          "condition": {
+            "owner_elite_gte": { "n": 1 }
+          },
+          "action": {
+            "kind": "add_flat_eff",
+            "params": { "value": 20.0 }
+          },
+          "phase": "constant",
+          "phase_order": 10
+        }
+      ]
+    },
+    {
+      "id": "hire_spd_bd_n1_n1[200]",
+      "skill_name": "救援队·灾后普查",
+      "facility": "office",
+      "tier": "tier_up",
+      "atoms": [
+        {
+          "selector": "facility_level_minus_one",
+          "scope": "global",
+          "action": {
+            "kind": "state_produce",
+            "params": {
+              "key": "HumanFireworks",
+              "amount": 10.0
+            }
+          },
+          "phase": "state_write",
+          "phase_order": 10
+        }
+      ]
+    },
+    {
       "id": "office_rec_spd[000]",
       "skill_name": "语言学",
       "facility": "office",

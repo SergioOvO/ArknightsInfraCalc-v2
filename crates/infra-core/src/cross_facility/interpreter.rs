@@ -114,6 +114,7 @@ fn resolve_selector_value(
     match sel {
         Selector::DormOccupantCount => f64::from(layout.dorm_occupant_count),
         Selector::FacilityLevel => f64::from(entry.room_level),
+        Selector::FacilityLevelMinusOne => f64::from(entry.room_level.saturating_sub(1)),
         Selector::RoomOperatorCount => 1.0, // scope=Global 时取 1（自身分子已包含在 amount）
         Selector::TradeStationCount => f64::from(layout.trade_station_count),
         Selector::PowerStationCount => f64::from(layout.power_station_count),

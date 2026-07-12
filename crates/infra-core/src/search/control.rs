@@ -86,6 +86,8 @@ pub struct ControlSearchOptions {
     pub matatabi_consumer_active: bool,
     /// 组合必须包含这些干员（如 `base_systems` 已钉死的中枢位）。
     pub must_include: HashSet<String>,
+    /// 候选组最低命中数；约束合法组合，不改变实际效率排序。
+    pub candidate_requirements: Vec<(HashSet<String>, u8)>,
     pub fill_policy: ControlFillPolicy,
 }
 
@@ -98,6 +100,7 @@ impl Default for ControlSearchOptions {
             layout: LayoutContext::default(),
             matatabi_consumer_active: false,
             must_include: HashSet::new(),
+            candidate_requirements: Vec::new(),
             fill_policy: ControlFillPolicy::default(),
         }
     }
@@ -380,14 +383,26 @@ pub fn search_control_combos(
     let mut entries: Vec<_> = pool
         .entries
         .iter()
-        .filter(|entry| !entry.buff_ids.is_empty() || options.must_include.contains(&entry.name))
+        .filter(|entry| {
+            !entry.buff_ids.is_empty()
+                || options.must_include.contains(&entry.name)
+                || options
+                    .candidate_requirements
+                    .iter()
+                    .any(|(candidates, _)| candidates.contains(&entry.name))
+        })
         .collect();
     let fallback_slots = usize::from(options.max_operators.min(5));
     entries.extend(
         pool.entries
             .iter()
             .filter(|entry| {
-                entry.buff_ids.is_empty() && !options.must_include.contains(&entry.name)
+                entry.buff_ids.is_empty()
+                    && !options.must_include.contains(&entry.name)
+                    && !options
+                        .candidate_requirements
+                        .iter()
+                        .any(|(candidates, _)| candidates.contains(&entry.name))
             })
             .take(fallback_slots),
     );
@@ -434,6 +449,20 @@ pub fn search_control_combos(
                 .must_include
                 .iter()
                 .all(|name| h.names.contains(name))
+        });
+    }
+    if !options.candidate_requirements.is_empty() {
+        hits.retain(|hit| {
+            options
+                .candidate_requirements
+                .iter()
+                .all(|(candidates, min_count)| {
+                    hit.names
+                        .iter()
+                        .filter(|name| candidates.contains(*name))
+                        .count()
+                        >= usize::from(*min_count)
+                })
         });
     }
 
@@ -665,6 +694,42 @@ mod tests {
 
         assert!(!hits.is_empty());
         assert!(hits.iter().all(|hit| hit.names.len() == 5));
+    }
+
+    #[test]
+    fn control_search_enforces_candidate_count_without_list_order_pick() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            ["重岳", "令", "Mon3tr", "玛恩纳", "阿米娅", "诗怀雅"]
+                .into_iter()
+                .map(|name| (name.to_string(), 2))
+                .collect(),
+        );
+        let pool = build_control_pool(&roster, &instances, &table).unwrap();
+        let candidates = HashSet::from(["重岳".to_string(), "令".to_string()]);
+
+        let hits = search_control_combos(
+            &pool,
+            &table,
+            &ControlSearchOptions {
+                max_operators: 5,
+                top_k: 20,
+                candidate_requirements: vec![(candidates.clone(), 1)],
+                fill_policy: ControlFillPolicy::LayeredFill,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert!(!hits.is_empty());
+        assert!(hits.iter().all(|hit| {
+            hit.names
+                .iter()
+                .filter(|name| candidates.contains(*name))
+                .count()
+                >= 1
+        }));
     }
 
     #[test]

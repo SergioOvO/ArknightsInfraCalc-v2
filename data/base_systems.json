@@ -270,6 +270,54 @@
           ]
         }
       ]
+    },
+    {
+      "id": "human_fireworks_pure",
+      "label": "纯人间烟火：乌有贸易 + 桑葚办公室 + 重岳/令中枢",
+      "tier": "cross_station",
+      "priority": 18,
+      "shift_modes": ["peak"],
+      "slots": [
+        {
+          "facility": "control",
+          "fill": "search",
+          "required_count": 1,
+          "operators": [
+            { "name": "重岳", "elite": 0 },
+            { "name": "令", "elite": 2 }
+          ]
+        },
+        {
+          "facility": "trade_post",
+          "operators": [{ "name": "乌有", "elite": 2 }]
+        },
+        {
+          "facility": "office",
+          "operators": [{ "name": "桑葚", "elite": 2 }]
+        }
+      ]
+    },
+    {
+      "id": "human_fireworks_perception",
+      "label": "感知附带人间烟火：乌有贸易 + 重岳令中枢",
+      "tier": "cross_station",
+      "priority": 18,
+      "shift_modes": ["peak"],
+      "slots": [
+        {
+          "facility": "control",
+          "fill": "search",
+          "required_count": 2,
+          "operators": [
+            { "name": "重岳", "elite": 0 },
+            { "name": "令", "elite": 2 }
+          ]
+        },
+        {
+          "facility": "trade_post",
+          "operators": [{ "name": "乌有", "elite": 2 }]
+        }
+      ]
     }
   ]
 }

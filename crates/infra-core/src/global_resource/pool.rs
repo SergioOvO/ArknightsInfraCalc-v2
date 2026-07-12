@@ -146,11 +146,11 @@ mod tests {
     }
 
     #[test]
-    fn conversions_human_fireworks_to_witchcraft() {
+    fn conversions_keep_shared_human_fireworks_available_to_all_consumers() {
         let mut pool = GlobalResourcePool::with_value(GlobalResourceKey::HumanFireworks, 10.0);
         pool.run_conversions();
-        assert!((pool.get(GlobalResourceKey::HumanFireworks) - 0.0).abs() < f64::EPSILON);
-        assert!((pool.get(GlobalResourceKey::WitchcraftCrystal) - 2.0).abs() < f64::EPSILON);
+        assert!((pool.get(GlobalResourceKey::HumanFireworks) - 10.0).abs() < f64::EPSILON);
+        assert!((pool.get(GlobalResourceKey::WitchcraftCrystal) - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]

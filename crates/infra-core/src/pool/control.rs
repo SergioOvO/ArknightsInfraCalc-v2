@@ -68,7 +68,8 @@ pub fn build_control_pool(
     build_roster_pool(roster, instances, table, |_| 0.0, try_entry)
 }
 
-/// Build the modeled control pool plus a bounded set of skill-less legal fillers.
+/// Build the modeled control pool plus all legal skill-less fillers in stable name order.
+/// Search trims this tail after `used` filtering, so unavailable early names cannot starve fill.
 pub fn build_control_pool_with_fillers(
     operbox: &OperBox,
     instances: &OperatorInstances,
@@ -81,21 +82,23 @@ pub fn build_control_pool_with_fillers(
         .map(|entry| entry.name.clone())
         .collect();
     let roster = operbox.roster();
-    for name in roster
+    let mut filler_names: Vec<_> = roster
         .names()
         .filter(|name| !existing.contains(*name))
-        .take(5)
-    {
-        let Some(progress) = roster.progress(name) else {
+        .cloned()
+        .collect();
+    filler_names.sort();
+    for name in filler_names {
+        let Some(progress) = roster.progress(&name) else {
             continue;
         };
         let tier = PromotionTier::from_progress(progress);
         let tags = instances
-            .get(name, tier)
+            .get(&name, tier)
             .map(|instance| instance.tags.clone())
             .unwrap_or_default();
         pool.entries.push(ControlPoolEntry {
-            name: name.to_string(),
+            name,
             elite: progress.elite,
             progress,
             buff_ids: Vec::new(),
@@ -145,7 +148,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn account_control_pool_adds_bounded_skillless_fillers() {
+    fn account_control_pool_keeps_stable_skillless_fallback_after_used_prefix() {
         let operbox =
             OperBox::load(&crate::operbox::default_operbox_full_e2_path().unwrap()).unwrap();
         let instances =
@@ -156,10 +159,14 @@ mod tests {
             build_control_pool(&operbox.control_roster(&instances), &instances, &table).unwrap();
         let with_fillers = build_control_pool_with_fillers(&operbox, &instances, &table).unwrap();
 
-        assert!(with_fillers.entries.len() <= skilled.entries.len() + 5);
-        assert!(with_fillers
+        let fillers: Vec<_> = with_fillers
             .entries
             .iter()
-            .any(|entry| entry.buff_ids.is_empty()));
+            .filter(|entry| entry.buff_ids.is_empty())
+            .map(|entry| entry.name.as_str())
+            .collect();
+        assert!(fillers.len() > 5);
+        assert!(fillers.windows(2).all(|pair| pair[0] <= pair[1]));
+        assert!(with_fillers.entries.len() > skilled.entries.len() + 5);
     }
 }

@@ -78,6 +78,7 @@ impl RoomBlueprint {
             }
             FacilityKind::PowerPlant => 1,
             FacilityKind::ControlCenter => 5,
+            FacilityKind::Office => 1,
             _ => usize::MAX,
         }
     }

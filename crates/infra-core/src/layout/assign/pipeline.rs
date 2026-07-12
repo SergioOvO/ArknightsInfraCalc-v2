@@ -77,6 +77,7 @@ pub(super) fn run_shift_pipeline(
             table,
             &producer_layout,
             options,
+            &plan.control_candidate_requirements,
             &mut run.used,
         )?;
     }

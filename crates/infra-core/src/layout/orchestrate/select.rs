@@ -5,6 +5,7 @@ use crate::layout::assignment::BaseAssignment;
 use crate::layout::blueprint::BaseBlueprint;
 use crate::layout::shift::AssignShiftMode;
 use crate::layout::system::select_registry_systems;
+use crate::layout::system::SlotFillMode;
 use crate::layout::system_integrity::{
     evaluate_systems, EvaluateContext, PinusPlan, PinusVerdict, RosemaryPlan, RosemaryTier,
     RosemaryVerdict,
@@ -39,6 +40,15 @@ pub fn build_plan(
     let mut code_activated = Vec::new();
     let ctx = EvaluateContext::new(blueprint, operbox, mode);
     let evaluated = evaluate_systems(&ctx);
+    let rosemary_active = matches!(&evaluated.rosemary, RosemaryVerdict::Activate(_));
+    let mut registry_skip = skip_system_ids.clone();
+    if rosemary_active {
+        // Pure fireworks is the no-perception branch; when perception is active,
+        // do not claim a competing office/trade/control system.
+        registry_skip.insert("human_fireworks_pure".to_string());
+    } else {
+        registry_skip.insert("human_fireworks_perception".to_string());
+    }
     if let RosemaryVerdict::Activate(rplan) = evaluated.rosemary {
         merge_rosemary_into_plan(
             &rplan,
@@ -98,9 +108,22 @@ pub fn build_plan(
     }
     let used = scratch.operator_names();
     let registry_claims =
-        select_registry_systems(blueprint, operbox, mode, &scratch, &used, skip_system_ids);
+        select_registry_systems(blueprint, operbox, mode, &scratch, &used, &registry_skip);
     let mut activated: Vec<_> = registry_claims.iter().map(registry_as_activated).collect();
     activated.extend(code_activated);
+    let control_candidate_requirements = registry_claims
+        .iter()
+        .flat_map(|claim| &claim.slots)
+        .filter(|slot| {
+            slot.facility == crate::layout::FacilityKind::ControlCenter
+                && slot.fill == SlotFillMode::Search
+                && slot.required_count > 0
+        })
+        .map(|slot| super::plan::ControlCandidateRequirement {
+            candidates: slot.operators.iter().map(|op| op.name.clone()).collect(),
+            min_count: slot.required_count,
+        })
+        .collect();
 
     Ok(AssignmentPlan {
         mode,
@@ -111,6 +134,7 @@ pub fn build_plan(
         constraints,
         degradations,
         shift_binds,
+        control_candidate_requirements,
     })
 }
 

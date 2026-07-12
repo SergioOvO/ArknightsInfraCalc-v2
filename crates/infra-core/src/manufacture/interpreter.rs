@@ -627,6 +627,7 @@ fn metal_formula_skill_count_in_room(ctx: &ManuContext) -> f64 {
 fn resolve_selector_value(ctx: &ManuContext, selector: Option<&Selector>, owner: &str) -> f64 {
     match selector {
         Some(Selector::FacilityLevel) => f64::from(ctx.facility_level),
+        Some(Selector::FacilityLevelMinusOne) => f64::from(ctx.facility_level.saturating_sub(1)),
         Some(Selector::MeetingMaxLevel) => f64::from(ctx.layout.meeting_max_level),
         Some(Selector::DormLevelSum) => f64::from(ctx.layout.dorm_level_sum),
         Some(Selector::ManuRecipeKinds) => f64::from(ctx.layout.manu_recipe_kinds),

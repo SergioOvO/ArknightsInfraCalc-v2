@@ -114,6 +114,13 @@ pub struct ShiftBind {
     pub off_shifts: u8,
 }
 
+/// 中枢搜索候选组约束：由 solver 在候选中至少选择 `min_count` 人。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ControlCandidateRequirement {
+    pub candidates: Vec<String>,
+    pub min_count: u8,
+}
+
 /// 单班进驻前的编排计划；`execute_plan` 将其落成 `BaseAssignment`。
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct AssignmentPlan {
@@ -134,6 +141,8 @@ pub struct AssignmentPlan {
     pub degradations: Vec<DegradationLadder>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shift_binds: Vec<ShiftBind>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub control_candidate_requirements: Vec<ControlCandidateRequirement>,
 }
 
 impl AssignmentPlan {
@@ -172,12 +181,10 @@ impl AssignmentPlan {
                 })
             })
         };
-        let perception_active = self.activated.iter().any(|system| {
-            matches!(
-                system.system_id.as_str(),
-                "rosemary_perception" | "rosemary_perception_core"
-            )
-        });
+        let perception_active = self
+            .activated
+            .iter()
+            .any(|system| system.system_id == "human_fireworks_perception");
 
         let mut add = |operators: &[&str]| {
             if self.shift_binds.iter().any(|bind| {
@@ -246,6 +253,7 @@ impl AssignmentPlan {
             constraints: Vec::new(),
             degradations: Vec::new(),
             shift_binds: Vec::new(),
+            control_candidate_requirements: Vec::new(),
         }
     }
 
@@ -321,6 +329,7 @@ pub fn registry_as_activated(claim: &RegistrySystemClaim) -> ActivatedSystem {
     let slots = claim
         .slots
         .iter()
+        .filter(|slot| slot.fill != SlotFillMode::Search)
         .flat_map(|slot| {
             slot.operators.iter().map(|op| SlotFill::Fixed {
                 operator: op.name.clone(),
@@ -387,5 +396,51 @@ mod tests {
         assignment.set_room("control", vec![AssignedOperator::new("灵知", 2)]);
         plan.derive_actual_shift_binds(&blueprint, &assignment);
         assert_eq!(plan.shift_binds.len(), 1);
+    }
+
+    #[test]
+    fn actual_fireworks_bind_uses_selected_branch_members() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room(
+            "control",
+            vec![
+                AssignedOperator::new("重岳", 2),
+                AssignedOperator::new("令", 2),
+            ],
+        );
+        set_trade_group(&mut assignment, &["乌有"]);
+
+        let mut perception = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        perception.activated.push(ActivatedSystem {
+            system_id: "human_fireworks_perception".to_string(),
+            priority: 0,
+            tier: crate::layout::tier::OperatorTier::CrossStation,
+            slots: Vec::new(),
+        });
+        perception.derive_actual_shift_binds(&blueprint, &assignment);
+        assert!(perception.shift_binds.iter().any(|bind| {
+            ["乌有", "重岳", "令"]
+                .iter()
+                .all(|name| bind.operators.iter().any(|bound| bound == name))
+        }));
+
+        let office_id = blueprint
+            .rooms
+            .iter()
+            .find(|room| room.kind == FacilityKind::Office)
+            .unwrap()
+            .id
+            .clone();
+        assignment.set_room(office_id, vec![AssignedOperator::new("桑葚", 2)]);
+        assignment.set_room("control", vec![AssignedOperator::new("令", 2)]);
+        let mut pure = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        pure.derive_actual_shift_binds(&blueprint, &assignment);
+        assert!(pure.shift_binds.iter().any(|bind| {
+            ["乌有", "桑葚", "令"]
+                .iter()
+                .all(|name| bind.operators.iter().any(|bound| bound == name))
+                && !bind.operators.iter().any(|bound| bound == "重岳")
+        }));
     }
 }

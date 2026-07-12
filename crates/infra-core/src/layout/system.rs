@@ -26,6 +26,12 @@ pub struct RegistrySlotClaim {
     pub operators: Vec<AssignedOperator>,
     #[serde(default, skip_serializing_if = "SlotFillMode::is_default")]
     pub fill: SlotFillMode,
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub required_count: u8,
+}
+
+fn is_zero_u8(value: &u8) -> bool {
+    *value == 0
 }
 
 /// `base_systems.json` 中已选体系的完整落位计划。
@@ -150,6 +156,9 @@ pub struct SystemSlotDef {
     pub trade_role: Option<String>,
     #[serde(default)]
     pub fill: SlotFillMode,
+    /// Search slot 中至少须由实际 solver 选中的候选数；不按列表顺序预选。
+    #[serde(default)]
+    pub required_count: u8,
     pub operators: Vec<SystemOperatorSpec>,
     /// 可选 slot：缺房 / 缺干员时静默跳过，不导致整链不可行。
     /// 用于感知 producer（夕中枢、絮雨办公室、爱丽丝/车尔尼宿舍）等非核心位，
@@ -917,6 +926,8 @@ fn plan_registry_system_detailed(
         let facility = slot.claim.facility;
         let room_id = slot.claim.room_id.clone();
         let operators = slot.claim.operators.clone();
+        let fill = slot.claim.fill;
+        let required_count = slot.claim.required_count;
         slot_explains.push(slot.explain);
         slots.push(slot.claim);
 
@@ -926,7 +937,13 @@ fn plan_registry_system_detailed(
         }
         if facility == FacilityKind::ControlCenter {
             let mut existing = scratch.control_operators();
-            existing.extend(operators);
+            if fill == SlotFillMode::Search {
+                existing.extend((0..required_count).map(|index| {
+                    AssignedOperator::new(format!("__control_reservation_{index}"), 0)
+                }));
+            } else {
+                existing.extend(operators);
+            }
             scratch.set_room(RoomId::from("control"), existing);
         } else {
             scratch.set_room(room_id, operators);
@@ -952,6 +969,16 @@ fn plan_registry_slot(
 ) -> std::result::Result<SlotPlan, SystemExplainReason> {
     let room = explain_slot_room(blueprint, assignment, slot_def)?;
     let resolved = explain_slot_operators(operbox, slot_def, used)?;
+    if slot_def.required_count > 0 && resolved.len() < usize::from(slot_def.required_count) {
+        return Err(SystemExplainReason::new(
+            "missing_required_candidates",
+            format!(
+                "search slot has {} available candidates, requires {}",
+                resolved.len(),
+                slot_def.required_count
+            ),
+        ));
+    }
     let facility = facility_kind(&slot_def.facility).ok_or_else(|| {
         SystemExplainReason::new(
             "unknown_facility",
@@ -960,13 +987,17 @@ fn plan_registry_slot(
     })?;
     if slot_def.facility == "control" {
         let current = assignment.control_operators().len();
-        if current + resolved.len() > 5 {
+        let required_capacity = if slot_def.fill == SlotFillMode::Search {
+            usize::from(slot_def.required_count)
+        } else {
+            resolved.len()
+        };
+        if current + required_capacity > 5 {
             return Err(SystemExplainReason::new(
                 "control_capacity",
                 format!(
                     "control capacity exceeded: current {} + slot {} > 5",
-                    current,
-                    resolved.len()
+                    current, required_capacity
                 ),
             ));
         }
@@ -1002,6 +1033,7 @@ fn plan_registry_slot(
             facility,
             operators,
             fill: slot_def.fill,
+            required_count: slot_def.required_count,
         },
         explain: SystemSlotExplain {
             facility: slot_def.facility.clone(),
@@ -1022,6 +1054,16 @@ fn apply_registry_claim_to_assignment(
 ) {
     for slot in &claim.slots {
         if slot.fill == SlotFillMode::Search {
+            if slot.facility == FacilityKind::ControlCenter && slot.required_count > 0 {
+                let mut existing = assignment.control_operators();
+                existing.extend((0..slot.required_count).map(|index| {
+                    AssignedOperator::new(
+                        format!("__control_reservation_{}_{}", claim.system_id, index),
+                        0,
+                    )
+                }));
+                assignment.set_room(RoomId::from("control"), existing);
+            }
             continue;
         }
         for op in &slot.operators {

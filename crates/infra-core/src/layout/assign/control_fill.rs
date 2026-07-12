@@ -26,6 +26,7 @@ pub(crate) fn assign_control(
     table: &SkillTable,
     layout: &LayoutContext,
     options: &AssignBaseOptions,
+    candidate_requirements: &[crate::layout::ControlCandidateRequirement],
     used: &mut HashSet<String>,
 ) -> Result<()> {
     const MAX_CONTROL: usize = 5;
@@ -48,6 +49,15 @@ pub(crate) fn assign_control(
         layout: layout.clone(),
         matatabi_consumer_active: assignment_has_matatabi_consumer(assignment),
         must_include: pinned.clone(),
+        candidate_requirements: candidate_requirements
+            .iter()
+            .map(|requirement| {
+                (
+                    requirement.candidates.iter().cloned().collect(),
+                    requirement.min_count,
+                )
+            })
+            .collect(),
         fill_policy: ControlFillPolicy::LayeredFill,
     };
 
@@ -172,6 +182,44 @@ mod tests {
     use crate::pool::build_control_pool;
     use crate::roster::Roster;
     use crate::skill_table::{default_skill_table_path, SkillTable};
+
+    #[test]
+    fn control_fill_skips_used_skillless_prefix_and_still_fills_five() {
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let entries: Vec<_> = (0..10)
+            .map(|index| crate::pool::ControlPoolEntry {
+                name: format!("普通候选{index:02}"),
+                elite: 0,
+                progress: crate::roster::OperatorProgress::default(),
+                buff_ids: Vec::new(),
+                tags: Vec::new(),
+                tier: crate::layout::tier::OperatorTier::Standalone,
+            })
+            .collect();
+        let pool = ControlPool {
+            entries,
+            skipped: Vec::new(),
+        };
+        let mut used: HashSet<String> = (0..5).map(|index| format!("普通候选{index:02}")).collect();
+        let mut assignment = BaseAssignment::default();
+
+        assign_control(
+            &mut assignment,
+            &pool,
+            &table,
+            &LayoutContext::default(),
+            &AssignBaseOptions::default(),
+            &[],
+            &mut used,
+        )
+        .unwrap();
+
+        assert_eq!(assignment.control_operators().len(), 5);
+        assert!(assignment.control_operators().iter().all(|op| !matches!(
+            op.name.as_str(),
+            "普通候选00" | "普通候选01" | "普通候选02" | "普通候选03" | "普通候选04"
+        )));
+    }
 
     #[test]
     fn final_control_pool_keeps_legal_operator_without_control_buff() {

@@ -50,6 +50,10 @@ resolve_base()
   └─ per-room 求解 (trade/manufacture/power)
 ```
 
+`run_conversions` 只执行确实会消耗 producer 状态的全局转换。感知信息与人间烟火是
+全基建共享读取状态，不在此扣减；无声共鸣、思维链环、巫术结晶等换算由对应
+consumer 的房间 interpreter 局部完成，因此多个 consumer 可读取同一份全量状态。
+
 - `resolve.rs` 中 `apply_perception_producers` 已删除；其余硬编码迁移进行中。
 - per-room 求解仍会执行 scope=Room 的 atom（含 scope=Global 的 StateProduce 副本），`room_layout_for_*` 函数扣回全局已计数的部分。
 
@@ -67,6 +71,7 @@ resolve_base()
 | 黑键·乐感 | 贸易 | 感知（宿舍人数） |
 | 迷迭香·超感 | 制造 | 感知（宿舍人数） |
 | 乌有·愿者上钩 | 贸易 | 人间烟火（宿舍人数） |
+| 桑葚·灾后普查 | 办公室 | 人间烟火（办公室额外招募位×10，精2） |
 | 森西·大食堂 | 宿舍 | 魔物料理（宿舍等级） |
 | 爱丽丝·梦境呓语 | 宿舍 | 感知（宿舍等级，精2） |
 | 车尔尼·琴键漫步 | 宿舍 | 感知（宿舍等级，精2） |

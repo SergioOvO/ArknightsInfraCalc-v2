@@ -347,7 +347,7 @@ fn apply_atoms_loop(
 fn condition_met(
     cond: &Option<Condition>,
     ctx: &TradeContext,
-    _owner: &str,
+    owner: &str,
     names: &[String],
 ) -> bool {
     let Some(cond) = cond else { return true };
@@ -369,6 +369,16 @@ fn condition_met(
         Condition::MoodAboveOrEq { n } => ctx.mood >= *n as f64,
         Condition::MoodBelow { n } => ctx.mood < *n as f64,
         Condition::MoodBelowOrEq { n } => ctx.mood <= *n as f64,
+        Condition::OwnerEliteGte { n } => ctx
+            .operators
+            .iter()
+            .find(|op| op.name == owner)
+            .is_some_and(|op| op.elite >= *n),
+        Condition::OwnerEliteBelow { n } => ctx
+            .operators
+            .iter()
+            .find(|op| op.name == owner)
+            .is_some_and(|op| op.elite < *n),
         Condition::PartnerInRoom { name } => names.iter().any(|n| n == name),
         Condition::TagPresentInRoom { tag } => ctx
             .operators
@@ -377,7 +387,7 @@ fn condition_met(
         Condition::PeerTagInRoom { tag } => ctx
             .operators
             .iter()
-            .any(|o| o.name != _owner && o.tags.iter().any(|t| t == tag)),
+            .any(|o| o.name != owner && o.tags.iter().any(|t| t == tag)),
         Condition::OperatorInBase { name } => ctx.layout.base_workforce.iter().any(|n| n == name),
         Condition::OperatorInPower { name } => ctx.layout.power_workforce.iter().any(|n| n == name),
         Condition::OperatorInTraining { name } => {
@@ -631,6 +641,7 @@ fn resolve_selector_value(ctx: &TradeContext, selector: Option<&Selector>, owner
             (ctx.final_order_limit - ctx.facility_base_limit).max(0) as f64
         }
         Some(Selector::FacilityLevel) => f64::from(ctx.facility_level),
+        Some(Selector::FacilityLevelMinusOne) => f64::from(ctx.facility_level.saturating_sub(1)),
         Some(Selector::TaggedCountInRoom { tag }) => ctx
             .operators
             .iter()

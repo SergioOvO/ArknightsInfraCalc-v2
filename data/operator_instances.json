@@ -6801,6 +6801,34 @@
         }
       }
     },
+    "桑葚@tier_0": {
+      "name": "桑葚",
+      "tier": "tier_0",
+      "tags": [],
+      "facilities": {
+        "office": {
+          "buff_ids": [
+            "hire_spd_cost[100]",
+            "hire_spd_cost[110]"
+          ],
+          "stepwise": false
+        }
+      }
+    },
+    "桑葚@tier_up": {
+      "name": "桑葚",
+      "tier": "tier_up",
+      "tags": [],
+      "facilities": {
+        "office": {
+          "buff_ids": [
+            "hire_spd_cost[110]",
+            "hire_spd_bd_n1_n1[200]"
+          ],
+          "stepwise": true
+        }
+      }
+    },
     "絮雨@tier_0": {
       "name": "絮雨",
       "tier": "tier_0",

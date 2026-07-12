@@ -314,6 +314,7 @@ fn scope_global_contribution(atom: &crate::types::EffectAtom, layout: &LayoutCon
     let scale = match sel {
         Selector::DormOccupantCount => f64::from(layout.dorm_occupant_count),
         Selector::FacilityLevel => 0.0,
+        Selector::FacilityLevelMinusOne => 0.0,
         _ => 0.0,
     };
     match &atom.action {
@@ -609,6 +610,72 @@ mod tests {
             "灵知+市井孑+银灰+琳琅应自然算出 129，got {}",
             ((result.efficiency.paper.paper_efficiency.as_f64() - 1.0) * 100.0)
         );
+    }
+
+    #[test]
+    fn resolve_keeps_mulberry_fireworks_visible_to_wuyou_trade() {
+        use crate::trade::input::TradeRoomInput;
+        use crate::trade::solve_trade;
+
+        let (instances, table) = pair();
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let office_id = blueprint
+            .rooms
+            .iter()
+            .find(|room| room.kind == FacilityKind::Office)
+            .unwrap()
+            .id
+            .clone();
+        let solve = |with_mulberry: bool| {
+            let mut assignment = BaseAssignment::default();
+            assignment.set_room("trade_1", vec![AssignedOperator::new("乌有", 2)]);
+            if with_mulberry {
+                assignment.set_room(office_id.clone(), vec![AssignedOperator::new("桑葚", 2)]);
+            }
+            let resolved = resolve_base(
+                &blueprint,
+                &assignment,
+                Some(&instances),
+                Some(&table),
+                24.0,
+                None,
+            )
+            .unwrap();
+            assert_eq!(
+                resolved
+                    .layout
+                    .global
+                    .get(crate::global_resource::GlobalResourceKey::HumanFireworks),
+                // 乌有按默认宿舍规划人数自产 20；桑葚 Lv3 办公室再提供 20，二者共享累加。
+                if with_mulberry { 40.0 } else { 20.0 }
+            );
+            let trade = resolved
+                .trade_rooms
+                .iter()
+                .find(|room| room.id.0 == "trade_1")
+                .unwrap();
+            solve_trade(
+                &TradeRoomInput {
+                    level: trade.level,
+                    operators: trade.operators.clone(),
+                    order_count: None,
+                    mood: 24.0,
+                    gold_production_lines: Some(resolved.gold_manu_line_count()),
+                    durin_virtual_lines: None,
+                    human_fireworks: None,
+                    layout: std::sync::Arc::new(trade.layout.clone()),
+                    active_order_kind: trade.order,
+                },
+                &table,
+            )
+            .unwrap()
+            .efficiency
+            .paper
+            .paper_efficiency
+            .as_f64()
+        };
+
+        assert!((solve(true) - solve(false) - 0.20).abs() < 0.001);
     }
 
     #[test]

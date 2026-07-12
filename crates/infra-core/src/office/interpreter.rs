@@ -26,7 +26,7 @@ pub fn solve_office(input: &OfficeRoomInput, table: &SkillTable) -> OfficeResult
                 if atom.phase != Phase::Constant {
                     continue;
                 }
-                if !condition_met(atom.condition.as_ref(), input.mood) {
+                if !condition_met(atom.condition.as_ref(), input.mood, op.elite) {
                     continue;
                 }
                 hire_spd_pct += apply_constant_action(&atom.action, &state_pool);
@@ -37,13 +37,15 @@ pub fn solve_office(input: &OfficeRoomInput, table: &SkillTable) -> OfficeResult
     OfficeResult { hire_spd_pct }
 }
 
-fn condition_met(condition: Option<&Condition>, mood: f64) -> bool {
+fn condition_met(condition: Option<&Condition>, mood: f64, owner_elite: u8) -> bool {
     match condition {
         None => true,
         Some(Condition::MoodAbove { n }) => mood > f64::from(*n),
         Some(Condition::MoodAboveOrEq { n }) => mood >= f64::from(*n),
         Some(Condition::MoodBelow { n }) => mood < f64::from(*n),
         Some(Condition::MoodBelowOrEq { n }) => mood <= f64::from(*n),
+        Some(Condition::OwnerEliteGte { n }) => owner_elite >= *n,
+        Some(Condition::OwnerEliteBelow { n }) => owner_elite < *n,
         _ => false,
     }
 }
@@ -103,6 +105,38 @@ mod tests {
             (result.hire_spd_pct - 35.0).abs() < f64::EPSILON,
             "20 + 2×5 + 1×5 = 35, got {}",
             result.hire_spd_pct
+        );
+    }
+
+    #[test]
+    fn mulberry_hire_speed_distinguishes_e0_e1_and_e2() {
+        let solve = |elite, buff_ids: &[&str]| {
+            solve_office(
+                &OfficeRoomInput {
+                    operators: vec![OfficeOperator {
+                        name: "桑葚".into(),
+                        elite,
+                        buff_ids: buff_ids.iter().map(|id| (*id).to_string()).collect(),
+                    }],
+                    mood: 24.0,
+                    layout: LayoutContext::default(),
+                },
+                &table(),
+            )
+            .hire_spd_pct
+        };
+
+        assert_eq!(
+            solve(0, &["hire_spd_cost[100]", "hire_spd_cost[110]"]),
+            10.0
+        );
+        assert_eq!(
+            solve(1, &["hire_spd_cost[100]", "hire_spd_cost[110]"]),
+            20.0
+        );
+        assert_eq!(
+            solve(2, &["hire_spd_cost[110]", "hire_spd_bd_n1_n1[200]"]),
+            20.0
         );
     }
 }
