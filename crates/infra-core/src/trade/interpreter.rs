@@ -157,7 +157,12 @@ impl TradeContext {
     }
 
     pub fn order_eff_total(&self) -> f64 {
-        self.order_eff_base() + self.order_eff_skill() + self.layout.global_inject.trade_eff_pct()
+        self.order_eff_base()
+            + self.order_eff_skill()
+            + self
+                .layout
+                .global_inject
+                .trade_eff_pct_with_tag_counts(&self.layout.trade_tagged_count_sum)
     }
 
     pub fn mechanic_caps(&self) -> MechanicCaps {
@@ -1278,6 +1283,70 @@ mod tests {
         let mut ctx = TradeContext::from_room(&input);
         apply_trade_phases(&mut ctx, &table);
         assert!((ctx.order_eff_skill() - 40.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn bellone_separates_vigil_in_base_from_same_room_debt() {
+        let table = load_table();
+        let bellone = TradeOperator {
+            name: "贝洛内".into(),
+            elite: 2,
+            buff_ids: vec![
+                "trade_ord_spd_ext[021]".into(),
+                "trade_ord_limit&cost_P[020]".into(),
+            ],
+            tags: vec!["cc.g.siracusa".into()],
+            ..Default::default()
+        };
+        let vigil = TradeOperator {
+            name: "伺夜".into(),
+            elite: 2,
+            buff_ids: vec!["trade_ord_spd&meet[000]".into()],
+            tags: vec!["cc.g.siracusa".into()],
+            ..Default::default()
+        };
+
+        let mut cross_layout = LayoutContext::default();
+        cross_layout.base_workforce.push("伺夜".into());
+        let cross_input = TradeRoomInput {
+            level: 3,
+            operators: vec![bellone.clone()],
+            order_count: None,
+            mood: 24.0,
+            gold_production_lines: None,
+            durin_virtual_lines: None,
+            human_fireworks: None,
+            layout: Arc::new(cross_layout),
+            active_order_kind: TradeOrderKind::Gold,
+        };
+        let mut cross = TradeContext::from_room(&cross_input);
+        apply_trade_phases(&mut cross, &table);
+        let cross_bellone = cross.operators.first().unwrap();
+        assert_eq!(cross_bellone.settled_eff, 40.0);
+        assert_eq!(cross_bellone.limit_contrib, 0);
+
+        let mut same_layout = LayoutContext::default();
+        same_layout.base_workforce.push("伺夜".into());
+        let same_input = TradeRoomInput {
+            level: 3,
+            operators: vec![bellone, vigil],
+            order_count: None,
+            mood: 24.0,
+            gold_production_lines: None,
+            durin_virtual_lines: None,
+            human_fireworks: None,
+            layout: Arc::new(same_layout),
+            active_order_kind: TradeOrderKind::Gold,
+        };
+        let mut same = TradeContext::from_room(&same_input);
+        apply_trade_phases(&mut same, &table);
+        let same_bellone = same
+            .operators
+            .iter()
+            .find(|operator| operator.name == "贝洛内")
+            .unwrap();
+        assert_eq!(same_bellone.settled_eff, 40.0);
+        assert_eq!(same_bellone.limit_contrib, 2);
     }
 
     #[test]

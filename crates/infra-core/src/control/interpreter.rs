@@ -232,9 +232,20 @@ fn apply_global_inject(ctx: &mut ControlContext, atom: &EffectAtom, source_buff_
     });
     match &atom.action {
         Action::GlobalInjectTradeEff { value } => {
-            let v = scaled_inject_value(ctx, atom, *value);
-            if v != 0.0 {
-                ctx.inject.record_trade(family, v);
+            if let Some(Selector::TaggedCountInTradeSum { tag }) = atom.selector.as_ref() {
+                let resolved_count = ctx
+                    .layout
+                    .trade_tagged_count_sum
+                    .get(tag)
+                    .copied()
+                    .unwrap_or(0);
+                ctx.inject
+                    .record_trade_tagged(source_buff_id, family, tag, *value, resolved_count);
+            } else {
+                let v = scaled_inject_value(ctx, atom, *value);
+                if v != 0.0 {
+                    ctx.inject.record_trade(family, v);
+                }
             }
         }
         Action::GlobalInjectManuEff { value, recipe } => {
@@ -377,6 +388,35 @@ mod tests {
             "manu={}",
             result.inject.manu_eff_for(crate::types::RecipeKind::Gold)
         );
+    }
+
+    #[test]
+    fn haru_trade_tagged_inject_is_delayed_and_resolves_zero_one_two() {
+        let mut layout = LayoutContext::default();
+        let solve = |layout: LayoutContext| {
+            solve_control(
+                &ControlRoomInput {
+                    operators: vec![control_op("八幡海铃", 2)],
+                    mood: 24.0,
+                    layout,
+                },
+                &table(),
+            )
+        };
+
+        let zero = solve(layout.clone());
+        assert!(zero.inject.has_dynamic_trade_inject());
+        assert_eq!(zero.inject.trade_eff_pct(), 0.0);
+
+        layout
+            .trade_tagged_count_sum
+            .insert("cc.g.siracusa".to_string(), 1);
+        assert_eq!(solve(layout.clone()).inject.trade_eff_pct(), 5.0);
+
+        layout
+            .trade_tagged_count_sum
+            .insert("cc.g.siracusa".to_string(), 2);
+        assert_eq!(solve(layout).inject.trade_eff_pct(), 10.0);
     }
 
     #[test]

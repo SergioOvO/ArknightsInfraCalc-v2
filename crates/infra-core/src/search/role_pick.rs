@@ -515,7 +515,7 @@ mod tests {
     }
 
     #[test]
-    fn docus_role_uses_highest_final_efficiency_even_when_syracusa_shortcut_is_available() {
+    fn docus_role_naturally_selects_syracusa_when_final_efficiency_wins() {
         let (pool, table, mut layout) = fixtures(&[
             ("但书", 2),
             ("伺夜", 2),
@@ -536,10 +536,10 @@ mod tests {
         )
         .unwrap();
 
-        assert!(hit.names.iter().any(|n| n == "但书"), "{hit:?}");
-        assert!(hit.names.iter().any(|n| n == "空弦"), "{hit:?}");
-        assert!(!hit.names.iter().any(|n| n == "贝洛内"), "{hit:?}");
-        assert_eq!(hit.rule_id.as_deref(), Some("gsl_docus_solo"));
+        for name in ["但书", "伺夜", "贝洛内"] {
+            assert!(hit.names.iter().any(|n| n == name), "{hit:?}");
+        }
+        assert_eq!(hit.rule_id.as_deref(), Some("gsl_docus_syracusa"));
         assert_eq!(
             hit.breakdown.as_ref().unwrap().unit_output_multiplier,
             Efficiency::from_decimal(1.550)

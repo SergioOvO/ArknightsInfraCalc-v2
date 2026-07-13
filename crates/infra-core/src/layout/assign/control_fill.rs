@@ -29,9 +29,56 @@ pub(crate) fn assign_control(
     candidate_requirements: &[crate::layout::ControlCandidateRequirement],
     used: &mut HashSet<String>,
 ) -> Result<()> {
+    assign_control_inner(
+        assignment,
+        pool,
+        table,
+        layout,
+        options,
+        candidate_requirements,
+        None,
+        used,
+    )?
+    .then_some(())
+    .ok_or_else(|| Error::msg("control: no legal fill combo"))
+}
+
+pub(crate) fn assign_control_requiring_any(
+    assignment: &mut BaseAssignment,
+    pool: &ControlPool,
+    table: &SkillTable,
+    layout: &LayoutContext,
+    options: &AssignBaseOptions,
+    candidate_requirements: &[crate::layout::ControlCandidateRequirement],
+    required_any: &HashSet<String>,
+    used: &mut HashSet<String>,
+) -> Result<bool> {
+    assign_control_inner(
+        assignment,
+        pool,
+        table,
+        layout,
+        options,
+        candidate_requirements,
+        Some(required_any),
+        used,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn assign_control_inner(
+    assignment: &mut BaseAssignment,
+    pool: &ControlPool,
+    table: &SkillTable,
+    layout: &LayoutContext,
+    options: &AssignBaseOptions,
+    candidate_requirements: &[crate::layout::ControlCandidateRequirement],
+    required_any: Option<&HashSet<String>>,
+    used: &mut HashSet<String>,
+) -> Result<bool> {
     const MAX_CONTROL: usize = 5;
     if pool.entries.is_empty() {
-        return Ok(());
+        return Ok(required_any.is_none());
     }
     let pinned: HashSet<String> = assignment
         .control_operators()
@@ -39,9 +86,21 @@ pub(crate) fn assign_control(
         .map(|o| o.name)
         .collect();
     if pinned.len() >= MAX_CONTROL {
-        return Ok(());
+        return Ok(required_any.is_none_or(|required| !pinned.is_disjoint(required)));
     }
 
+    let mut requirements: Vec<(HashSet<String>, u8)> = candidate_requirements
+        .iter()
+        .map(|requirement| {
+            (
+                requirement.candidates.iter().cloned().collect(),
+                requirement.min_count,
+            )
+        })
+        .collect();
+    if let Some(required_any) = required_any {
+        requirements.push((required_any.clone(), 1));
+    }
     let control_opts = ControlSearchOptions {
         max_operators: 5,
         top_k: options.top_k,
@@ -49,44 +108,31 @@ pub(crate) fn assign_control(
         layout: layout.clone(),
         matatabi_consumer_active: assignment_has_matatabi_consumer(assignment),
         must_include: pinned.clone(),
-        candidate_requirements: candidate_requirements
-            .iter()
-            .map(|requirement| {
-                (
-                    requirement.candidates.iter().cloned().collect(),
-                    requirement.min_count,
-                )
-            })
-            .collect(),
+        candidate_requirements: requirements,
         fill_policy: ControlFillPolicy::LayeredFill,
     };
 
-    let base_pool = if options.skip_standalone_control || !pinned.is_empty() {
-        pool.clone()
-    } else {
-        let preferred = try_filter_standalone(pool, FacilityKind::ControlCenter, 1);
-        if preferred.entries.len() >= MAX_CONTROL {
-            preferred
-        } else {
+    let base_pool =
+        if options.skip_standalone_control || !pinned.is_empty() || required_any.is_some() {
             pool.clone()
-        }
-    };
+        } else {
+            let preferred = try_filter_standalone(pool, FacilityKind::ControlCenter, 1);
+            if preferred.entries.len() >= MAX_CONTROL {
+                preferred
+            } else {
+                pool.clone()
+            }
+        };
     let filtered_pool = filter_control_pool_for_fill(&base_pool, used, &pinned);
 
-    let hit = if pinned.is_empty() {
-        let combos = search_control_combos(&filtered_pool, table, &control_opts)?;
-        pick_cached_or_rescan_control(
-            &combos,
-            &pinned,
-            used,
-            || search_control_combos(&filtered_pool, table, &control_opts),
-            |h| &h.names,
-            "control: no disjoint combo after pool filter",
-        )?
-    } else {
-        let combos = search_control_combos(&filtered_pool, table, &control_opts)?;
-        pick_control_extending_pins(combos.iter().cloned(), &pinned, used, &|h| &h.names)
-            .ok_or_else(|| Error::msg("control: no combo extending pinned after pool filter"))?
+    let combos = search_control_combos(&filtered_pool, table, &control_opts)?;
+    let Some(hit) = pick_control_extending_pins(combos, &pinned, used, &|h| &h.names) else {
+        if required_any.is_some() {
+            return Ok(false);
+        }
+        return Err(Error::msg(
+            "control: no combo extending pins after pool filter",
+        ));
     };
     let control_id = RoomId::from("control");
     commit_control_combo(
@@ -100,7 +146,8 @@ pub(crate) fn assign_control(
         },
         used,
         &pinned,
-    )
+    )?;
+    Ok(true)
 }
 
 fn filter_control_pool_for_fill(
@@ -117,26 +164,6 @@ fn filter_control_pool_for_fill(
             .collect(),
         skipped: pool.skipped.clone(),
     }
-}
-
-fn pick_cached_or_rescan_control<T, F>(
-    cached: &[T],
-    pinned: &HashSet<String>,
-    used: &HashSet<String>,
-    rescan: F,
-    names_of: impl Fn(&T) -> &[String],
-    err: &str,
-) -> Result<T>
-where
-    T: Clone,
-    F: FnOnce() -> Result<Vec<T>>,
-{
-    if let Some(hit) = pick_control_extending_pins(cached.iter().cloned(), pinned, used, &names_of)
-    {
-        return Ok(hit);
-    }
-    let fresh = rescan()?;
-    pick_control_extending_pins(fresh, pinned, used, &names_of).ok_or_else(|| Error::msg(err))
 }
 
 fn pick_control_extending_pins<T: Clone>(

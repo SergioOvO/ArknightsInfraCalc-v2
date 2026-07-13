@@ -1118,11 +1118,12 @@ mod tests {
     fn base_systems_registry_loads_curated_groups() {
         let cache = base_systems_cache().expect("base_systems loaded");
         let ids: HashSet<_> = cache.systems.iter().map(|s| s.id.as_str()).collect();
-        assert!(
-            !ids.contains("syracusa_pair"),
-            "叙拉古队友已迁移到但书贸易自由搜索"
-        );
-        assert!(ids.contains("syracusa_cross_station"));
+        for forbidden in ["docus_syracusa", "syracusa_pair", "syracusa_cross_station"] {
+            assert!(
+                !ids.contains(forbidden),
+                "叙拉古是自然中枢-贸易效率关系，不应注册历史固定体系 {forbidden}"
+            );
+        }
         assert!(
             !ids.contains("rosemary_perception"),
             "迷迭香感知链走代码化体系层（system_integrity），不进 registry"
@@ -1153,6 +1154,9 @@ mod tests {
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let _instances =
             crate::instances::OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        for name in ["八幡海铃", "伺夜", "贝洛内"] {
+            assert!(operbox.owns(name), "ideal E2 fixture must own {name}");
+        }
 
         let mut assignment = BaseAssignment::default();
         let mut used = HashSet::new();
@@ -1167,34 +1171,12 @@ mod tests {
         )
         .unwrap();
 
-        assert!(!used.contains("伺夜"), "伺夜必须留给贸易搜索");
-        assert!(!used.contains("贝洛内"), "贝洛内必须留给贸易搜索");
-        assert!(used.contains("八幡海铃"), "八幡海铃应固定进入中枢");
-    }
-
-    #[test]
-    fn syracusa_claim_pins_only_control_producer() {
-        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let operbox = ideal_e2_operbox();
-        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-
-        let mut assignment = BaseAssignment::default();
-        let mut used = HashSet::new();
-        claim_base_systems(
-            &blueprint,
-            &operbox,
-            &table,
-            AssignShiftMode::Peak,
-            &mut assignment,
-            &mut used,
-            &HashSet::new(),
-        )
-        .unwrap();
-
-        assert!(!used.contains("灵知"));
-        assert!(used.contains("八幡海铃"));
-        assert!(!used.contains("伺夜"));
-        assert!(!used.contains("贝洛内"));
+        for name in ["八幡海铃", "伺夜", "贝洛内"] {
+            assert!(
+                !used.contains(name),
+                "叙拉古成员不得由 registry 强制认领: {name}"
+            );
+        }
     }
 
     #[test]

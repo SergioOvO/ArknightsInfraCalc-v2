@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -9,7 +10,7 @@ use crate::error::Result;
 use crate::layout::{LayoutContext, SharedLayout};
 use crate::pool::{
     build_trade_combo_operators_vec, combinations_indices, filter_standalone_exact_with,
-    StandaloneFilter, TradePool,
+    trade_operators_require_candidate_projection, StandaloneFilter, TradePool,
 };
 use crate::skill_table::SkillTable;
 use crate::trade::input::{
@@ -407,6 +408,7 @@ fn eval_combo_hit(
     } else {
         options.gold_production_lines
     };
+    let projected_layout = trade_combo_layout(&options.layout, &ops);
     let input = TradeRoomInput {
         level: options.trade_level,
         operators: ops,
@@ -415,7 +417,7 @@ fn eval_combo_hit(
         gold_production_lines: Some(gold_lines),
         durin_virtual_lines: None,
         human_fireworks: None,
-        layout: Arc::clone(&options.layout),
+        layout: projected_layout,
         active_order_kind: order_kind,
     };
     let result = solve_trade_with_shift_prevalidated(&input, table, options.shift_hours).ok()?;
@@ -449,6 +451,52 @@ fn eval_combo_hit(
         unit_originium_per_day: result.production.unit.unit_originium_per_day,
         breakdown: Some(breakdown),
     })
+}
+
+fn trade_combo_layout(base: &SharedLayout, operators: &[TradeOperator]) -> SharedLayout {
+    let changes_dynamic_tag_count = base.global_inject.trade_tagged().iter().any(|rule| {
+        operators
+            .iter()
+            .any(|operator| operator.tags.contains(&rule.target_tag))
+    });
+    if changes_dynamic_tag_count || trade_operators_require_candidate_projection(operators) {
+        project_trade_combo_layout(base, operators)
+    } else {
+        Arc::clone(base)
+    }
+}
+
+/// 把尚未提交的当前贸易房候选投影进跨设施上下文。
+///
+/// 搜索候选在 `resolve_base` 的 assignment 中尚不存在；依赖“在基建内”、
+/// 贸易 workforce 或 `TaggedCountInTradeSum` 的机制必须看到候选本身。
+/// 已经存在于贸易 workforce 的 anchor 不重复计数；本 helper 不负责
+/// `TradeStationsWithTaggedGte` 的逐房门槛投影。
+fn project_trade_combo_layout(base: &LayoutContext, operators: &[TradeOperator]) -> SharedLayout {
+    let mut layout = base.clone();
+    let mut base_names: HashSet<String> = layout.base_workforce.iter().cloned().collect();
+    let mut trade_names: HashSet<String> = layout.trade_workforce.iter().cloned().collect();
+
+    for operator in operators {
+        if base_names.insert(operator.name.clone()) {
+            layout.base_workforce.push(operator.name.clone());
+        }
+        if !trade_names.insert(operator.name.clone()) {
+            continue;
+        }
+        layout.trade_workforce.push(operator.name.clone());
+        let mut seen_tags = HashSet::new();
+        for tag in &operator.tags {
+            if seen_tags.insert(tag.as_str()) {
+                *layout
+                    .trade_tagged_count_sum
+                    .entry(tag.clone())
+                    .or_insert(0) += 1;
+            }
+        }
+    }
+
+    Arc::new(layout)
 }
 
 pub fn hit_witch_shortcut(hit: &TradeSearchHit) -> bool {
@@ -569,6 +617,142 @@ mod tests {
             "维娜未与其他格拉斯哥同房时应为 30% 退化态: {:?}",
             report.best
         );
+    }
+
+    #[test]
+    fn current_trade_combo_is_projected_into_base_and_tagged_workforce() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            [("伺夜", 2), ("贝洛内", 2), ("古米", 2)]
+                .into_iter()
+                .map(|(name, elite)| (name.to_string(), elite))
+                .collect(),
+        );
+        let pool = build_trade_pool(&roster, &instances, &table).unwrap();
+        let operators: Vec<_> = ["伺夜", "贝洛内", "古米"]
+            .iter()
+            .map(|name| pool.entry(name).unwrap().to_trade_operator())
+            .collect();
+
+        let projected = project_trade_combo_layout(&LayoutContext::default(), &operators);
+        assert!(projected.base_workforce.iter().any(|name| name == "伺夜"));
+        assert!(projected
+            .trade_workforce
+            .iter()
+            .any(|name| name == "贝洛内"));
+        assert_eq!(projected.trade_tagged_count_sum["cc.g.siracusa"], 2);
+
+        let report = search_trade_triples(
+            &pool,
+            &table,
+            &TradeSearchOptions {
+                use_baked: false,
+                order_mode: TradeSearchOrderMode::Single(TradeOrderKind::Gold),
+                ..TradeSearchOptions::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            report.best.breakdown.as_ref().unwrap().skill_efficiency,
+            Efficiency::from_decimal(1.100),
+            "同房候选投影后，贝洛内应同时看见伺夜在基建内的 +10%"
+        );
+    }
+
+    #[test]
+    fn candidate_projection_deduplicates_existing_anchor_name_and_tags() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            [("伺夜", 2), ("贝洛内", 2)]
+                .into_iter()
+                .map(|(name, elite)| (name.to_string(), elite))
+                .collect(),
+        );
+        let pool = build_trade_pool(&roster, &instances, &table).unwrap();
+        let operators: Vec<_> = ["伺夜", "贝洛内"]
+            .iter()
+            .map(|name| pool.entry(name).unwrap().to_trade_operator())
+            .collect();
+        let mut base = LayoutContext::default();
+        base.base_workforce.push("伺夜".to_string());
+        base.trade_workforce.push("伺夜".to_string());
+        base.trade_tagged_count_sum
+            .insert("cc.g.siracusa".to_string(), 1);
+
+        let projected = project_trade_combo_layout(&base, &operators);
+        assert_eq!(
+            projected
+                .base_workforce
+                .iter()
+                .filter(|name| name.as_str() == "伺夜")
+                .count(),
+            1
+        );
+        assert_eq!(
+            projected
+                .trade_workforce
+                .iter()
+                .filter(|name| name.as_str() == "伺夜")
+                .count(),
+            1
+        );
+        assert_eq!(projected.trade_tagged_count_sum["cc.g.siracusa"], 2);
+    }
+
+    #[test]
+    fn plain_combo_reuses_layout_when_dynamic_inject_targets_other_tags() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map([("古米".to_string(), 2)].into_iter().collect());
+        let pool = build_trade_pool(&roster, &instances, &table).unwrap();
+        let operators = vec![pool.entry("古米").unwrap().to_trade_operator()];
+        let mut context = LayoutContext::search_baseline();
+        context.global_inject.record_trade_tagged(
+            "dynamic_source",
+            "dynamic_family",
+            "cc.g.siracusa",
+            5.0,
+            0,
+        );
+        let base = Arc::new(context);
+
+        let selected = trade_combo_layout(&base, &operators);
+        assert!(Arc::ptr_eq(&base, &selected));
+    }
+
+    #[test]
+    fn full_standalone_pool_keeps_vigil_and_bellone_as_normal_candidates() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            [
+                ("伺夜", 2),
+                ("贝洛内", 2),
+                ("空弦", 2),
+                ("吉星", 2),
+                ("石英", 2),
+            ]
+            .into_iter()
+            .map(|(name, elite)| (name.to_string(), elite))
+            .collect(),
+        );
+        let pool = build_trade_pool(&roster, &instances, &table).unwrap();
+        let filtered = trade_search_pool_for_order(
+            &pool,
+            TradeOrderKind::Gold,
+            &TradeSearchOptions::gold_order_only(),
+            &SearchTripleFilter::default(),
+        );
+
+        assert!(filtered.entries.len() >= 3, "反例必须走足量 standalone 池");
+        for name in ["伺夜", "贝洛内"] {
+            assert!(
+                filtered.entry(name).is_some(),
+                "足量池不应在 solver 前裁掉{name}"
+            );
+        }
     }
 
     #[test]

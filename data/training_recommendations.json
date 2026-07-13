@@ -31,31 +31,6 @@
       "conflicts": []
     },
     {
-      "id": "docus_syracusa",
-      "label": "但书叙拉古链",
-      "source_system_id": "syracusa_pair",
-      "priority_ready_after_training": "P0",
-      "priority_blocked": "Info",
-      "core": [
-        { "name": "但书", "elite": 2 },
-        { "name": "伺夜", "elite": 2 },
-        { "name": "贝洛内", "elite": 2 },
-        { "name": "八幡海铃", "elite": 2 }
-      ],
-      "pick_one_core": [],
-      "reason_code": "system_core_undertrained",
-      "message": "但书叙拉古链核心已齐，但有人未达到体系要求。",
-      "source_paths": [
-        "data/base_systems.json",
-        "data/trade_segments.json",
-        "data/trade_shortcuts.json",
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/但书叙拉古链.md"
-      ],
-      "source_notes": "当前 base_systems 将八幡海铃放在中枢、伺夜和贝洛内放在贸易站；推荐层按核心齐全后再建议补练。",
-      "needs_review": false,
-      "conflicts": []
-    },
-    {
       "id": "blackkey_closure",
       "label": "可露希尔 / 黑键 / 吉星特别订单",
       "source_system_id": "blackkey_closure",

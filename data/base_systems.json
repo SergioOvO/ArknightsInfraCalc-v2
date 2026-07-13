@@ -33,30 +33,6 @@
   ],
   "systems": [
     {
-      "id": "syracusa_cross_station",
-      "label": "叙拉古跨站：八幡海铃中枢，伺夜/贝洛内进入贸易搜索（不要求同站）",
-      "tier": "cross_station",
-      "priority": 20,
-      "segment_id": "docus_syracusa",
-      "shift_modes": ["peak"],
-      "slots": [
-        {
-          "facility": "control",
-          "operators": [{ "name": "八幡海铃", "elite": 2 }]
-        },
-        {
-          "facility": "trade_post",
-          "fill": "search",
-          "operators": [{ "name": "伺夜", "elite": 2 }]
-        },
-        {
-          "facility": "trade_post",
-          "fill": "search",
-          "operators": [{ "name": "贝洛内", "elite": 2 }]
-        }
-      ]
-    },
-    {
       "id": "automation_group",
       "label": "自动化组：温蒂E2+清流E1+承曦格雷伊E2（赤金专精，第三人贪心补齐）",
       "tier": "cross_station",

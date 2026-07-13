@@ -19,6 +19,7 @@ use crate::skill_table::SkillTable;
 use super::AssignBaseOptions;
 
 /// 单班填房运行上下文。`assignment` / `used` 是流水线推进中的可变状态。
+#[derive(Clone)]
 pub(super) struct AssignmentRun<'a> {
     pub blueprint: &'a BaseBlueprint,
     pub operbox: &'a OperBox,

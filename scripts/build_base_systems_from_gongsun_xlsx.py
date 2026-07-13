@@ -12,8 +12,6 @@ import json
 import re
 from pathlib import Path
 
-import openpyxl
-
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_XLSX = Path.home() / "Downloads" / "工具人表26.5 (2).xlsx"
 OUT_PATH = ROOT / "data" / "base_systems.json"
@@ -53,27 +51,6 @@ CURATED_SYSTEMS = [
                     {"name": "阿罗玛", "elite": 2},
                     {"name": "砾", "elite": 2},
                     {"name": "迷迭香", "elite": 2},
-                ],
-            },
-        ],
-    },
-    {
-        "id": "docus_syracusa",
-        "label": "叙拉古组：但书+伺夜+贝洛内（中枢八幡海铃E2，工具45+45）",
-        "priority": 20,
-        "segment_id": "docus_syracusa",
-        "exclusive_group": "meta_chain",
-        "shift_modes": ["peak"],
-        "xlsx_hint": "伺夜Ⅱ+贝洛内Ⅱ + 中枢八幡海铃",
-        "slots": [
-            {"facility": "control", "operators": [{"name": "八幡海铃", "elite": 2}]},
-            {
-                "facility": "trade_post",
-                "trade_role": "meta_docus",
-                "operators": [
-                    {"name": "但书", "elite": 2},
-                    {"name": "伺夜", "elite": 2},
-                    {"name": "贝洛内", "elite": 2},
                 ],
             },
         ],
@@ -173,8 +150,16 @@ CURATED_SYSTEMS = [
     },
 ]
 
+FORBIDDEN_FIXED_SYRACUSA_SYSTEM_IDS = {
+    "docus_syracusa",
+    "syracusa_pair",
+    "syracusa_cross_station",
+}
+
 
 def scan_xlsx_hints(xlsx: Path) -> list[str]:
+    import openpyxl
+
     wb = openpyxl.load_workbook(xlsx, read_only=True, data_only=True)
     ws = wb["Sheet1"]
     hints: list[str] = []
@@ -221,13 +206,22 @@ def build_document(xlsx: Path) -> dict:
             "requires_monhun_peer": True,
         },
     ]
-    return {
+    document = {
         "version": 1,
         "source": f"{xlsx.name} + 基建干员练度简表 + 排班迭代说明 @公孙长乐",
         "control_manu_injectors": control_manu_injectors,
         "xlsx_scan_hints": hints[:25],
         "systems": systems,
     }
+    validate_document(document)
+    return document
+
+
+def validate_document(document: dict) -> None:
+    system_ids = {entry.get("id") for entry in document.get("systems", [])}
+    forbidden = sorted(system_ids & FORBIDDEN_FIXED_SYRACUSA_SYSTEM_IDS)
+    if forbidden:
+        raise ValueError(f"fixed Syracusa systems are forbidden: {forbidden}")
 
 
 def main() -> None:

@@ -469,7 +469,9 @@
     "伺夜@tier_up": {
       "name": "伺夜",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.siracusa"
+      ],
       "facilities": {
         "trade": {
           "buff_ids": [
@@ -5643,7 +5645,9 @@
     "贝洛内@tier_0": {
       "name": "贝洛内",
       "tier": "tier_0",
-      "tags": [],
+      "tags": [
+        "cc.g.siracusa"
+      ],
       "facilities": {
         "trade": {
           "buff_ids": [
@@ -5657,7 +5661,9 @@
     "贝洛内@tier_up": {
       "name": "贝洛内",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.siracusa"
+      ],
       "facilities": {
         "trade": {
           "buff_ids": [

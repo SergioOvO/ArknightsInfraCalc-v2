@@ -44,9 +44,9 @@
 
 数据：`data/base_systems.json`（每 System 含 `"tier"` 字段：`cross_station` / `same_station`）；主路径代码：`layout/orchestrate::{build_plan, execute_plan}`，其中 `build_plan` 调用 `select_registry_systems`。`layout/system.rs::claim_base_systems` 仅作兼容 / 测试辅助入口。
 
-在 `assign_shift` **开头**（高峰班）由 `build_plan` 按 **tier 两阶段**贪心认领真正的跨站体系 / fixed bond：先 `CrossStation`（跨站体系）、后 `SameStation`（同站组合），各阶段内按 `priority` 排序，`exclusive_group` 互斥态跨阶段共享。随后 `execute_plan` 先占 `control` / `trade_post` 等空房并写入 `used`；后续设施贪心跳过已占房间。中枢若只钉了体系内 1 人（如海铃），`assign_control` 会**补满剩余席位**而非整房重搜。
+在 `assign_shift` **开头**（高峰班）由 `build_plan` 按 **tier 两阶段**贪心认领真正的跨站体系 / fixed bond：先 `CrossStation`（跨站体系）、后 `SameStation`（同站组合），各阶段内按 `priority` 排序，`exclusive_group` 互斥态跨阶段共享。随后 `execute_plan` 先占 `control` / `trade_post` 等空房并写入 `used`；后续设施贪心跳过已占房间。中枢若只钉了体系内 1 人（如推进之王链中的戴菲恩），`assign_control` 会**补满剩余席位**而非整房重搜。
 
-来源：公孙长乐工具人表（`scripts/build_base_systems_from_gongsun_xlsx.py` 维护小目录）。`exclusive_group` 处理跨站体系；`pick_one` 在认领时按顺序取盒内第一个可用干员。贸易核心优先（但书、可露希尔、巫恋）不依赖 fixed 同房认领。`syracusa_cross_station` 固定八幡海铃中枢，并以两个独立 `fill=search` slot 声明伺夜/贝洛内进入贸易域而不要求同站。贸易 L3 锚点仍在 `trade_shortcuts.json`，但 `gsl_ling_jie_yaxin` 仅作参考锚点，不参与 active 匹配。
+来源：公孙长乐工具人表（`scripts/build_base_systems_from_gongsun_xlsx.py` 维护小目录）。`exclusive_group` 处理真正的硬跨站体系；`pick_one` 在认领时按顺序取盒内第一个可用干员。贸易核心优先（但书、可露希尔、巫恋）不依赖 fixed 同房认领。叙拉古已移出 `base_systems.json`：八幡海铃、伺夜、贝洛内均由中枢/贸易自然搜索决定，伺夜与贝洛内不要求同站，八幡海铃的标签倍率按最终实际贸易成员动态结算。贸易 L3 锚点仍在 `trade_shortcuts.json`，但 `gsl_ling_jie_yaxin` 仅作参考锚点，不参与 active 匹配。
 
 ## 匹配优先级（`resolve_trade_shortcut`）
 

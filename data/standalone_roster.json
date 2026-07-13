@@ -151,6 +151,21 @@
           "gold",
           "originium"
         ]
+      },
+      {
+        "name": "伺夜",
+        "min_tier": "tier_up",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
+      },
+      {
+        "name": "贝洛内",
+        "order_types": [
+          "gold",
+          "originium"
+        ]
       }
     ],
     "factory": [

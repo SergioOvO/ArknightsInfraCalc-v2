@@ -23,3 +23,20 @@ pub fn load_training_recommendation_rules(path: &Path) -> Result<TrainingRecomme
         ))
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn natural_syracusa_members_are_not_a_training_core_rule() {
+        let rules =
+            load_training_recommendation_rules(&default_training_recommendations_path().unwrap())
+                .unwrap();
+        for forbidden in ["docus_syracusa", "syracusa_pair", "syracusa_cross_station"] {
+            assert!(rules.system_rules.iter().all(|rule| {
+                rule.id != forbidden && rule.source_system_id.as_deref() != Some(forbidden)
+            }));
+        }
+    }
+}

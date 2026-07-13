@@ -27,3 +27,6 @@ pub use trade::{
     karlan_precision_active, n_choose_k_u64, PoolSkip, PoolStats, TradePool, TradePoolEntry,
     JIE_TRADE_NAME,
 };
+pub(crate) use trade::{
+    trade_operators_require_candidate_projection, trade_pool_requires_candidate_projection,
+};

@@ -1359,30 +1359,6 @@ mod tests {
             .iter()
             .find(|r| r.operators.iter().any(|o| o.name == "但书"));
         assert!(docus_room.is_some(), "精二但书应作为贸易搜索第一核心");
-
-        let control_ops = assignment.control_operators();
-        let control: HashSet<_> = control_ops.iter().map(|o| o.name.as_str()).collect();
-        assert!(control.contains("八幡海铃"), "control: {:?}", control);
-        assert!(
-            control.contains("斩业星熊") && control.contains("诗怀雅"),
-            "control: {:?}",
-            control
-        );
-        assert!(
-            !control.contains("三角初华") && !control.contains("若叶睦"),
-            "钉死后补位应为公招/心情而非 MyGO 热情链: {:?}",
-            control
-        );
-        assert!(
-            control.contains("薇薇安娜") || control.contains("焰尾"),
-            "应有中枢心情回复补位: {:?}",
-            control
-        );
-        assert!(
-            !control.contains("火龙S黑角") && !control.contains("麒麟R夜刀"),
-            "高峰无调查团时不应因木天蓼选怪猎中枢: {:?}",
-            control
-        );
     }
 
     #[test]

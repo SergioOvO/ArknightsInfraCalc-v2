@@ -398,8 +398,8 @@ mod tests {
             &crate::skill_table::data_path("schedule_243/operbox_ideal_e2.json").unwrap(),
         )
         .unwrap();
-        if !operbox.owns("但书") {
-            return;
+        for name in ["但书", "八幡海铃", "伺夜", "贝洛内"] {
+            assert!(operbox.owns(name), "ideal E2 fixture must own {name}");
         }
         let plan = build_plan(
             &blueprint,
@@ -409,13 +409,15 @@ mod tests {
             &std::collections::HashSet::new(),
         )
         .unwrap();
-        assert!(
-            plan.registry_claims
-                .iter()
-                .any(|claim| claim.system_id == "syracusa_cross_station"),
-            "应选中叙拉古跨站体系: {:?}",
-            plan.registry_claims
-        );
+        for forbidden in ["docus_syracusa", "syracusa_pair", "syracusa_cross_station"] {
+            assert!(
+                plan.registry_claims
+                    .iter()
+                    .all(|claim| claim.system_id != forbidden),
+                "叙拉古成员应留给自然中枢/贸易搜索，不得认领 {forbidden}: {:?}",
+                plan.registry_claims
+            );
+        }
     }
 
     #[test]
@@ -429,6 +431,9 @@ mod tests {
             &crate::skill_table::default_skill_table_path().unwrap(),
         )
         .unwrap();
+        for name in ["但书", "八幡海铃", "伺夜", "贝洛内"] {
+            assert!(operbox.owns(name), "ideal E2 fixture must own {name}");
+        }
         let plan = build_plan(
             &blueprint,
             &operbox,
@@ -445,16 +450,12 @@ mod tests {
             &BaseAssignment::default(),
         )
         .unwrap();
-        for name in ["但书", "伺夜", "贝洛内"] {
+        for name in ["但书", "八幡海铃", "伺夜", "贝洛内"] {
             assert!(
                 !executed.used.contains(name),
-                "execute_plan 不应提前占用贸易自由搜索干员 {name}"
+                "execute_plan 不应提前占用叙拉古或贸易自由搜索干员 {name}"
             );
         }
-        assert!(
-            executed.used.contains("八幡海铃"),
-            "跨站体系应固定八幡海铃中枢 producer"
-        );
     }
 
     #[test]

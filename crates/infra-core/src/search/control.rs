@@ -13,7 +13,7 @@ use crate::scoring::{
     evaluate_control_inject_policy, ScoringPolicyId, TradeManuEfficiencyComponents,
 };
 use crate::skill_table::SkillTable;
-use crate::types::RecipeKind;
+use crate::types::{Action, Phase, RecipeKind, Selector};
 
 /// 木天蓼 consumer：贸易/制造侧的泰拉大陆调查团。
 pub const MATATABI_CONSUMER_NAME: &str = "泰拉大陆调查团";
@@ -188,6 +188,51 @@ pub fn control_entry_core_inject_fill(entry: &crate::pool::ControlPoolEntry) -> 
         .any(|b| control_efficiency_inject_buff(b))
 }
 
+/// 返回该中枢候选会按贸易站实际标签人数动态结算的标签集合。
+/// 识别依据是 atom 结构，不依赖干员名或具体倍率。
+pub fn control_entry_dynamic_trade_tags(
+    entry: &crate::pool::ControlPoolEntry,
+    table: &SkillTable,
+) -> HashSet<String> {
+    let mut tags = HashSet::new();
+    for buff_id in &entry.buff_ids {
+        let Some(skill) = table.get(buff_id) else {
+            continue;
+        };
+        for atom in &skill.atoms {
+            if atom.phase != Phase::GlobalInject
+                || !matches!(&atom.action, Action::GlobalInjectTradeEff { .. })
+            {
+                continue;
+            }
+            if let Some(Selector::TaggedCountInTradeSum { tag }) = atom.selector.as_ref() {
+                tags.insert(tag.clone());
+            }
+        }
+    }
+    tags
+}
+
+/// 本轮允许主动建立 control↔trade 比较分支的动态 producer。
+///
+/// `TaggedCountInTradeSum` 也被其他既有体系使用；是否为“自然可选 producer”是
+/// 机制分类，不应由 pipeline 泛化所有 selector。当前确认的家族认可 buff 在此
+/// 单点登记，pipeline 仍只消费标签集合，不认识干员名或倍率。
+pub fn control_entry_optional_dynamic_trade_tags(
+    entry: &crate::pool::ControlPoolEntry,
+    table: &SkillTable,
+) -> HashSet<String> {
+    const OPTIONAL_DYNAMIC_TRADE_BUFFS: &[&str] = &["control_tra_limit&spd2[000]"];
+    if !entry
+        .buff_ids
+        .iter()
+        .any(|buff_id| OPTIONAL_DYNAMIC_TRADE_BUFFS.contains(&buff_id.as_str()))
+    {
+        return HashSet::new();
+    }
+    control_entry_dynamic_trade_tags(entry, table)
+}
+
 pub fn control_entry_mood_cost_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
     if entry.name == "琴柳" {
         return false;
@@ -307,7 +352,9 @@ fn evaluate_control_policy(
 
     if options.fill_policy == ControlFillPolicy::LayeredFill {
         let fill_scores = control_layered_fill_scores(operators, table);
-        let trade_inject = result.inject.trade_eff_pct();
+        let trade_inject = result
+            .inject
+            .trade_eff_pct_with_tag_counts(&options.layout.trade_tagged_count_sum);
         let manu_gold = result.inject.manu_eff_for(RecipeKind::Gold);
         let manu_br = result.inject.manu_eff_for(RecipeKind::BattleRecord);
         let component_score = evaluate_control_inject_policy(TradeManuEfficiencyComponents {
@@ -336,7 +383,9 @@ fn evaluate_control_policy(
         };
     }
 
-    let trade_inject = result.inject.trade_eff_pct();
+    let trade_inject = result
+        .inject
+        .trade_eff_pct_with_tag_counts(&options.layout.trade_tagged_count_sum);
     let manu_gold = result.inject.manu_eff_for(RecipeKind::Gold);
     let manu_br = result.inject.manu_eff_for(RecipeKind::BattleRecord);
     let gold_line_count = options.layout.gold_manu_line_count.min(u32::from(u8::MAX)) as u8;
@@ -370,6 +419,24 @@ fn evaluate_control_policy(
         policy_sort_key: inject_subtotal,
         ..ControlPolicyBreakdown::default()
     }
+}
+
+/// 对已经完成贸易落位的候选前缀，使用现有具名
+/// `ControlInjectRawSumV0` policy 计算比较键。
+pub(crate) fn control_inject_policy_sort_key_for_layout(layout: &LayoutContext) -> f64 {
+    evaluate_control_inject_policy(TradeManuEfficiencyComponents {
+        trade_eff_pct: layout
+            .global_inject
+            .trade_eff_pct_with_tag_counts(&layout.trade_tagged_count_sum),
+        gold_manu_eff_pct: layout.global_inject.manu_eff_for(RecipeKind::Gold),
+        battle_record_manu_eff_pct: layout.global_inject.manu_eff_for(RecipeKind::BattleRecord),
+        trade_station_count: layout.trade_station_count,
+        gold_line_count: layout.gold_manu_line_count.min(u32::from(u8::MAX)) as u8,
+        battle_record_line_count: layout
+            .manufacture_station_count
+            .saturating_sub(layout.gold_manu_line_count.min(u32::from(u8::MAX)) as u8),
+    })
+    .sort_key_pct
 }
 
 /// 中枢满编组合搜索；可用人数不足上限时使用全部可用角色。
@@ -435,7 +502,9 @@ pub fn search_control_combos(
             let result = solve_control(&input, table);
             let breakdown = evaluate_control_policy(&result, &operators, table, options);
             Some(ControlSearchHit {
-                trade_inject_pct: result.inject.trade_eff_pct(),
+                trade_inject_pct: result
+                    .inject
+                    .trade_eff_pct_with_tag_counts(&layout.trade_tagged_count_sum),
                 manu_gold_inject_pct: result.inject.manu_eff_for(RecipeKind::Gold),
                 names,
                 breakdown,
@@ -616,6 +685,27 @@ mod tests {
                 "{name} is a system producer and should not be inserted as standalone control fill"
             );
         }
+    }
+
+    #[test]
+    fn optional_dynamic_branch_classifies_family_recognition_not_daifeen() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            [("八幡海铃", 2), ("戴菲恩", 2)]
+                .into_iter()
+                .map(|(name, elite)| (name.to_string(), elite))
+                .collect(),
+        );
+        let pool = build_control_pool(&roster, &instances, &table).unwrap();
+        assert_eq!(
+            control_entry_optional_dynamic_trade_tags(pool.entry("八幡海铃").unwrap(), &table),
+            HashSet::from(["cc.g.siracusa".to_string()])
+        );
+        assert!(
+            control_entry_optional_dynamic_trade_tags(pool.entry("戴菲恩").unwrap(), &table)
+                .is_empty()
+        );
     }
 
     #[test]

@@ -85,9 +85,9 @@ pub(super) fn assign_trade_jie_remainder(
     pool: &TradePool,
     table: &SkillTable,
     instances: &OperatorInstances,
-    layout: &LayoutContext,
     gold_lines: u32,
     options: &AssignBaseOptions,
+    durin_dorm_planning: Option<u8>,
     assignment: &mut BaseAssignment,
     used: &mut HashSet<String>,
 ) -> Result<()> {
@@ -100,7 +100,16 @@ pub(super) fn assign_trade_jie_remainder(
         return Ok(());
     }
 
-    let jie_lead = !karlan_precision_active(&layout.global_inject)
+    let mut current_layout = crate::layout::resolve_base(
+        blueprint,
+        assignment,
+        Some(instances),
+        Some(table),
+        options.mood,
+        durin_dorm_planning,
+    )?
+    .layout;
+    let jie_lead = !karlan_precision_active(&current_layout.global_inject)
         && jie_e0_trade_operator(instances, table).is_some();
 
     if jie_lead {
@@ -113,7 +122,7 @@ pub(super) fn assign_trade_jie_remainder(
             if sub.entries.len() >= capacity {
                 if let Some(jie_op) = jie_e0_trade_operator(instances, table) {
                     let search_opts = trade_room_options(
-                        layout,
+                        &current_layout,
                         gold_lines,
                         options,
                         TradeOrderKind::Gold,
@@ -140,11 +149,20 @@ pub(super) fn assign_trade_jie_remainder(
         if !assignment.operators_in(&room.id).is_empty() {
             continue;
         }
+        current_layout = crate::layout::resolve_base(
+            blueprint,
+            assignment,
+            Some(instances),
+            Some(table),
+            options.mood,
+            durin_dorm_planning,
+        )?
+        .layout;
         let order = trade_order_from_room(room)?;
         let hit = pick_trade_hit(
             pool,
             table,
-            trade_room_options(layout, gold_lines, options, order, room.level),
+            trade_room_options(&current_layout, gold_lines, options, order, room.level),
             SearchTripleFilter::default(),
             used,
             options.top_k,
@@ -159,9 +177,10 @@ pub(super) fn assign_trade_remainder(
     blueprint: &BaseBlueprint,
     pool: &TradePool,
     table: &SkillTable,
-    layout: &LayoutContext,
+    instances: &OperatorInstances,
     gold_lines: u32,
     options: &AssignBaseOptions,
+    durin_dorm_planning: Option<u8>,
     assignment: &mut BaseAssignment,
     used: &mut HashSet<String>,
 ) -> Result<()> {
@@ -176,18 +195,34 @@ pub(super) fn assign_trade_remainder(
         if assignment.operators_in(&room.id).len() >= room.operator_capacity() {
             continue;
         }
+        let current_layout = crate::layout::resolve_base(
+            blueprint,
+            assignment,
+            Some(instances),
+            Some(table),
+            options.mood,
+            durin_dorm_planning,
+        )?
+        .layout;
         let order = trade_order_from_room(room)?;
         let existing = assignment.operators_in(&room.id);
         let hit = if existing.is_empty() {
             pick_trade_meta_then_plain(
-                pool, table, layout, gold_lines, options, order, room.level, used,
+                pool,
+                table,
+                &current_layout,
+                gold_lines,
+                options,
+                order,
+                room.level,
+                used,
             )
         } else {
             let anchors: Vec<_> = existing.iter().map(|op| op.name.clone()).collect();
             pick_trade_hit(
                 pool,
                 table,
-                trade_room_options(layout, gold_lines, options, order, room.level),
+                trade_room_options(&current_layout, gold_lines, options, order, room.level),
                 SearchTripleFilter {
                     must_include_names: anchors,
                     hit_filter: Some(trade_hit_ok_for_greedy),
@@ -199,6 +234,63 @@ pub(super) fn assign_trade_remainder(
         }
         .map_err(|e| Error::msg(format!("trade {}: {e}", room.id.0)))?;
         commit_trade_room(assignment, &room.id, &hit, pool, used)?;
+    }
+    Ok(())
+}
+
+pub(super) fn refresh_trade_efficiency_snapshots(
+    blueprint: &BaseBlueprint,
+    assignment: &mut BaseAssignment,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+    options: &AssignBaseOptions,
+    durin_dorm_planning: Option<u8>,
+) -> Result<()> {
+    let resolved = crate::layout::resolve_base(
+        blueprint,
+        assignment,
+        Some(instances),
+        Some(table),
+        options.mood,
+        durin_dorm_planning,
+    )?;
+    let gold_lines = resolved.gold_manu_line_count();
+    for room in resolved.trade_rooms {
+        if room.operators.is_empty() {
+            continue;
+        }
+        let input = crate::trade::TradeRoomInput {
+            level: room.level,
+            operators: room.operators,
+            order_count: None,
+            mood: options.mood,
+            gold_production_lines: Some(gold_lines),
+            durin_virtual_lines: None,
+            human_fireworks: None,
+            layout: Arc::new(room.layout),
+            active_order_kind: room.order,
+        };
+        let solved = crate::trade::solve_trade_with_shift(&input, table, options.shift_hours)?;
+        let operators = assignment.operators_in(&room.id).to_vec();
+        assignment.set_room_with_efficiency(
+            room.id,
+            operators,
+            Some(crate::layout::RoomEfficiencySnapshot {
+                trade_paper_efficiency: solved.efficiency.paper.paper_efficiency,
+                trade_unit_output_multiplier: solved
+                    .efficiency
+                    .production_basis
+                    .unit_output_multiplier,
+                trade_final_efficiency: solved.efficiency.final_efficiency,
+                trade_equivalent_skill_efficiency: solved.efficiency.equivalent_skill_efficiency,
+                trade_rule_id: solved.rule_id,
+                trade_skill_efficiency: solved.efficiency.paper.skill_efficiency,
+                trade_mechanic_equivalent_efficiency: solved
+                    .order_mechanic
+                    .mechanic_equivalent_efficiency,
+                ..Default::default()
+            }),
+        );
     }
     Ok(())
 }
@@ -496,6 +588,7 @@ pub(super) fn trade_room_options(
 mod tests {
     use super::*;
     use crate::instances::{default_instances_path, OperatorInstances};
+    use crate::layout::blueprint::{BlueprintScenario, RoomBlueprint};
     use crate::pool::{add_jie_market_to_trade_pool, build_trade_pool};
     use crate::roster::Roster;
     use crate::skill_table::{default_skill_table_path, SkillTable};
@@ -587,5 +680,183 @@ mod tests {
 
         assert_eq!(hit.rule_id.as_deref(), Some("gsl_vina_lungmen"));
         assert!(!hit.names.iter().any(|n| n == "巫恋"), "{hit:?}");
+    }
+
+    #[test]
+    fn later_trade_room_sees_vigil_committed_in_earlier_room() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            [("伺夜", 2), ("贝洛内", 2)]
+                .into_iter()
+                .map(|(name, elite)| (name.to_string(), elite))
+                .collect(),
+        );
+        let pool = build_trade_pool(&roster, &instances, &table).unwrap();
+        let blueprint = BaseBlueprint {
+            template: None,
+            drone_cap: 135,
+            scenario: BlueprintScenario::default(),
+            rooms: vec![
+                RoomBlueprint {
+                    id: RoomId::from("trade_a"),
+                    kind: FacilityKind::TradePost,
+                    level: 1,
+                    product: Some(RoomProduct::Trade {
+                        order: TradeOrderKind::Gold,
+                    }),
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+                RoomBlueprint {
+                    id: RoomId::from("trade_b"),
+                    kind: FacilityKind::TradePost,
+                    level: 1,
+                    product: Some(RoomProduct::Trade {
+                        order: TradeOrderKind::Gold,
+                    }),
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+                RoomBlueprint {
+                    id: RoomId::from("meeting"),
+                    kind: FacilityKind::MeetingRoom,
+                    level: 3,
+                    product: None,
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+            ],
+        };
+        let mut assignment = BaseAssignment::default();
+        let mut used = HashSet::new();
+        assign_trade_remainder(
+            &blueprint,
+            &pool,
+            &table,
+            &instances,
+            0,
+            &AssignBaseOptions {
+                top_k: 10,
+                ..Default::default()
+            },
+            None,
+            &mut assignment,
+            &mut used,
+        )
+        .unwrap();
+
+        assert_eq!(
+            assignment.operators_in(&RoomId::from("trade_a"))[0].name,
+            "伺夜"
+        );
+        assert_eq!(
+            assignment.operators_in(&RoomId::from("trade_b"))[0].name,
+            "贝洛内"
+        );
+        assert_eq!(
+            assignment
+                .efficiency_in(&RoomId::from("trade_b"))
+                .unwrap()
+                .trade_skill_efficiency,
+            crate::Efficiency::from_decimal(0.400),
+            "后站贝洛内必须看见前站已提交的伺夜并获得跨站 +10%"
+        );
+    }
+
+    #[test]
+    fn final_refresh_updates_earlier_trade_snapshot_after_later_tagged_consumer_commits() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let blueprint = BaseBlueprint {
+            template: None,
+            drone_cap: 135,
+            scenario: BlueprintScenario::default(),
+            rooms: vec![
+                RoomBlueprint {
+                    id: RoomId::from("control"),
+                    kind: FacilityKind::ControlCenter,
+                    level: 5,
+                    product: None,
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+                RoomBlueprint {
+                    id: RoomId::from("trade_a"),
+                    kind: FacilityKind::TradePost,
+                    level: 1,
+                    product: Some(RoomProduct::Trade {
+                        order: TradeOrderKind::Gold,
+                    }),
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+                RoomBlueprint {
+                    id: RoomId::from("trade_b"),
+                    kind: FacilityKind::TradePost,
+                    level: 1,
+                    product: Some(RoomProduct::Trade {
+                        order: TradeOrderKind::Gold,
+                    }),
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+                RoomBlueprint {
+                    id: RoomId::from("meeting"),
+                    kind: FacilityKind::MeetingRoom,
+                    level: 3,
+                    product: None,
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+            ],
+        };
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room(
+            "control",
+            vec![crate::layout::AssignedOperator::new("八幡海铃", 2)],
+        );
+        assignment.set_room(
+            "trade_a",
+            vec![crate::layout::AssignedOperator::new("伺夜", 2)],
+        );
+        let options = AssignBaseOptions::default();
+
+        refresh_trade_efficiency_snapshots(
+            &blueprint,
+            &mut assignment,
+            &instances,
+            &table,
+            &options,
+            None,
+        )
+        .unwrap();
+        let one_consumer = assignment
+            .efficiency_in(&RoomId::from("trade_a"))
+            .unwrap()
+            .trade_paper_efficiency;
+
+        assignment.set_room(
+            "trade_b",
+            vec![crate::layout::AssignedOperator::new("贝洛内", 2)],
+        );
+        refresh_trade_efficiency_snapshots(
+            &blueprint,
+            &mut assignment,
+            &instances,
+            &table,
+            &options,
+            None,
+        )
+        .unwrap();
+        let two_consumers = assignment
+            .efficiency_in(&RoomId::from("trade_a"))
+            .unwrap()
+            .trade_paper_efficiency;
+        assert_eq!(
+            two_consumers - one_consumer,
+            crate::Efficiency::from_decimal(0.050),
+            "后站提交第二名标签 consumer 后，前站快照也必须按最终全局人数刷新"
+        );
     }
 }

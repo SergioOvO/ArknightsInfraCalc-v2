@@ -129,7 +129,7 @@ crates/infra-core/src/layout/orchestrate/
 
 | id / role | 类型 | L3 shortcut | 当前运行时 |
 |-----------|------|-------------|------------|
-| `syracusa_cross_station` + role `docus` | 跨站成员 + 但书核心优先 | `gsl_docus_syracusa` / `gsl_docus_solo` | 八幡海铃固定中枢；伺夜/贝洛内是独立贸易 `search` 成员、不要求同站；但书先按最终效率自由选队友，剩余跨站成员再进入其余贸易站 |
+| 叙拉古动态注入 + role `docus` | 自然中枢/贸易候选（不注册 System） | `gsl_docus_syracusa` / `gsl_docus_solo` | 八幡海铃、伺夜、贝洛内均不固定；普通中枢路径与包含动态贸易 producer 的路径各自完成贸易搜索后按 `ControlInjectRawSumV0` 比较。伺夜/贝洛内不要求同站，也不要求入编 |
 | `closure` | 可露希尔核心优先 | `gsl_blackkey_closure` / `gsl_closure_*` | 强制包含可露希尔；优先黑键可露锚点，缺黑键仍保留可露 |
 | `witch` / `witch_fallback` | 龙巫 / 巫恋兜底 | `gsl_witch_*` | `witch` 强制包含精二巫恋 + 龙舌兰；无龙舌兰时 `witch_fallback` 低于推王组，只做巫恋兜底 |
 | `ling_jie_karlan` | control producer + L1 自然搜索 | `gsl_ling_jie_yaxin` 仅参考 | 只认领灵知 E2 中枢；精1孑由贸易搜索注入 |
@@ -146,7 +146,7 @@ crates/infra-core/src/layout/orchestrate/
 4. `meta_vina`：戴菲恩 producer 激活时命中推王 + 摩根 + 维娜，优先级高于灵知孑与无龙舌兰巫恋兜底。
 5. `witch_fallback` / `karlan` / `penguin` / plain：无龙舌兰巫恋兜底、灵知孑、企鹅、散件工具人三人组，且排除黑键与巫恋同房冲突。
 
-这条顺序是核心优先策略，不是固定三人组优先级。八幡海铃只提供中枢 producer 条件；伺夜、贝洛内要求进入贸易域但不要求同站；但书仍先自由搜索最高效率队友，三者同房只是可能自然选中的 shortcut。
+这条顺序是核心优先策略，不是固定三人组优先级。八幡海铃只作为可选中枢 producer，伺夜、贝洛内只作为普通贸易候选；三人都不由编排层强制入编。伺夜与贝洛内不要求同站，三人同房只是可能自然选中的 shortcut；八幡与单个贸易消费者的极端组合同样合法。
 
 #### Phase 2 待建（贸易 bond）
 
@@ -169,7 +169,7 @@ crates/infra-core/src/layout/orchestrate/
 
 Producer 前提（跨房，非 global pool）：
 
-- 叙拉古：`haru_e2_in_control`（八幡海铃 E2）
+- 叙拉古：八幡海铃 E2 的动态贸易标签倍率；仅在八幡与实际叙拉古贸易成员自然同时入选时生效，`haru_e2_in_control` 只保留为 L3 链段 producer 事实
 - 喀兰：`karlan_precision`（灵知 E2）
 - 推王：`戴菲恩` E2 在中枢（运筹好手）
 

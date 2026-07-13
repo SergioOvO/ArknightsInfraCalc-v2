@@ -19,7 +19,7 @@ use crate::manufacture::input::ManuRoomInput;
 use crate::manufacture::solver::solve_manufacture;
 use crate::pool::{
     build_manufacture_pool, build_trade_combo_operators_vec, build_trade_pool,
-    combinations_indices, n_choose_k_u64,
+    combinations_indices, n_choose_k_u64, trade_pool_requires_candidate_projection,
 };
 use crate::pool::{standalone_names_for, StandaloneFilter};
 use crate::pool::{HasName, ManuPool, PoolCore, TradePool};
@@ -1338,20 +1338,45 @@ fn baked_trade_compatible(
     filter.must_operator_override.is_none()
         && (options.mood - 24.0).abs() < f64::EPSILON
         && (options.shift_hours - 24.0).abs() < f64::EPSILON
-        && baked_layout_search_compatible(&options.layout)
+        && baked_trade_layout_compatible(&options.layout)
+        && !trade_pool_requires_candidate_projection(pool)
         && pool.entries.iter().all(|entry| entry.progress.elite >= 2)
 }
 
 fn baked_manufacture_compatible(pool: &ManuPool, options: &ManuSearchOptions) -> bool {
     !options.full_pool
         && (options.mood - 24.0).abs() < f64::EPSILON
-        && baked_layout_search_compatible(&options.layout)
+        && baked_manufacture_layout_compatible(&options.layout)
         && pool.entries.iter().all(|entry| entry.progress.elite >= 2)
 }
 
-fn baked_layout_search_compatible(layout: &LayoutContext) -> bool {
-    let _ = layout;
-    true
+fn baked_search_baseline() -> &'static LayoutContext {
+    static BASELINE: OnceLock<LayoutContext> = OnceLock::new();
+    BASELINE.get_or_init(LayoutContext::search_baseline)
+}
+
+fn baked_layout_common_compatible(layout: &LayoutContext) -> bool {
+    let mut actual = layout.clone();
+    actual.global_inject = Default::default();
+    let mut baseline = baked_search_baseline().clone();
+    baseline.global_inject = Default::default();
+    actual == baseline
+}
+
+fn baked_trade_layout_compatible(layout: &LayoutContext) -> bool {
+    let baseline = baked_search_baseline();
+    baked_layout_common_compatible(layout)
+        && layout
+            .global_inject
+            .same_trade_effects_as(&baseline.global_inject)
+}
+
+fn baked_manufacture_layout_compatible(layout: &LayoutContext) -> bool {
+    let baseline = baked_search_baseline();
+    baked_layout_common_compatible(layout)
+        && layout
+            .global_inject
+            .same_manufacture_effects_as(&baseline.global_inject)
 }
 
 fn baked_table_covers_pool_names<'a>(
@@ -1647,6 +1672,7 @@ fn bake_input_fingerprints() -> Result<Vec<BakeInputFingerprint>> {
         "trade_shortcuts.json",
         "trade_segments.json",
         "base_systems.json",
+        "layout/243_use_this_.json",
     ] {
         let path = data_path(name)?;
         paths.insert(name, path);
@@ -1707,6 +1733,17 @@ mod tests {
     }
 
     #[test]
+    fn bake_manifest_inputs_include_search_baseline_layout() {
+        let inputs = bake_input_fingerprints().unwrap();
+        assert!(inputs.iter().any(|input| {
+            input
+                .path
+                .replace('\\', "/")
+                .ends_with("layout/243_use_this_.json")
+        }));
+    }
+
+    #[test]
     fn assignment_full_manufacture_pool_structurally_rejects_standalone_bake() {
         let pool = ManuPool {
             entries: vec![],
@@ -1723,5 +1760,171 @@ mod tests {
                 ..Default::default()
             }
         ));
+    }
+
+    #[test]
+    fn dynamic_trade_inject_rejects_only_trade_bake() {
+        let mut layout = LayoutContext::search_baseline();
+        layout.global_inject.record_trade_tagged(
+            "control_tra_limit&spd2[000]",
+            "dynamic_test",
+            "cc.g.siracusa",
+            5.0,
+            0,
+        );
+        let trade_pool = TradePool {
+            entries: vec![],
+            skipped: vec![],
+        };
+        assert!(!baked_trade_compatible(
+            &trade_pool,
+            &TradeSearchOptions {
+                layout: Arc::new(layout.clone()),
+                ..Default::default()
+            },
+            &SearchTripleFilter::default(),
+        ));
+        let manu_pool = ManuPool {
+            entries: vec![],
+            skipped: vec![],
+        };
+        assert!(baked_manufacture_compatible(
+            &manu_pool,
+            &ManuSearchOptions {
+                layout: Arc::new(layout),
+                ..Default::default()
+            }
+        ));
+    }
+
+    #[test]
+    fn static_injects_only_reject_their_own_facility_bake() {
+        let trade_pool = TradePool {
+            entries: vec![],
+            skipped: vec![],
+        };
+        let manu_pool = ManuPool {
+            entries: vec![],
+            skipped: vec![],
+        };
+
+        let mut trade_layout = LayoutContext::search_baseline();
+        trade_layout
+            .global_inject
+            .record_trade("bake_trade_test", 1.0);
+        assert!(!baked_trade_compatible(
+            &trade_pool,
+            &TradeSearchOptions {
+                layout: Arc::new(trade_layout.clone()),
+                ..Default::default()
+            },
+            &SearchTripleFilter::default(),
+        ));
+        assert!(baked_manufacture_compatible(
+            &manu_pool,
+            &ManuSearchOptions {
+                layout: Arc::new(trade_layout),
+                ..Default::default()
+            }
+        ));
+
+        let mut manu_layout = LayoutContext::search_baseline();
+        manu_layout
+            .global_inject
+            .record_manu("bake_manu_test", Some(RecipeKind::Gold), 1.0);
+        assert!(baked_trade_compatible(
+            &trade_pool,
+            &TradeSearchOptions {
+                layout: Arc::new(manu_layout.clone()),
+                ..Default::default()
+            },
+            &SearchTripleFilter::default(),
+        ));
+        assert!(!baked_manufacture_compatible(
+            &manu_pool,
+            &ManuSearchOptions {
+                layout: Arc::new(manu_layout),
+                ..Default::default()
+            }
+        ));
+    }
+
+    #[test]
+    fn non_baseline_common_layout_rejects_both_facility_bakes() {
+        let mut layout = LayoutContext::search_baseline();
+        layout.base_workforce.push("额外干员".to_string());
+        let trade_pool = TradePool {
+            entries: vec![],
+            skipped: vec![],
+        };
+        let manu_pool = ManuPool {
+            entries: vec![],
+            skipped: vec![],
+        };
+        assert!(!baked_trade_compatible(
+            &trade_pool,
+            &TradeSearchOptions {
+                layout: Arc::new(layout.clone()),
+                ..Default::default()
+            },
+            &SearchTripleFilter::default(),
+        ));
+        assert!(!baked_manufacture_compatible(
+            &manu_pool,
+            &ManuSearchOptions {
+                layout: Arc::new(layout),
+                ..Default::default()
+            }
+        ));
+    }
+
+    #[test]
+    fn trade_producer_flag_rejects_only_trade_bake() {
+        let mut layout = LayoutContext::search_baseline();
+        layout.global_inject.record_haru_e2_in_control();
+        let trade_pool = TradePool {
+            entries: vec![],
+            skipped: vec![],
+        };
+        let manu_pool = ManuPool {
+            entries: vec![],
+            skipped: vec![],
+        };
+        assert!(!baked_trade_compatible(
+            &trade_pool,
+            &TradeSearchOptions {
+                layout: Arc::new(layout.clone()),
+                ..Default::default()
+            },
+            &SearchTripleFilter::default(),
+        ));
+        assert!(baked_manufacture_compatible(
+            &manu_pool,
+            &ManuSearchOptions {
+                layout: Arc::new(layout),
+                ..Default::default()
+            }
+        ));
+    }
+
+    #[test]
+    fn operator_in_base_trade_pool_rejects_legacy_bake_precisely() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let sensitive = build_trade_pool(
+            &Roster::from_elite_map([("贝洛内".to_string(), 2)].into_iter().collect()),
+            &instances,
+            &table,
+        )
+        .unwrap();
+        assert!(trade_pool_requires_candidate_projection(&sensitive));
+
+        let plain = build_trade_pool(
+            &Roster::from_elite_map([("古米".to_string(), 2)].into_iter().collect()),
+            &instances,
+            &table,
+        )
+        .unwrap();
+        assert!(!trade_pool_requires_candidate_projection(&plain));
     }
 }

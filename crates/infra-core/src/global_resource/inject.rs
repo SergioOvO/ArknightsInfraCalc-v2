@@ -18,6 +18,7 @@ pub struct GlobalInjectManifest {
     manu_gold_by_family: HashMap<String, f64>,
     manu_battle_record_by_family: HashMap<String, f64>,
     manu_originium_by_family: HashMap<String, f64>,
+    trade_tagged: Vec<TaggedTradeInject>,
     manu_tagged: Vec<TaggedManuInject>,
     /// 灵知·精密计算规则（单一中枢，不与自身叠加）。
     karlan_precision: Option<KarlanPrecision>,
@@ -25,6 +26,20 @@ pub struct GlobalInjectManifest {
     haru_e2_in_control: bool,
     /// 中枢戴菲恩 E2「运筹好手」已进驻（推王组链段 producer）。
     daifeen_e2_in_control: bool,
+}
+
+/// 中枢按贸易站实际标签人数结算的延迟注入规则。
+///
+/// 控制中枢先于贸易站搜索，因此不能在中枢求值时把标签人数冻结为 0。
+/// `resolved_count` 只保存当前完整 layout 的展示快照；候选搜索通过
+/// [`GlobalInjectManifest::trade_eff_pct_with_tag_counts`] 使用候选投影后的计数。
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaggedTradeInject {
+    pub source_buff_id: String,
+    pub family: String,
+    pub target_tag: String,
+    pub value_per_operator: f64,
+    pub resolved_count: u8,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,7 +60,26 @@ enum ManuInjectSlot {
 
 impl GlobalInjectManifest {
     pub fn trade_eff_pct(&self) -> f64 {
-        self.trade_by_family.values().sum()
+        self.trade_eff_pct_by(|rule| rule.resolved_count)
+    }
+
+    /// 以调用方提供的贸易标签人数结算动态规则；同 `family` 仍取最高，
+    /// 不同族相加，与静态 `record_trade` 语义一致。
+    pub fn trade_eff_pct_with_tag_counts(&self, counts: &HashMap<String, u8>) -> f64 {
+        self.trade_eff_pct_by(|rule| counts.get(&rule.target_tag).copied().unwrap_or(0))
+    }
+
+    fn trade_eff_pct_by(&self, count_of: impl Fn(&TaggedTradeInject) -> u8) -> f64 {
+        if self.trade_tagged.is_empty() {
+            return self.trade_by_family.values().sum();
+        }
+        let mut by_family = self.trade_by_family.clone();
+        for rule in &self.trade_tagged {
+            let value = f64::from(count_of(rule)) * rule.value_per_operator;
+            let entry = by_family.entry(rule.family.clone()).or_insert(0.0);
+            *entry = entry.max(value);
+        }
+        by_family.values().sum()
     }
 
     pub fn trade_global_flat_eff_pct(&self) -> f64 {
@@ -89,6 +123,39 @@ impl GlobalInjectManifest {
         *entry = entry.max(value);
     }
 
+    pub fn record_trade_tagged(
+        &mut self,
+        source_buff_id: &str,
+        family: &str,
+        target_tag: &str,
+        value_per_operator: f64,
+        resolved_count: u8,
+    ) {
+        self.trade_tagged.push(TaggedTradeInject {
+            source_buff_id: source_buff_id.to_string(),
+            family: family.to_string(),
+            target_tag: target_tag.to_string(),
+            value_per_operator,
+            resolved_count,
+        });
+    }
+
+    pub fn trade_tagged(&self) -> &[TaggedTradeInject] {
+        &self.trade_tagged
+    }
+
+    pub fn has_dynamic_trade_inject(&self) -> bool {
+        !self.trade_tagged.is_empty()
+    }
+
+    pub(crate) fn same_trade_effects_as(&self, other: &Self) -> bool {
+        self.trade_by_family == other.trade_by_family
+            && self.trade_tagged == other.trade_tagged
+            && self.karlan_precision == other.karlan_precision
+            && self.haru_e2_in_control == other.haru_e2_in_control
+            && self.daifeen_e2_in_control == other.daifeen_e2_in_control
+    }
+
     pub fn record_manu(&mut self, family: &str, recipe: Option<RecipeKind>, value: f64) {
         let slot = match recipe {
             None | Some(RecipeKind::All) => ManuInjectSlot::All,
@@ -127,6 +194,14 @@ impl GlobalInjectManifest {
 
     pub fn manu_tagged(&self) -> &[TaggedManuInject] {
         &self.manu_tagged
+    }
+
+    pub(crate) fn same_manufacture_effects_as(&self, other: &Self) -> bool {
+        self.manu_all_by_family == other.manu_all_by_family
+            && self.manu_gold_by_family == other.manu_gold_by_family
+            && self.manu_battle_record_by_family == other.manu_battle_record_by_family
+            && self.manu_originium_by_family == other.manu_originium_by_family
+            && self.manu_tagged == other.manu_tagged
     }
 
     /// 记录灵知·精密计算；单一中枢不叠加，取订单上限增益更大的一条。
@@ -177,6 +252,31 @@ mod tests {
         inject.record_manu(INJECT_FAMILY_MANU_GLOBAL_ALL, None, 3.0);
         assert_eq!(inject.manu_global_flat_eff_pct(), 0.0);
         assert_eq!(inject.manu_eff_for(RecipeKind::Gold), 3.0);
+    }
+
+    #[test]
+    fn tagged_trade_inject_uses_family_max_and_candidate_counts_without_mutating_snapshot() {
+        let mut inject = GlobalInjectManifest::default();
+        inject.record_trade("shared", 4.0);
+        inject.record_trade_tagged("source_a", "shared", "tag_a", 5.0, 1);
+        inject.record_trade_tagged("source_b", "shared", "tag_b", 4.0, 2);
+        inject.record_trade_tagged("source_c", "other", "tag_c", 3.0, 1);
+
+        assert_eq!(inject.trade_eff_pct(), 11.0);
+        let candidate_counts = HashMap::from([
+            ("tag_a".to_string(), 3),
+            ("tag_b".to_string(), 0),
+            ("tag_c".to_string(), 2),
+        ]);
+        assert_eq!(
+            inject.trade_eff_pct_with_tag_counts(&candidate_counts),
+            21.0
+        );
+        assert_eq!(
+            inject.trade_eff_pct(),
+            11.0,
+            "候选计数只能覆盖本次求值，不能改写 resolved_count 展示快照"
+        );
     }
 }
 

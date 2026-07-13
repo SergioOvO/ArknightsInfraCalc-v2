@@ -208,7 +208,11 @@ impl AssignmentPlan {
         if in_control("灵知") && together_in(FacilityKind::TradePost, &["孑", "银灰"]) {
             add(&["灵知", "孑", "银灰"]);
         }
-        if in_control("八幡海铃") {
+        let family_recognition_active = assignment
+            .control_operators()
+            .iter()
+            .any(|operator| operator.name == "八幡海铃" && operator.elite >= 2);
+        if family_recognition_active {
             let mut operators = vec!["八幡海铃"];
             for name in ["伺夜", "贝洛内"] {
                 if anywhere_in(FacilityKind::TradePost, &[name]) {
@@ -391,6 +395,53 @@ mod tests {
         assignment.set_room("control", vec![AssignedOperator::new("灵知", 2)]);
         plan.derive_actual_shift_binds(&blueprint, &assignment);
         assert_eq!(plan.shift_binds.len(), 1);
+    }
+
+    #[test]
+    fn actual_syracusa_bind_uses_only_present_cross_station_consumers() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room("control", vec![AssignedOperator::new("八幡海铃", 2)]);
+
+        let mut no_consumer = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        no_consumer.derive_actual_shift_binds(&blueprint, &assignment);
+        assert!(no_consumer.shift_binds.is_empty());
+
+        set_trade_group(&mut assignment, &["伺夜"]);
+        assignment.set_room("control", vec![AssignedOperator::new("八幡海铃", 0)]);
+        let mut e0_no_skill = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        e0_no_skill.derive_actual_shift_binds(&blueprint, &assignment);
+        assert!(
+            e0_no_skill.shift_binds.is_empty(),
+            "精0 八幡海铃没有家族认可，不能仅因补位与 consumer 共存就派生 bind"
+        );
+
+        assignment.set_room("control", vec![AssignedOperator::new("八幡海铃", 2)]);
+        let mut single = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        single.derive_actual_shift_binds(&blueprint, &assignment);
+        assert_eq!(single.shift_binds.len(), 1);
+        assert_eq!(single.shift_binds[0].operators.len(), 2);
+        assert!(single.shift_binds[0]
+            .operators
+            .contains(&"八幡海铃".to_string()));
+        assert!(single.shift_binds[0]
+            .operators
+            .contains(&"伺夜".to_string()));
+
+        assignment.set_room("trade_2", vec![AssignedOperator::new("贝洛内", 2)]);
+        let mut cross_station = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        cross_station.derive_actual_shift_binds(&blueprint, &assignment);
+        assert_eq!(cross_station.shift_binds.len(), 1);
+        for name in ["八幡海铃", "伺夜", "贝洛内"] {
+            assert!(cross_station.shift_binds[0]
+                .operators
+                .contains(&name.to_string()));
+        }
+
+        assignment.set_room("control", vec![]);
+        let mut no_producer = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        no_producer.derive_actual_shift_binds(&blueprint, &assignment);
+        assert!(no_producer.shift_binds.is_empty());
     }
 
     #[test]

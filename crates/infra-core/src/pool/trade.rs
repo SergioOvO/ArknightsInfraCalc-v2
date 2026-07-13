@@ -7,7 +7,7 @@ use crate::roster::{OperatorProgress, Roster};
 use crate::skill_table::SkillTable;
 use crate::tier::PromotionTier;
 use crate::trade::TradeOperator;
-use crate::types::{Action, CompiledAtom, Phase, SkillDef};
+use crate::types::{Action, CompiledAtom, Condition, EffectAtom, Phase, Selector, SkillDef};
 
 use crate::layout::tier::OperatorTier;
 
@@ -159,6 +159,36 @@ impl TradePoolEntry {
             compiled_atoms: self.compiled_atoms.clone(),
         }
     }
+}
+
+/// 当前贸易候选投影只改变在基建/贸易名单与贸易标签总数；读取这些字段的 atom
+/// 必须看到尚未提交的当前组合。这个判定同时供实时搜索 fast path 与旧 bake gate 使用。
+pub(crate) fn trade_atom_requires_candidate_projection(atom: &EffectAtom) -> bool {
+    matches!(
+        atom.condition.as_ref(),
+        Some(Condition::OperatorInBase { .. } | Condition::OperatorInTrade { .. })
+    ) || matches!(
+        atom.selector.as_ref(),
+        Some(Selector::TaggedCountInTradeSum { .. })
+    )
+}
+
+pub(crate) fn trade_operators_require_candidate_projection(operators: &[TradeOperator]) -> bool {
+    operators.iter().any(|operator| {
+        operator
+            .compiled_atoms
+            .iter()
+            .any(|compiled| trade_atom_requires_candidate_projection(&compiled.atom))
+    })
+}
+
+pub(crate) fn trade_pool_requires_candidate_projection(pool: &TradePool) -> bool {
+    pool.entries.iter().any(|entry| {
+        entry
+            .compiled_atoms
+            .iter()
+            .any(|compiled| trade_atom_requires_candidate_projection(&compiled.atom))
+    })
 }
 
 /// 向后兼容别名：`TradePool` = `PoolCore<TradePoolEntry>`

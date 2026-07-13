@@ -37,9 +37,11 @@ pub fn assign_team_producer_rooms(
 ) -> Result<()> {
     assign_team_trade_meta_rooms(
         blueprint,
+        instances,
+        coexist_assignment,
+        durin_dorm_planning,
         trade_pool,
         table,
-        layout,
         options,
         trade_rooms,
         assignment,
@@ -57,7 +59,9 @@ pub fn assign_team_producer_rooms(
         manu_rooms,
         assignment,
         used,
-    )
+    )?;
+    clear_team_trade_snapshots(assignment, trade_rooms);
+    Ok(())
 }
 
 /// γ 替补半区：贸易沿用 meta 核心优先级，制造/发电仍站绑定搜索。
@@ -81,9 +85,11 @@ pub fn assign_team_gamma_half(
 ) -> Result<()> {
     assign_team_trade_meta_rooms(
         blueprint,
+        instances,
+        coexist_assignment,
+        durin_dorm_planning,
         trade_pool,
         table,
-        layout,
         options,
         trade_rooms,
         assignment,
@@ -111,15 +117,19 @@ pub fn assign_team_gamma_half(
         power_rooms,
         assignment,
         used,
-    )
+    )?;
+    clear_team_trade_snapshots(assignment, trade_rooms);
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
 fn assign_team_trade_meta_rooms(
     blueprint: &BaseBlueprint,
+    instances: &crate::instances::OperatorInstances,
+    coexist_assignment: &BaseAssignment,
+    durin_dorm_planning: Option<u8>,
     trade_pool: &TradePool,
     table: &SkillTable,
-    layout: &LayoutContext,
     options: &AssignBaseOptions,
     trade_rooms: &[RoomId],
     assignment: &mut BaseAssignment,
@@ -140,14 +150,46 @@ fn assign_team_trade_meta_rooms(
         if !assignment.operators_in(&room.id).is_empty() {
             continue;
         }
+        let mut current_assignment = coexist_assignment.clone();
+        for assigned_room in &assignment.rooms {
+            current_assignment.set_room_assignment(assigned_room.clone());
+        }
+        let current_layout = crate::layout::resolve_base(
+            blueprint,
+            &current_assignment,
+            Some(instances),
+            Some(table),
+            options.mood,
+            durin_dorm_planning,
+        )?
+        .layout;
         let order = trade_order_from_room(room)?;
         let hit = pick_trade_meta_then_plain(
-            trade_pool, table, layout, gold_lines, options, order, room.level, used,
+            trade_pool,
+            table,
+            &current_layout,
+            gold_lines,
+            options,
+            order,
+            room.level,
+            used,
         )
         .map_err(|e| Error::msg(format!("team trade {}: {e}", room.id.0)))?;
         commit_trade_room(assignment, &room.id, &hit, trade_pool, used)?;
     }
     Ok(())
+}
+
+/// 队伍 partial assignment 的最终结算必须使用完整班次（coexist + partial）。
+/// 清掉逐房搜索时的局部快照，让 schedule 最终合并后按完整上下文重算。
+fn clear_team_trade_snapshots(assignment: &mut BaseAssignment, trade_rooms: &[RoomId]) {
+    for room_id in trade_rooms {
+        if assignment.operators_in(room_id).is_empty() {
+            continue;
+        }
+        let operators = assignment.operators_in(room_id).to_vec();
+        assignment.set_room(room_id.clone(), operators);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -219,7 +261,130 @@ fn assign_team_manu_rooms(
 mod tests {
     use super::*;
     use crate::layout::assignment::AssignedOperator;
+    use crate::layout::blueprint::{BlueprintScenario, FacilityKind, RoomBlueprint};
     use crate::operbox::{OperBox, OperBoxEntry};
+    use crate::roster::Roster;
+    use crate::trade::TradeOrderKind;
+
+    fn two_level_one_trade_blueprint() -> BaseBlueprint {
+        BaseBlueprint {
+            template: None,
+            drone_cap: 135,
+            scenario: BlueprintScenario::default(),
+            rooms: vec![
+                RoomBlueprint {
+                    id: RoomId::from("trade_a"),
+                    kind: FacilityKind::TradePost,
+                    level: 1,
+                    product: Some(RoomProduct::Trade {
+                        order: TradeOrderKind::Gold,
+                    }),
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+                RoomBlueprint {
+                    id: RoomId::from("trade_b"),
+                    kind: FacilityKind::TradePost,
+                    level: 1,
+                    product: Some(RoomProduct::Trade {
+                        order: TradeOrderKind::Gold,
+                    }),
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+                RoomBlueprint {
+                    id: RoomId::from("meeting"),
+                    kind: FacilityKind::MeetingRoom,
+                    level: 3,
+                    product: None,
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn gamma_trade_search_sees_coexist_and_earlier_partial_trade_workforce() {
+        let blueprint = two_level_one_trade_blueprint();
+        let instances = crate::instances::OperatorInstances::load(
+            &crate::instances::default_instances_path().unwrap(),
+        )
+        .unwrap();
+        let table =
+            SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
+
+        let bellone_pool = crate::pool::build_trade_pool(
+            &Roster::from_elite_map([("贝洛内".to_string(), 2)].into_iter().collect()),
+            &instances,
+            &table,
+        )
+        .unwrap();
+        let mut coexist = BaseAssignment::default();
+        coexist.set_room("trade_a", vec![AssignedOperator::new("伺夜", 2)]);
+        let mut from_coexist = BaseAssignment::default();
+        assign_team_trade_meta_rooms(
+            &blueprint,
+            &instances,
+            &coexist,
+            None,
+            &bellone_pool,
+            &table,
+            &AssignBaseOptions::default(),
+            &[RoomId::from("trade_b")],
+            &mut from_coexist,
+            &mut HashSet::from(["伺夜".to_string()]),
+        )
+        .unwrap();
+        assert_eq!(
+            from_coexist
+                .efficiency_in(&RoomId::from("trade_b"))
+                .unwrap()
+                .trade_skill_efficiency,
+            crate::Efficiency::from_decimal(0.400)
+        );
+
+        let both_pool = crate::pool::build_trade_pool(
+            &Roster::from_elite_map(
+                [("伺夜", 2), ("贝洛内", 2)]
+                    .into_iter()
+                    .map(|(name, elite)| (name.to_string(), elite))
+                    .collect(),
+            ),
+            &instances,
+            &table,
+        )
+        .unwrap();
+        let mut partial = BaseAssignment::default();
+        assign_team_trade_meta_rooms(
+            &blueprint,
+            &instances,
+            &BaseAssignment::default(),
+            None,
+            &both_pool,
+            &table,
+            &AssignBaseOptions::default(),
+            &[RoomId::from("trade_a"), RoomId::from("trade_b")],
+            &mut partial,
+            &mut HashSet::new(),
+        )
+        .unwrap();
+        assert_eq!(
+            partial.operators_in(&RoomId::from("trade_a"))[0].name,
+            "伺夜"
+        );
+        assert_eq!(
+            partial.operators_in(&RoomId::from("trade_b"))[0].name,
+            "贝洛内"
+        );
+        assert_eq!(
+            partial
+                .efficiency_in(&RoomId::from("trade_b"))
+                .unwrap()
+                .trade_skill_efficiency,
+            crate::Efficiency::from_decimal(0.400)
+        );
+    }
 
     #[test]
     fn gamma_manufacture_search_consumes_coexisting_rhine_workforce() {
