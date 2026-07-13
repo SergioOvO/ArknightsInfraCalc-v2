@@ -33,7 +33,7 @@
 
 | 场景 | 命令 |
 |------|------|
-| 用户说“跑一遍模拟” | `cargo run -q -p infra-cli -- plan --operbox data/fixtures/243/operbox_full_e2.json --maa-out out/243_maa.json` |
+| 用户说“跑一遍模拟” | `cargo run -q -p infra-cli -- plan --operbox data/fixtures/243/operbox_full_e2.json --profile-out out/<task>-profile.json --maa-out out/<task>-maa.json` |
 | 只验证三队排班 / MAA | `cargo run -q -p infra-cli -- layout team-rotation --layout <layout> --operbox <operbox> --maa-out <out>` |
 | 单班布局搜索 | `cargo run -q -p infra-cli -- layout test --layout <layout> --operbox <operbox> --text` |
 | 指定编制结算 | `cargo run -q -p infra-cli -- layout eval --layout <layout> --operbox <operbox> --assignment <assignment> --text` |
@@ -42,6 +42,14 @@
 | 性能回退 | `cargo run -q -p infra-cli -- profile layout-full --layout <layout> --operbox <operbox>` |
 
 A-B-A 的 `layout rotation` / `schedule rotation` 已移除；三队轮换 bug 只走 `plan` 或 `layout team-rotation` 复现。
+
+### 2.3 验证证据硬门禁
+
+任何 test 调用都无例外必须遵守 [`AGENTS.md` 的“验证留痕硬门禁”和 `run_logged` 模板](../AGENTS.md#22-验证留痕硬门禁)，探索、复现、修改后回归、最终验证和 subagent 执行的 test 全部包括；每一个 `cargo test` 调用即使通过也必须有自己的完整日志，`/tmp` 探索例外不适用于 test。其他 build、CLI smoke、benchmark、格式 / 结构校验只要用于支持结论，也必须遵守同一门禁。
+
+日志必须位于 `target/codex-logs/`，包含命令、cwd、输入、时间 / 耗时、完整 stdout + stderr、exit code 与结果摘要；full suite 必须保留完整失败列表，有 baseline 时必须记录失败集合对比。若曾裸跑，交付前必须带日志重跑。真实 CLI JSON 必须以任务专属文件名写入 `out/`，`plan` 必须显式指定 `--profile-out` 与 `--maa-out`，不得改写 fixture、operbox 相邻 profile 或用户文件。`/tmp` 只能用于探索，成为结论依据的内容必须进入 `target/codex-logs/` / `out/`。
+
+`target/` 和 `out/` 默认不提交，但必须保留到交付，不能为了清工作区删除；Git commit 不是验证证据。最终回复必须按 build、定向测试、full suite、真实 CLI、性能和生成 JSON 分类给出 Markdown 可点击绝对路径；没有链接的项目必须写明未跑，不能宣称通过。主 Agent 还必须实际检查 subagent 日志存在且 exit code、输入和汇报一致。
 
 ## 3. 分层定位
 
@@ -219,54 +227,67 @@ schedule_team_rotation
 
 ## 5. 验收矩阵
 
+以下示例中的 `run_logged` 必须先从 [`AGENTS.md` 第 6 节](../AGENTS.md#6-默认命令)载入当前 Bash shell，并设置唯一的 `task_slug`。所有命令都必须通过该模板执行，不得裸跑；每次调用生成独立日志。示例中的输出名必须替换为当前任务专属名称。
+
 ### 5.1 文档 / 数据小改
 
 ```bash
-git diff --check
+run_logged "${task_slug}-diff-check" \
+  "current task diff" \
+  git diff --check
 ```
 
 ### 5.2 贸易机制 / shortcut
 
 ```bash
-mkdir -p target/codex-logs
-cargo test -p infra-core --no-run > target/codex-logs/infra-core-test-build.log 2>&1
-tail -80 target/codex-logs/infra-core-test-build.log
-cargo test -p infra-core --quiet
-cargo run -q -p infra-cli -- verify --all
+run_logged "${task_slug}-infra-core-test-build" "workspace sources" \
+  cargo test -p infra-core --no-run
+run_logged "${task_slug}-infra-core-full" "workspace sources; baseline=<path-or-none>" \
+  cargo test -p infra-core --quiet
+run_logged "${task_slug}-verify-all" "data fixtures under data/" \
+  cargo run -q -p infra-cli -- verify --all
 ```
 
 ### 5.3 编排 / 排班 / MAA
 
 ```bash
-mkdir -p target/codex-logs
-cargo test -p infra-core --no-run > target/codex-logs/infra-core-test-build.log 2>&1
-tail -80 target/codex-logs/infra-core-test-build.log
-cargo test -p infra-core --quiet
-cargo run -q -p infra-cli -- layout test \
+run_logged "${task_slug}-infra-core-test-build" "workspace sources" \
+  cargo test -p infra-core --no-run
+run_logged "${task_slug}-infra-core-full" "workspace sources; baseline=<path-or-none>" \
+  cargo test -p infra-core --quiet
+run_logged "${task_slug}-layout-smoke" \
+  "layout=data/fixtures/243/layout.json; operbox=data/fixtures/243/operbox_full_e2.json" \
+  cargo run -q -p infra-cli -- layout test \
   --layout data/fixtures/243/layout.json \
   --operbox data/fixtures/243/operbox_full_e2.json \
   --text
-cargo run -q -p infra-cli -- plan \
+run_logged "${task_slug}-plan" \
+  "operbox=data/fixtures/243/operbox_full_e2.json; profile=out/${task_slug}-profile.json; maa=out/${task_slug}-maa.json" \
+  cargo run -q -p infra-cli -- plan \
   --operbox data/fixtures/243/operbox_full_e2.json \
-  --maa-out out/243_maa.json
+  --profile-out "out/${task_slug}-profile.json" \
+  --maa-out "out/${task_slug}-maa.json"
 ```
 
 ### 5.4 CLI / 前端
 
 ```bash
-cargo build -p infra-cli > target/codex-logs/infra-cli-build.log 2>&1
-tail -80 target/codex-logs/infra-cli-build.log
-cargo run -q -p infra-cli -- plan \
+run_logged "${task_slug}-infra-cli-build" "workspace sources" \
+  cargo build -p infra-cli
+run_logged "${task_slug}-frontend-plan" \
+  "operbox=data/fixtures/243/operbox_full_e2.json; profile=out/${task_slug}-frontend-profile.json; maa=out/${task_slug}-frontend-maa.json" \
+  cargo run -q -p infra-cli -- plan \
   --operbox data/fixtures/243/operbox_full_e2.json \
-  --profile-out out/frontend_profile.json \
-  --maa-out out/frontend_maa.json \
+  --profile-out "out/${task_slug}-frontend-profile.json" \
+  --maa-out "out/${task_slug}-frontend-maa.json" \
   --json
 ```
 
 ### 5.5 发布数据 / bake
 
 ```bash
-cargo run -q -p infra-cli -- bake validate
+run_logged "${task_slug}-bake-validate" "workspace data and baked tables" \
+  cargo run -q -p infra-cli -- bake validate
 ```
 
 若 `bake validate` 因本地未生成 bake 表失败，说明原因即可；不要为通过该命令提交大体积生成物，除非用户明确要求更新发布资产。
@@ -290,3 +311,4 @@ cargo run -q -p infra-cli -- bake validate
 - 跑了哪些验证命令。
 - 若有未验证项，说明原因。
 - 若创建 commit，给出 commit hash。
+- “验证证据”段：为实际运行的 build、每组定向测试、full suite、真实 CLI、性能和生成 JSON 分别提供可点击绝对路径链接，并尽量定位到结果摘要 / 完整失败列表行。没有链接的验证必须标记未跑。

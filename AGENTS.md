@@ -36,7 +36,7 @@
 3. 缩小层级：CLI 参数/输出 → layout 编排 → search 排序 → 单站 solver → L1/L2/L3 机制 → data。
 4. 最小修复：只改 bug 所在层；不顺手重构、不重开 Phase 计划。
 5. 加回归：能落 CSV/fixture 就落 CSV/fixture；排班 bug 优先保留最小 layout + operbox 或 debug bundle。
-6. 验证：跑与改动半径匹配的命令，说明未跑的原因。
+6. 验证：跑与改动半径匹配的命令，并按本文“验证留痕硬门禁”保存证据；未跑项必须说明原因。
 7. Git：只提交本轮 agent 自己改的文件。
 
 如果无法复现，不要猜公式；先给出已跑命令、输入差异和下一步需要的最小材料。
@@ -103,6 +103,30 @@
 2. 新的单一事实源，禁止只罗列修改文件。
 3. 未通过的测试，并区分本轮回归、既有失败和未验证风险。
 4. 实际运行过的用户入口；只跑单元测试时不得声称排班 bug 已完整修复。
+
+### 2.2 验证留痕硬门禁
+
+以下规则适用于主 Agent 和所有 subagent，属于完成门禁，不是建议：
+
+1. **任何 test 调用都无例外必须留痕**，探索、复现、回归和最终验证全部包括；每一个 `cargo test` 调用即使通过也必须把完整 stdout + stderr 单独保存到 `target/codex-logs/` 下唯一且可辨识的日志名。其他 build、CLI smoke、benchmark、格式 / 结构校验只要用于验证结论，也必须按同样标准留痕；需要比较的重复运行不得覆盖旧日志。
+2. 每份日志必须能还原完整命令、cwd、输入 fixture / operbox / layout / assignment、开始与结束时间、exit code 和结果摘要；性能结论还必须记录耗时。长测试和 full suite 必须保留完整失败列表；有 baseline 时，日志或相邻证据文件必须记录失败集合对比，不能只比较失败数量。
+3. 如果最初在终端裸跑，交付前必须使用留痕方式重跑；滚屏输出、Agent 消息和 `/tmp` 文件都不能作为最终证据。非 test 的探索可使用 `/tmp`，但任何成为结论依据的日志或 JSON 都必须重跑或复制到 `target/codex-logs/` / `out/`；此探索例外不适用于 test，test 日志始终直接进入 `target/codex-logs/`。
+4. 真实 CLI 产物必须写入 `out/` 并使用任务专属文件名。`plan` 必须同时显式传入 `--profile-out out/<task>-profile.json` 和 `--maa-out out/<task>-maa.json`；禁止覆盖 operbox 相邻 profile、标准 fixture 或用户文件。
+5. `target/`、`out/` 默认不提交，但必须在本地保留到交付，不得为了清理工作区删除。Git commit 不能代替验证日志和生成产物。
+6. subagent 跑验证时同样必须生成上述日志。主 Agent 必须在最终回复前检查日志 / 产物实际存在，核对日志中的命令、输入、结果摘要和 exit code与 subagent 汇报一致；最终证据不能只存在于 subagent 消息或 `/tmp`。
+7. 最终回复必须有“验证证据”段，按实际运行类别分别提供 build、定向测试、full suite、真实 CLI、性能和生成 JSON 的 Markdown 可点击**绝对路径**链接，并尽量链接到结果摘要或失败列表所在行。没有链接的验证视为未完成：必须明确写“未跑”，不得声称通过。
+
+最终回复链接格式：
+
+```markdown
+### 验证证据
+
+- Build：[构建日志](/absolute/workspace/target/codex-logs/task-build-20260714-120000.log:1)
+- 定向测试：[测试日志](/absolute/workspace/target/codex-logs/task-targeted-20260714-120100.log:42)
+- Full suite：[完整失败列表与集合对比](/absolute/workspace/target/codex-logs/task-full-20260714-120200.log:300)
+- 真实 CLI / 性能：[plan 日志](/absolute/workspace/target/codex-logs/task-plan-20260714-120300.log:1)
+- 生成 JSON：[账号分析 JSON](/absolute/workspace/out/task-profile.json)；[MAA JSON](/absolute/workspace/out/task-maa.json)
+```
 
 ## 3. 硬边界
 
@@ -191,43 +215,95 @@
 
 ## 6. 默认命令
 
-本仓库 warning 多。跑 Cargo 时先编译落日志，只看 tail；编译通过后再运行测试 / CLI。
+本仓库 warning 多。所有用于验证的命令都必须通过下面的 Bash 模板运行；不得把后续示例改回裸跑。模板为每次调用生成唯一 `.log` 和 `.status`，保留完整 stdout + stderr、命令、输入、cwd、时间、耗时、exit code 和 PASS / FAIL 摘要，不依赖 `tee` 的管道退出码。Cargo 自带的测试计数 / 失败列表和 CLI 摘要保留在完整输出中；若命令本身没有足够的结果摘要，交付前必须向日志追加 `result_summary=...`。性能比较和 full suite baseline 对比也必须追加到对应日志或独立的 `target/codex-logs/` 证据文件。
 
 ```bash
-mkdir -p target/codex-logs
-
-cargo test -p infra-core --no-run > target/codex-logs/infra-core-test-build.log 2>&1
-tail -80 target/codex-logs/infra-core-test-build.log
-cargo test -p infra-core --quiet
-
-cargo build -p infra-cli > target/codex-logs/infra-cli-build.log 2>&1
-tail -80 target/codex-logs/infra-cli-build.log
-cargo run -q -p infra-cli -- verify --all
+run_logged() (
+  set +e
+  local stem="$1"
+  local inputs="$2"
+  shift 2
+  local stamp log status_file started ended elapsed rc result
+  stamp="$(date +%Y%m%d-%H%M%S)-${RANDOM}"
+  log="target/codex-logs/${stem}-${stamp}.log"
+  status_file="${log%.log}.status"
+  mkdir -p target/codex-logs out
+  started="$(date -Is)"
+  {
+    printf 'cwd=%s\n' "$PWD"
+    printf 'started_at=%s\n' "$started"
+    printf 'inputs=%s\n' "$inputs"
+    printf 'command='
+    printf '%q ' "$@"
+    printf '\n--- stdout+stderr ---\n'
+  } >"$log"
+  SECONDS=0
+  "$@" >>"$log" 2>&1
+  rc=$?
+  elapsed=$SECONDS
+  ended="$(date -Is)"
+  if ((rc == 0)); then result=PASS; else result=FAIL; fi
+  {
+    printf '\n--- evidence metadata ---\n'
+    printf 'ended_at=%s\n' "$ended"
+    printf 'elapsed_seconds=%s\n' "$elapsed"
+    printf 'exit_code=%s\n' "$rc"
+    printf 'result_summary=%s\n' "$result"
+  } >>"$log"
+  {
+    printf 'log=%s\n' "$PWD/$log"
+    printf 'exit_code=%s\n' "$rc"
+    printf 'result_summary=%s\n' "$result"
+  } >"$status_file"
+  printf 'evidence_log=%s/%s\nstatus_file=%s/%s\n' "$PWD" "$log" "$PWD" "$status_file"
+  exit "$rc"
+)
 ```
 
-编译失败时：
+先为当前任务设置短名称；下面每一个调用都会生成独立日志，不会覆盖旧证据：
 
 ```bash
-rg -n "error\\[|error:|failed|panicked" target/codex-logs
+task_slug="issue-short-name"
+
+run_logged "${task_slug}-infra-core-test-build" \
+  "workspace sources" \
+  cargo test -p infra-core --no-run
+run_logged "${task_slug}-infra-core-full" \
+  "workspace sources; baseline=<path-or-none>" \
+  cargo test -p infra-core --quiet
+
+run_logged "${task_slug}-infra-cli-build" \
+  "workspace sources" \
+  cargo build -p infra-cli
+run_logged "${task_slug}-verify-all" \
+  "data fixtures under data/" \
+  cargo run -q -p infra-cli -- verify --all
 ```
+
+编译失败时直接检查对应完整日志；不能用一次未留痕的重跑代替它。若从日志提取失败集合做 baseline 对比，提取结果也要保存在新的 `target/codex-logs/<task>-failure-set-<stamp>.log`，并记录来源日志。
 
 ### 用户说“跑一遍模拟”
 
 默认理解为：全精2 练度盒 + 243 布局 + 账号分析 + αβγ ABC 三队轮换 + 写出 MAA JSON。
 
 ```bash
-cargo run -q -p infra-cli -- plan \
+run_logged "${task_slug}-plan" \
+  "operbox=data/fixtures/243/operbox_full_e2.json; profile=out/${task_slug}-profile.json; maa=out/${task_slug}-maa.json" \
+  cargo run -q -p infra-cli -- plan \
   --operbox data/fixtures/243/operbox_full_e2.json \
-  --maa-out out/243_maa.json
+  --profile-out "out/${task_slug}-profile.json" \
+  --maa-out "out/${task_slug}-maa.json"
 ```
 
 仅排班时：
 
 ```bash
-cargo run -q -p infra-cli -- layout team-rotation \
+run_logged "${task_slug}-team-rotation" \
+  "layout=data/fixtures/243/layout.json; operbox=data/fixtures/243/operbox_full_e2.json; maa=out/${task_slug}-rotation-maa.json" \
+  cargo run -q -p infra-cli -- layout team-rotation \
   --layout data/fixtures/243/layout.json \
   --operbox data/fixtures/243/operbox_full_e2.json \
-  --maa-out out/243_maa.json
+  --maa-out "out/${task_slug}-rotation-maa.json"
 ```
 
 不要用 `layout test`（单班探测）代替模拟；A-B-A 入口已移除。
@@ -235,7 +311,9 @@ cargo run -q -p infra-cli -- layout team-rotation \
 ### 改机制后的 smoke test
 
 ```bash
-cargo run -q -p infra-cli -- layout test \
+run_logged "${task_slug}-layout-smoke" \
+  "layout=data/fixtures/243/layout.json; operbox=data/fixtures/243/operbox_full_e2.json" \
+  cargo run -q -p infra-cli -- layout test \
   --layout data/fixtures/243/layout.json \
   --operbox data/fixtures/243/operbox_full_e2.json \
   --text
@@ -250,6 +328,7 @@ cargo run -q -p infra-cli -- layout test \
 3. 若本轮改动和既有用户改动在同一文件内交织，不能可靠拆分时不要强行提交。
 4. 验证通过，或验证未跑但原因已说明时，若本轮改动形成独立单元，默认创建简短 commit。
 5. 不自动 `amend`、`rebase`、`reset`、`checkout --` 或清理未跟踪文件。
+6. `target/codex-logs/` 和 `out/` 的任务证据默认不 stage / commit，但必须保留到交付；不得为了让 `git status` 更干净而删除。commit hash 不能替代最终回复中的日志 / 产物链接。
 
 ### 7.1 Rust 格式化口径
 
