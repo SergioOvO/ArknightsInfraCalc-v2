@@ -361,6 +361,9 @@ fn split_production_facilities(
 #[allow(clippy::too_many_arguments)]
 fn assign_gamma_half(
     blueprint: &BaseBlueprint,
+    instances: &OperatorInstances,
+    coexist_assignment: &BaseAssignment,
+    durin_dorm_planning: Option<u8>,
     pools: &ProductionPools,
     table: &SkillTable,
     layout: &crate::layout::LayoutContext,
@@ -371,6 +374,9 @@ fn assign_gamma_half(
 ) -> Result<()> {
     assign_team_gamma_half(
         blueprint,
+        instances,
+        coexist_assignment,
+        durin_dorm_planning,
         &pools.trade,
         &pools.manu,
         &pools.power,
@@ -1420,6 +1426,13 @@ pub fn schedule_team_rotation(
     let mut used_g1 = used_ab.clone();
     assign_gamma_half(
         blueprint,
+        instances,
+        &{
+            let mut coexist = production_seed.clone();
+            merge_rooms(&mut coexist, &beta);
+            coexist
+        },
+        Some(durin_plan),
         &pools,
         table,
         &production_layout,
@@ -1433,6 +1446,13 @@ pub fn schedule_team_rotation(
     let mut used_g2 = used_ab.clone();
     assign_gamma_half(
         blueprint,
+        instances,
+        &{
+            let mut coexist = production_seed.clone();
+            merge_rooms(&mut coexist, &alpha);
+            coexist
+        },
+        Some(durin_plan),
         &pools,
         table,
         &production_layout,

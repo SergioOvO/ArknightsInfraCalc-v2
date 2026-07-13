@@ -1,7 +1,7 @@
 # 制造站域状态
 
 > **勿按贸易站 L2/L3 假设改制造站。** 制造站无 `gold_flow` / `order_mechanic` / `trade_shortcuts`；求解为 L1 直通 `solve_manufacture`。  
-> **搜索刻意对候选池做 `C(n,3)` 穷举**：制造站无贸易式「金标组合」L3，穷举后按 `final_efficiency` 排序是定稿设计，不是待补缺口；排班层会先用工具人表按剩余制造房间需求缩小候选池。
+> **搜索刻意对候选池做 `C(n,3)` 穷举**：制造站无贸易式「金标组合」L3，穷举后按 `final_efficiency` 排序是定稿设计，不是待补缺口。排班使用 `full_pool=true` 的全部合法普通制造候选；standalone 缩池仅服务 `full_pool=false` 的 bench / 独立探索。
 
 ## 域对比
 
@@ -33,10 +33,11 @@
 - 无 `PeerAbsorb` 后的 `gold_flow` 挂钩。
 - 共享同一 `skill_table.json`（制造 buff 与贸易 buff 同表不同 id）。
 - **时间爬升**（芬/克洛丝/稀音/阿罗玛等）：`Action::AddEffRamp` → 纸面取 **20h 逐时效率算术平均**（见 `eff_ramp.rs`）；发电空构仍用 `shift_hours` 单点。
-- 排班层 `assign_shift` 在 meta/体系落位后统计剩余制造房间需求：若 `standalone_roster.json` 制造主池可用人数足够填满缺口，则只搜索主池；若主池人数不足，再通过 `expand_manufacture_candidate_pool` 补入不适合写进人工工具人表、但机制上应参与散件竞争的候选（当前包括标准化·β、急性子/慢性子同构的 25% 爬升技能）；若扩展池仍不足以填满当前缺口，才容量兜底到全池。制造站不在每个房间无条件二次搜索全池。低星爬升技能不必为了可选中而加入工具人表。
-- 体系专用制造干员仍可以留在制造池里供编排显式认领，但普通制造搜索会先通过 `filter_general_manufacture_search_pool()` 排除掉它们。当前这类干员包括冬时、温蒂：自动化组会显式使用温蒂，并在无森蚺时用冬时补清流+温蒂第三人；但 `search/manufacture.rs` 的普通三人穷举不会再把这些会清空同行生产力的自动化干员当散件候选。卡达这类仅提供心情/仓库容量的非效率干员不进入 `standalone_roster.json` 制造效率工具人表。
-- `data/standalone_roster.json` 现支持结构化白名单条目：每个工具人可以声明 `min_tier`，并按 `recipes` / `order_types` 限定适用配方。制造搜索会按当前房间 `RecipeKind` 再裁一次候选池，贸易搜索会按 `TradeOrderKind` 再裁一次候选池；同名干员不再默认跨所有配方/订单类型通用。
-- 制造白名单按配方过滤后若不足 3 人，不再回退到制造全池；`search/manufacture.rs` 会改用 `filter_recipe_productive_pool()` 补入当前配方下确实能贡献生产力的候选。这样源石配方限定干员（如炎熔）不会被回退池带进作战记录 / 赤金房间。
+- 排班层 `assign_shift` 在体系落位后直接使用全部合法普通制造干员做 C(n,k)，由 solver 按 `final_efficiency` 自然排序；不按 atom、buff id、干员名或当前配方预判谁“值得搜索”。排班以 `full_pool=true` 标记完整候选范围，结构上禁止使用仅由 standalone 组合烘焙的制造表。`standalone_roster.json` 与对应 baked 表只服务独立 bench/探索入口，不裁剪排班候选。这样标准化、红云/泡泡仓容耦合、莱茵同房机制以及 `atoms: []` 的同房催化角色都能参与真实组合结算。
+- `standardization_mizuki` 不是体系，不进入 `base_systems`、不产生 anchor 或特殊 fallback。水月只读取同房标准化技能；红云/泡泡只按同房仓库贡献结算；莱茵同房技能与全基建计数继续服从既有机制。搜索结果可以自然形成高效组合，但不得固定成员、房间、队伍或班次。
+- 体系专用制造干员仍留在原始制造池供编排显式认领，但普通制造池通过 `filter_general_manufacture_search_pool()` 排除冬时、温蒂、迷迭香。显式 required anchor 搜索会从原池只加回该 anchor；自动化组继续显式处理冬时/温蒂，迷迭香仍服从与黑键共同激活的硬核心。卡达等其余合法制造干员不会因零直接生产力被规则删除，只由 solver 自然淘汰。
+- 独立 bench / 探索在 `full_pool=false` 时可使用 `data/standalone_roster.json` 的结构化白名单：每个工具人可以声明 `min_tier`，并按 `recipes` / `order_types` 限定适用配方。该入口的制造搜索按当前房间 `RecipeKind` 再裁候选池，贸易搜索按 `TradeOrderKind` 再裁候选池；此规则不适用于排班 `full_pool=true`。
+- 独立 bench / 探索的 `full_pool=false` 制造白名单按配方过滤后若不足 3 人，不回退到制造全池；`search/manufacture.rs` 改用 `filter_recipe_productive_pool()` 补入当前配方下确实能贡献生产力的候选。这样源石配方限定干员（如炎熔）不会被回退池带进作战记录 / 赤金房间；排班 `full_pool=true` 不经过这条过滤。
 
 ## CLI 入口
 

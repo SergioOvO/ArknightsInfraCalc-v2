@@ -132,6 +132,27 @@ impl ManuContext {
         self.operators.len() as f64
     }
 
+    fn effective_rhine_life_in_base(&self) -> u8 {
+        let mut names: std::collections::HashSet<&str> = self
+            .layout
+            .base_workforce
+            .iter()
+            .map(String::as_str)
+            .collect();
+        let mut count = usize::from(self.layout.rhine_life_in_base);
+        for operator in &self.operators {
+            if operator
+                .tags
+                .iter()
+                .any(|tag| tag == crate::layout::TAG_RHINE)
+                && names.insert(operator.name.as_str())
+            {
+                count += 1;
+            }
+        }
+        count.min(5) as u8
+    }
+
     pub fn prod_skill(&self, recipe: RecipeKind) -> f64 {
         let ops: f64 = self.operators.iter().map(|o| o.total_eff(recipe)).sum();
         ops + self.station_eff.for_recipe(recipe)
@@ -655,7 +676,7 @@ fn resolve_selector_value(ctx: &ManuContext, selector: Option<&Selector>, owner:
             .sum(),
         Some(Selector::Mood) => ctx.mood,
         Some(Selector::DroneCap) => ctx.layout.drone_cap as f64,
-        Some(Selector::RhineLifeInBase) => f64::from(ctx.layout.rhine_life_in_base),
+        Some(Selector::RhineLifeInBase) => f64::from(ctx.effective_rhine_life_in_base()),
         Some(Selector::MetalFormulaSkillCountInRoom) => metal_formula_skill_count_in_room(ctx),
         Some(Selector::StandardSkillCountInRoom) => standard_skill_count_in_room(ctx),
         Some(Selector::RhineSkillCountInRoom) => {
@@ -761,6 +782,33 @@ mod tests {
         ctx = ManuContext::from_room(&input);
         apply_manu_phases(&mut ctx, &table);
         assert!((ctx.operators[0].mood_drain_delta + 0.25).abs() < 0.01);
+    }
+
+    #[test]
+    fn effective_rhine_count_adds_room_candidates_dedupes_and_caps() {
+        let input = ManuRoomInput::with_operators(
+            3,
+            RecipeKind::Gold,
+            vec![op("娜斯提", 2, vec![]), op("多萝西", 2, vec![])],
+        );
+        let mut ctx = ManuContext::from_room(&input);
+        for operator in &mut ctx.operators {
+            operator.tags.push("cc.g.rhine".into());
+        }
+        assert_eq!(ctx.effective_rhine_life_in_base(), 2);
+
+        Arc::make_mut(&mut ctx.layout).base_workforce = vec!["多萝西".into()];
+        Arc::make_mut(&mut ctx.layout).rhine_life_in_base = 1;
+        assert_eq!(ctx.effective_rhine_life_in_base(), 2);
+
+        Arc::make_mut(&mut ctx.layout).base_workforce.clear();
+        Arc::make_mut(&mut ctx.layout).rhine_life_in_base = 4;
+        assert_eq!(ctx.effective_rhine_life_in_base(), 5);
+
+        ctx.operators[0].tags.clear();
+        ctx.operators[1].tags.clear();
+        Arc::make_mut(&mut ctx.layout).rhine_life_in_base = 0;
+        assert_eq!(ctx.effective_rhine_life_in_base(), 0);
     }
 
     #[test]

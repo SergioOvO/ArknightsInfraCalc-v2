@@ -6,32 +6,6 @@ use crate::layout::blueprint::RoomId;
 use crate::pool::{ManuPool, TradePool};
 use crate::search::{ManuSearchHit, TradeSearchHit};
 
-pub(super) fn names_disjoint_except(names: &[String], used_wo: &HashSet<String>) -> bool {
-    names.iter().all(|n| !used_wo.contains(n))
-}
-
-pub(super) fn commit_anchor_room(
-    assignment: &mut BaseAssignment,
-    room_id: &RoomId,
-    names: &[String],
-    operator_of: impl Fn(&str) -> AssignedOperator,
-    used: &mut HashSet<String>,
-    anchors: &[String],
-    facility: &str,
-) -> Result<()> {
-    let ops = names
-        .iter()
-        .map(|name| {
-            if !anchors.contains(name) && !used.insert(name.clone()) {
-                return Err(Error::msg(format!("{facility} duplicate {name}")));
-            }
-            Ok(operator_of(name))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    assignment.set_room(room_id.clone(), ops);
-    Ok(())
-}
-
 pub(super) fn commit_trade_room(
     assignment: &mut BaseAssignment,
     room_id: &RoomId,

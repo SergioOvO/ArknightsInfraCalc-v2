@@ -62,7 +62,7 @@ impl ManuPoolEntry {
 /// 向后兼容别名
 pub type ManuPool = PoolCore<ManuPoolEntry>;
 
-const SYSTEM_ONLY_MANUFACTURE_OPERATORS: [&str; 2] = ["冬时", "温蒂"];
+const SYSTEM_ONLY_MANUFACTURE_OPERATORS: [&str; 3] = ["冬时", "温蒂", "迷迭香"];
 
 pub fn build_manufacture_pool(
     roster: &Roster,
@@ -90,48 +90,6 @@ pub fn filter_general_manufacture_search_pool(pool: &ManuPool) -> ManuPool {
             .collect(),
         skipped: pool.skipped.clone(),
     }
-}
-
-/// Expand the standalone manufacture candidate pool with low-cost mechanically
-/// important fillers that should not live in the hand-maintained whitelist.
-pub fn expand_manufacture_candidate_pool(primary: &ManuPool, full: &ManuPool) -> ManuPool {
-    let mut seen: HashSet<String> = primary.entries.iter().map(|e| e.name.clone()).collect();
-    let mut entries = primary.entries.clone();
-
-    for entry in &full.entries {
-        if seen.contains(&entry.name) {
-            continue;
-        }
-        if is_manufacture_candidate_extension(entry) {
-            entries.push(entry.clone());
-            seen.insert(entry.name.clone());
-        }
-    }
-
-    entries.sort_by(|a, b| {
-        b.flat_eff_hint
-            .partial_cmp(&a.flat_eff_hint)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| a.name.cmp(&b.name))
-    });
-
-    ManuPool {
-        entries,
-        skipped: full.skipped.clone(),
-    }
-}
-
-fn is_manufacture_candidate_extension(entry: &ManuPoolEntry) -> bool {
-    entry.buff_ids.iter().any(|buff_id| {
-        matches!(
-            buff_id.as_str(),
-            "manu_prod_spd[010]"
-                | "manu_prod_spd_addition[030]"
-                | "manu_prod_spd_addition[031]"
-                | "manu_prod_spd_addition[040]"
-                | "manu_prod_spd_addition[041]"
-        )
-    })
 }
 
 fn try_entry(
@@ -253,41 +211,12 @@ mod tests {
     }
 
     #[test]
-    fn manufacture_candidate_extension_adds_standard_beta_and_ramps() {
-        let primary = ManuPool {
-            entries: vec![
-                test_entry("褐果", &["manu_prod_spd[000]"], 20.0),
-                test_entry("雪猎", &["manu_prod_spd&limit&cost[101]"], 20.0),
-                test_entry("卡达", &["manu_formula_cost[000]"], 0.0),
-            ],
-            skipped: vec![],
-        };
-        let full = ManuPool {
-            entries: vec![
-                primary.entries[0].clone(),
-                primary.entries[1].clone(),
-                primary.entries[2].clone(),
-                test_entry("史都华德", &["manu_prod_spd[010]"], 25.0),
-                test_entry("芬", &["manu_prod_spd_addition[030]"], 0.0),
-                test_entry("克洛丝", &["manu_prod_spd_addition[040]"], 0.0),
-                test_entry("低效非候选", &["manu_prod_spd[999]"], 5.0),
-            ],
-            skipped: vec![],
-        };
-
-        let expanded = expand_manufacture_candidate_pool(&primary, &full);
-        assert!(expanded.entry("史都华德").is_some());
-        assert!(expanded.entry("芬").is_some());
-        assert!(expanded.entry("克洛丝").is_some());
-        assert!(expanded.entry("低效非候选").is_none());
-    }
-
-    #[test]
     fn general_manufacture_search_pool_excludes_system_only_automation_ops() {
         let pool = ManuPool {
             entries: vec![
                 test_entry("冬时", &["manu_prod_spd&manu[100]"], 30.0),
                 test_entry("温蒂", &["manu_prod_spd&power[020]"], 45.0),
+                test_entry("迷迭香", &["manu_prod_spd&cost[100]"], 20.0),
                 test_entry("芬", &["manu_prod_spd_addition[030]"], 0.0),
                 test_entry("克洛丝", &["manu_prod_spd_addition[040]"], 0.0),
             ],
@@ -299,6 +228,7 @@ mod tests {
         assert!(pool.entry("温蒂").is_some(), "体系路径仍可显式取温蒂");
         assert!(filtered.entry("冬时").is_none());
         assert!(filtered.entry("温蒂").is_none());
+        assert!(filtered.entry("迷迭香").is_none());
         assert!(filtered.entry("芬").is_some());
         assert!(filtered.entry("克洛丝").is_some());
     }

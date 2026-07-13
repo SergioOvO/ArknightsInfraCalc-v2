@@ -1343,7 +1343,8 @@ fn baked_trade_compatible(
 }
 
 fn baked_manufacture_compatible(pool: &ManuPool, options: &ManuSearchOptions) -> bool {
-    (options.mood - 24.0).abs() < f64::EPSILON
+    !options.full_pool
+        && (options.mood - 24.0).abs() < f64::EPSILON
         && baked_layout_search_compatible(&options.layout)
         && pool.entries.iter().all(|entry| entry.progress.elite >= 2)
 }
@@ -1703,5 +1704,24 @@ mod tests {
             ),
             "baked search must fall back when a stale catalog omits a live candidate"
         );
+    }
+
+    #[test]
+    fn assignment_full_manufacture_pool_structurally_rejects_standalone_bake() {
+        let pool = ManuPool {
+            entries: vec![],
+            skipped: vec![],
+        };
+        assert!(baked_manufacture_compatible(
+            &pool,
+            &ManuSearchOptions::default()
+        ));
+        assert!(!baked_manufacture_compatible(
+            &pool,
+            &ManuSearchOptions {
+                full_pool: true,
+                ..Default::default()
+            }
+        ));
     }
 }

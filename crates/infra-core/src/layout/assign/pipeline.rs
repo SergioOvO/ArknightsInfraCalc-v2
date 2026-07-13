@@ -19,7 +19,10 @@ use crate::pool::{
 use crate::skill_table::SkillTable;
 
 use super::control_fill::assign_control;
-use super::manufacture_fill::{assign_manufacture_lines, ManufactureSystemCandidateTrace};
+use super::manufacture_fill::{
+    assign_manufacture_lines, refresh_manufacture_efficiency_snapshots,
+    ManufactureSystemCandidateTrace,
+};
 use super::power_fill::assign_power_stations;
 use super::producer_fill::{
     assign_dorm_producers, assign_sphinx_urrbian_dorm_anchor,
@@ -171,6 +174,7 @@ pub(super) fn run_shift_pipeline(
             assign_manufacture_lines(
                 blueprint,
                 operbox,
+                instances,
                 &manu_pool,
                 table,
                 &manu_layout,
@@ -198,6 +202,7 @@ pub(super) fn run_shift_pipeline(
             assign_manufacture_lines(
                 blueprint,
                 operbox,
+                instances,
                 &manu_pool,
                 table,
                 &layout,
@@ -220,6 +225,15 @@ pub(super) fn run_shift_pipeline(
             timer.mark("发电");
         }
     }
+
+    refresh_manufacture_efficiency_snapshots(
+        blueprint,
+        &mut run.assignment,
+        instances,
+        table,
+        options.mood,
+        Some(run.durin_plan),
+    )?;
 
     timer.report();
     Ok(run.assignment)

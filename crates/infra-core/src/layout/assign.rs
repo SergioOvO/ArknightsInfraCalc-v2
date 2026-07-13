@@ -400,7 +400,9 @@ mod tests {
 
     use crate::instances::default_instances_path;
     use crate::layout::shift::AssignShiftMode;
-    use crate::layout::{AssignedOperator, BaseBlueprint, RoomId, RoomProduct};
+    use crate::layout::{
+        AssignedOperator, BaseBlueprint, BlueprintScenario, RoomBlueprint, RoomId, RoomProduct,
+    };
     use crate::manufacture::input::ManuSearchRecipeMode;
     use crate::operbox::{
         default_operbox_full_e2_path, default_operbox_gongsun_path, OperBox, OperBoxEntry,
@@ -578,6 +580,124 @@ mod tests {
     }
 
     #[test]
+    fn gongsun_gold_completion_does_not_activate_from_pool_only() {
+        let gold_room = RoomId::from("gold_empty");
+        let blueprint = BaseBlueprint {
+            template: None,
+            drone_cap: 135,
+            scenario: BlueprintScenario::default(),
+            rooms: vec![RoomBlueprint {
+                id: gold_room.clone(),
+                kind: FacilityKind::Factory,
+                level: 3,
+                product: Some(RoomProduct::Factory {
+                    recipe: RecipeKind::Gold,
+                }),
+                dorm_beds: None,
+                dorm_ambience_level: None,
+            }],
+        };
+        let pool = ManuPool {
+            entries: vec![
+                manu_pool_entry("清流", &[QINGLIU_RENEWABLE_ENERGY_BUFF]),
+                manu_pool_entry(
+                    "温蒂",
+                    &[super::manufacture_fill::WENDY_BIONIC_SEADRAGON_BUFF],
+                ),
+                manu_pool_entry("森蚺", &["manu_prod_spd&power[000]"]),
+                manu_pool_entry("冬时", &["manu_prod_spd&manu[100]"]),
+            ],
+            skipped: vec![],
+        };
+        assert!(
+            gongsun_gold_manu_anchors_ready(&pool),
+            "反例必须确保完成器能在 pool 中看见清流+温蒂"
+        );
+        let mut assignment = BaseAssignment::default();
+        let mut used = HashSet::new();
+
+        try_assign_gongsun_gold_manu_team(&blueprint, &mut assignment, &pool, &mut used).unwrap();
+
+        assert!(
+            assignment.operators_in(&gold_room).is_empty(),
+            "未由 plan 落位清流+温蒂 anchor 时，完成器不得从 pool 自激活自动化组"
+        );
+        assert!(used.is_empty(), "未落位时 used 也不得被污染: {used:?}");
+    }
+
+    #[test]
+    fn gongsun_gold_existing_anchors_are_completed_in_their_actual_room() {
+        let first_gold_room = RoomId::from("gold_first");
+        let anchor_gold_room = RoomId::from("gold_anchor");
+        let blueprint = BaseBlueprint {
+            template: None,
+            drone_cap: 135,
+            scenario: BlueprintScenario::default(),
+            rooms: vec![
+                RoomBlueprint {
+                    id: first_gold_room.clone(),
+                    kind: FacilityKind::Factory,
+                    level: 3,
+                    product: Some(RoomProduct::Factory {
+                        recipe: RecipeKind::Gold,
+                    }),
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+                RoomBlueprint {
+                    id: anchor_gold_room.clone(),
+                    kind: FacilityKind::Factory,
+                    level: 3,
+                    product: Some(RoomProduct::Factory {
+                        recipe: RecipeKind::Gold,
+                    }),
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+            ],
+        };
+        let pool = ManuPool {
+            entries: vec![
+                manu_pool_entry("清流", &[QINGLIU_RENEWABLE_ENERGY_BUFF]),
+                manu_pool_entry(
+                    "温蒂",
+                    &[super::manufacture_fill::WENDY_BIONIC_SEADRAGON_BUFF],
+                ),
+                manu_pool_entry("冬时", &["manu_prod_spd&manu[100]"]),
+            ],
+            skipped: vec![],
+        };
+        assert!(
+            pool.entry("森蚺").is_none(),
+            "回归必须覆盖缺森蚺时的冬时降级"
+        );
+
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room(
+            anchor_gold_room.clone(),
+            vec![
+                AssignedOperator::new("清流", 2),
+                AssignedOperator::new("温蒂", 2),
+            ],
+        );
+        let mut used = HashSet::from(["清流".to_string(), "温蒂".to_string()]);
+
+        try_assign_gongsun_gold_manu_team(&blueprint, &mut assignment, &pool, &mut used).unwrap();
+
+        assert!(
+            assignment.operators_in(&first_gold_room).is_empty(),
+            "不应因蓝图顺序占用首个赤金房"
+        );
+        let anchor_names: Vec<_> = assignment
+            .operators_in(&anchor_gold_room)
+            .iter()
+            .map(|operator| operator.name.as_str())
+            .collect();
+        assert_eq!(anchor_names, vec!["清流", "温蒂", "冬时"]);
+        assert!(used.contains("冬时"), "used 应与实际补位同步");
+    }
+
+    #[test]
     fn gongsun_gold_windflit_trace_records_low_progress_rejection() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = operbox_from_names(&[
@@ -712,7 +832,7 @@ mod tests {
     }
 
     #[test]
-    fn manufacture_candidate_extension_picks_ramp_skills_over_low_standalone_pool() {
+    fn general_manufacture_pool_naturally_picks_ramp_skills() {
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let pool = ManuPool {
             entries: vec![
@@ -726,11 +846,8 @@ mod tests {
             ],
             skipped: vec![],
         };
-        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 3);
-        assert!(
-            candidate_pool.entries.len() < pool.entries.len(),
-            "manufacture candidate extension should not fall back to the full pool"
-        );
+        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new());
+        assert_eq!(candidate_pool.entries.len(), pool.entries.len());
         assert!(candidate_pool.entry("芬").is_some());
         assert!(candidate_pool.entry("克洛丝").is_some());
 
@@ -740,6 +857,7 @@ mod tests {
             ManuSearchOptions {
                 recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::Gold),
                 top_k: 20,
+                full_pool: true,
                 ..Default::default()
             },
             &HashSet::new(),
@@ -747,11 +865,13 @@ mod tests {
         )
         .unwrap();
         let names: HashSet<_> = manu_hit_names(&hit).iter().map(String::as_str).collect();
-        assert!(names.contains("芬"), "hit={hit:?}");
-        assert!(names.contains("克洛丝"), "hit={hit:?}");
+        assert!(
+            names.contains("芬") || names.contains("克洛丝"),
+            "at least one legal ramp candidate should naturally win: {hit:?}"
+        );
         assert!(
             !names.contains("褐果") && !names.contains("卡达"),
-            "低效白名单组合不应压过扩展候选池中的爬升技能: {hit:?}"
+            "低效普通组合不应压过合法候选中的爬升技能: {hit:?}"
         );
         assert!(
             (hit.breakdown.skill_efficiency.as_f64() * 100.0) > 50.0,
@@ -760,7 +880,178 @@ mod tests {
     }
 
     #[test]
-    fn manufacture_candidate_pool_stays_primary_when_standalone_can_fill_rooms() {
+    fn real_same_room_mechanics_win_through_general_candidate_search() {
+        let (_, _, instances, table) = fixtures();
+        let cases: &[(&[(&str, u8, u8)], &[&str])] = &[
+            (
+                &[
+                    ("水月", 2, 6),
+                    ("史都华德", 1, 3),
+                    ("杰西卡", 2, 4),
+                    ("卡达", 2, 4),
+                ],
+                &["水月", "史都华德", "杰西卡"],
+            ),
+            (
+                &[
+                    ("泡泡", 2, 4),
+                    ("火神", 2, 5),
+                    ("贝娜", 2, 5),
+                    ("卡达", 2, 4),
+                ],
+                &["泡泡", "火神", "贝娜"],
+            ),
+            (
+                &[
+                    ("红云", 2, 4),
+                    ("蛇屠箱", 2, 4),
+                    ("火神", 2, 5),
+                    ("卡达", 2, 4),
+                ],
+                &["红云", "蛇屠箱", "火神"],
+            ),
+            (
+                &[
+                    ("多萝西", 2, 6),
+                    ("淬羽赫默", 2, 6),
+                    ("娜斯提", 2, 6),
+                    ("卡达", 2, 4),
+                ],
+                &["多萝西", "淬羽赫默", "娜斯提"],
+            ),
+        ];
+        for (operators, expected) in cases {
+            let operbox = operbox_from_names(operators);
+            let pool = crate::pool::build_manufacture_pool(
+                &operbox.manufacture_roster(&instances),
+                &instances,
+                &table,
+            )
+            .unwrap();
+            let candidates = manufacture_candidate_pool_for_demand(&pool, &HashSet::new());
+            let report = crate::search_manufacture_triples(
+                &candidates,
+                &table,
+                &ManuSearchOptions {
+                    recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::Gold),
+                    full_pool: true,
+                    use_baked: false,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            for name in *expected {
+                assert!(
+                    report.best.names.iter().any(|actual| actual == name),
+                    "{report:?}"
+                );
+            }
+        }
+
+        let operbox = operbox_from_names(&[("海沫", 2, 5), ("水月", 2, 6), ("史都华德", 1, 3)]);
+        let pool = crate::pool::build_manufacture_pool(
+            &operbox.manufacture_roster(&instances),
+            &instances,
+            &table,
+        )
+        .unwrap();
+        let candidates = manufacture_candidate_pool_for_demand(&pool, &HashSet::new());
+        assert!(
+            candidates.entry("海沫").is_some(),
+            "atoms:[] compatibility operators must remain in the general pool"
+        );
+    }
+
+    #[test]
+    fn system_only_manufacture_anchor_is_readded_only_when_explicit() {
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let pool = ManuPool {
+            entries: vec![
+                manu_pool_entry("迷迭香", &["manu_prod_spd&cost[100]"]),
+                manu_pool_entry("槐琥", &["manu_prod_spd[000]"]),
+                manu_pool_entry("至简", &["manu_prod_spd[000]"]),
+                manu_pool_entry("史都华德", &["manu_prod_spd[010]"]),
+            ],
+            skipped: vec![],
+        };
+        let ordinary = crate::search_manufacture_triples(
+            &pool,
+            &table,
+            &ManuSearchOptions {
+                full_pool: true,
+                use_baked: false,
+                recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::Gold),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(!ordinary.best.names.contains(&"迷迭香".to_string()));
+
+        let anchored = crate::search_manufacture_triples(
+            &pool,
+            &table,
+            &ManuSearchOptions {
+                full_pool: true,
+                use_baked: false,
+                recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::Gold),
+                must_include_name: Some("迷迭香".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(
+            anchored.best.names.contains(&"迷迭香".to_string()),
+            "{anchored:?}"
+        );
+    }
+
+    #[test]
+    fn missing_blackkey_closes_rosemary_through_full_assignment_pipeline() {
+        let (blueprint, _, instances, table) = fixtures();
+        let full_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../data/fixtures/243/operbox_full_e2.json");
+        let full = OperBox::load(&full_path).unwrap();
+        let without_blackkey = OperBox::from_entries(
+            full.entries
+                .into_iter()
+                .filter(|entry| entry.name != "黑键")
+                .collect(),
+        );
+        let result = assign_shift_with_plan(
+            &blueprint,
+            &without_blackkey,
+            &instances,
+            &table,
+            &AssignBaseOptions::default(),
+            AssignShiftMode::Peak,
+            &BaseAssignment::default(),
+        )
+        .unwrap();
+        assert!(result.plan.activated.iter().all(|system| {
+            system.system_id != "rosemary_perception"
+                && system.system_id != "rosemary_perception_core"
+        }));
+        assert!(result
+            .plan
+            .anchors
+            .iter()
+            .all(|anchor| anchor.operator != "迷迭香"));
+        assert!(result.plan.shift_binds.iter().all(|bind| {
+            !bind
+                .operators
+                .iter()
+                .any(|name| name == "迷迭香" || name == "黑键")
+        }));
+        assert!(result.assignment.rooms.iter().all(|room| {
+            room.operators
+                .iter()
+                .all(|operator| operator.name != "迷迭香")
+        }));
+    }
+
+    #[test]
+    fn general_manufacture_pool_keeps_all_legal_candidates() {
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let pool = ManuPool {
             entries: vec![
                 manu_pool_entry("槐琥", &["manu_prod_spd[000]"]),
@@ -772,16 +1063,41 @@ mod tests {
             skipped: vec![],
         };
 
-        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 3);
+        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new());
         assert!(candidate_pool.entry("槐琥").is_some());
         assert!(candidate_pool.entry("雪猎").is_some());
         assert!(candidate_pool.entry("至简").is_some());
-        assert!(candidate_pool.entry("芬").is_none());
-        assert!(candidate_pool.entry("克洛丝").is_none());
+        assert!(candidate_pool.entry("芬").is_some());
+        assert!(candidate_pool.entry("克洛丝").is_some());
+
+        let report = crate::search_manufacture_triples(
+            &candidate_pool,
+            &table,
+            &ManuSearchOptions {
+                recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::Gold),
+                use_baked: false,
+                full_pool: true,
+                top_k: 10,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            report.combinations, 10,
+            "all five scoped candidates must be scored"
+        );
+        assert!(
+            report.top.iter().any(|hit| hit
+                .names
+                .iter()
+                .any(|name| name == "芬" || name == "克洛丝")),
+            "all legal candidates must survive into actual scored hits: {:?}",
+            report.top
+        );
     }
 
     #[test]
-    fn manufacture_candidate_pool_falls_back_to_full_pool_when_expansion_still_lacks_capacity() {
+    fn general_manufacture_pool_does_not_drop_low_direct_efficiency_candidates() {
         let pool = ManuPool {
             entries: vec![
                 manu_pool_entry("褐果", &["manu_prod_spd[000]"]),
@@ -794,14 +1110,14 @@ mod tests {
             skipped: vec![],
         };
 
-        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 6);
+        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new());
         assert_eq!(candidate_pool.entries.len(), pool.entries.len());
         assert!(candidate_pool.entry("低效非候选A").is_some());
         assert!(candidate_pool.entry("低效非候选B").is_some());
     }
 
     #[test]
-    fn manufacture_candidate_pool_does_not_fallback_automation_ops_as_general_pieces() {
+    fn general_manufacture_pool_excludes_system_only_operators() {
         let pool = ManuPool {
             entries: vec![
                 manu_pool_entry("褐果", &["manu_prod_spd[000]"]),
@@ -815,16 +1131,16 @@ mod tests {
             skipped: vec![],
         };
 
-        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new(), 6);
+        let candidate_pool = manufacture_candidate_pool_for_demand(&pool, &HashSet::new());
         assert!(pool.entry("冬时").is_some(), "自动化组仍可从原池显式取冬时");
         assert!(pool.entry("温蒂").is_some(), "自动化组仍可从原池显式取温蒂");
         assert!(
             candidate_pool.entry("冬时").is_none(),
-            "普通制造候选池容量兜底也不应带回冬时"
+            "普通制造候选池不应带回冬时"
         );
         assert!(
             candidate_pool.entry("温蒂").is_none(),
-            "普通制造候选池容量兜底也不应带回温蒂"
+            "普通制造候选池不应带回温蒂"
         );
         assert!(candidate_pool.entry("低效非候选A").is_some());
         assert!(candidate_pool.entry("低效非候选B").is_some());
@@ -1512,6 +1828,59 @@ mod tests {
                 })
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn assign_peak_skipping_automation_does_not_leak_system_only_manufacture() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let operbox = OperBox::load(&default_operbox_full_e2_path().unwrap()).unwrap();
+        for name in ["承曦格雷伊", "清流", "温蒂", "冬时"] {
+            assert!(operbox.owns(name), "full-E2 fixture must contain {name}");
+        }
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+
+        let result = assign_shift_with_plan_skip(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 10,
+                ..Default::default()
+            },
+            AssignShiftMode::Peak,
+            &BaseAssignment::default(),
+            &HashSet::from(["automation_group".to_string()]),
+        )
+        .unwrap();
+
+        assert!(
+            result
+                .plan
+                .activated
+                .iter()
+                .all(|system| system.system_id != "automation_group"),
+            "显式跳过后 automation_group 不得激活: {:?}",
+            result.plan.activated
+        );
+        for room in blueprint
+            .rooms
+            .iter()
+            .filter(|room| room.kind == FacilityKind::Factory)
+        {
+            let names: Vec<_> = result
+                .assignment
+                .operators_in(&room.id)
+                .iter()
+                .map(|operator| operator.name.as_str())
+                .collect();
+            assert!(
+                !names.contains(&"温蒂") && !names.contains(&"冬时"),
+                "显式关闭自动化组后 system-only 制造干员不得由普通池回流到 {}: {names:?}",
+                room.id.0
+            );
+        }
     }
 
     #[test]

@@ -1136,67 +1136,14 @@ mod tests {
         assert!(ids.contains("lungmen_manu_pair"));
         assert!(ids.contains("gongsun_greyy2_power_line"));
         assert!(ids.contains("automation_group"), "自动化组应已注册");
-        assert!(ids.contains("standardization_mizuki"), "标准化组应已注册");
+        assert!(
+            !ids.contains("standardization_mizuki"),
+            "标准化组合由制造候选池和效率搜索自然产生，不进入 registry"
+        );
         assert!(
             !ids.contains("abyssal_hunters"),
             "深海链只在三班轮换 S2 短班入口尝试，不进入普通 base_systems registry"
         );
-    }
-
-    #[test]
-    fn claim_standardization_mizuki_same_station() {
-        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let operbox = OperBox::from_entries(vec![
-            crate::operbox::OperBoxEntry {
-                id: "mizuki".into(),
-                name: "水月".into(),
-                elite: 2,
-                level: 60,
-                own: true,
-                potential: 1,
-                rarity: 6,
-            },
-            crate::operbox::OperBoxEntry {
-                id: "steward".into(),
-                name: "史都华德".into(),
-                elite: 1,
-                level: 55,
-                own: true,
-                potential: 1,
-                rarity: 3,
-            },
-            crate::operbox::OperBoxEntry {
-                id: "jessica".into(),
-                name: "杰西卡".into(),
-                elite: 2,
-                level: 70,
-                own: true,
-                potential: 1,
-                rarity: 4,
-            },
-        ]);
-        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-
-        let mut assignment = BaseAssignment::default();
-        let mut used = HashSet::new();
-        claim_base_systems(
-            &blueprint,
-            &operbox,
-            &table,
-            AssignShiftMode::Peak,
-            &mut assignment,
-            &mut used,
-            &HashSet::new(),
-        )
-        .unwrap();
-
-        let manu_4 = assignment.operators_in(&RoomId::from("manu_4"));
-        let names: HashSet<_> = manu_4.iter().map(|op| op.name.as_str()).collect();
-        assert_eq!(manu_4.len(), 3, "manu_4: {manu_4:?}");
-        assert!(names.contains("水月"), "manu_4: {manu_4:?}");
-        assert!(names.contains("史都华德"), "manu_4: {manu_4:?}");
-        assert!(names.contains("杰西卡"), "manu_4: {manu_4:?}");
-        assert!(used.contains("水月"));
     }
 
     #[test]

@@ -1,9 +1,9 @@
 # 编排层重构路线图（Orchestration Layer）
 
 > **状态**：**Phase 0–3 / 5 已落地**（2026-06）；Phase 4 global effect 收拢进行中  
-> **目标**：把「谁上哪个岗位」从 search/solve 评分里拆出来，统一到 **System → Plan → Execute**；L1–L3 求解器不改语义，只消费编制结果。  
+> **目标**：把硬体系的「谁必须上哪个岗位」从 search/solve 评分里拆出来，统一到 **System → Plan → Execute**；普通制造软同房组合不由 System 声明，仍由全合法普通候选池 + L1 solver 按实际效率发现。
 > **背景讨论**：同房组合、跨房体系、global effect 三套入口搅在 `assign_shift` 里是乱源，不是机制太多。  
-> **旧稿参考**：[plans/orchestration_engine_design.md](../plans/orchestration_engine_design.md)（阶段二/三「穷举方案 + DailyTotals 裁决」**不采用**；组合由 System 声明，不靠 search 发现）
+> **旧稿参考**：[plans/orchestration_engine_design.md](../plans/orchestration_engine_design.md)（阶段二/三「穷举硬体系方案 + DailyTotals 裁决」**不采用**；硬核心由 System 声明，普通制造软同房组合由 search 自然发现）
 
 ---
 
@@ -16,7 +16,7 @@
 | 选跨站体系 / 固定 bond 进编 | **编排** | `layout/orchestrate::{build_plan, execute_plan}`；`claim_base_systems` 仅兼容 / 测试辅助 |
 | 贸易核心优先 / 填散件第三人 | **role policy + 搜索（子集）** | `trade_segments.roles` + `search/role_pick.rs`；`assign_trade_remainder` / 制造 / 发电贪心填空房 |
 | 算全局池 / 中枢注入 | **resolve** | `resolve_base` + `cross_facility` / `global_resource` |
-| 算同房效率 / 产量 | **L1–L3 solve** | 只消费编制结果，不负责发现 meta 组合 |
+| 算同房效率 / 产量 | **L1–L3 solve** | 不负责保证硬体系进编；普通制造在全合法候选池中用同房结算与 `final_efficiency` 排序，自然发现软组合 |
 
 该重构要避免的后果：组合表化后又被 search 打散（如黑键可露链 vs 但书链）、`flat_eff_hint` / 并站 solve 分等补丁继续扩散。
 
@@ -28,7 +28,8 @@
 
 | 范围 | CSV 特征 | 编排 / 运行时 |
 |------|----------|----------------|
-| **同房** | 「当与 X 在同一个贸易站」 | System 的 `bond` / `fixed` slot + L3 `shortcut` 回归锚点 |
+| **硬同房 bond** | 用户确认必须同房 / 固定核心 | System 的 `bond` / `fixed` slot + L3 `shortcut` 回归锚点 |
+| **普通制造软同房** | 标准化、仓容、莱茵技能等效率耦合 | 不注册 System；全合法普通制造池做 `C(n,k)`，L1 solver 按 `final_efficiency` 发现 |
 | **跨房体系** | 中枢/宿舍 producer → 贸易/制造 consumer | **同一个 System**，多 `facility` slot + `trade_segments` producer 前提 |
 | **全基建池** | 感知、人间烟火、木天蓼、虚拟电站 | **不是组合**；`resolve_base` → `GlobalResourcePool` + `cross_facility` |
 
@@ -38,7 +39,7 @@
 |----------|-------------|----------|
 | 跨房体系 | `CrossStation` | 第 1 轮 `select_registry_systems` |
 | 同房 bond | `SameStation` | 第 2 轮 `select_registry_systems` |
-| 散件效率工具人 | `Standalone` | 不在 registry；由 `try_filter_standalone` + `C(n,3)` 贪心 |
+| 普通制造候选 | `Standalone` | 不在 registry；排班使用全部合法普通制造池做 `C(n,k)`，由 solver 自然排序 |
 
 `base_systems.json` 中每个 System 通过 `"tier"` 字段声明归属，`select_registry_systems` 据此分两阶段贪心：
 先跨站、后同站，`exclusive_group` 互斥态跨轮共享。
@@ -46,7 +47,7 @@
 **原则**
 
 - **编排不算效率**：不调用 `solve_trade_with_shift` 决定 meta 组合。
-- **L3 表 = 组合级硬编码效率**（工具人表）；search 只填 `pick_one` / Plain 站 `greedy`。
+- **硬体系与普通制造分界**：L3 / System 可承载已确认硬组合；普通制造软同房不表化，search 对全合法普通候选自然排序。
 - **global effect 不参与进编**：编制定完后再 `resolve` 写池。
 
 ---
@@ -92,7 +93,7 @@ crates/infra-core/src/layout/orchestrate/
 | `cross_station` | 跨站体系（slot 跨多设施） | `select_registry_systems` 第 1 轮 |
 | `same_station` | 同站组合（slot 在同一设施内） | `select_registry_systems` 第 2 轮 |
 
-两轮共享 `exclusive_group` 互斥态。未注册的散件干员属第三层 `Standalone`，不走 registry，由 `try_filter_standalone` + `C(n,3)` 贪心填充。
+两轮共享 `exclusive_group` 互斥态。未注册的普通制造干员不走 registry；排班不套 standalone 名录，而从全部合法普通制造池做 `C(n,k)`。
 
 对应 Rust 枚举：`crates/infra-core/src/layout/tier.rs` 的 `OperatorTier`，同时标注到 `RegistrySystemClaim`、`ActivatedSystem` 和各设施 `PoolEntry` 的 `tier` 字段。
 
@@ -104,7 +105,7 @@ crates/infra-core/src/layout/orchestrate/
 | `bond` | 二人锁死 + 第三人 | 固定 A+B，`pick_one` 填第三（例：德 E0+拉普兰德 **或** 能天使+蕾缪安；同干员不同 tier 须分叉 System） |
 | `core` | 单人锚 + segment 池补满 | 仅用于未来非感知散件锚点；**黑键不走此路径** |
 | `pick_one` | 列表选一 | 第一个可用干员 |
-| `greedy` | Plain | 候选池内 `C(n,3)` 或发电 O(n)（制造先用工具人表主池；主池不足以填剩余房间时补机制扩展候选；仍不足才容量兜底全池） |
+| `greedy` | Plain | 候选池内 `C(n,k)` 或发电 O(n)（制造排班直接使用全部合法普通制造池） |
 
 `pick_one` 候选默认继承 slot 级 `"elite"` 要求；需要按候选区分精英化门槛时可写对象，例如 `{ "name": "海沫", "elite": 2 }`。对象候选还支持 `"max_elite"`，用于保留少量 E0-only / E1-only 历史锚点。
 
@@ -178,7 +179,7 @@ Producer 前提（跨房，非 global pool）：
 
 | 组合 | CSV 技能 | 编排建议 | 状态 |
 |------|----------|----------|------|
-| 水月 E2 + 两名标准化 β | 意识协议 / 标准化 β | `same_station` 固定制造站，同站 meta；β 工具人用 `pick_one`，海沫单独要求 E2 | ✅ `standardization_mizuki` |
+| 水月 E2 + 同房标准化技能 | 意识协议 / 标准化 α/β | 不注册体系；进入普通制造候选池，由 solver 结算同房技能并按 `final_efficiency` 自然搜索 | ✅ 普通制造搜索 |
 | 阿兰娜 E2 + 温米 | 「搭把手！」 | 自动化金线固定 slot 或 `bond` + 第三人贪心 | ⚠️ shortcut 待补；registry 延至 Phase 3（避免抢公孙金线制造位） |
 | Miss.Christine E2 + 酒神 | 盛餐的回报 |  niche；低优先 | ❌ |
 | 怒潮凛冬 E2 + 乌萨斯学生自治团 | 情同手足 | tag 同房加成；可并进乌萨斯制造 meta | ❌ |

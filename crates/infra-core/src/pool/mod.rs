@@ -11,8 +11,8 @@ pub use control::{
     ControlPoolEntry,
 };
 pub use manufacture::{
-    build_manufacture_pool, expand_manufacture_candidate_pool,
-    filter_general_manufacture_search_pool, filter_manufacture_pool, ManuPool, ManuPoolEntry,
+    build_manufacture_pool, filter_general_manufacture_search_pool, filter_manufacture_pool,
+    ManuPool, ManuPoolEntry,
 };
 pub use power::{build_power_pool, PowerPool, PowerPoolEntry};
 pub use standalone::{

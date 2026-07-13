@@ -208,11 +208,6 @@ impl AssignmentPlan {
         if in_control("灵知") && together_in(FacilityKind::TradePost, &["孑", "银灰"]) {
             add(&["灵知", "孑", "银灰"]);
         }
-        if in_control("涤火杰西卡")
-            && anywhere_in(FacilityKind::Factory, &["水月", "香草", "杰西卡"])
-        {
-            add(&["涤火杰西卡", "水月", "香草", "杰西卡"]);
-        }
         if in_control("八幡海铃") {
             let mut operators = vec!["八幡海铃"];
             for name in ["伺夜", "贝洛内"] {
@@ -396,6 +391,30 @@ mod tests {
         assignment.set_room("control", vec![AssignedOperator::new("灵知", 2)]);
         plan.derive_actual_shift_binds(&blueprint, &assignment);
         assert_eq!(plan.shift_binds.len(), 1);
+    }
+
+    #[test]
+    fn natural_standardization_members_do_not_create_exact_shift_bind() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room("control", vec![AssignedOperator::new("涤火杰西卡", 2)]);
+        assignment.set_room(
+            "manu_1",
+            vec![
+                AssignedOperator::new("水月", 2),
+                AssignedOperator::new("香草", 2),
+                AssignedOperator::new("杰西卡", 2),
+            ],
+        );
+
+        let mut plan = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        plan.derive_actual_shift_binds(&blueprint, &assignment);
+
+        assert!(
+            plan.shift_binds.is_empty(),
+            "普通制造自然入选不得升级为固定成员/班次绑定: {:?}",
+            plan.shift_binds
+        );
     }
 
     #[test]

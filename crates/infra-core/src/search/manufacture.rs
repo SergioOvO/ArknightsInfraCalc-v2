@@ -127,7 +127,14 @@ pub fn search_manufacture_triples(
     table: &SkillTable,
     options: &ManuSearchOptions,
 ) -> Result<ManuSearchReport> {
-    let general_pool = filter_general_manufacture_search_pool(pool);
+    let mut general_pool = filter_general_manufacture_search_pool(pool);
+    if let Some(anchor) = options.must_include_name.as_deref() {
+        if general_pool.entry(anchor).is_none() {
+            if let Some(entry) = pool.entry(anchor) {
+                general_pool.entries.push(entry.clone());
+            }
+        }
+    }
     match options.recipe_mode {
         ManuSearchRecipeMode::Lines(scenario) => {
             search_manufacture_split_lines(&general_pool, table, options, scenario)

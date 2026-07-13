@@ -24,9 +24,9 @@
 
 | 原则 | 说明 |
 |------|------|
-| **设施内并行** | 贸易 / 制造 / 发电 / 中枢（及日后宿舍 producer）搜索可 rayon 并行；不为软搭档（如 Christine 无酒神）做组合剪枝 |
+| **单房候选并行** | 单个贸易 / 制造房的候选组合求值、单个发电站的候选求值可用 rayon；这不表示多个制造房共享同一份静态上下文并行搜索 |
 | **规模可控** | 单设施 `C(n,3)` 或发电 `O(n)`；瓶颈在单次 `solve_*` 热路径，不在穷举次数 |
-| **硬约束合并** | 一人不能占两位：并行搜完后**顺序落位** + `HashSet<name>`，不是为省算力的剪枝 |
+| **跨房顺序提交** | 一人不能占两位，且已上岗 workforce 会影响后房效率：制造房按稳定顺序执行「合并已提交 assignment → `resolve_base` → 搜本房 → commit + 更新 `used`」 |
 | **不做全局联合最优** | 禁止 `C(n,3)^站数` 式笛卡尔积；贪心 + `top_k` 回退即可 |
 | **机制在 core** | 编制编排可放 `infra-core::layout`；CLI 只加载 JSON、调用、打印 |
 
@@ -38,21 +38,20 @@
 operbox + blueprint
         ↓
 ┌───────────────────────────────────────────────────┐
-│ 阶段 A：编排 + producer 落位 + 分设施搜索           │
+│ 阶段 A：编排 + producer 落位                        │
 │  · System → Plan → Execute 先认领 registry 体系     │
-│  · 中枢  C(n,k)  k∈[1,5]（search_control_combos）   │
-│  · 贸易  余站按 docus/closure/witch/meta_vina/witch_fallback role 后 C(n,3) │
-│  · 制造  每产线类型 C(n,3)（同 243c split-line）   │
-│  · 发电  每站 1 人贪心（已有 search_power_*）      │
-│  · 宿舍   producer 房（森西等）按 assignment 定人   │
-│  每站缓存 top_k 候选（默认 k≥20 可调）              │
+│  · 中枢与宿舍 / 感知 producer 先落位                │
+│  · resolve_base 得到当前全局资源                    │
 └───────────────────────────────────────────────────┘
         ↓
 ┌───────────────────────────────────────────────────┐
-│ 阶段 B：顺序落位（单线程，极快）                    │
-│  global used: HashSet<String>                       │
-│  按 §4 默认顺序，逐房间认领干员                     │
-│  冲突 → 取该站 top 下一项，或对 filter 后池重搜     │
+│ 阶段 B：按设施生命周期搜索并提交                     │
+│  · global used: HashSet<String>                     │
+│  · 贸易 / 发电按各自 fill 顺序搜索、提交             │
+│  · 制造按稳定房序逐房：                              │
+│      合并已提交 assignment → resolve_base            │
+│      → 本房 C(n,k)（组合内部可 rayon）→ commit       │
+│  · 冲突时过滤 used 后重搜；不做跨房笛卡尔积           │
 └───────────────────────────────────────────────────┘
         ↓
    BaseAssignment
@@ -62,7 +61,7 @@ operbox + blueprint
    （可选）对 consumer 房再跑单房 solve 出分 / bench 输出
 ```
 
-**`resolve` 与搜索的次序**：凡影响 `layout.global` / `global_inject` 的 **producer 房**（中枢、宿舍森西、发电虚拟电站等）须先落位并 `resolve_base` 一轮，再搜依赖全局资源的 **consumer 房**（贸易齐尔查克、制造自动化等）。实现上可以是「producer 阶段落位 → resolve → consumer 阶段并行搜+落位」，不必一次 resolve 定死。
+**`resolve` 与搜索的次序**：凡影响 `layout.global` / `global_inject` 的 **producer 房**（中枢、宿舍森西、发电虚拟电站等）须先落位并 `resolve_base`，再搜依赖全局资源的 **consumer 房**（贸易齐尔查克、制造自动化等）。制造还存在跨制造房的 workforce 依赖，因此不能把所有制造房先用同一快照并行搜完再落位；每提交一房，下一房都基于合并后的当前编制重新 `resolve_base`。这里仍然是逐房贪心，不做房间组合的全局笛卡尔积。
 
 ---
 
@@ -75,7 +74,7 @@ operbox + blueprint
 3. **宿舍 / 感知 producer**（如森西、迷迭香感知源；先落位再 `resolve_base`）
 4. **发电各站**（每站 1 人，`search_power_assignment` 同款 `used`）
 5. **贸易余站**（未被 registry 占用的金单贸易站先走 `docus → closure → witch → meta_vina → witch_fallback → karlan → penguin → plain` role；源石单走 plain）
-6. **制造各产线**（按蓝图 `manu_line_scenario`：赤金线、经验线等同组三人）
+6. **制造各产线**（按蓝图 `manu_line_scenario`：各制造房按配方独立搜索 `C(n,k)`）
 
 同类型多房间：按蓝图 `rooms` 数组顺序或稳定 `room_id` 字典序。
 
@@ -87,9 +86,9 @@ operbox + blueprint
 
 对当前房间：
 
-1. 从阶段 A 缓存的 `top_k` 中，取**第一个**与 `used` 无交集的组合；
-2. 若 `top_k` 耗尽，对该房用 `filter_*_pool(pool, &used)` **缩小池后重搜**（仍 `C(n',3)`，`n'` 已减小）；
-3. 认领成功后，将组合内所有 `name` 插入 `used`。
+1. 贸易等持有候选报告的 fill 可从当前报告选择与 `used` 无交集的组合，耗尽后对当前房过滤 `used` 并重搜；
+2. 排班制造不消费阶段 A 缓存的 `top_k`：每个制造房都先过滤当前 `used`，合并已提交 assignment 并重新 `resolve_base`，再当场执行本房 `C(n',k)`；
+3. 当前房命中后立即 commit，并将成员写入 `used`；下一制造房因此看到最新 workforce 与占用状态。
 
 贸易站落位实现见 `layout/assign/commit.rs` 与 `layout/assign/trade_fill.rs`。
 
@@ -105,7 +104,7 @@ operbox + blueprint
 |------|----------|------------------|----------|
 | 控制中枢 | 1～5 | `search_control_combos` | `ControlFillPolicy::InjectOnly` / `LayeredFill`；输出具名 policy key，不输出生产效率 |
 | 贸易站 | 按等级 1/2/3 | `search_trade_triples` / `search_trade_triples_filtered` | 同房互斥：`trade_station_exclusive_violation` |
-| 制造站 | 按等级 1/2/3 | `search_manufacture_triples` | 同类产线共用同容量组合（`ManuSearchRecipeMode::Lines`） |
+| 制造站 | 按等级 1/2/3 | `search_manufacture_triples` | 排班对每房使用 `ManuSearchRecipeMode::Single(recipe)` 独立搜索；`Lines` 仅用于 bench / 产线探索，不是排班多房共享组合 |
 | 发电站 | 1 | `search_power_assignment` | 站内不重复 |
 | 宿舍 | 1～N | 暂无 search；编制驱动 `resolve` 内 producer | 森西大食堂等 |
 
@@ -210,8 +209,10 @@ operbox + blueprint
 
 | 阶段 | 求值次数（量级） |
 |------|------------------|
-| 阶段 A 并行四设施 | 各设施独立：贸易 ~10⁵、制造 ~10⁵、发电 ~10²、中枢 ~10⁶（若穷举 5 人） |
+| 阶段 A 分设施求解 | 单房组合内部可用 rayon；制造房按顺序提交并逐房 resolve，不做房间笛卡尔积 |
 | 阶段 B 落位 | `O(房间数 × top_k)`，可忽略 |
 | 合并后 | 单次 `solve` 保持微秒～毫秒级时，总耗时仍为 **秒级** |
 
-设施级并行 + 设施内 rayon 即可；**不必**为宏观排班再做算法层「优化」。
+单房 `C(n,k)` 内 rayon 即可；制造房因跨房计数按顺序提交并逐房 resolve。**不必**为宏观排班构造房间笛卡尔积。
+
+排班制造不由 standalone 工具表裁剪。多制造房按顺序提交，每房搜索前基于当前完整 assignment 重新 resolve；全部落位后再次按最终 assignment 结算并回写制造效率快照，避免早期房间保留陈旧跨房计数。
