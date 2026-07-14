@@ -18,6 +18,7 @@
 | 文件 | 状态 | 用途 |
 |------|------|------|
 | [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md](DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md) | ready-on-request | 用户已确认的下一位 Agent 交接：三类可选中枢 producer 的 live 精确索引 Join 与 A+ Bake；尚未实现，不自动执行 |
+| [CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md](CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md) | ready-on-request | 动态 producer 的条件化单房响应 Bake：允许离线计算数十分钟，按中枢效果签名物化完整单房 solver response，运行时做互斥 Join 与 live 对账 |
 | [FIAMMETTA_SHIFT_PRIORITY.md](FIAMMETTA_SHIFT_PRIORITY.md) | completed | MAA 单目标线性优先级已接入；动态布局规则留在后续排班策略层 |
 | [TRAINING_RECOMMENDER_RAG_PLAN.md](TRAINING_RECOMMENDER_RAG_PLAN.md) | proposal | 练度比对 / 练卡推荐 / RAG 解释层企划，待 Claude 与用户确认 |
 | [TRADE_EQUIVALENT_EFFICIENCY_ARCHITECTURE.md](TRADE_EQUIVALENT_EFFICIENCY_ARCHITECTURE.md) | proposal | 贸易纸面效率、社区等效换算、搜索排序与产出预估的统一量纲设计 |

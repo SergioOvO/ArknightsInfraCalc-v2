@@ -4,6 +4,9 @@
 > 用户确认方向：凛御银灰、戴菲恩、八幡海铃进入同一套可选中枢 producer 生命周期。
 > 算法偏好：问题规模小，优先“多烘焙、按完全等价签名做小型精确 Join”的模型；不扫描原始全笛卡尔积，DP、Pareto 与 branch-and-bound 不作为首版前提。
 > 本文用途：交给下一位 Agent 的实施 TODO；不能用来描述当前 `HEAD` 已有能力。
+> Bake 物化边界、并行生成、分片与运行时查询的当前方案见
+> [条件化单房响应 Bake 计划](CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md)；本文继续负责 producer
+> 业务不变量、联合候选合法性、comparator、winner commit 与 rotation dependency。
 
 > 设计边界补充：首期只实现八幡海铃、戴菲恩、凛御银灰三个贸易目标
 > producer，但 rule、候选行、dependency、winner commit 与 Bake manifest 必须按
@@ -313,6 +316,11 @@ commit(best) exactly once
 首期不需要通用 DP、Pareto frontier 或 branch-and-bound。若 effect bucket 数或 heap 扩展数经实测仍过大，再提交可与本节 live reference 做差分验证的优化；正确性基线始终是“完整行保留 + 完全等价分桶 + 首个兼容最优 tuple”的索引 join。
 
 ## 7. A+ Bake 物化什么
+
+本节保留 joint solver 对 Bake 的接口要求。具体物化模型已经收敛为“单房 row × 中枢效果
+签名 × 跨房摘要 → 结构化 solver response”，其 schema、并行生成、分片和 cache gate 以
+[条件化单房响应 Bake 计划](CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md)为实施真源；若两处细节
+冲突，以该专门计划为准，但不得改变本文定义的业务不变量和 comparator。
 
 ### 7.1 紧凑行
 
