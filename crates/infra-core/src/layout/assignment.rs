@@ -19,6 +19,9 @@ pub struct AssignedOperator {
     /// 0 = unknown; tier fallback then uses `elite` only for compatibility.
     #[serde(default, skip_serializing_if = "is_zero_u8")]
     pub rarity: u8,
+    /// 仅当体系显式要求特殊工作状态时覆盖本班全局心情。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_mood: Option<u8>,
 }
 
 impl AssignedOperator {
@@ -28,6 +31,7 @@ impl AssignedOperator {
             elite,
             level: 0,
             rarity: 0,
+            work_mood: None,
         }
     }
 
@@ -37,7 +41,13 @@ impl AssignedOperator {
             elite: progress.elite,
             level: progress.level,
             rarity: progress.rarity,
+            work_mood: None,
         }
+    }
+
+    pub fn with_work_mood(mut self, mood: Option<u8>) -> Self {
+        self.work_mood = mood;
+        self
     }
 
     pub fn tier(&self) -> PromotionTier {

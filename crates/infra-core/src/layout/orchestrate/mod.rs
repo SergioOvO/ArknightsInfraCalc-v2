@@ -1,17 +1,19 @@
-//! 全基建进驻编排：`System → Plan → Execute`。
+//! 全基建进驻编排：`Rule → resolved Plan → Execute`。
 //!
-//! Phase 0–1：`System → Plan → Execute`；`select` 合并 integrity + `base_systems` 选型。
+//! `select` 汇合高优先声明式规则、兼容 registry 与 late competitive 规则；
+//! `execute` 只消费已解析 placement，不按体系 id 重判。
 
 mod execute;
 mod plan;
+mod rules;
 mod select;
 
 pub use execute::{execute_plan, ExecuteResult};
 pub use plan::{
-    ActivatedSystem, AssignmentPlan, ControlCandidateRequirement, ProducerSlot, SlotFill,
-    SystemAnchor, SystemConstraint,
+    ActivatedSystem, ActiveDependency, AssignmentPlan, ContinuousRole, ControlCandidateRequirement,
+    ProducerSlot, SelectedRuleAlternative, SlotFill, SystemAnchor, SystemConstraint,
 };
-pub use select::build_plan;
+pub use select::{build_plan, build_plan_with_runtime};
 
 #[cfg(test)]
 mod tests {
@@ -94,48 +96,59 @@ mod tests {
     #[test]
     fn perception_fireworks_requires_both_control_candidates() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let operbox =
-            OperBox::load(&crate::operbox::default_operbox_full_e2_path().unwrap()).unwrap();
-        let plan = build_plan(
-            &blueprint,
-            &operbox,
-            AssignShiftMode::Peak,
-            &BaseAssignment::default(),
-            &std::collections::HashSet::new(),
+        let full = OperBox::load(&crate::operbox::default_operbox_full_e2_path().unwrap()).unwrap();
+        let operbox = full.excluding(&std::collections::HashSet::from([
+            "焰尾".to_string(),
+            "薇薇安娜".to_string(),
+            "斩业星熊".to_string(),
+            "诗怀雅".to_string(),
+            "火龙S黑角".to_string(),
+            "麒麟R夜刀".to_string(),
+        ]));
+        let instances = crate::instances::OperatorInstances::load(
+            &crate::instances::default_instances_path().unwrap(),
         )
         .unwrap();
+        let table = crate::skill_table::SkillTable::load(
+            &crate::skill_table::default_skill_table_path().unwrap(),
+        )
+        .unwrap();
+        let plan = crate::layout::assign_shift_with_plan(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &crate::layout::AssignBaseOptions::default(),
+            AssignShiftMode::Peak,
+            &BaseAssignment::default(),
+        )
+        .unwrap()
+        .plan;
 
         assert!(!plan.registry_system_ids().contains(&"human_fireworks_pure"));
-        assert!(plan
+        assert!(!plan
             .registry_system_ids()
             .contains(&"human_fireworks_perception"));
         assert!(plan
-            .control_candidate_requirements
+            .selected_rules
             .iter()
-            .any(|requirement| {
-                requirement.min_count == 2
-                    && requirement.candidates.contains(&"重岳".to_string())
-                    && requirement.candidates.contains(&"令".to_string())
-            }));
-        let fixed_control_count: usize = plan
-            .registry_claims
-            .iter()
-            .flat_map(|claim| &claim.slots)
-            .filter(|slot| {
-                slot.facility == crate::layout::FacilityKind::ControlCenter
-                    && slot.fill != crate::layout::system::SlotFillMode::Search
-            })
-            .map(|slot| slot.operators.len())
-            .sum();
-        let control_anchors = plan
+            .any(|selected| selected.rule_id == "rosemary_perception"));
+        assert!(plan.selected_rules.iter().any(|selected| {
+            selected.rule_id == "human_fireworks_perception"
+                && selected.alternative_id == "actual_perception_core"
+        }));
+        let attached: Vec<_> = plan
             .anchors
             .iter()
-            .filter(|anchor| anchor.facility == crate::layout::FacilityKind::ControlCenter)
-            .count();
-        assert!(
-            control_anchors + fixed_control_count + 2 <= 5,
-            "感知分支必须跨代码化/registry 两条路径预留两个 solver 席位"
-        );
+            .filter(|anchor| anchor.system_id == "human_fireworks_perception")
+            .map(|anchor| anchor.operator.as_str())
+            .collect();
+        assert_eq!(attached, vec!["重岳", "令", "乌有"]);
+        assert!(plan.shift_binds.iter().any(|bind| {
+            ["重岳", "令", "乌有"]
+                .iter()
+                .all(|name| bind.operators.iter().any(|operator| operator == name))
+        }));
     }
 
     #[test]
@@ -155,12 +168,9 @@ mod tests {
         let assert_closed = |plan: &AssignmentPlan, system_id: &str| {
             assert!(!plan.registry_system_ids().contains(&system_id));
             assert!(plan
-                .control_candidate_requirements
+                .selected_rules
                 .iter()
-                .all(|requirement| {
-                    !requirement.candidates.contains(&"重岳".to_string())
-                        && !requirement.candidates.contains(&"令".to_string())
-                }));
+                .all(|selected| selected.rule_id != system_id));
         };
 
         let pure_base = full.excluding(&std::collections::HashSet::from([
@@ -185,7 +195,12 @@ mod tests {
 
         for missing in ["重岳", "令"] {
             let operbox = full.excluding(&std::collections::HashSet::from([missing.to_string()]));
-            assert_closed(&build(&operbox), "human_fireworks_perception");
+            let plan = build(&operbox);
+            assert_closed(&plan, "human_fireworks_perception");
+            assert!(
+                !plan.excluded_operators.contains(&"桑葚".to_string()),
+                "感知附带分支不成立时不得把桑葚排除出普通候选"
+            );
         }
         assert_closed(
             &build(&full.excluding(&std::collections::HashSet::from(["乌有".to_string()]))),
@@ -204,8 +219,9 @@ mod tests {
         let no_mulberry = full.excluding(&std::collections::HashSet::from(["桑葚".to_string()]));
         let perception_without_mulberry = build(&no_mulberry);
         assert!(perception_without_mulberry
-            .registry_system_ids()
-            .contains(&"human_fireworks_perception"));
+            .selected_rules
+            .iter()
+            .any(|selected| selected.rule_id == "rosemary_perception"));
         assert!(!perception_without_mulberry
             .registry_system_ids()
             .contains(&"human_fireworks_pure"));
@@ -257,9 +273,8 @@ mod tests {
 
     #[test]
     fn build_plan_peak_ideal_e2_does_not_registry_claim_rosemary() {
-        // 迷迭香感知链走代码化体系层（system_integrity），不再作为 registry 体系。
-        // build_plan 把代码化产出汇合进统一 plan 的 anchors/degradations/shift_binds，
-        // 但不进 registry_claims；迷迭香与黑键作为统一 plan 的 required anchors。
+        // 迷迭香感知链走声明式规则，不再作为 registry 体系；
+        // 核心、producer、约束和 bind 汇入统一 plan。
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = OperBox::load(
             &crate::skill_table::data_path("schedule_243/operbox_ideal_e2.json").unwrap(),
@@ -285,7 +300,7 @@ mod tests {
 
     #[test]
     fn build_plan_peak_ideal_e2_converges_rosemary_into_unified_plan() {
-        // ADR 0001 决策 B：代码化体系层与 registry 汇合到统一 AssignmentPlan。
+        // 声明式规则与兼容 registry 汇合到统一 AssignmentPlan。
         // 迷迭香满配应产出 迷迭香制造 anchor + 上2休1 绑定 + 降级阶梯档位。
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = OperBox::load(
@@ -327,8 +342,15 @@ mod tests {
             "应含迷迭香+黑键上2休1绑定: {:?}",
             plan.shift_binds
         );
-        // 降级阶梯档位汇入 plan.degradations。
-        assert!(!plan.degradations.is_empty(), "应含迷迭香降级阶梯档位");
+        assert!(plan.selected_rules.iter().any(|selected| {
+            selected.rule_id == "rosemary_perception"
+                && [
+                    "recruit_refresh",
+                    "high_perception",
+                    "recruit_refresh_zilan",
+                ]
+                .contains(&selected.alternative_id.as_str())
+        }));
         // forbid-same-room 约束汇入 plan.constraints（迷迭香 ≠ 清流/温蒂同房）。
         assert!(
             plan.constraints.iter().any(|c| matches!(
@@ -343,7 +365,7 @@ mod tests {
 
     #[test]
     fn build_plan_peak_without_rosemary_leaves_codeized_plan_empty() {
-        // 不拥有迷迭香/黑键时，代码化体系层不激活，统一 plan 的语义片段为空。
+        // 不拥有迷迭香/黑键时声明式规则不激活，统一 plan 不含 Rosemary 片段。
         use crate::operbox::OperBoxEntry;
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = OperBox::from_entries(vec![OperBoxEntry {
@@ -421,6 +443,48 @@ mod tests {
     }
 
     #[test]
+    fn failed_generic_automation_does_not_reactivate_legacy_registry() {
+        let blueprint =
+            BaseBlueprint::load(&crate::skill_table::data_path("layout/252.json").unwrap())
+                .unwrap();
+        let operbox =
+            OperBox::load(&crate::operbox::default_operbox_full_e2_path().unwrap()).unwrap();
+        let mut occupied_control = BaseAssignment::default();
+        occupied_control.set_room(
+            "control",
+            (0..5)
+                .map(|index| crate::layout::AssignedOperator::new(format!("occupied-{index}"), 0))
+                .collect(),
+        );
+
+        let plan = build_plan(
+            &blueprint,
+            &operbox,
+            AssignShiftMode::Peak,
+            &occupied_control,
+            &std::collections::HashSet::new(),
+        )
+        .unwrap();
+
+        assert!(plan
+            .selected_rules
+            .iter()
+            .all(|selected| selected.rule_id != "automation_group"));
+        assert!(plan.registry_claims.iter().all(|claim| {
+            !matches!(
+                claim.system_id.as_str(),
+                "automation_group" | "gongsun_greyy2_power_line"
+            )
+        }));
+        assert!(plan.activated.iter().all(|system| {
+            !matches!(
+                system.system_id.as_str(),
+                "automation_group" | "gongsun_greyy2_power_line"
+            )
+        }));
+    }
+
+    #[test]
     fn execute_plan_matches_select_registry_claims() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = OperBox::load(
@@ -450,10 +514,18 @@ mod tests {
             &BaseAssignment::default(),
         )
         .unwrap();
-        for name in ["但书", "八幡海铃", "伺夜", "贝洛内"] {
+        assert!(
+            executed.used.contains("但书"),
+            "多贸易站但书是 required core"
+        );
+        assert!(
+            executed.used.contains("八幡海铃"),
+            "高刷新路径成员必须由 plan 实际进编"
+        );
+        for name in ["伺夜", "贝洛内"] {
             assert!(
                 !executed.used.contains(name),
-                "execute_plan 不应提前占用叙拉古或贸易自由搜索干员 {name}"
+                "execute_plan 不应提前占用贸易自由搜索干员 {name}"
             );
         }
     }

@@ -1,9 +1,9 @@
 # 编排层重构路线图（Orchestration Layer）
 
-> **状态**：**Phase 0–3 / 5 已落地**（2026-06）；Phase 4 global effect 收拢进行中  
-> **目标**：把硬体系的「谁必须上哪个岗位」从 search/solve 评分里拆出来，统一到 **System → Plan → Execute**；普通制造软同房组合不由 System 声明，仍由全合法普通候选池 + L1 solver 按实际效率发现。
+> **状态**：**2026-07-15 通用规则编译器主路径已落地**；旧专用 evaluator 已删除，不再扩展“一体系一个函数”
+> **目标**：把业务体系写成角色、备选方案、关系和资源门槛，由同一个规则编译器产出完全解析的 **Rule → Candidate → Plan → Execute**；普通制造软同房仍由全合法候选池 + L1 solver 按实际效率发现。
 > **背景讨论**：同房组合、跨房体系、global effect 三套入口搅在 `assign_shift` 里是乱源，不是机制太多。  
-> **旧稿参考**：[plans/orchestration_engine_design.md](../plans/orchestration_engine_design.md)（阶段二/三「穷举硬体系方案 + DailyTotals 裁决」**不采用**；硬核心由 System 声明，普通制造软同房组合由 search 自然发现）
+> **旧稿参考**：[plans/orchestration_engine_design.md](../plans/orchestration_engine_design.md)。本轮只枚举每条规则声明的有限 alternatives，并用显式同域 objective 或 policy 顺序裁决；仍不采用全编制笛卡尔积或匿名跨域总分。
 
 ---
 
@@ -13,7 +13,7 @@
 
 | 职责 | 应在哪 | 当前边界 |
 |------|--------|------|
-| 选跨站体系 / 固定 bond 进编 | **编排** | `layout/orchestrate::{build_plan, execute_plan}`；`claim_base_systems` 仅兼容 / 测试辅助 |
+| 选跨站体系 / 固定 bond / 条件硬锚点进编 | **通用规则编译器** | 规则目录实例化有限 alternatives，容量预检和资源 gate 后生成 `AssignmentPlan`；不按体系名分派函数 |
 | 贸易核心优先 / 填散件第三人 | **role policy + 搜索（子集）** | `trade_segments.roles` + `search/role_pick.rs`；`assign_trade_remainder` / 制造 / 发电贪心填空房 |
 | 算全局池 / 中枢注入 | **resolve** | `resolve_base` + `cross_facility` / `global_resource` |
 | 算同房效率 / 产量 | **L1–L3 solve** | 不负责保证硬体系进编；普通制造在全合法候选池中用同房结算与 `final_efficiency` 排序，自然发现软组合 |
@@ -28,9 +28,9 @@
 
 | 范围 | CSV 特征 | 编排 / 运行时 |
 |------|----------|----------------|
-| **硬同房 bond** | 用户确认必须同房 / 固定核心 | System 的 `bond` / `fixed` slot + L3 `shortcut` 回归锚点 |
+| **硬同房 bond** | 用户确认必须同房 / 固定核心 | 声明式 role / `room_group` 或兼容 registry bond + L3 `shortcut` 回归锚点 |
 | **普通制造软同房** | 标准化、仓容、莱茵技能等效率耦合 | 不注册 System；全合法普通制造池做 `C(n,k)`，L1 solver 按 `final_efficiency` 发现 |
-| **跨房体系** | 中枢/宿舍 producer → 贸易/制造 consumer | **同一个 System**，多 `facility` slot + `trade_segments` producer 前提 |
+| **跨房体系** | 中枢/宿舍 producer → 贸易/制造 consumer | **同一条 Rule alternative**，多设施 role + relation / resource gate |
 | **全基建池** | 感知、人间烟火、木天蓼、虚拟电站 | **不是组合**；`resolve_base` → `GlobalResourcePool` + `cross_facility` |
 
 **与 `OperatorTier` 枚举的对应关系**（`crates/infra-core/src/layout/tier.rs`）：
@@ -46,7 +46,7 @@
 
 **原则**
 
-- **编排不算效率**：不调用 `solve_trade_with_shift` 决定 meta 组合。
+- **规则不重复机制公式**：候选需要比较时调用现有 room solver / `resolve_base` 读取正式结果，不在编排层手写效率公式；不同域之间不新增匿名综合权重。
 - **硬体系与普通制造分界**：L3 / System 可承载已确认硬组合；普通制造软同房不表化，search 对全合法普通候选自然排序。
 - **global effect 不参与进编**：编制定完后再 `resolve` 写池。
 
@@ -56,9 +56,10 @@
 
 ```
 assign_shift()
-  └─ orchestrate::build_plan(operbox, blueprint, mode) → AssignmentPlan
-       └─ orchestrate::execute_plan(plan) → BaseAssignment
-            └─ fill_greedy(remaining empty rooms)   // 仅 Plain 贸易 / 制造 / 发电
+  └─ orchestrate::compile_rules(operbox, blueprint, preferences) → PlanCandidate[]
+       └─ resolve/check gates/select alternatives → AssignmentPlan（实际干员与房间已确定）
+            └─ orchestrate::execute_plan(plan) → BaseAssignment
+                 └─ fill_greedy(search_peers / remaining empty rooms)
 
 resolve_base(assignment)   // 与 assign 分离，CLI 评分 / verify 才走
   ├─ control → GlobalInjectManifest
@@ -71,16 +72,42 @@ resolve_base(assignment)   // 与 assign 分离，CLI 评分 / verify 才走
 ```
 crates/infra-core/src/layout/orchestrate/
   mod.rs
-  plan.rs      # AssignmentPlan, SlotFill, ActivatedSystem
-  select.rs    # System 选型、tier 降级、exclusive_group
-  execute.rs   # 落位：fixed / bond / core+segment / pick_one
+  rules.rs     # 唯一通用 gate / role / relation 编译器
+  plan.rs      # 已解析 AssignmentPlan、anchor、bind、dependency、continuous role
+  select.rs    # 高优先 Rule → legacy registry → late competitive Rule 汇合
+  execute.rs   # 只执行已解析 placement，不按 rule/system id 重判
 ```
 
 `assign_shift` 当前主线为：seed → `build_plan` → `execute_plan` → producer/resolve → 发电 → 贸易 core role / plain → 制造贪心填充。贸易早于制造填充，避免但书、可露希尔、巫恋等核心和其工具人被制造站提前占用。
 
 ---
 
-## 4. System 统一 schema（扩 `base_systems.json`）
+## 4. 通用规则 schema
+
+体系不是执行函数。`data/orchestration_rules.json` 当前只声明：
+
+- `alternatives`：按顺序尝试的有限备选方案，`explicit_only` 方案只接受 `--prefer`；
+- `roles`：候选、最低练度、设施/配方、人数、`all_available` / `ordered`、同房 group、one-per-room、competitive、工作心情和休息去向；
+- `relations`：禁同房、禁同站；`bind_roles` / `bind_all` 生成 exact shift bind，`active_dependencies` 生成单向在岗依赖；
+- `exclude_operators`：alternative 激活后的路径级实际互斥；写入 plan 后由 fill / rotation 统一排除，不能只跳过 registry 又让普通补位重新引入；
+- `gates`：设施数、订单数、配方数、可用/不可用干员，以及由临时 assignment 正式 resolve 的 global resource 门槛；
+- `skip_registry_ids` / `skip_registry_ids_when_inactive`：与 legacy registry 的激活/关闭互斥，不在 `select.rs` 写体系 id 分支。
+
+Rosemary active 只关闭 legacy 纯烟火。感知附带分支是 priority 18 的独立声明式 rule：实际感知 ≥50 后仍必须让重岳、令、乌有三人完整落位并生成 bind；容量不足时自然关闭。不能在 select/rotation 另写 Rosemary id 分支。
+
+候选阶段解决所有 optional 选择；最终 `AssignmentPlan` 只包含已确定且可落位的 placement。`execute` 不得静默跳过 required placement，fill / rotation / export 不得再次判断体系。
+
+`base_systems.json` 仍作为未迁移体系的兼容 registry，在高优先 Rule 与 late competitive Rule 之间执行；`layout/system_integrity/` 专用路径已删除。
+
+### 4.1 贸易核心硬锚点
+
+- 实际贸易站总数为 1，且该站是龙门币订单：可露希尔为首个 required trade anchor。
+- 实际贸易站总数至少为 2，且存在龙门币订单：但书为首个 required trade anchor。
+- 全部贸易站均为源石订单：不生成上述 anchor。
+- 只固定核心本人，不固定房号和队友；叙拉古成员继续按实际跨站收益搜索。
+- 该规则只读取实际设施数量和订单配方，不读取布局名称或房间编号。
+
+## 4A. 旧 System schema（迁移兼容）
 
 **同站组合与跨站体系都是 System**，差别只在 `slots` 数量与 `prerequisites`。
 
@@ -101,7 +128,7 @@ crates/infra-core/src/layout/orchestrate/
 
 | 值 | 含义 | Executor |
 |----|------|----------|
-| `fixed` | 整包落位 | 直接 `set_room`；不用于但书、伺夜或贝洛内，三者全部由贸易搜索决定 |
+| `fixed` | 整包落位 | 直接 `set_room`；迁移后只用于真正固定 bond，不承担一贸可露希尔/多贸但书 required anchor |
 | `bond` | 二人锁死 + 第三人 | 固定 A+B，`pick_one` 填第三（例：德 E0+拉普兰德 **或** 能天使+蕾缪安；同干员不同 tier 须分叉 System） |
 | `core` | 单人锚 + segment 池补满 | 仅用于未来非感知散件锚点；**黑键不走此路径** |
 | `pick_one` | 列表选一 | 第一个可用干员 |
@@ -118,7 +145,7 @@ crates/infra-core/src/layout/orchestrate/
 | `data/base_systems.json` | System 目录：`tier`（`cross_station` / `same_station`）、priority、`exclusive_group`、slots |
 | `data/trade_segments.json` | producer 条件 + consumer → `shortcut_id`；`roles` 声明贸易核心优先 fallback 链 |
 | `data/trade_shortcuts.json` | L3 组合级 trade%/gold% 锚点 |
-| `layout/system_integrity/` | **已迁出编排主路径**；迷迭香感知链待 Phase 4 `cross_facility` + 计算效率后进编 |
+| `data/orchestration_rules.json` | 当前声明式 rule / alternative / role / relation 真源；执行器不按体系名分派 |
 
 ### 4.3 贸易 meta：跨站体系、同站锚点与核心优先
 
@@ -131,18 +158,18 @@ crates/infra-core/src/layout/orchestrate/
 
 | id / role | 类型 | L3 shortcut | 当前运行时 |
 |-----------|------|-------------|------------|
-| 叙拉古动态注入 + role `docus` | 自然中枢/贸易候选（不注册 System） | `gsl_docus_syracusa` / `gsl_docus_solo` | 八幡海铃、伺夜、贝洛内均不固定；普通中枢路径与包含动态贸易 producer 的路径各自完成贸易搜索后按 `ControlInjectRawSumV0` 比较。伺夜/贝洛内不要求同站，也不要求入编 |
+| 多贸但书 required anchor + 叙拉古动态注入 | 条件硬锚点 + 自然中枢/贸易候选 | `gsl_docus_syracusa` / `gsl_docus_solo` | 多贸龙门币布局先预留但书本人；八幡海铃、伺夜、贝洛内均不固定，伺夜/贝洛内不要求同站，也不要求入编 |
 | `closure` | 可露希尔核心优先 | `gsl_blackkey_closure` / `gsl_closure_*` | 强制包含可露希尔；优先黑键可露锚点，缺黑键仍保留可露 |
 | `witch` / `witch_fallback` | 龙巫 / 巫恋兜底 | `gsl_witch_*` | `witch` 强制包含精二巫恋 + 龙舌兰；无龙舌兰时 `witch_fallback` 低于推王组，只做巫恋兜底 |
 | `ling_jie_karlan` | control producer + L1 自然搜索 | `gsl_ling_jie_yaxin` 仅参考 | 只认领灵知 E2 中枢；精1孑由贸易搜索注入 |
 | `meta_vina` / `penguin_*` | legacy Vina role / 企鹅 segment | `gsl_vina_lungmen` / `gsl_penguin_*` | `meta_vina` 当前仍把推王组放在第 4 优先，待删除；Vina shortcut 仅可保留为实际组合结算。企鹅逻辑不在本缺口范围 |
-| `rosemary_perception*` | **global effect** | — | 已移出编排；`assign_perception_producers` + scope=global |
+| `rosemary_perception` | 声明式跨设施 Rule + global resource gate | — | 核心、路径成员与实际 producer 先形成临时 assignment；`resolve_base` 得到感知 ≥50 后才提交 plan |
 
 #### 贸易核心 role 顺序
 
 贸易金单余站按 `pick_trade_meta_then_plain` 尝试：
 
-1. `docus`：拥有精二但书时，无条件作为全部金单贸易站的第一核心；有空二级金单站时优先进二级站，然后一次性搜索所有“必须包含但书”的候选并按 `final_efficiency` 取最高。`gsl_docus_solo` / `gsl_docus_syracusa` 由求解器按实际组合自然命中，不是候选优先级；没有精二但书时不启用该 role。
+1. 一贸龙门币布局由可露希尔 required anchor 先占位；多贸龙门币布局由但书 required anchor 先占位。核心所在房的其余位置按 `final_efficiency` 搜索；`gsl_docus_solo` / `gsl_docus_syracusa` 只结算实际组合。
 2. `closure`：`gsl_blackkey_closure` 优先；否则 `gsl_closure_*`；否则包含可露希尔的最高可用三人组。
 3. `witch`：必须同时包含精二巫恋、精二龙舌兰和裁缝 β/α；blank shortcut 不进入自动 role。
 4. **legacy `meta_vina`（待删除）**：当前由戴菲恩 producer 激活推王 + 摩根 + 维娜固定优先；目标状态让全部格拉斯哥贸易候选按实际 `final_efficiency` 自然竞争。
@@ -204,12 +231,11 @@ crates/infra-core/src/layout/orchestrate/
 - [x] `assign_shift` 调用 `build_plan` → `execute_plan`（行为可先等价迁移）
 - [x] **验收**：243 E2 现有集成测仍绿
 
-### Phase 1 — System 选型（select）
+### Phase 1 — System 选型（select，历史执行记录）
 
 - [x] 合并 `claim_base_systems` → `select.rs`（`select_registry_systems`）
 - [x] 支持 `exclusive_group`、德克萨斯 E0/E2 企鹅物流 tier 分叉
-- [x] **迷迭香感知链移出编排**（待 Phase 4 global effect 后按计算效率进编）
-- [ ] **不实现**「多方案穷举 + DailyTotals 裁决」
+- [x] 迷迭香、自动化、红松、莱茵与贸易核心迁移为有限 alternatives；禁止全编制笛卡尔积和 `DailyTotals` 匿名跨域裁决
 
 ### Phase 2 — 组合数据
 
@@ -238,7 +264,7 @@ crates/infra-core/src/layout/orchestrate/
 - [x] 感知 producer（爱丽丝/车尔尼/絮雨）`scope: global` atom → `cross_facility`
 - [x] 删 `resolve.rs` 的 `apply_perception_producers` 硬编码
 - [x] 制造房 `room_layout_for_manu` 声明式扣回 scope=Global atom
-- [x] assign 层 `assign_perception_producers`：堆感知源后 resolve → 贪心消费 layout
+- [x] Rosemary rule 把实际 producer 解析到临时 assignment，再由统一 `resolve_base` 执行感知 gate；无专用 producer evaluator
 - [ ] `skill_table` 其余干员 atom 标 `scope: global`（乌有人间烟火等）
 - [ ] 删 `resolve.rs` 其余 `apply_*` 硬编码
 - [ ] `GlobalInject` 留 `control/interpreter`，供 segment producer 读取
@@ -254,8 +280,8 @@ crates/infra-core/src/layout/orchestrate/
 
 ## 6. 控 bug 策略
 
-1. **编排单测不调 solve**；shortcut 单测才调 `resolve_trade_shortcut`。
-2. **每个 System 一条 golden test**（`operbox_full_e2` 或最小 roster）。
+1. **分层验证选型边界**：高优先硬规则单测验证结构不变量，且不靠 solve 决定 required core；late competitive 可调用对应 domain solver，验证候选相对普通基线的 Pareto 比较。
+2. **以通用不变量矩阵为主**：覆盖 gate、role、cardinality、room-order、backtracking、bind 等 schema 语义，并保留关键体系端到端回归；不要求每个体系拥有专用实现函数。
 3. 端到端：`layout team-rotation` + [fixtures/243](../data/fixtures/243/README.md)。
 4. 迁移期可用环境变量/feature 对比旧 `assign_shift` 总分（短期）。
 

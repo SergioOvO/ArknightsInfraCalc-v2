@@ -171,6 +171,7 @@ cargo run -p infra-cli -- plan \
 | `--output-dir` | 可选。写出三队 `team_shift_*.json` assignment |
 | `--baseline` | 可选。对比用基准 operbox（默认 `data/box_profile_knightcode.json`） |
 | `--top` | Top-K 搜索条数，默认 20 |
+| `--prefer system=alternative` | 可重复。优先尝试声明式规则 alternative；不可行时按规则顺序回退。未知 rule/alternative 会明确报错；例如 `--prefer rosemary_perception=recruit_refresh_witch` |
 | `--maa-title` | 覆盖 MAA JSON 顶层 `title` |
 | `--json` | 仅输出 profile JSON 到 stdout（跳过人类可读表） |
 
@@ -210,6 +211,7 @@ cargo run -p infra-cli -- layout team-rotation \
 | `--maa-out` | **Agent 默认必带**。写出 MAA 基建排班 JSON；默认 `out/243_maa.json` |
 | `--maa-title` | 可选。覆盖 JSON 顶层 `title` |
 | `--top` | Top-K 搜索条数，默认 20 |
+| `--prefer system=alternative` | 可重复；三个入口均透传到同一规则编译器。语义是“优先尝试、不可行则回退”，未知值报错 |
 | `--text` | 可选。带 `--maa-out` 时 stderr 默认已有人类可读排班表 |
 
 ### 输出约定

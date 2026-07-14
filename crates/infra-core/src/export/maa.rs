@@ -138,6 +138,7 @@ struct PlanInput<'a> {
     resting: Vec<String>,
     fiammetta_target: Option<&'a str>,
     fiammetta_priority: &'a [String],
+    special_rest: Vec<(FacilityKind, String)>,
 }
 
 impl MaaSchedule {
@@ -178,6 +179,19 @@ pub fn build_from_team_rotation(
                     resting.insert(0, action.displaced.clone());
                 }
             }
+            let special_rest: Vec<_> = report
+                .peak_plan
+                .anchors
+                .iter()
+                .filter_map(|anchor| {
+                    let facility = anchor.rest_facility?;
+                    resting
+                        .iter()
+                        .any(|name| name == &anchor.operator)
+                        .then(|| (facility, anchor.operator.clone()))
+                })
+                .collect();
+            resting.retain(|name| !special_rest.iter().any(|(_, special)| special == name));
             PlanInput {
                 assignment: &shift.assignment,
                 name: format!(
@@ -198,6 +212,7 @@ pub fn build_from_team_rotation(
                     .map(|action| action.target.as_str()),
                 // ABC 主路径只执行 schedule 已确认的回岗动作；没有动作就保持关闭。
                 fiammetta_priority: &[],
+                special_rest,
             }
         })
         .map(|input| build_plan(blueprint, &input))
@@ -226,7 +241,12 @@ fn build_plan(blueprint: &BaseBlueprint, input: &PlanInput) -> MaaPlan {
             .map(resolve_scheduled_fiammetta)
             .unwrap_or_else(|| resolve_fiammetta(input.fiammetta_priority, input.assignment)),
         drones: drone_defaults(blueprint),
-        rooms: build_rooms(blueprint, input.assignment, &input.resting),
+        rooms: build_rooms(
+            blueprint,
+            input.assignment,
+            &input.resting,
+            &input.special_rest,
+        ),
     }
 }
 
@@ -242,6 +262,7 @@ fn build_rooms(
     blueprint: &BaseBlueprint,
     assignment: &BaseAssignment,
     resting: &[String],
+    special_rest: &[(FacilityKind, String)],
 ) -> MaaRooms {
     MaaRooms {
         trading: blueprint
@@ -290,7 +311,19 @@ fn build_rooms(
         processing: blueprint
             .rooms_of(FacilityKind::Workshop)
             .into_iter()
-            .map(|room| shared_slot(assignment, &room.id.0, false))
+            .enumerate()
+            .map(|(index, room)| {
+                let extra = if index == 0 {
+                    special_rest
+                        .iter()
+                        .filter(|(facility, _)| *facility == FacilityKind::Workshop)
+                        .map(|(_, name)| name.clone())
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                shared_slot_with_extra(assignment, &room.id.0, false, extra, Some(1))
+            })
             .collect(),
     }
 }
@@ -312,7 +345,34 @@ fn production_slot(
 }
 
 fn shared_slot(assignment: &BaseAssignment, room_id: &str, autofill_if_empty: bool) -> MaaRoomSlot {
-    let operators = operator_names(assignment, room_id);
+    shared_slot_with_extra(assignment, room_id, autofill_if_empty, Vec::new(), None)
+}
+
+fn shared_slot_with_extra(
+    assignment: &BaseAssignment,
+    room_id: &str,
+    autofill_if_empty: bool,
+    extra: Vec<String>,
+    capacity: Option<usize>,
+) -> MaaRoomSlot {
+    // special-rest 是该班的明确去向，优先于 peak/shared 中沿用的旧成员。
+    let mut operators = Vec::new();
+    for name in extra {
+        if !operators.contains(&name) {
+            operators.push(name);
+        }
+    }
+    for name in operator_names(assignment, room_id) {
+        if capacity.is_some_and(|capacity| operators.len() >= capacity) {
+            break;
+        }
+        if !operators.contains(&name) {
+            operators.push(name);
+        }
+    }
+    if let Some(capacity) = capacity {
+        operators.truncate(capacity);
+    }
     if operators.is_empty() && autofill_if_empty {
         return MaaRoomSlot {
             skip: false,
@@ -625,6 +685,31 @@ mod tests {
     }
 
     #[test]
+    fn special_rest_lancet_overrides_occupied_single_processing_slot() {
+        let mut blueprint = sample_blueprint();
+        blueprint.rooms.push(RoomBlueprint {
+            id: RoomId::new("workshop"),
+            kind: FacilityKind::Workshop,
+            level: 3,
+            product: None,
+            dorm_beds: None,
+            dorm_ambience_level: None,
+        });
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room("workshop", vec![AssignedOperator::new("共享加工干员", 2)]);
+
+        let rooms = build_rooms(
+            &blueprint,
+            &assignment,
+            &[],
+            &[(FacilityKind::Workshop, "Lancet-2".to_string())],
+        );
+
+        assert_eq!(rooms.processing.len(), 1);
+        assert_eq!(rooms.processing[0].operators, vec!["Lancet-2"]);
+    }
+
+    #[test]
     fn build_team_rotation_emits_maa_products() {
         let blueprint = sample_blueprint();
         let mut assignment = BaseAssignment::default();
@@ -688,7 +773,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_fiammetta_uses_confirmed_priority_order() {
+    fn legacy_fiammetta_priority_excludes_declarative_continuous_trade_cores() {
         let blueprint = sample_blueprint();
         let mut assignment = BaseAssignment::default();
         assignment.set_room(
@@ -705,7 +790,7 @@ mod tests {
         let resolved = resolve_fiammetta(&opts.fiammetta_priority, &assignment);
 
         assert!(resolved.enable);
-        assert_eq!(resolved.target, "但书");
+        assert_eq!(resolved.target, "龙舌兰");
         assert_eq!(resolved.order, "pre");
     }
 

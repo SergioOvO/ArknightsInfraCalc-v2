@@ -140,7 +140,7 @@ fn resolve_selector_value(ctx: &PowerContext, selector: Option<&Selector>) -> f6
             {
                 n = n.saturating_sub(1);
             }
-            f64::from(n)
+            f64::from(n.min(5))
         }
         Some(Selector::PowerStationCount) => f64::from(ctx.layout.effective_power_station_count()),
         Some(Selector::Mood) => ctx.mood,

@@ -12,9 +12,7 @@ use super::manufacture_fill::{
     manu_options, manufacture_candidate_pool_for_demand, pick_capacity_manu_hit, pick_manu_hit,
 };
 use super::power_fill::assign_power_rooms;
-use super::trade_fill::{
-    pick_trade_meta_then_plain, prioritize_docus_trade_rooms, trade_order_from_room,
-};
+use super::trade_fill::{pick_trade_meta_then_plain, trade_order_from_room};
 use super::AssignBaseOptions;
 
 /// 为一支队伍填满指定的贸易/制造房间（站绑定），共享 `used` 实现跨队互斥。
@@ -136,7 +134,7 @@ fn assign_team_trade_meta_rooms(
     used: &mut HashSet<String>,
 ) -> Result<()> {
     let gold_lines = blueprint.gold_manu_line_count();
-    let mut rooms = trade_rooms
+    let rooms = trade_rooms
         .iter()
         .map(|room_id| {
             blueprint.room(room_id).ok_or_else(|| {
@@ -144,8 +142,6 @@ fn assign_team_trade_meta_rooms(
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    prioritize_docus_trade_rooms(&mut rooms, trade_pool, assignment, used);
-
     for room in rooms {
         if !assignment.operators_in(&room.id).is_empty() {
             continue;
@@ -173,6 +169,7 @@ fn assign_team_trade_meta_rooms(
             order,
             room.level,
             used,
+            &[],
         )
         .map_err(|e| Error::msg(format!("team trade {}: {e}", room.id.0)))?;
         commit_trade_room(assignment, &room.id, &hit, trade_pool, used)?;

@@ -1,10 +1,8 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use serde::Serialize;
-
 use crate::error::{Error, Result};
-use crate::layout::assignment::{AssignedOperator, BaseAssignment};
+use crate::layout::assignment::BaseAssignment;
 use crate::layout::blueprint::{
     station_operator_capacity, BaseBlueprint, FacilityKind, RoomId, RoomProduct,
 };
@@ -22,37 +20,6 @@ use crate::types::RecipeKind;
 use super::commit::{commit_manu_room, manu_hit_names, pick_disjoint_from_report};
 use super::AssignBaseOptions;
 
-const GONGSUN_GOLD_MANU_THIRD_CHOICES: [&str; 2] = ["森蚺", "冬时"];
-pub(super) const QINGLIU_RENEWABLE_ENERGY_BUFF: &str = "manu_prod_spd&trade[000]";
-pub(super) const WENDY_BIONIC_SEADRAGON_BUFF: &str = "manu_prod_spd&power[020]";
-const DONGSHI_FLOW_OPTIMIZATION_BUFF: &str = "manu_prod_spd&manu[100]";
-
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct ManufactureLinkedProducer {
-    pub station: String,
-    pub operator: String,
-    pub required_elite: Option<u8>,
-    pub current_elite: Option<u8>,
-    pub satisfied: bool,
-    pub role: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct ManufactureSystemCandidateTrace {
-    pub room: String,
-    pub recipe: String,
-    pub operators: Vec<String>,
-    pub source: String,
-    pub selected: bool,
-    pub rejected: bool,
-    pub rejection_reason: Option<String>,
-    pub final_efficiency: Option<crate::Efficiency>,
-    pub evaluation_failed: Option<String>,
-    pub linked_producers: Vec<ManufactureLinkedProducer>,
-    pub source_system: String,
-    pub evidence: Vec<String>,
-}
-
 fn manu_recipe_fill_priority(recipe: RecipeKind) -> u8 {
     match recipe {
         RecipeKind::Gold => 0,
@@ -62,262 +29,18 @@ fn manu_recipe_fill_priority(recipe: RecipeKind) -> u8 {
     }
 }
 
-pub(super) fn try_assign_gongsun_gold_manu_team(
-    blueprint: &BaseBlueprint,
-    assignment: &mut BaseAssignment,
-    pool: &ManuPool,
-    used: &mut HashSet<String>,
-) -> Result<()> {
-    if !gongsun_gold_manu_anchors_ready(pool) {
-        return Ok(());
-    }
-
-    // 只消费 execute_plan 已实际落位的自动化组制造 anchor；不能仅凭 pool 中有人
-    // 就在空赤金房自激活体系。房号由 plan/实际落位决定，这里只完成第三人。
-    if let Some(room) = blueprint.rooms.iter().find(|r| {
-        r.kind == FacilityKind::Factory
-            && matches!(
-                r.product.as_ref(),
-                Some(RoomProduct::Factory {
-                    recipe: RecipeKind::Gold
-                })
-            )
-            && {
-                let existing = assignment.operators_in(&r.id);
-                existing.iter().any(|o| o.name == "清流")
-                    && existing.iter().any(|o| o.name == "温蒂")
-                    && existing.len() < r.operator_capacity()
-            }
-    }) {
-        let existing = assignment.operators_in(&room.id);
-        for candidate in GONGSUN_GOLD_MANU_THIRD_CHOICES {
-            let Some(entry) = pool.entry(candidate) else {
-                continue;
-            };
-            if used.contains(candidate) {
-                continue;
-            }
-            let mut ops: Vec<AssignedOperator> = existing.to_vec();
-            ops.push(AssignedOperator::from_progress(candidate, entry.progress));
-            assignment.set_room(room.id.clone(), ops);
-            used.insert(candidate.to_string());
-            return Ok(());
-        }
-    }
-
-    Ok(())
-}
-
-pub(super) fn trace_gongsun_gold_windflit_candidate(
-    room: &crate::layout::blueprint::RoomBlueprint,
-    assignment: &BaseAssignment,
-    used: &HashSet<String>,
-    pool: &ManuPool,
-    table: &SkillTable,
-    layout: &LayoutContext,
-    options: &AssignBaseOptions,
-    operbox: &OperBox,
-    selected_hit: Option<&ManuSearchHit>,
-) -> Option<ManufactureSystemCandidateTrace> {
-    if room.kind != FacilityKind::Factory
-        || !matches!(
-            room.product.as_ref(),
-            Some(RoomProduct::Factory {
-                recipe: RecipeKind::Gold
-            })
-        )
-    {
-        return None;
-    }
-    let operators = vec!["清流".to_string(), "温蒂".to_string(), "冬时".to_string()];
-    let linked = ManufactureLinkedProducer {
-        station: "power".to_string(),
-        operator: "承曦格雷伊".to_string(),
-        required_elite: Some(2),
-        current_elite: operbox.elite_of("承曦格雷伊"),
-        satisfied: operbox
-            .elite_of("承曦格雷伊")
-            .is_some_and(|elite| elite >= 2),
-        role: "linked_virtual_power".to_string(),
-    };
-
-    let mut missing = Vec::new();
-    let mut entries = Vec::new();
-    for name in &operators {
-        match pool.entry(name) {
-            Some(entry) => entries.push(entry.clone()),
-            None => missing.push(name.clone()),
-        }
-    }
-
-    let (final_efficiency, evaluation_failed) = if missing.is_empty() {
-        let opts = manu_options(layout, options, RecipeKind::Gold, room.level);
-        match score_manu_entries(
-            &entries,
-            table,
-            layout,
-            options,
-            RecipeKind::Gold,
-            opts.level,
-        ) {
-            Some(hit) => (Some(hit.final_efficiency), None),
-            None => (None, Some("evaluation_failed".to_string())),
-        }
-    } else {
-        (
-            None,
-            Some(format!("missing_operator:{}", missing.join(","))),
-        )
-    };
-
-    let wendy_ready = pool.entry("温蒂").is_some_and(|entry| {
-        entry
-            .buff_ids
-            .iter()
-            .any(|id| id == WENDY_BIONIC_SEADRAGON_BUFF)
-    });
-    let dongshi_ready = pool.entry("冬时").is_some_and(|entry| {
-        entry
-            .buff_ids
-            .iter()
-            .any(|id| id == DONGSHI_FLOW_OPTIMIZATION_BUFF)
-    });
-    let qingliu_ready = pool.entry("清流").is_some_and(|entry| {
-        entry
-            .buff_ids
-            .iter()
-            .any(|id| id == QINGLIU_RENEWABLE_ENERGY_BUFF)
-    });
-    let current_room_names: HashSet<String> = assignment
-        .operators_in(&room.id)
-        .iter()
-        .map(|op| op.name.clone())
-        .collect();
-    let used_elsewhere = operators
-        .iter()
-        .any(|name| used.contains(name) && !current_room_names.contains(name));
-    let selected_by_assignment = {
-        let assigned_names: Vec<_> = assignment
-            .operators_in(&room.id)
-            .iter()
-            .map(|op| op.name.as_str())
-            .collect();
-        assigned_names.len() == 3
-            && ["清流", "温蒂", "冬时"]
-                .iter()
-                .all(|name| assigned_names.contains(name))
-    };
-    let selected_by_hit = selected_hit.is_some_and(|hit| manu_hit_matches_names(hit, &operators));
-    let selected = selected_by_assignment || selected_by_hit;
-    let selected_efficiency = selected_hit.map(|hit| hit.final_efficiency);
-    let rejection_reason = if selected {
-        None
-    } else if !missing.is_empty() {
-        Some("missing_operator".to_string())
-    } else if used_elsewhere {
-        Some("operator_used".to_string())
-    } else if !wendy_ready || !dongshi_ready {
-        Some("tier_gate_not_met".to_string())
-    } else if !qingliu_ready {
-        Some("required_buff_missing".to_string())
-    } else if !linked.satisfied {
-        Some("linked_producer_not_satisfied".to_string())
-    } else if let (Some(candidate), Some(selected)) = (final_efficiency, selected_efficiency) {
-        if candidate < selected {
-            Some("final_efficiency_below_selected".to_string())
-        } else {
-            Some("trace_only_low_progress".to_string())
-        }
-    } else if evaluation_failed.is_some() {
-        Some("evaluation_failed".to_string())
-    } else {
-        Some("trace_only_low_progress".to_string())
-    };
-
-    Some(ManufactureSystemCandidateTrace {
-        room: room.id.0.clone(),
-        recipe: "gold".to_string(),
-        operators,
-        source: "manual-system-candidate".to_string(),
-        selected,
-        rejected: !selected && rejection_reason.is_some(),
-        rejection_reason,
-        final_efficiency,
-        evaluation_failed,
-        linked_producers: vec![linked],
-        source_system: "automation_group".to_string(),
-        evidence: vec![
-            "AUTOMATION_GROUP_CHAIN.md: third member fallback is 森蚺 > 冬时".to_string(),
-            "feedback seed expects 清流 + 温蒂 + 冬时 visibility".to_string(),
-        ],
-    })
-}
-
-fn manu_hit_matches_names(hit: &ManuSearchHit, expected: &[String]) -> bool {
-    let names = manu_hit_names(hit);
-    names.len() == expected.len() && expected.iter().all(|name| names.contains(name))
-}
-
-pub(super) fn gongsun_gold_manu_anchors_ready(pool: &ManuPool) -> bool {
-    pool.entry("清流").is_some_and(|entry| {
-        entry
-            .buff_ids
-            .iter()
-            .any(|id| id == QINGLIU_RENEWABLE_ENERGY_BUFF)
-    }) && pool.entry("温蒂").is_some_and(|entry| {
-        entry
-            .buff_ids
-            .iter()
-            .any(|id| id == WENDY_BIONIC_SEADRAGON_BUFF)
-    })
-}
-
 pub(super) fn assign_manufacture_lines(
     blueprint: &BaseBlueprint,
     operbox: &OperBox,
     instances: &crate::instances::OperatorInstances,
     pool: &ManuPool,
     table: &SkillTable,
-    layout: &LayoutContext,
+    _layout: &LayoutContext,
     options: &AssignBaseOptions,
     forbid_same_room: &[(String, String)],
     assignment: &mut BaseAssignment,
     used: &mut HashSet<String>,
-    mut trace_sink: Option<&mut Vec<ManufactureSystemCandidateTrace>>,
 ) -> Result<()> {
-    try_assign_gongsun_gold_manu_team(blueprint, assignment, pool, used)?;
-    if let Some(trace_sink) = trace_sink.as_deref_mut() {
-        let selected_gold_room = blueprint.rooms.iter().find(|room| {
-            room.kind == FacilityKind::Factory
-                && matches!(
-                    room.product.as_ref(),
-                    Some(RoomProduct::Factory {
-                        recipe: RecipeKind::Gold
-                    })
-                )
-                && {
-                    let assigned_names: Vec<_> = assignment
-                        .operators_in(&room.id)
-                        .iter()
-                        .map(|op| op.name.as_str())
-                        .collect();
-                    assigned_names.len() == 3
-                        && ["清流", "温蒂", "冬时"]
-                            .iter()
-                            .all(|name| assigned_names.contains(name))
-                }
-        });
-        if let Some(room) = selected_gold_room {
-            if let Some(trace) = trace_gongsun_gold_windflit_candidate(
-                room, assignment, used, pool, table, layout, options, operbox, None,
-            ) {
-                if trace.selected {
-                    trace_sink.push(trace);
-                }
-            }
-        }
-    }
-
     let mut rooms: Vec<_> = blueprint
         .rooms
         .iter()
@@ -400,23 +123,6 @@ pub(super) fn assign_manufacture_lines(
             pick_manu_hit_with_anchor(pool, table, opts, used, options.top_k, &anchor, &forbidden)
         }
         .map_err(|e| Error::msg(format!("manufacture {}: {e}", room.id.0)))?;
-        if matches!(recipe, RecipeKind::Gold) {
-            if let Some(trace_sink) = trace_sink.as_deref_mut() {
-                if let Some(trace) = trace_gongsun_gold_windflit_candidate(
-                    room,
-                    assignment,
-                    used,
-                    pool,
-                    table,
-                    &current_layout,
-                    options,
-                    operbox,
-                    Some(&hit),
-                ) {
-                    trace_sink.push(trace);
-                }
-            }
-        }
         commit_manu_room(assignment, &room.id, &hit, pool, used)?;
     }
     Ok(())
@@ -980,117 +686,5 @@ mod tests {
         assert!(f2.contains("迷迭香"));
         // 无关 anchor 不受影响。
         assert!(forbidden_teammates("砾", &pairs).is_empty());
-    }
-
-    fn trace_test_entry(name: &str, buff_ids: &[&str], elite: u8, rarity: u8) -> ManuPoolEntry {
-        let progress = crate::roster::OperatorProgress::new(elite, 1, rarity);
-        ManuPoolEntry {
-            name: name.to_string(),
-            elite,
-            progress,
-            buff_ids: buff_ids.iter().map(|id| (*id).to_string()).collect(),
-            tags: vec![],
-            flat_eff_hint: 0.0,
-            has_l2_delegate: false,
-            tier: crate::layout::tier::OperatorTier::Standalone,
-        }
-    }
-
-    #[test]
-    fn manufacture_trace_sink_reports_operator_used_for_later_gold_room() {
-        let mut blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        blueprint
-            .rooms
-            .retain(|room| matches!(room.id.0.as_str(), "manu_1" | "manu_2"));
-        let operbox = OperBox::from_entries(vec![
-            crate::operbox::OperBoxEntry {
-                id: "test_qingliu".to_string(),
-                name: "清流".to_string(),
-                elite: 2,
-                level: 1,
-                own: true,
-                potential: 1,
-                rarity: 4,
-            },
-            crate::operbox::OperBoxEntry {
-                id: "test_wendy".to_string(),
-                name: "温蒂".to_string(),
-                elite: 1,
-                level: 80,
-                own: true,
-                potential: 1,
-                rarity: 6,
-            },
-            crate::operbox::OperBoxEntry {
-                id: "test_dongshi".to_string(),
-                name: "冬时".to_string(),
-                elite: 0,
-                level: 1,
-                own: true,
-                potential: 1,
-                rarity: 5,
-            },
-            crate::operbox::OperBoxEntry {
-                id: "test_greyy2".to_string(),
-                name: "承曦格雷伊".to_string(),
-                elite: 0,
-                level: 1,
-                own: true,
-                potential: 1,
-                rarity: 5,
-            },
-        ]);
-        let pool = ManuPool {
-            entries: vec![
-                trace_test_entry("清流", &[QINGLIU_RENEWABLE_ENERGY_BUFF], 2, 4),
-                trace_test_entry("温蒂", &["manu_prod_spd&power[010]"], 1, 6),
-                trace_test_entry("冬时", &["manu_prod_spd&manu[000]"], 0, 5),
-                trace_test_entry("斑点", &["manu_prod_spd[020]"], 1, 3),
-                trace_test_entry("至简", &["manu_prod_spd&fac_cnt[020]"], 2, 5),
-                trace_test_entry("砾", &["manu_prod_spd&limit[010]"], 1, 4),
-                trace_test_entry("史都华德", &["manu_prod_spd[010]"], 1, 3),
-                trace_test_entry("杰西卡", &["manu_prod_spd[010]"], 1, 4),
-            ],
-            skipped: vec![],
-        };
-        let table =
-            SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
-        let instances = crate::instances::OperatorInstances::load(
-            &crate::instances::default_instances_path().unwrap(),
-        )
-        .unwrap();
-        let layout = LayoutContext::search_baseline();
-        let options = AssignBaseOptions::default();
-        let mut assignment = BaseAssignment::default();
-        assignment.set_room(
-            RoomId::from("manu_1"),
-            vec![AssignedOperator::new("清流", 2)],
-        );
-        let mut used = HashSet::from(["清流".to_string()]);
-        let mut trace_sink = Vec::new();
-
-        assign_manufacture_lines(
-            &blueprint,
-            &operbox,
-            &instances,
-            &pool,
-            &table,
-            &layout,
-            &options,
-            &[],
-            &mut assignment,
-            &mut used,
-            Some(&mut trace_sink),
-        )
-        .unwrap();
-
-        assert!(
-            trace_sink.iter().any(|trace| {
-                trace.room == "manu_2"
-                    && trace.operators == vec!["清流", "温蒂", "冬时"]
-                    && trace.rejection_reason.as_deref() == Some("operator_used")
-            }),
-            "later gold room should report operator_used trace, got {trace_sink:?}"
-        );
     }
 }

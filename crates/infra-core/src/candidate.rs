@@ -192,47 +192,6 @@ impl TeamCandidate {
             metadata,
         }
     }
-
-    pub fn from_manufacture_system_trace(
-        trace: &crate::layout::ManufactureSystemCandidateTrace,
-    ) -> Self {
-        let mut metrics = Vec::new();
-        if let Some(final_efficiency) = trace.final_efficiency {
-            metrics.push(TeamMetric::new(
-                "manufacture.final_efficiency",
-                final_efficiency.as_f64(),
-            ));
-        }
-
-        let mut metadata = BTreeMap::new();
-        metadata.insert("trace_source".to_string(), json!(trace.source));
-        metadata.insert(
-            "evaluation_failed".to_string(),
-            json!(trace.evaluation_failed),
-        );
-        metadata.insert(
-            "linked_producers".to_string(),
-            json!(trace.linked_producers),
-        );
-        metadata.insert("evidence".to_string(), json!(trace.evidence));
-
-        Self {
-            station_kind: CandidateStationKind::Manufacture,
-            room_id: Some(trace.room.clone()),
-            recipe: Some(trace.recipe.clone()),
-            order_kind: None,
-            operators: trace.operators.clone(),
-            source: CandidateSource::ManualSystemCandidate,
-            source_id: Some(trace.source_system.clone()),
-            system_tags: vec![trace.source_system.clone()],
-            final_efficiency: trace.final_efficiency,
-            metrics,
-            selected: Some(trace.selected),
-            rejected: Some(trace.rejected),
-            rejection_reason: trace.rejection_reason.clone(),
-            metadata,
-        }
-    }
 }
 
 fn first_non_empty(lists: &[&Vec<String>]) -> Vec<String> {
@@ -260,7 +219,6 @@ fn push_non_zero_metric(metrics: &mut Vec<TeamMetric>, key: &'static str, value:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::{ManufactureLinkedProducer, ManufactureSystemCandidateTrace};
     use crate::manufacture::{ManuProdBreakdown, ManuStorageBreakdown};
     use crate::search::{
         ManuEfficiencyBreakdown, ManuSearchHit, TradeEfficiencyBreakdown, TradeSearchHit,
@@ -371,79 +329,5 @@ mod tests {
         assert!(candidate.metrics.iter().any(|metric| metric.key
             == "trade.mechanic_equivalent_efficiency"
             && metric.value == 0.350));
-    }
-
-    #[test]
-    fn manual_manufacture_trace_candidate_preserves_rejection_metadata() {
-        let trace = ManufactureSystemCandidateTrace {
-            room: "manu_1".to_string(),
-            recipe: "gold".to_string(),
-            operators: vec!["清流".to_string(), "温蒂".to_string(), "冬时".to_string()],
-            source: "manual-system-candidate".to_string(),
-            selected: false,
-            rejected: true,
-            rejection_reason: Some("tier_gate_not_met".to_string()),
-            final_efficiency: Some(Efficiency::from_decimal(2.300)),
-            evaluation_failed: None,
-            linked_producers: vec![ManufactureLinkedProducer {
-                station: "power".to_string(),
-                operator: "承曦格雷伊".to_string(),
-                required_elite: Some(2),
-                current_elite: Some(0),
-                satisfied: false,
-                role: "linked_virtual_power".to_string(),
-            }],
-            source_system: "automation_group".to_string(),
-            evidence: vec!["feedback seed".to_string()],
-        };
-
-        let candidate = TeamCandidate::from_manufacture_system_trace(&trace);
-
-        assert_eq!(candidate.source, CandidateSource::ManualSystemCandidate);
-        assert_eq!(candidate.source_id.as_deref(), Some("automation_group"));
-        assert_eq!(candidate.system_tags, vec!["automation_group"]);
-        assert_eq!(candidate.selected, Some(false));
-        assert_eq!(candidate.rejected, Some(true));
-        assert_eq!(
-            candidate.rejection_reason.as_deref(),
-            Some("tier_gate_not_met")
-        );
-        assert_eq!(
-            candidate.final_efficiency,
-            Some(Efficiency::from_decimal(2.300))
-        );
-        assert!(candidate.metadata["linked_producers"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|producer| producer["operator"] == "承曦格雷伊"));
-        assert_eq!(candidate.metadata["evidence"][0], "feedback seed");
-    }
-
-    #[test]
-    fn manual_trace_without_final_efficiency_stays_inert() {
-        let trace = ManufactureSystemCandidateTrace {
-            room: "manu_1".to_string(),
-            recipe: "gold".to_string(),
-            operators: vec!["清流".to_string(), "温蒂".to_string(), "冬时".to_string()],
-            source: "manual-system-candidate".to_string(),
-            selected: false,
-            rejected: true,
-            rejection_reason: Some("missing_operator".to_string()),
-            final_efficiency: None,
-            evaluation_failed: Some("missing_operator:温蒂".to_string()),
-            linked_producers: vec![],
-            source_system: "automation_group".to_string(),
-            evidence: vec![],
-        };
-
-        let candidate = TeamCandidate::from_manufacture_system_trace(&trace);
-
-        assert_eq!(candidate.final_efficiency, None);
-        assert!(candidate.metrics.is_empty());
-        assert_eq!(
-            candidate.metadata["evaluation_failed"].as_str(),
-            Some("missing_operator:温蒂")
-        );
     }
 }

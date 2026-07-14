@@ -53,6 +53,7 @@ impl PowerPoolEntry {
             elite: self.elite,
             buff_ids: self.buff_ids.clone(),
             tags: self.tags.clone(),
+            work_mood: None,
         }
     }
 }

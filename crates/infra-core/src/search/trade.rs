@@ -139,6 +139,8 @@ pub struct SearchTripleFilter {
     pub must_operator_override: Option<TradeOperator>,
     /// Keep only hits passing this predicate (e.g. witch / closure shortcut).
     pub hit_filter: Option<fn(&TradeSearchHit) -> bool>,
+    /// 由 `AssignmentPlan` 编译出的同站禁配，不绑定具体体系函数。
+    pub forbidden_pairs: Vec<(String, String)>,
 }
 
 impl SearchTripleFilter {
@@ -300,7 +302,7 @@ fn search_trade_single_order(
     };
 
     let start = Instant::now();
-    if options.use_baked {
+    if options.use_baked && filter.forbidden_pairs.is_empty() {
         if let Some(report) = crate::bake::try_baked_trade_search(
             &sub,
             table,
@@ -317,6 +319,7 @@ fn search_trade_single_order(
     let override_op = filter.must_operator_override.clone();
     let must_name = filter.must_include_name.clone();
     let hit_filter = filter.hit_filter;
+    let forbidden_pairs = &filter.forbidden_pairs;
 
     let mut combos: Vec<_> = combinations_indices(n, operator_capacity).collect();
     if !must_indices.is_empty() {
@@ -336,13 +339,21 @@ fn search_trade_single_order(
             )
         })
         .filter(|hit| hit_filter.is_none_or(|f| f(hit)))
+        .filter(|hit| {
+            forbidden_pairs.iter().all(|(a, b)| {
+                !(hit.names.iter().any(|name| name == a) && hit.names.iter().any(|name| name == b))
+            })
+        })
         .collect();
 
     let evaluated = hits.len() as u64;
     hits.sort_by(|a, b| trade_efficiency_sort_key(b).cmp(&trade_efficiency_sort_key(a)));
     let best = hits.first().cloned().ok_or_else(|| {
         crate::error::Error::msg(
-            if filter.hit_filter.is_some() || filter.has_must_include() {
+            if filter.hit_filter.is_some()
+                || filter.has_must_include()
+                || !filter.forbidden_pairs.is_empty()
+            {
                 "no trade combo matched search filter"
             } else {
                 "trade pool has fewer ready operators than station capacity"
@@ -373,7 +384,10 @@ fn trade_search_pool_for_order(
     if options.full_pool {
         return pool.clone();
     }
-    if filter.has_must_include() || filter.hit_filter.is_some() {
+    if filter.has_must_include()
+        || filter.hit_filter.is_some()
+        || !filter.forbidden_pairs.is_empty()
+    {
         return pool.clone();
     }
 

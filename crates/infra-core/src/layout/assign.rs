@@ -12,7 +12,6 @@ mod trade_fill;
 
 pub(crate) use control_fill::assign_control;
 pub(crate) use manufacture_fill::assign_manu_room_with_anchors;
-pub use manufacture_fill::{ManufactureLinkedProducer, ManufactureSystemCandidateTrace};
 pub use power_fill::{assign_power_rooms, assign_power_stations};
 pub use team_fill::{assign_team_gamma_half, assign_team_producer_rooms};
 pub use trade_fill::blackkey_witch_same_trade_room;
@@ -22,7 +21,7 @@ use crate::error::Result;
 use crate::instances::OperatorInstances;
 use crate::layout::assignment::BaseAssignment;
 use crate::layout::blueprint::{BaseBlueprint, FacilityKind};
-use crate::layout::orchestrate::{build_plan, AssignmentPlan};
+use crate::layout::orchestrate::AssignmentPlan;
 use crate::layout::shift::AssignShiftMode;
 use crate::layout::system::{explain_registry_systems, SlotFillMode, SystemExplainReport};
 use crate::operbox::OperBox;
@@ -37,6 +36,8 @@ pub struct AssignBaseOptions {
     pub shift_hours: f64,
     /// 中枢分配时跳过 standalone_roster 白名单过滤（轮换编排中体系绑定干员可能不在白名单内）。
     pub skip_standalone_control: bool,
+    /// `system_id=alternative_id` 解析后的通用体系路径偏好。
+    pub system_preferences: std::collections::HashMap<String, String>,
 }
 
 impl Default for AssignBaseOptions {
@@ -46,6 +47,7 @@ impl Default for AssignBaseOptions {
             mood: 24.0,
             shift_hours: 24.0,
             skip_standalone_control: false,
+            system_preferences: std::collections::HashMap::new(),
         }
     }
 }
@@ -74,7 +76,6 @@ pub fn assign_base_greedy(
 pub struct AssignShiftResult {
     pub assignment: BaseAssignment,
     pub plan: AssignmentPlan,
-    pub manufacture_traces: Vec<ManufactureSystemCandidateTrace>,
 }
 
 /// 单班进驻；`seed` 非空时保留已钉死房间（中枢/宿舍），仅补贸易/制造/发电。
@@ -235,65 +236,6 @@ pub fn assign_shift_with_plan(
     )
 }
 
-/// 同 [`assign_shift_with_plan`]，并额外返回制造站体系候选 trace。
-pub fn assign_shift_with_plan_and_trace(
-    blueprint: &BaseBlueprint,
-    operbox: &OperBox,
-    instances: &OperatorInstances,
-    table: &SkillTable,
-    options: &AssignBaseOptions,
-    mode: AssignShiftMode,
-    seed: &BaseAssignment,
-) -> Result<AssignShiftResult> {
-    assign_shift_with_plan_skip_and_trace(
-        blueprint,
-        operbox,
-        instances,
-        table,
-        options,
-        mode,
-        seed,
-        &HashSet::new(),
-    )
-}
-
-/// 同 [`assign_shift_with_plan_skip`]，并额外返回制造站体系候选 trace。
-pub fn assign_shift_with_plan_skip_and_trace(
-    blueprint: &BaseBlueprint,
-    operbox: &OperBox,
-    instances: &OperatorInstances,
-    table: &SkillTable,
-    options: &AssignBaseOptions,
-    mode: AssignShiftMode,
-    seed: &BaseAssignment,
-    skip_system_ids: &HashSet<String>,
-) -> Result<AssignShiftResult> {
-    blueprint.validate()?;
-
-    let mut skip_system_ids = skip_system_ids.clone();
-    skip_trade_core_registry_systems(&mut skip_system_ids);
-    let plan = build_plan(blueprint, operbox, mode, seed, &skip_system_ids)?;
-    let mut manufacture_traces = Vec::new();
-
-    let assignment = pipeline::run_shift_pipeline(
-        blueprint,
-        operbox,
-        instances,
-        table,
-        options,
-        mode,
-        seed,
-        &plan,
-        Some(&mut manufacture_traces),
-    )?;
-
-    Ok(AssignShiftResult {
-        assignment,
-        plan,
-        manufacture_traces,
-    })
-}
-
 /// 同 [`assign_shift_with_plan`]，额外允许跳过指定体系。
 pub fn assign_shift_with_plan_skip(
     blueprint: &BaseBlueprint,
@@ -309,17 +251,23 @@ pub fn assign_shift_with_plan_skip(
 
     let mut skip_system_ids = skip_system_ids.clone();
     skip_trade_core_registry_systems(&mut skip_system_ids);
-    let plan = build_plan(blueprint, operbox, mode, seed, &skip_system_ids)?;
-
-    let assignment = pipeline::run_shift_pipeline(
-        blueprint, operbox, instances, table, options, mode, seed, &plan, None,
+    let plan = crate::layout::orchestrate::build_plan_with_runtime(
+        blueprint,
+        operbox,
+        instances,
+        table,
+        options.mood,
+        &options.system_preferences,
+        mode,
+        seed,
+        &skip_system_ids,
     )?;
 
-    Ok(AssignShiftResult {
-        assignment,
-        plan,
-        manufacture_traces: Vec::new(),
-    })
+    let assignment = pipeline::run_shift_pipeline(
+        blueprint, operbox, instances, table, options, mode, seed, &plan,
+    )?;
+
+    Ok(AssignShiftResult { assignment, plan })
 }
 
 /// 编制内所有上岗干员。
@@ -386,11 +334,7 @@ pub fn pinned_assignment_excluding(
 #[cfg(test)]
 mod tests {
     use super::commit::{commit_manu_room, manu_hit_names};
-    use super::manufacture_fill::{
-        gongsun_gold_manu_anchors_ready, manufacture_candidate_pool_for_demand, pick_manu_hit,
-        trace_gongsun_gold_windflit_candidate, try_assign_gongsun_gold_manu_team,
-        QINGLIU_RENEWABLE_ENERGY_BUFF,
-    };
+    use super::manufacture_fill::{manufacture_candidate_pool_for_demand, pick_manu_hit};
     use super::producer_fill::{
         assign_sphinx_urrbian_dorm_anchor, cleanup_unused_sphinx_urrbian_dorm_anchor,
     };
@@ -408,12 +352,9 @@ mod tests {
         default_operbox_full_e2_path, default_operbox_gongsun_path, OperBox, OperBoxEntry,
     };
     use crate::pool::ManuPool;
-    use crate::search::{
-        ManuEfficiencyBreakdown, ManuSearchHit, ManuSearchOptions, MATATABI_CONSUMER_NAME,
-    };
+    use crate::search::{ManuSearchOptions, MATATABI_CONSUMER_NAME};
     use crate::skill_table::{default_skill_table_path, SkillTable};
     use crate::types::RecipeKind;
-    use crate::Efficiency;
 
     const GONGSUN_GOLD_MANU_TEAM: [&str; 3] = ["清流", "温蒂", "森蚺"];
 
@@ -553,282 +494,6 @@ mod tests {
             }),
             "深巡进贸易站时，应保留乌尔比安作为 OperatorInBase 锚点"
         );
-    }
-
-    #[test]
-    fn gongsun_gold_fixed_team_requires_wendy_tier_up() {
-        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let pool = ManuPool {
-            entries: vec![
-                manu_pool_entry("清流", &[QINGLIU_RENEWABLE_ENERGY_BUFF]),
-                manu_pool_entry_tier0("温蒂", &["manu_prod_spd&power[010]"]),
-                manu_pool_entry_tier0("冬时", &["manu_prod_spd&manu[000]"]),
-            ],
-            skipped: vec![],
-        };
-        let mut assignment = BaseAssignment::default();
-        let mut used = HashSet::new();
-
-        assert!(!gongsun_gold_manu_anchors_ready(&pool));
-        try_assign_gongsun_gold_manu_team(&blueprint, &mut assignment, &pool, &mut used).unwrap();
-
-        assert!(
-            assignment.rooms.is_empty(),
-            "温蒂未解锁仿生海龙时不应强制清流+温蒂+冬时金线: {:?}",
-            assignment.rooms
-        );
-    }
-
-    #[test]
-    fn gongsun_gold_completion_does_not_activate_from_pool_only() {
-        let gold_room = RoomId::from("gold_empty");
-        let blueprint = BaseBlueprint {
-            template: None,
-            drone_cap: 135,
-            scenario: BlueprintScenario::default(),
-            rooms: vec![RoomBlueprint {
-                id: gold_room.clone(),
-                kind: FacilityKind::Factory,
-                level: 3,
-                product: Some(RoomProduct::Factory {
-                    recipe: RecipeKind::Gold,
-                }),
-                dorm_beds: None,
-                dorm_ambience_level: None,
-            }],
-        };
-        let pool = ManuPool {
-            entries: vec![
-                manu_pool_entry("清流", &[QINGLIU_RENEWABLE_ENERGY_BUFF]),
-                manu_pool_entry(
-                    "温蒂",
-                    &[super::manufacture_fill::WENDY_BIONIC_SEADRAGON_BUFF],
-                ),
-                manu_pool_entry("森蚺", &["manu_prod_spd&power[000]"]),
-                manu_pool_entry("冬时", &["manu_prod_spd&manu[100]"]),
-            ],
-            skipped: vec![],
-        };
-        assert!(
-            gongsun_gold_manu_anchors_ready(&pool),
-            "反例必须确保完成器能在 pool 中看见清流+温蒂"
-        );
-        let mut assignment = BaseAssignment::default();
-        let mut used = HashSet::new();
-
-        try_assign_gongsun_gold_manu_team(&blueprint, &mut assignment, &pool, &mut used).unwrap();
-
-        assert!(
-            assignment.operators_in(&gold_room).is_empty(),
-            "未由 plan 落位清流+温蒂 anchor 时，完成器不得从 pool 自激活自动化组"
-        );
-        assert!(used.is_empty(), "未落位时 used 也不得被污染: {used:?}");
-    }
-
-    #[test]
-    fn gongsun_gold_existing_anchors_are_completed_in_their_actual_room() {
-        let first_gold_room = RoomId::from("gold_first");
-        let anchor_gold_room = RoomId::from("gold_anchor");
-        let blueprint = BaseBlueprint {
-            template: None,
-            drone_cap: 135,
-            scenario: BlueprintScenario::default(),
-            rooms: vec![
-                RoomBlueprint {
-                    id: first_gold_room.clone(),
-                    kind: FacilityKind::Factory,
-                    level: 3,
-                    product: Some(RoomProduct::Factory {
-                        recipe: RecipeKind::Gold,
-                    }),
-                    dorm_beds: None,
-                    dorm_ambience_level: None,
-                },
-                RoomBlueprint {
-                    id: anchor_gold_room.clone(),
-                    kind: FacilityKind::Factory,
-                    level: 3,
-                    product: Some(RoomProduct::Factory {
-                        recipe: RecipeKind::Gold,
-                    }),
-                    dorm_beds: None,
-                    dorm_ambience_level: None,
-                },
-            ],
-        };
-        let pool = ManuPool {
-            entries: vec![
-                manu_pool_entry("清流", &[QINGLIU_RENEWABLE_ENERGY_BUFF]),
-                manu_pool_entry(
-                    "温蒂",
-                    &[super::manufacture_fill::WENDY_BIONIC_SEADRAGON_BUFF],
-                ),
-                manu_pool_entry("冬时", &["manu_prod_spd&manu[100]"]),
-            ],
-            skipped: vec![],
-        };
-        assert!(
-            pool.entry("森蚺").is_none(),
-            "回归必须覆盖缺森蚺时的冬时降级"
-        );
-
-        let mut assignment = BaseAssignment::default();
-        assignment.set_room(
-            anchor_gold_room.clone(),
-            vec![
-                AssignedOperator::new("清流", 2),
-                AssignedOperator::new("温蒂", 2),
-            ],
-        );
-        let mut used = HashSet::from(["清流".to_string(), "温蒂".to_string()]);
-
-        try_assign_gongsun_gold_manu_team(&blueprint, &mut assignment, &pool, &mut used).unwrap();
-
-        assert!(
-            assignment.operators_in(&first_gold_room).is_empty(),
-            "不应因蓝图顺序占用首个赤金房"
-        );
-        let anchor_names: Vec<_> = assignment
-            .operators_in(&anchor_gold_room)
-            .iter()
-            .map(|operator| operator.name.as_str())
-            .collect();
-        assert_eq!(anchor_names, vec!["清流", "温蒂", "冬时"]);
-        assert!(used.contains("冬时"), "used 应与实际补位同步");
-    }
-
-    #[test]
-    fn gongsun_gold_windflit_trace_records_low_progress_rejection() {
-        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let operbox = operbox_from_names(&[
-            ("清流", 2, 4),
-            ("温蒂", 1, 6),
-            ("冬时", 0, 5),
-            ("承曦格雷伊", 0, 5),
-        ]);
-        let pool = ManuPool {
-            entries: vec![
-                manu_pool_entry_with_progress(
-                    "清流",
-                    &[QINGLIU_RENEWABLE_ENERGY_BUFF],
-                    crate::roster::OperatorProgress::new(2, 1, 4),
-                ),
-                manu_pool_entry_with_progress(
-                    "温蒂",
-                    &["manu_prod_spd&power[010]"],
-                    crate::roster::OperatorProgress::new(1, 80, 6),
-                ),
-                manu_pool_entry_with_progress(
-                    "冬时",
-                    &["manu_prod_spd&manu[000]"],
-                    crate::roster::OperatorProgress::new(0, 1, 5),
-                ),
-            ],
-            skipped: vec![],
-        };
-        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-        let layout = crate::layout::context::LayoutContext::search_baseline();
-        let room = blueprint
-            .rooms
-            .iter()
-            .find(|room| room.id.0 == "manu_2")
-            .expect("manu_2 should exist");
-        let trace = trace_gongsun_gold_windflit_candidate(
-            room,
-            &BaseAssignment::default(),
-            &HashSet::new(),
-            &pool,
-            &table,
-            &layout,
-            &AssignBaseOptions::default(),
-            &operbox,
-            None,
-        )
-        .expect("trace candidate should be generated");
-
-        assert_eq!(trace.room, "manu_2");
-        assert_eq!(trace.recipe, "gold");
-        assert_eq!(trace.operators, vec!["清流", "温蒂", "冬时"]);
-        assert_eq!(trace.source_system, "automation_group");
-        assert_eq!(trace.source, "manual-system-candidate");
-        assert!(!trace.selected);
-        assert!(trace.rejected);
-        assert_eq!(trace.rejection_reason.as_deref(), Some("tier_gate_not_met"));
-        assert!(
-            trace.final_efficiency.is_some(),
-            "low-progress candidate can still be evaluated"
-        );
-        let linked = trace
-            .linked_producers
-            .iter()
-            .find(|producer| producer.operator == "承曦格雷伊")
-            .expect("linked producer should be present");
-        assert_eq!(linked.required_elite, Some(2));
-        assert_eq!(linked.current_elite, Some(0));
-        assert!(!linked.satisfied);
-    }
-
-    #[test]
-    fn gongsun_gold_windflit_trace_treats_matching_selected_hit_as_selected() {
-        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let operbox = operbox_from_names(&[
-            ("清流", 2, 4),
-            ("温蒂", 2, 6),
-            ("冬时", 2, 5),
-            ("承曦格雷伊", 2, 5),
-        ]);
-        let pool = ManuPool {
-            entries: vec![
-                manu_pool_entry_with_progress(
-                    "清流",
-                    &[QINGLIU_RENEWABLE_ENERGY_BUFF],
-                    crate::roster::OperatorProgress::new(2, 1, 4),
-                ),
-                manu_pool_entry_with_progress(
-                    "温蒂",
-                    &["manu_prod_spd&power[020]"],
-                    crate::roster::OperatorProgress::new(2, 1, 6),
-                ),
-                manu_pool_entry_with_progress(
-                    "冬时",
-                    &["manu_prod_spd&manu[100]"],
-                    crate::roster::OperatorProgress::new(2, 1, 5),
-                ),
-            ],
-            skipped: vec![],
-        };
-        let selected_hit = ManuSearchHit {
-            names: vec!["清流".to_string(), "温蒂".to_string(), "冬时".to_string()],
-            gold_names: vec![],
-            battle_record_names: vec![],
-            final_efficiency: Efficiency::from_decimal(5.300),
-            per_station: crate::manufacture::ManuProdBreakdown::default(),
-            storage: crate::manufacture::ManuStorageBreakdown::default(),
-            breakdown: ManuEfficiencyBreakdown::default(),
-        };
-        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-        let layout = crate::layout::context::LayoutContext::search_baseline();
-        let room = blueprint
-            .rooms
-            .iter()
-            .find(|room| room.id.0 == "manu_1")
-            .expect("manu_1 should exist");
-        let trace = trace_gongsun_gold_windflit_candidate(
-            room,
-            &BaseAssignment::default(),
-            &HashSet::new(),
-            &pool,
-            &table,
-            &layout,
-            &AssignBaseOptions::default(),
-            &operbox,
-            Some(&selected_hit),
-        )
-        .expect("trace candidate should be generated");
-
-        assert!(trace.selected);
-        assert!(!trace.rejected);
-        assert!(trace.rejection_reason.is_none());
     }
 
     #[test]
@@ -1147,120 +812,6 @@ mod tests {
     }
 
     #[test]
-    fn assign_shift_with_plan_and_trace_exposes_manufacture_candidate_trace() {
-        let (blueprint, operbox, instances, table) = fixtures();
-
-        let default_result = assign_shift_with_plan(
-            &blueprint,
-            &operbox,
-            &instances,
-            &table,
-            &AssignBaseOptions::default(),
-            AssignShiftMode::Peak,
-            &BaseAssignment::default(),
-        )
-        .unwrap();
-        assert!(
-            default_result.manufacture_traces.is_empty(),
-            "default assignment API should not collect manufacture traces"
-        );
-
-        let traced_result = assign_shift_with_plan_and_trace(
-            &blueprint,
-            &operbox,
-            &instances,
-            &table,
-            &AssignBaseOptions::default(),
-            AssignShiftMode::Peak,
-            &BaseAssignment::default(),
-        )
-        .unwrap();
-        assert!(traced_result
-            .manufacture_traces
-            .iter()
-            .any(|trace| trace.source == "manual-system-candidate"
-                && trace.source_system == "automation_group"
-                && trace.operators == ["清流", "温蒂", "冬时"]));
-        assert_eq!(
-            serde_json::to_value(&default_result.assignment).unwrap(),
-            serde_json::to_value(&traced_result.assignment).unwrap(),
-            "trace collection must not change the final assignment"
-        );
-    }
-
-    #[test]
-    fn feedback_seed_purestream_weedy_windflit_trace_is_visible() {
-        let root = crate::skill_table::workspace_root().unwrap();
-        let seed_path = root
-            .join("data/feedback_regression_seeds/purestream_weedy_windflit_gold_automation.json");
-        let seed: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(&seed_path).unwrap()).unwrap();
-        assert_eq!(
-            seed["status"].as_str(),
-            Some("draft_manual_reviewed"),
-            "seed should remain a manually reviewed evidence record"
-        );
-
-        let source_feedback = seed["source_feedback"].as_str().unwrap();
-        let preferred = &seed["user_expectation"]["preferred_pattern"];
-        let expected_ops: Vec<String> = preferred["operators"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|value| value.as_str().unwrap().to_string())
-            .collect();
-        let linked_operator = seed["user_expectation"]["linked_producer"]["operators"][0]
-            .as_str()
-            .unwrap();
-
-        let debug_bundle_path = root.join(source_feedback).join("debug-bundle.json");
-        let debug_bundle: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(&debug_bundle_path).unwrap()).unwrap();
-        let blueprint: BaseBlueprint =
-            serde_json::from_value(debug_bundle["layout"].clone()).unwrap();
-        let operbox = OperBox::load(&root.join(source_feedback).join("operbox.json")).unwrap();
-        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
-        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-
-        let result = assign_shift_with_plan_and_trace(
-            &blueprint,
-            &operbox,
-            &instances,
-            &table,
-            &AssignBaseOptions::default(),
-            AssignShiftMode::Peak,
-            &BaseAssignment::default(),
-        )
-        .unwrap();
-        let trace = result
-            .manufacture_traces
-            .iter()
-            .find(|trace| trace.operators == expected_ops)
-            .expect("feedback seed preferred manufacture trio should be visible in trace");
-
-        assert_eq!(trace.source, "manual-system-candidate");
-        assert_eq!(trace.source_system, "automation_group");
-        assert!(
-            trace.rejected,
-            "low-progress seed should be trace-only/rejected"
-        );
-        assert!(
-            trace.rejection_reason.is_some() || trace.evaluation_failed.is_some(),
-            "rejected seed candidate should explain why it was not selected: {trace:?}"
-        );
-        assert!(
-            trace
-                .linked_producers
-                .iter()
-                .any(|producer| producer.operator == linked_operator
-                    && producer.station == "power"
-                    && producer.role == "linked_virtual_power"),
-            "linked producer from seed should be visible: {:?}",
-            trace.linked_producers
-        );
-    }
-
-    #[test]
     fn commit_manu_room_stores_efficiency_snapshot_and_progress() {
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let progress = crate::roster::OperatorProgress::new(1, 55, 3);
@@ -1343,7 +894,7 @@ mod tests {
         {
             return;
         }
-        let assignment = assign_base_greedy(
+        let result = assign_shift_with_plan(
             &blueprint,
             &operbox,
             &instances,
@@ -1352,8 +903,23 @@ mod tests {
                 top_k: 10,
                 ..Default::default()
             },
+            AssignShiftMode::Peak,
+            &BaseAssignment::default(),
         )
         .unwrap();
+
+        let trade_core_anchors: Vec<_> = result
+            .plan
+            .anchors
+            .iter()
+            .filter(|anchor| anchor.system_id == "trade_core")
+            .map(|anchor| anchor.operator.as_str())
+            .collect();
+        assert_eq!(trade_core_anchors, vec!["但书"]);
+        assert!(["伺夜", "贝洛内"]
+            .into_iter()
+            .all(|name| !trade_core_anchors.contains(&name)));
+        let assignment = result.assignment;
         let docus_room = assignment
             .rooms
             .iter()
@@ -1362,7 +928,7 @@ mod tests {
     }
 
     #[test]
-    fn assign_252_puts_docus_in_lv2_trade_without_reserving_teammates() {
+    fn assign_252_puts_docus_in_actual_gold_trade_without_reserving_teammates() {
         let blueprint =
             BaseBlueprint::load(&crate::skill_table::data_path("layout/252.json").unwrap())
                 .unwrap();
@@ -1397,11 +963,16 @@ mod tests {
             .expect("但书应被排入贸易站");
         let docus_blueprint = blueprint.room(&docus_room.room_id).unwrap();
         assert_eq!(docus_blueprint.kind, FacilityKind::TradePost);
-        assert_eq!(
-            docus_blueprint.level, 2,
-            "但书应优先进入二级贸易站: {:?}",
-            docus_room
-        );
+        assert!(matches!(
+            docus_blueprint.product.as_ref(),
+            Some(RoomProduct::Trade {
+                order
+            }) if *order == crate::trade::input::TradeOrderKind::Gold
+        ));
+        assert!(docus_room
+            .operators
+            .iter()
+            .any(|operator| operator.name == "但书"));
     }
 
     #[test]
@@ -1526,7 +1097,7 @@ mod tests {
     }
 
     #[test]
-    fn team_rotation_partial_trade_meta_keeps_docus_closure_and_witch() {
+    fn team_rotation_partial_trade_meta_keeps_required_docus_and_witch_role() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = operbox_from_names(&[
             ("但书", 2, 5),
@@ -1579,6 +1150,11 @@ mod tests {
             ("炎熔", 2, 3),
             ("艾雅法拉", 2, 6),
             ("阿罗玛", 0, 5),
+            ("红云", 2, 4),
+            ("食铁兽", 2, 5),
+            ("弑君者", 2, 6),
+            ("裂响", 2, 5),
+            ("夜烟", 2, 4),
         ]);
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
@@ -1595,6 +1171,19 @@ mod tests {
         )
         .unwrap();
 
+        let trade_core_anchors: Vec<_> = report
+            .peak_plan
+            .anchors
+            .iter()
+            .filter(|anchor| anchor.system_id == "trade_core")
+            .map(|anchor| anchor.operator.as_str())
+            .collect();
+        assert_eq!(
+            trade_core_anchors,
+            vec!["但书"],
+            "多贸只声明但书 required core；可露希尔只能自然竞争"
+        );
+
         assert!(
             report.shifts.iter().any(|shift| trade_room_contains(
                 &shift.assignment,
@@ -1602,12 +1191,6 @@ mod tests {
                 &["但书"]
             )),
             "partial meta account should keep docus core in rotation"
-        );
-        assert!(
-            report.shifts.iter().any(|shift| {
-                trade_room_contains(&shift.assignment, &blueprint, &["可露希尔"])
-            }),
-            "partial meta account should keep closure core in rotation"
         );
         assert!(
             report.shifts.iter().any(|shift| {
@@ -1705,12 +1288,6 @@ mod tests {
                         .any(|b| b.id == r.room_id && b.kind == FacilityKind::Factory)
                 })
                 .collect::<Vec<_>>()
-        );
-
-        let br_winter = room_ops("manu_2");
-        assert!(
-            !br_winter.contains(&"清流".to_string()),
-            "经验线 manu_2 不应占清流 trio: {br_winter:?}"
         );
 
         let pool =

@@ -6,7 +6,6 @@ mod orchestrate;
 mod resolve;
 mod shift;
 mod system;
-mod system_integrity;
 pub mod tier;
 mod workforce;
 
@@ -14,11 +13,10 @@ pub(crate) use assign::assign_control;
 pub(crate) use assign::assign_manu_room_with_anchors;
 pub use assign::{
     assign_base_greedy, assign_power_rooms, assign_power_stations, assign_shift,
-    assign_shift_with_plan, assign_shift_with_plan_and_trace, assign_shift_with_plan_skip,
-    assign_shift_with_plan_skip_and_trace, assign_team_gamma_half, assign_team_producer_rooms,
-    assignment_operator_names, blackkey_witch_same_trade_room, explain_assignment_systems,
-    pinned_assignment, pinned_assignment_excluding, rotating_workers, AssignBaseOptions,
-    AssignShiftResult, ManufactureLinkedProducer, ManufactureSystemCandidateTrace,
+    assign_shift_with_plan, assign_shift_with_plan_skip, assign_team_gamma_half,
+    assign_team_producer_rooms, assignment_operator_names, blackkey_witch_same_trade_room,
+    explain_assignment_systems, pinned_assignment, pinned_assignment_excluding, rotating_workers,
+    AssignBaseOptions, AssignShiftResult,
 };
 pub use assignment::{AssignedOperator, BaseAssignment, RoomAssignment, RoomEfficiencySnapshot};
 pub use blueprint::{
@@ -28,8 +26,9 @@ pub use context::{
     trade_station_tagged_gte_key, LayoutContext, SharedLayout, DEFAULT_DORM_OCCUPANT_COUNT,
 };
 pub use orchestrate::{
-    build_plan, execute_plan, ActivatedSystem, AssignmentPlan, ControlCandidateRequirement,
-    ExecuteResult, SlotFill,
+    build_plan, build_plan_with_runtime, execute_plan, ActivatedSystem, ActiveDependency,
+    AssignmentPlan, ContinuousRole, ControlCandidateRequirement, ExecuteResult,
+    SelectedRuleAlternative, SlotFill,
 };
 pub use resolve::{
     resolve_automation_group_1_layout, resolve_base, resolve_search_baseline_layout,
@@ -42,11 +41,6 @@ pub use system::{
     apply_registry_system_claim, claim_base_systems, default_base_systems_path, load_base_systems,
     select_registry_systems, RegistrySlotClaim, RegistrySystemClaim, SystemExplainEntry,
     SystemExplainReason, SystemExplainReport, SystemExplainStatus, SystemSlotExplain,
-};
-pub use system_integrity::{
-    apply_rosemary_plan, evaluate_rosemary, evaluate_systems, EvaluateContext, EvaluateResult,
-    OptionalProducer, RosemaryPlan, RosemaryTier, RosemaryVerdict, ShiftBind, SkipReason,
-    SystemAnchor,
 };
 pub use tier::OperatorTier;
 pub use workforce::{

@@ -24,6 +24,7 @@ pub fn plan_cmd(args: &[String]) -> Result<(), Error> {
         .find(|w| w[0] == "--top")
         .and_then(|w| w[1].parse().ok())
         .unwrap_or(20);
+    let system_preferences = system_preferences_from_args(args)?;
 
     let blueprint = BaseBlueprint::load(&layout_path)?;
     let operbox = OperBox::load(&operbox_path)?;
@@ -65,6 +66,7 @@ pub fn plan_cmd(args: &[String]) -> Result<(), Error> {
         &table,
         &AssignBaseOptions {
             top_k,
+            system_preferences,
             ..AssignBaseOptions::default()
         },
     )?;
@@ -115,6 +117,28 @@ pub fn plan_cmd(args: &[String]) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+fn system_preferences_from_args(
+    args: &[String],
+) -> Result<std::collections::HashMap<String, String>, Error> {
+    let mut preferences = std::collections::HashMap::new();
+    for pair in args.windows(2).filter(|pair| pair[0] == "--prefer") {
+        let Some((system, alternative)) = pair[1].split_once('=') else {
+            return Err(Error::msg(format!(
+                "invalid --prefer {}; expected system=alternative",
+                pair[1]
+            )));
+        };
+        if system.is_empty() || alternative.is_empty() {
+            return Err(Error::msg(format!(
+                "invalid --prefer {}; expected system=alternative",
+                pair[1]
+            )));
+        }
+        preferences.insert(system.to_string(), alternative.to_string());
+    }
+    Ok(preferences)
 }
 
 fn operbox_path_from_args(args: &[String]) -> Result<PathBuf, Error> {

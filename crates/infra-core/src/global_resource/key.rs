@@ -64,22 +64,32 @@ impl GlobalResourceKey {
 
     pub fn parse(s: &str) -> Option<Self> {
         match s {
-            "Matatabi" | "木天蓼" => Some(Self::Matatabi),
-            "Perception" | "感知信息" => Some(Self::Perception),
-            "VirtualPower" | "虚拟发电站" => Some(Self::VirtualPower),
-            "VirtualGoldLines" | "虚拟赤金产线" => Some(Self::VirtualGoldLines),
-            "HumanFireworks" | "人间烟火" => Some(Self::HumanFireworks),
-            "SilentEcho" | "无声共鸣" => Some(Self::SilentEcho),
-            "MonsterCuisine" | "魔物料理" => Some(Self::MonsterCuisine),
-            "Dream" | "梦境" => Some(Self::Dream),
-            "MusicalSection" | "小节" => Some(Self::MusicalSection),
-            "MemoryFragment" | "记忆碎片" => Some(Self::MemoryFragment),
-            "WitchcraftCrystal" | "巫术结晶" => Some(Self::WitchcraftCrystal),
-            "ThoughtChainRing" | "思维链环" => Some(Self::ThoughtChainRing),
-            "IntelligenceReserve" | "情报储备" => Some(Self::IntelligenceReserve),
-            "UsautDrink" | "乌萨斯特饮" => Some(Self::UsautDrink),
-            "Passion" | "热情值" => Some(Self::Passion),
-            "EngineeringRobot" | "工程机器人" => Some(Self::EngineeringRobot),
+            "Matatabi" | "matatabi" | "木天蓼" => Some(Self::Matatabi),
+            "Perception" | "perception" | "感知信息" => Some(Self::Perception),
+            "VirtualPower" | "virtual_power" | "虚拟发电站" => Some(Self::VirtualPower),
+            "VirtualGoldLines" | "virtual_gold_lines" | "虚拟赤金产线" => {
+                Some(Self::VirtualGoldLines)
+            }
+            "HumanFireworks" | "human_fireworks" | "人间烟火" => Some(Self::HumanFireworks),
+            "SilentEcho" | "silent_echo" | "无声共鸣" => Some(Self::SilentEcho),
+            "MonsterCuisine" | "monster_cuisine" | "魔物料理" => Some(Self::MonsterCuisine),
+            "Dream" | "dream" | "梦境" => Some(Self::Dream),
+            "MusicalSection" | "musical_section" | "小节" => Some(Self::MusicalSection),
+            "MemoryFragment" | "memory_fragment" | "记忆碎片" => Some(Self::MemoryFragment),
+            "WitchcraftCrystal" | "witchcraft_crystal" | "巫术结晶" => {
+                Some(Self::WitchcraftCrystal)
+            }
+            "ThoughtChainRing" | "thought_chain_ring" | "思维链环" => {
+                Some(Self::ThoughtChainRing)
+            }
+            "IntelligenceReserve" | "intelligence_reserve" | "情报储备" => {
+                Some(Self::IntelligenceReserve)
+            }
+            "UsautDrink" | "usaut_drink" | "乌萨斯特饮" => Some(Self::UsautDrink),
+            "Passion" | "passion" | "热情值" => Some(Self::Passion),
+            "EngineeringRobot" | "engineering_robot" | "工程机器人" => {
+                Some(Self::EngineeringRobot)
+            }
             _ => None,
         }
     }

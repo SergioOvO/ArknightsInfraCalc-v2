@@ -13,8 +13,8 @@ use crate::pool::{
     TradePool, JIE_TRADE_NAME,
 };
 use crate::search::{
-    hit_witch_shortcut, pick_docus_trade_hit, pick_trade_role_hit, search_trade_triples,
-    search_trade_triples_filtered, SearchTripleFilter, TradeSearchHit, TradeSearchOptions,
+    pick_trade_role_hit, search_trade_triples, search_trade_triples_filtered, SearchTripleFilter,
+    TradeSearchHit, TradeSearchOptions,
 };
 use crate::skill_table::SkillTable;
 use crate::trade::input::{TradeOrderKind, TradeSearchOrderMode};
@@ -22,14 +22,12 @@ use crate::trade::input::{TradeOrderKind, TradeSearchOrderMode};
 use super::commit::{commit_trade_room, pick_disjoint_from_report, trade_hit_names};
 use super::AssignBaseOptions;
 
-const BLACKKEY_NAME: &str = "黑键";
 const WITCH_TRADE_NAME: &str = "巫恋";
-const DOCUS_TRADE_NAME: &str = "但书";
-const CLOSURE_TRADE_NAME: &str = "可露希尔";
+const BLACKKEY_NAME: &str = "黑键";
 const KARLAN_JIE_TRADE_NAME: &str = "孑";
 /// 这些 `base_systems` 条目是 L3/兼容锚点或贸易 role 目录，不再由 registry fixed 早占岗位。
-/// 主路径改由 `trade_segments.roles` 的核心优先策略落位：
-/// 但书 -> 可露希尔 -> 巫恋 -> 推王 -> 喀兰 -> 企鹅。
+/// 主路径的可露希尔/但书 required anchor 来自 `orchestration_rules.json`；
+/// 这里只跳过仍由贸易 role 搜索消费的旧 registry 条目，不声明跨体系总优先级。
 const TRADE_ROLE_MANAGED_REGISTRY_SYSTEMS: [&str; 7] = [
     "blackkey_closure",
     "witch_long_beta",
@@ -39,18 +37,6 @@ const TRADE_ROLE_MANAGED_REGISTRY_SYSTEMS: [&str; 7] = [
     "penguin_texlap_e0",
     "vina_lungmen",
 ];
-
-fn trade_hit_excludes_blackkey_witch_collide(hit: &TradeSearchHit) -> bool {
-    !hit.names.iter().any(|n| n == WITCH_TRADE_NAME) && !hit_witch_shortcut(hit)
-}
-
-fn trade_hit_ok_for_greedy(hit: &TradeSearchHit) -> bool {
-    let has_blackkey = hit.names.iter().any(|n| n == BLACKKEY_NAME);
-    if !has_blackkey {
-        return true;
-    }
-    trade_hit_excludes_blackkey_witch_collide(hit)
-}
 
 /// 黑键贸站不得与巫恋同房（含巫恋 shortcut 三人组）。
 pub fn blackkey_witch_same_trade_room(
@@ -181,15 +167,15 @@ pub(super) fn assign_trade_remainder(
     gold_lines: u32,
     options: &AssignBaseOptions,
     durin_dorm_planning: Option<u8>,
+    forbidden_pairs: &[(String, String)],
     assignment: &mut BaseAssignment,
     used: &mut HashSet<String>,
 ) -> Result<()> {
-    let mut rooms: Vec<_> = blueprint
+    let rooms: Vec<_> = blueprint
         .rooms
         .iter()
         .filter(|r| r.kind == FacilityKind::TradePost)
         .collect();
-    prioritize_docus_trade_rooms(&mut rooms, pool, assignment, used);
 
     for room in rooms {
         if assignment.operators_in(&room.id).len() >= room.operator_capacity() {
@@ -216,6 +202,7 @@ pub(super) fn assign_trade_remainder(
                 order,
                 room.level,
                 used,
+                forbidden_pairs,
             )
         } else {
             let anchors: Vec<_> = existing.iter().map(|op| op.name.clone()).collect();
@@ -225,7 +212,7 @@ pub(super) fn assign_trade_remainder(
                 trade_room_options(&current_layout, gold_lines, options, order, room.level),
                 SearchTripleFilter {
                     must_include_names: anchors,
-                    hit_filter: Some(trade_hit_ok_for_greedy),
+                    forbidden_pairs: forbidden_pairs.to_vec(),
                     ..SearchTripleFilter::default()
                 },
                 used,
@@ -295,31 +282,6 @@ pub(super) fn refresh_trade_efficiency_snapshots(
     Ok(())
 }
 
-pub(super) fn prioritize_docus_trade_rooms(
-    rooms: &mut Vec<&RoomBlueprint>,
-    pool: &TradePool,
-    assignment: &BaseAssignment,
-    used: &HashSet<String>,
-) {
-    if used.contains(DOCUS_TRADE_NAME)
-        || pool
-            .entry(DOCUS_TRADE_NAME)
-            .is_none_or(|entry| entry.elite < 2)
-    {
-        return;
-    }
-    rooms.sort_by_key(|room| {
-        let is_empty_lv2_gold = assignment.operators_in(&room.id).is_empty()
-            && room.level == 2
-            && trade_order_from_room(room).ok() == Some(TradeOrderKind::Gold);
-        if is_empty_lv2_gold {
-            0
-        } else {
-            1
-        }
-    });
-}
-
 pub(super) fn trade_order_from_room(room: &RoomBlueprint) -> Result<TradeOrderKind> {
     match room.product.as_ref() {
         Some(RoomProduct::Trade { order }) => Ok(*order),
@@ -340,9 +302,9 @@ pub(super) fn skip_trade_core_registry_systems(skip: &mut HashSet<String>) {
     }
 }
 
-/// 团队贸易站取人：但书 -> 可露希尔 -> 龙巫 -> 推王 -> 巫恋兜底 -> 喀兰 -> 企鹅 -> 普通散件。
+/// 未被 plan 认领的贸易站：龙巫 -> 推王 -> 巫恋兜底 -> 喀兰 -> 企鹅 -> 普通散件。
 ///
-/// 这些 meta 是核心优先级，不是固定三人组；每个核心站内部仍由贸易搜索选择最优队友。
+/// 一贸可露希尔 / 多贸但书已由通用规则编译器落成具体房间，此处不再重做核心选型。
 pub(super) fn pick_trade_meta_then_plain(
     pool: &TradePool,
     table: &SkillTable,
@@ -352,53 +314,8 @@ pub(super) fn pick_trade_meta_then_plain(
     order: TradeOrderKind,
     room_level: u8,
     used: &mut HashSet<String>,
+    forbidden_pairs: &[(String, String)],
 ) -> Result<TradeSearchHit> {
-    if order == TradeOrderKind::Gold
-        && !used.contains(DOCUS_TRADE_NAME)
-        && pool
-            .entry(DOCUS_TRADE_NAME)
-            .is_some_and(|entry| entry.elite >= 2)
-    {
-        if let Ok(hit) = pick_docus_trade_hit(
-            pool,
-            table,
-            trade_room_options(
-                layout,
-                gold_lines,
-                options,
-                TradeOrderKind::Gold,
-                room_level,
-            ),
-            layout,
-            used,
-            options.top_k,
-        ) {
-            if hit.names.iter().any(|n| n == DOCUS_TRADE_NAME) {
-                return Ok(hit);
-            }
-        }
-    }
-    if order == TradeOrderKind::Gold && !used.contains(CLOSURE_TRADE_NAME) {
-        if let Ok(hit) = pick_trade_role_hit(
-            "closure",
-            pool,
-            table,
-            trade_room_options(
-                layout,
-                gold_lines,
-                options,
-                TradeOrderKind::Gold,
-                room_level,
-            ),
-            layout,
-            used,
-            options.top_k,
-        ) {
-            if hit.names.iter().any(|n| n == CLOSURE_TRADE_NAME) {
-                return Ok(hit);
-            }
-        }
-    }
     if order == TradeOrderKind::Gold && !used.contains(WITCH_TRADE_NAME) {
         if let Ok(hit) = pick_trade_role_hit(
             "witch",
@@ -508,7 +425,7 @@ pub(super) fn pick_trade_meta_then_plain(
         table,
         trade_room_options(layout, gold_lines, options, order, room_level),
         SearchTripleFilter {
-            hit_filter: Some(trade_hit_ok_for_greedy),
+            forbidden_pairs: forbidden_pairs.to_vec(),
             ..SearchTripleFilter::default()
         },
         used,
@@ -630,6 +547,7 @@ mod tests {
             TradeOrderKind::Gold,
             3,
             &mut HashSet::new(),
+            &[],
         )
         .unwrap();
 
@@ -675,6 +593,7 @@ mod tests {
             TradeOrderKind::Gold,
             3,
             &mut HashSet::new(),
+            &[],
         )
         .unwrap();
 
@@ -741,6 +660,7 @@ mod tests {
                 ..Default::default()
             },
             None,
+            &[],
             &mut assignment,
             &mut used,
         )

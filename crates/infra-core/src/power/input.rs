@@ -7,6 +7,8 @@ pub struct PowerOperator {
     pub elite: u8,
     pub buff_ids: Vec<String>,
     pub tags: Vec<String>,
+    /// 编排层为单个干员声明的工作心情；`None` 使用房间默认值。
+    pub work_mood: Option<f64>,
 }
 
 impl PowerOperator {
@@ -20,6 +22,7 @@ impl PowerOperator {
             elite,
             buff_ids,
             tags: Vec::new(),
+            work_mood: None,
         }
     }
 }

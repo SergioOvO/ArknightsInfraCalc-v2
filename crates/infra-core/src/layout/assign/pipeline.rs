@@ -24,14 +24,11 @@ use crate::search::{
 use crate::skill_table::SkillTable;
 
 use super::control_fill::{assign_control, assign_control_requiring_any};
-use super::manufacture_fill::{
-    assign_manufacture_lines, refresh_manufacture_efficiency_snapshots,
-    ManufactureSystemCandidateTrace,
-};
+use super::manufacture_fill::{assign_manufacture_lines, refresh_manufacture_efficiency_snapshots};
 use super::power_fill::assign_power_stations;
 use super::producer_fill::{
     assign_dorm_producers, assign_sphinx_urrbian_dorm_anchor,
-    cleanup_unused_sphinx_urrbian_dorm_anchor, place_system_anchors, place_system_producers,
+    cleanup_unused_sphinx_urrbian_dorm_anchor, place_system_producers,
 };
 use super::run::{AssignmentRun, StageTimer};
 use super::trade_fill::{
@@ -52,7 +49,6 @@ pub(super) fn run_shift_pipeline(
     mode: AssignShiftMode,
     seed: &BaseAssignment,
     plan: &AssignmentPlan,
-    mut manufacture_trace_sink: Option<&mut Vec<ManufactureSystemCandidateTrace>>,
 ) -> Result<BaseAssignment> {
     let mut timer = StageTimer::new("单班");
 
@@ -67,9 +63,6 @@ pub(super) fn run_shift_pipeline(
         executed.assignment,
         executed.used,
     );
-    if mode == AssignShiftMode::Peak {
-        place_system_anchors(blueprint, &plan.anchors, &mut run.assignment, &mut run.used)?;
-    }
     timer.mark("编排落位");
 
     // 建池（中枢 / 贸易 / 制造 / 发电）+ tier 标注 + anchor 注入。
@@ -152,7 +145,6 @@ pub(super) fn run_shift_pipeline(
                 &forbid_same_room,
                 &mut run.assignment,
                 &mut run.used,
-                manufacture_trace_sink.as_deref_mut(),
             )?;
             timer.mark("制造");
         }
@@ -184,7 +176,6 @@ pub(super) fn run_shift_pipeline(
                 &forbid_same_room,
                 &mut run.assignment,
                 &mut run.used,
-                manufacture_trace_sink.as_deref_mut(),
             )?;
             timer.mark("制造");
             assign_power_stations(
@@ -321,6 +312,7 @@ fn run_peak_prefix_candidate<'a>(
         gold_lines,
         run.options,
         Some(run.durin_plan),
+        &forbid_trade_station_pairs(plan),
         &mut run.assignment,
         &mut run.used,
     )?;
@@ -366,6 +358,18 @@ fn forbid_same_room_pairs(plan: &AssignmentPlan) -> Vec<(String, String)> {
         .iter()
         .filter_map(|c| match c {
             crate::layout::orchestrate::SystemConstraint::ForbidSameRoom { a, b } => {
+                Some((a.clone(), b.clone()))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+fn forbid_trade_station_pairs(plan: &AssignmentPlan) -> Vec<(String, String)> {
+    plan.constraints
+        .iter()
+        .filter_map(|constraint| match constraint {
+            crate::layout::orchestrate::SystemConstraint::ForbidSameStation { a, b } => {
                 Some((a.clone(), b.clone()))
             }
             _ => None,
@@ -460,7 +464,6 @@ mod tests {
             AssignShiftMode::Peak,
             &BaseAssignment::default(),
             &AssignmentPlan::recovery(AssignShiftMode::Peak),
-            None,
         )
         .unwrap();
 
@@ -490,7 +493,6 @@ mod tests {
             AssignShiftMode::Peak,
             &BaseAssignment::default(),
             &AssignmentPlan::recovery(AssignShiftMode::Peak),
-            None,
         )
         .unwrap();
 
@@ -538,7 +540,6 @@ mod tests {
             AssignShiftMode::Peak,
             &seed,
             &AssignmentPlan::recovery(AssignShiftMode::Peak),
-            None,
         )
         .unwrap();
         let control: HashSet<_> = assignment

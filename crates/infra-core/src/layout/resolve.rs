@@ -486,7 +486,9 @@ fn to_power_operator(
     op: &AssignedOperator,
 ) -> Result<PowerOperator> {
     let buff_ids = resolve_buff_ids(instances, op, "power")?;
-    Ok(PowerOperator::new(op.name.clone(), op.elite, buff_ids))
+    let mut power = PowerOperator::new(op.name.clone(), op.elite, buff_ids);
+    power.work_mood = op.work_mood.map(f64::from);
+    Ok(power)
 }
 
 fn to_control_operator(
@@ -995,6 +997,44 @@ mod tests {
             "森蚺中枢 + Lancet-2 → VirtualPower +2"
         );
         assert_eq!(layout.effective_power_station_count(), 5);
+    }
+
+    #[test]
+    fn zero_mood_lancet_keeps_eunectes_link_without_blocking_greyy_dawn() {
+        let (instances, table) = pair();
+        let blueprint = BaseBlueprint::load(&data_path("layout/252.json").unwrap()).unwrap();
+        let power_ids: Vec<_> = blueprint
+            .rooms_of(FacilityKind::PowerPlant)
+            .into_iter()
+            .map(|room| room.id.clone())
+            .collect();
+        assert_eq!(power_ids.len(), 2);
+
+        let build = |lancet_mood| {
+            let mut assignment = BaseAssignment::default();
+            assignment.set_room("control", vec![AssignedOperator::new("森蚺", 2)]);
+            assignment.set_power_operator(
+                power_ids[0].clone(),
+                AssignedOperator::new("Lancet-2", 0).with_work_mood(lancet_mood),
+            );
+            assignment
+                .set_power_operator(power_ids[1].clone(), AssignedOperator::new("承曦格雷伊", 2));
+            resolve_base(
+                &blueprint,
+                &assignment,
+                Some(&instances),
+                Some(&table),
+                24.0,
+                None,
+            )
+            .unwrap()
+            .layout
+            .global
+            .get(crate::global_resource::GlobalResourceKey::VirtualPower)
+        };
+
+        assert_eq!(build(Some(0)), 3.0, "中枢联动2 + 晨曦1");
+        assert_eq!(build(None), 2.0, "普通作业平台应阻断晨曦");
     }
 
     #[test]

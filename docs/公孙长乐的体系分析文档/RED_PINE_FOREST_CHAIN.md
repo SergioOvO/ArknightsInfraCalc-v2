@@ -1,17 +1,16 @@
 # 红松林体系论证（公孙长乐 × InfraCalc）
 
-> 状态：**严格实现审计与修复完成**（2026-07-12） | 业务口径已由公孙逐项确认
+> 状态：**已迁入通用 Rule → resolved AssignmentPlan 主路径**（2026-07-15） | 业务口径已由公孙逐项确认
 > 对齐布局：含至少一条作战记录制造线的布局；不固定 room id
 > 对齐 operbox：含焰尾 E2 + 薇薇安娜 E2，以及灰毫 E2 / 远牙 E2 / 野鬃 E2 中至少两名
 > 对齐班次：体系全员由 `shift_bind` 保证同队上 2 休 1；不固定班次编号
-> 实现提交：`9ca679a`（体系编排）+ `53060b8`（反例回归与多 anchor 修复）
-> 最后更新：2026-07-12
+> 最后更新：2026-07-15（删除专用 PinusPlan，改为声明式规则）
 
 ---
 
 ## 1. 一句话结论
 
-红松林体系是**中枢→制造跨设施作战记录专精体系**，以焰尾 E2 + 薇薇安娜 E2 双中枢为核心，为灰毫/远牙/野鬃提供跨设施制造增益。满配三名红松成员合计 **126%**；三人不要求同房，但都必须进入作战记录制造站。砾不是体系硬核心或锚点，由制造搜索自然决定是否上岗。其 priority 只处理红松林自身认领，不与不存在的“叙拉古 fixed 体系”比较。
+红松林体系是**中枢→制造跨设施作战记录专精体系**，以焰尾 E2 + 薇薇安娜 E2 双中枢为核心，为灰毫/远牙/野鬃提供跨设施制造增益。满配三名红松成员合计 **126%**；三人不要求同房，但都必须进入作战记录制造站。砾不是体系硬核心或锚点，由制造搜索自然决定是否上岗。红松林 priority 19；贸易核心按实际贸易站数量和订单配方先行预留，不与制造 priority 比较。
 
 ---
 
@@ -49,7 +48,7 @@
 | 体系 | 关系 |
 |------|------|
 | 迷迭香感知链 | **完全兼容**。迷迭香占赤金线，红松林占经验线；中枢 5 人位充裕 |
-| 但书核心 / 叙拉古自然候选 | **完全正交**。不影响贸易；叙拉古不注册 fixed 体系 |
+| 一贸可露希尔 / 多贸但书核心 | **完全正交**。只影响龙门币贸易站，不与红松制造争用成员 |
 | 龙门中枢（斩业星熊+诗怀雅）| **兼容**。中枢 5 人位 |
 | 怪猎中枢 | **兼容**。中枢 5 人，焰尾+薇薇安娜+怪猎双人 = 4 位，余 1 位 |
 | 喀兰中枢（灵知）| **兼容**。中枢内不互斥（红松林不入 `meta_chain`）|
@@ -106,7 +105,7 @@
 | 灰毫/远牙/野鬃制造 L1 atom | **已完成**（`manu_prod_spd[002]/[012]`，`add_flat_eff` 15/25）|
 | 焰尾 E2「红松的骑士」| 已通过 tagged manufacture inject 建模：每名红松制造成员固定 +10% 作战记录、-10% 赤金 |
 | 薇薇安娜 E2 制造 buff | 已通过 tagged manufacture inject 建模：每名骑士制造成员 +7% |
-| 体系编排 | 由代码化 `PinusPlan` 判定并汇入统一 `AssignmentPlan`；不在 `base_systems.json` 保留重复条目 |
+| 体系编排 | 由 `orchestration_rules.json` 的 role/gate 编译成统一 `AssignmentPlan`；不在 `base_systems.json` 保留重复条目 |
 | required anchor | 双中枢与实际拥有的 2/3 名红松制造成员均为 required anchor；制造 anchor 限定作战记录配方 |
 | 轮换 | `shift_bind` 绑定上述全员，同队上 2 休 1 |
 | 正义骑士号联动 | 公孙不使用，**低优先级** |
@@ -143,7 +142,7 @@
 | 焰尾 E2 | **体系必需**，占 1 位 |
 | 薇薇安娜 E2 | **体系必需**，占 1 位 |
 | 夕 E0 | 兼容（+5 位）|
-| 八幡海铃 E2 | 兼容；仅按每班实际叙拉古贸易消费者结算 |
+| 八幡海铃 E2 | 兼容；仅按实际叙拉古贸易消费者结算 |
 | 斩业星熊+诗怀雅 | 兼容（龙门制造+3%）|
 | 令/重岳 | 兼容（人间烟火）|
 | 灵知 E2 | 兼容（喀兰）|
@@ -154,7 +153,7 @@
 | Priority | 体系 | 说明 |
 |----------|------|------|
 | 21 | 迷迭香全链（档 1–2）| 泛用高收益 |
-| 自然搜索 | 但书核心 / 叙拉古候选 | 不占红松林 priority；按实际效率与逐班消费者结算 |
+| required anchor | 一贸可露希尔 / 多贸但书 | 有龙门币订单时先于制造体系预留，不使用数字 priority 与红松比较 |
 | **19** | **红松林满配（含薇薇安娜）** | **经验产线首选** |
 | 18 | 喀兰组（灵知）| `meta_chain` 互斥 |
 | 16 | 巫恋组 | 贸易 |
@@ -247,11 +246,11 @@
 
 ### 9.2 编排单一事实源
 
-- `evaluate_pinus` 负责激活：焰尾 E2、薇薇安娜 E2、至少两名 E2 红松制造成员、至少一条作战记录线，缺一关闭。
-- `PinusPlan` 产出双中枢 anchor、2/3 名制造 recipe anchor 和一条全员 `shift_bind`。
+- `data/orchestration_rules.json` 的 `pinus_sylvestris` 规则声明激活条件：焰尾 E2、薇薇安娜 E2、至少两名 E2 红松制造成员、至少一条可承载的作战记录线，缺一关闭；制造站总数和赤金线都不是额外门槛。
+- 通用规则编译器产出双中枢 anchor、实际拥有的 2/3 名制造 recipe anchor 和一条全员 `shift_bind`。
 - `AssignmentPlan` 是 execute、fill 和 rotation 的唯一消费入口；`base_systems.json` 不再声明红松体系或无薇薇安娜 variant。
 - 制造 required anchor 可以同房或跨房；多 anchor 房补位必须保留全部 anchor，不能只保留首名后覆盖整房。
-- 砾不属于 `PinusPlan`，不设 anchor、不加入 bind，由普通制造搜索自然选择。
+- 砾不属于 `pinus_sylvestris` rule roles，不设 anchor、不加入 bind，由普通制造搜索自然选择。
 
 ### 9.3 已废弃方案
 
@@ -261,37 +260,17 @@
 
 | 不变量 | 代码保证 | 删除的冲突 | 回归与端到端结果 |
 |--------|----------|------------|------------------|
-| 缺焰尾 E2 或薇薇安娜 E2 关闭；红松制造成员少于 2 人关闭 | `evaluate_pinus` 是唯一激活判定 | 删除 `base_systems.json` 中重复红松条目和无薇薇安娜 variant | `system_integrity::pinus` 覆盖满配、两人档和缺核心关闭 |
-| 实际拥有的 2/3 名红松制造成员全部进入作战记录站，可同房或跨站 | `PinusPlan.manufacture_anchors` 生成 recipe anchor；通用 manufacture fill 保留同房全部 anchor | 删除固定 `manu_1`/`manu_3` 与强制三人同房语义；修正 fill 只保留首个 anchor 的覆盖路径 | `team_rotation_pinus_two_manufacturers_end_to_end` 验证最低人数；`team_rotation_pinus_three_manufacturers_span_battle_record_rooms` 强制三人跨两个经验站 |
-| 焰尾、薇薇安娜和纳入的红松制造成员同队上 2 休 1 | `PinusPlan.shift_bind` 经统一 `AssignmentPlan` 进入 rotation | 删除依赖 `used` 和搜索顺序碰巧同队的路径 | 两个 team-rotation 端到端测试均逐人断言工作两班、休息一班 |
+| 缺焰尾 E2 或薇薇安娜 E2 关闭；红松制造成员少于 2 人关闭 | 通用 gate + role 最低人数是唯一激活判定 | 删除 `base_systems.json` 中重复红松条目、无薇薇安娜 variant、三制造/赤金伪门槛 | `pinus_requires_both_cores_and_keeps_all_two_or_three_members` 覆盖满配、两人档、缺核心关闭和“仅两制造、无赤金仍激活” |
+| 实际拥有的 2/3 名红松制造成员全部进入作战记录站，可同房或跨站 | `RoleSpec(recipe=battle_record, selection=all_available)` 生成实际 room anchors；通用 manufacture fill 保留同房全部 anchor | 删除固定 `manu_1`/`manu_3` 与强制三人同房语义；修正 fill 只保留首个 anchor 的覆盖路径 | 规则回归强制三人跨两个经验站；team-rotation 端到端覆盖完整编制 |
+| 焰尾、薇薇安娜和纳入的红松制造成员同队上 2 休 1 | alternative 的 `bind_all` 经统一 `AssignmentPlan` 进入 rotation | 删除依赖 `used` 和搜索顺序碰巧同队的路径 | team-rotation 端到端逐人断言工作两班、休息一班 |
 | 满配作战记录效率 126%，焰尾对红松成员赤金为 -10% | tagged manufacture inject 按 `buff_id`、tag 和 recipe 结算 | 删除制造 L1 按中文名识别体系技能的旧分支 | `pinus_sylvestris_br_room_126_and_gravel_gold_42` 同时锚定作战记录 126% 和红松成员赤金 66% |
-| 砾不绑定，由制造搜索自然决定 | 砾不进入 `PinusPlan` 的 anchor 或 bind | 删除砾硬核心、固定赤金房和班次绑定 | 端到端验收不要求砾出现；标准 CLI 中可由普通搜索自然上岗 |
+| 砾不绑定，由制造搜索自然决定 | 砾不进入规则 role、anchor 或 bind | 删除砾硬核心、固定赤金房和班次绑定 | 端到端验收不要求砾出现；标准 CLI 中可由普通搜索自然上岗 |
 
-根因位于体系声明和制造补位边界：旧模型没有统一表达 required anchor、配方作用域与全员轮换，且多 anchor 房在 fill 时可能只保留首人。满配样例中，被覆盖成员可能又被效率搜索选回，因此结果看似正确但没有结构保证。现在 `PinusPlan -> AssignmentPlan` 是体系语义的单一事实源，通用 manufacture fill 只负责忠实消费全部 recipe anchor。
-
----
-
-## 附录 A：迷迭香体系补充确认（基于公孙回答的修正）
-
-### 办公室 + office slot
-
-- **所有布局默认办公室三级**，蓝图中必然有办公室。
-- 絮雨 slot **始终自动追加**（不判断等级），Lv3 产出 20 感知，Lv2 产出 10 感知。
-- 建议代码：`resolve_base` 在 blueprint 有办公室时，自动检查絮雨是否进驻并计入感知。
-
-### 琴柳
-
-- **Perception chain 内视为 `pick_one`（可选）**，不是 fixed。
-- 琴柳的作用是给絮雨等 <25% 人力效率的角色 +20% 人力效率，**与感知产出无关**。
-- 代码里判断：琴柳是中枢填充位的可选项，不影响感知链主体。
-
-### 塑心
-
-- 已确认为**固定 slot**（黑键挂件 +2.5% 贸易）。
+根因位于体系声明和制造补位边界：旧模型没有统一表达 required anchor、配方作用域与全员轮换，且多 anchor 房在 fill 时可能只保留首人。满配样例中，被覆盖成员可能又被效率搜索选回，因此结果看似正确但没有结构保证。现在 `orchestration_rules.json -> AssignmentPlan` 是体系语义的单一事实源，通用 manufacture fill 只负责忠实消费全部 recipe anchor。
 
 ---
 
-## 附录 B：红松林代码现状总结
+## 附录：红松林代码现状总结
 
 | 干员 | 设施 | 建模状态 | atoms |
 |------|------|---------|-------|
@@ -303,4 +282,4 @@
 | 野鬃 E0/E2 | 制造 | **已完成** | `add_flat_eff` 15/25 |
 | 正义骑士号 | 发电→制造 | **公孙不使用** | 低优先级 |
 
-体系编排现由 `PinusPlan` 完整承载；本附录只记录技能建模状态，不另行定义激活或落位规则。
+体系编排现由 `orchestration_rules.json -> AssignmentPlan` 完整承载；本附录只记录技能建模状态，不另行定义激活或落位规则。

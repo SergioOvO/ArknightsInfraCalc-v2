@@ -1,0 +1,614 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "trade_core",
+      "priority": 1000,
+      "tier": "cross_station",
+      "alternatives": [
+        {
+          "id": "single_trade_closure",
+          "gates": [
+            { "kind": "facility_count", "facility": "trade_post", "min": 1, "max": 1 },
+            { "kind": "trade_order_count", "order": "gold", "min": 1 }
+          ],
+          "roles": [
+            {
+              "id": "core",
+              "facility": "trade_post",
+              "trade_order": "gold",
+              "candidates": [{ "name": "可露希尔", "elite": 2 }]
+            }
+          ],
+          "continuous": true,
+          "bind_all": true
+        },
+        {
+          "id": "single_trade_docus_fallback",
+          "gates": [
+            { "kind": "facility_count", "facility": "trade_post", "min": 1, "max": 1 },
+            { "kind": "trade_order_count", "order": "gold", "min": 1 }
+          ],
+          "roles": [
+            {
+              "id": "core",
+              "facility": "trade_post",
+              "trade_order": "gold",
+              "candidates": [{ "name": "但书", "elite": 2 }]
+            }
+          ],
+          "continuous": true,
+          "bind_all": true
+        },
+        {
+          "id": "multi_trade_docus",
+          "gates": [
+            { "kind": "facility_count", "facility": "trade_post", "min": 2 },
+            { "kind": "trade_order_count", "order": "gold", "min": 1 }
+          ],
+          "roles": [
+            {
+              "id": "core",
+              "facility": "trade_post",
+              "trade_order": "gold",
+              "candidates": [{ "name": "但书", "elite": 2 }]
+            }
+          ],
+          "continuous": true,
+          "bind_all": true
+        },
+        {
+          "id": "multi_trade_closure_fallback",
+          "gates": [
+            { "kind": "facility_count", "facility": "trade_post", "min": 2 },
+            { "kind": "trade_order_count", "order": "gold", "min": 1 }
+          ],
+          "roles": [
+            {
+              "id": "core",
+              "facility": "trade_post",
+              "trade_order": "gold",
+              "candidates": [{ "name": "可露希尔", "elite": 2 }]
+            }
+          ],
+          "continuous": true,
+          "bind_all": true
+        }
+      ]
+    },
+    {
+      "id": "rosemary_perception",
+      "priority": 21,
+      "tier": "cross_station",
+      "skip_registry_ids": ["human_fireworks_pure"],
+      "alternatives": [
+        {
+          "id": "recruit_refresh_witch",
+          "explicit_only": true,
+          "gates": [
+            { "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 2 },
+            { "kind": "resource_at_least", "resource": "perception", "value": 50 }
+          ],
+          "roles": [
+            { "id": "rosemary", "facility": "factory", "candidates": [{ "name": "迷迭香", "elite": 2 }] },
+            { "id": "blackkey", "facility": "trade_post", "candidates": [{ "name": "黑键", "elite": 2 }] },
+            { "id": "refresh", "facility": "control_center", "candidates": [{ "name": "八幡海铃", "elite": 2 }] },
+            { "id": "xi", "facility": "control_center", "candidates": [{ "name": "夕", "elite": 0 }], "min_count": 0 },
+            {
+              "id": "dorm_perception",
+              "facility": "dormitory",
+              "candidates": [{ "name": "爱丽丝", "elite": 2 }, { "name": "车尔尼", "elite": 2 }],
+              "min_count": 0,
+              "max_count": 2,
+              "selection": "all_available"
+            }
+          ],
+          "relations": [
+            { "kind": "forbid_same_room", "a": "迷迭香", "b": "清流" },
+            { "kind": "forbid_same_room", "a": "迷迭香", "b": "温蒂" }
+          ],
+          "bind_roles": ["rosemary", "blackkey", "xi", "dorm_perception"]
+        },
+        {
+          "id": "recruit_refresh",
+          "gates": [
+            { "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 3 },
+            { "kind": "resource_at_least", "resource": "perception", "value": 50 }
+          ],
+          "roles": [
+            { "id": "rosemary", "facility": "factory", "candidates": [{ "name": "迷迭香", "elite": 2 }] },
+            { "id": "blackkey", "facility": "trade_post", "candidates": [{ "name": "黑键", "elite": 2 }] },
+            { "id": "refresh", "facility": "control_center", "candidates": [{ "name": "八幡海铃", "elite": 2 }] },
+            { "id": "xi", "facility": "control_center", "candidates": [{ "name": "夕", "elite": 0 }], "min_count": 0 },
+            {
+              "id": "dorm_perception",
+              "facility": "dormitory",
+              "candidates": [{ "name": "爱丽丝", "elite": 2 }, { "name": "车尔尼", "elite": 2 }],
+              "min_count": 0,
+              "max_count": 2,
+              "selection": "all_available"
+            }
+          ],
+          "relations": [
+            { "kind": "forbid_same_room", "a": "迷迭香", "b": "清流" },
+            { "kind": "forbid_same_room", "a": "迷迭香", "b": "温蒂" },
+            { "kind": "forbid_same_station", "a": "黑键", "b": "巫恋" }
+          ],
+          "bind_roles": ["rosemary", "blackkey", "xi", "dorm_perception"]
+        },
+        {
+          "id": "high_perception",
+          "gates": [
+            { "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 3 },
+            { "kind": "resource_at_least", "resource": "perception", "value": 50 }
+          ],
+          "roles": [
+            { "id": "rosemary", "facility": "factory", "candidates": [{ "name": "迷迭香", "elite": 2 }] },
+            { "id": "blackkey", "facility": "trade_post", "candidates": [{ "name": "黑键", "elite": 2 }] },
+            { "id": "xuyu", "facility": "office", "candidates": [{ "name": "絮雨", "elite": 2 }] },
+            { "id": "saileach", "facility": "control_center", "candidates": [{ "name": "琴柳", "elite": 0 }] }
+          ],
+          "relations": [
+            { "kind": "forbid_same_room", "a": "迷迭香", "b": "清流" },
+            { "kind": "forbid_same_room", "a": "迷迭香", "b": "温蒂" },
+            { "kind": "forbid_same_station", "a": "黑键", "b": "巫恋" }
+          ],
+          "bind_roles": ["rosemary", "blackkey", "xuyu"]
+        },
+        {
+          "id": "recruit_refresh_zilan",
+          "gates": [
+            { "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 3 },
+            { "kind": "resource_at_least", "resource": "perception", "value": 50 }
+          ],
+          "roles": [
+            { "id": "rosemary", "facility": "factory", "candidates": [{ "name": "迷迭香", "elite": 2 }] },
+            { "id": "blackkey", "facility": "trade_post", "candidates": [{ "name": "黑键", "elite": 2 }] },
+            { "id": "refresh", "facility": "control_center", "candidates": [{ "name": "焰狐龙梓兰", "elite": 2 }] },
+            { "id": "xi", "facility": "control_center", "candidates": [{ "name": "夕", "elite": 0 }], "min_count": 0 },
+            {
+              "id": "dorm_perception",
+              "facility": "dormitory",
+              "candidates": [{ "name": "爱丽丝", "elite": 2 }, { "name": "车尔尼", "elite": 2 }],
+              "min_count": 0,
+              "max_count": 2,
+              "selection": "all_available"
+            }
+          ],
+          "relations": [
+            { "kind": "forbid_same_room", "a": "迷迭香", "b": "清流" },
+            { "kind": "forbid_same_room", "a": "迷迭香", "b": "温蒂" },
+            { "kind": "forbid_same_station", "a": "黑键", "b": "巫恋" }
+          ],
+          "bind_roles": ["rosemary", "blackkey", "xi", "dorm_perception"]
+        }
+      ]
+    },
+    {
+      "id": "automation_group",
+      "priority": 20,
+      "tier": "cross_station",
+      "skip_registry_ids": ["automation_group", "gongsun_greyy2_power_line"],
+      "alternatives": [
+        {
+          "id": "two_power_control_eunectes",
+          "gates": [{ "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 2 }],
+          "roles": [
+            {
+              "id": "gold_pair",
+              "facility": "factory",
+              "recipe": "gold",
+              "candidates": [{ "name": "清流", "elite": 1 }, { "name": "温蒂", "elite": 2 }],
+              "min_count": 2,
+              "max_count": 2,
+              "selection": "all_available",
+              "room_group": "automation_factory"
+            },
+            {
+              "id": "gold_third",
+              "facility": "factory",
+              "recipe": "gold",
+              "candidates": [{ "name": "冬时", "elite": 2 }, { "name": "异客", "elite": 2 }, { "name": "掠风", "elite": 2 }],
+              "min_count": 0,
+              "max_count": 1,
+              "selection": "ordered",
+              "room_group": "automation_factory"
+            },
+            { "id": "control", "facility": "control_center", "candidates": [{ "name": "森蚺", "elite": 2 }] },
+            {
+              "id": "lancet",
+              "facility": "power_plant",
+              "candidates": [{ "name": "Lancet-2", "elite": 0 }],
+              "work_mood": 0,
+              "rest_facility": "workshop"
+            },
+            { "id": "virtual_power", "facility": "power_plant", "candidates": [{ "name": "承曦格雷伊", "elite": 2 }], "min_count": 0 }
+          ],
+          "bind_all": true
+        },
+        {
+          "id": "two_power_control_eunectes_general",
+          "gates": [
+            { "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 2 },
+            { "kind": "operator_available", "name": "森蚺", "elite": 2 },
+            { "kind": "operator_available", "name": "Lancet-2", "elite": 0 }
+          ],
+          "roles": [
+            {
+              "id": "wendy_core",
+              "facility": "factory",
+              "candidates": [{ "name": "温蒂", "elite": 2 }],
+              "room_group": "automation_factory"
+            },
+            {
+              "id": "general_peers",
+              "facility": "factory",
+              "candidates": [{ "name": "冬时", "elite": 2 }, { "name": "异客", "elite": 2 }, { "name": "掠风", "elite": 2 }],
+              "min_count": 1,
+              "max_count": 2,
+              "selection": "ordered",
+              "room_group": "automation_factory"
+            },
+            { "id": "control", "facility": "control_center", "candidates": [{ "name": "森蚺", "elite": 2 }] },
+            {
+              "id": "lancet",
+              "facility": "power_plant",
+              "candidates": [{ "name": "Lancet-2", "elite": 0 }],
+              "work_mood": 0,
+              "rest_facility": "workshop"
+            },
+            { "id": "virtual_power", "facility": "power_plant", "candidates": [{ "name": "承曦格雷伊", "elite": 2 }], "min_count": 0 }
+          ],
+          "bind_all": true
+        },
+        {
+          "id": "two_power_factory_eunectes",
+          "gates": [
+            { "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 2 },
+            { "kind": "operator_available", "name": "森蚺", "elite": 2 },
+            { "kind": "operator_unavailable", "name": "Lancet-2", "elite": 0 }
+          ],
+          "roles": [
+            {
+              "id": "gold_team",
+              "facility": "factory",
+              "recipe": "gold",
+              "candidates": [{ "name": "清流", "elite": 1 }, { "name": "温蒂", "elite": 2 }, { "name": "森蚺", "elite": 2 }],
+              "min_count": 3,
+              "max_count": 3,
+              "selection": "all_available",
+              "same_room": true
+            },
+            { "id": "virtual_power", "facility": "power_plant", "candidates": [{ "name": "承曦格雷伊", "elite": 2 }], "min_count": 0 }
+          ],
+          "bind_all": true
+        },
+        {
+          "id": "two_power_factory_eunectes_general",
+          "gates": [
+            { "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 2 },
+            { "kind": "operator_available", "name": "森蚺", "elite": 2 },
+            { "kind": "operator_unavailable", "name": "Lancet-2", "elite": 0 }
+          ],
+          "roles": [
+            {
+              "id": "wendy_core",
+              "facility": "factory",
+              "candidates": [{ "name": "温蒂", "elite": 2 }],
+              "room_group": "automation_factory"
+            },
+            {
+              "id": "general_peers",
+              "facility": "factory",
+              "candidates": [{ "name": "森蚺", "elite": 2 }, { "name": "冬时", "elite": 2 }, { "name": "异客", "elite": 2 }, { "name": "掠风", "elite": 2 }],
+              "min_count": 1,
+              "max_count": 2,
+              "selection": "ordered",
+              "room_group": "automation_factory"
+            },
+            { "id": "virtual_power", "facility": "power_plant", "candidates": [{ "name": "承曦格雷伊", "elite": 2 }], "min_count": 0 }
+          ],
+          "bind_all": true
+        },
+        {
+          "id": "two_power_gold_without_eunectes",
+          "gates": [
+            { "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 2 },
+            { "kind": "operator_unavailable", "name": "森蚺", "elite": 2 }
+          ],
+          "roles": [
+            {
+              "id": "wendy_core",
+              "facility": "factory",
+              "recipe": "gold",
+              "candidates": [{ "name": "温蒂", "elite": 2 }],
+              "room_group": "automation_factory"
+            },
+            {
+              "id": "gold_peers",
+              "facility": "factory",
+              "recipe": "gold",
+              "candidates": [{ "name": "清流", "elite": 1 }, { "name": "冬时", "elite": 2 }, { "name": "异客", "elite": 2 }, { "name": "掠风", "elite": 2 }],
+              "min_count": 1,
+              "max_count": 2,
+              "selection": "ordered",
+              "room_group": "automation_factory"
+            },
+            { "id": "virtual_power", "facility": "power_plant", "candidates": [{ "name": "承曦格雷伊", "elite": 2 }], "min_count": 0 }
+          ],
+          "bind_all": true
+        },
+        {
+          "id": "two_power_general",
+          "gates": [
+            { "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 2 },
+            { "kind": "operator_unavailable", "name": "森蚺", "elite": 2 }
+          ],
+          "roles": [
+            {
+              "id": "wendy_core",
+              "facility": "factory",
+              "candidates": [{ "name": "温蒂", "elite": 2 }],
+              "room_group": "automation_factory"
+            },
+            {
+              "id": "general_peers",
+              "facility": "factory",
+              "candidates": [{ "name": "冬时", "elite": 2 }, { "name": "异客", "elite": 2 }, { "name": "掠风", "elite": 2 }],
+              "min_count": 1,
+              "max_count": 2,
+              "selection": "ordered",
+              "room_group": "automation_factory"
+            },
+            { "id": "virtual_power", "facility": "power_plant", "candidates": [{ "name": "承曦格雷伊", "elite": 2 }], "min_count": 0 }
+          ],
+          "bind_all": true
+        },
+        {
+          "id": "three_power_gold",
+          "gates": [
+            { "kind": "facility_count", "facility": "power_plant", "min": 3, "max": 3 },
+            { "kind": "facility_count", "facility": "trade_post", "min": 2 }
+          ],
+          "roles": [
+            {
+              "id": "wendy_core",
+              "facility": "factory",
+              "recipe": "gold",
+              "candidates": [{ "name": "温蒂", "elite": 2 }],
+              "room_group": "automation_factory"
+            },
+            {
+              "id": "qingliu",
+              "facility": "factory",
+              "recipe": "gold",
+              "candidates": [{ "name": "清流", "elite": 1 }],
+              "room_group": "automation_factory"
+            },
+            {
+              "id": "third",
+              "facility": "factory",
+              "recipe": "gold",
+              "candidates": [{ "name": "森蚺", "elite": 2 }, { "name": "冬时", "elite": 2 }, { "name": "异客", "elite": 2 }, { "name": "掠风", "elite": 2 }],
+              "room_group": "automation_factory"
+            },
+            { "id": "virtual_power", "facility": "power_plant", "candidates": [{ "name": "承曦格雷伊", "elite": 2 }], "min_count": 0 }
+          ],
+          "bind_all": true
+        },
+        {
+          "id": "three_power_general",
+          "gates": [
+            { "kind": "facility_count", "facility": "power_plant", "min": 3, "max": 3 },
+            { "kind": "facility_count", "facility": "trade_post", "min": 1, "max": 1 }
+          ],
+          "roles": [
+            {
+              "id": "wendy_core",
+              "facility": "factory",
+              "candidates": [{ "name": "温蒂", "elite": 2 }],
+              "room_group": "automation_factory"
+            },
+            {
+              "id": "general_peers",
+              "facility": "factory",
+              "candidates": [{ "name": "森蚺", "elite": 2 }, { "name": "冬时", "elite": 2 }, { "name": "异客", "elite": 2 }, { "name": "掠风", "elite": 2 }],
+              "min_count": 2,
+              "max_count": 2,
+              "selection": "ordered",
+              "room_group": "automation_factory"
+            },
+            { "id": "virtual_power", "facility": "power_plant", "candidates": [{ "name": "承曦格雷伊", "elite": 2 }], "min_count": 0 }
+          ],
+          "bind_all": true
+        },
+        {
+          "id": "three_power_general_fallback",
+          "gates": [{ "kind": "facility_count", "facility": "power_plant", "min": 3, "max": 3 }],
+          "roles": [
+            {
+              "id": "wendy_core",
+              "facility": "factory",
+              "candidates": [{ "name": "温蒂", "elite": 2 }],
+              "room_group": "automation_factory"
+            },
+            {
+              "id": "general_peers",
+              "facility": "factory",
+              "candidates": [{ "name": "森蚺", "elite": 2 }, { "name": "冬时", "elite": 2 }, { "name": "异客", "elite": 2 }, { "name": "掠风", "elite": 2 }],
+              "min_count": 2,
+              "max_count": 2,
+              "selection": "ordered",
+              "room_group": "automation_factory"
+            },
+            { "id": "virtual_power", "facility": "power_plant", "candidates": [{ "name": "承曦格雷伊", "elite": 2 }], "min_count": 0 }
+          ],
+          "bind_all": true
+        }
+      ]
+    },
+    {
+      "id": "pinus_sylvestris",
+      "priority": 19,
+      "tier": "cross_station",
+      "alternatives": [
+        {
+          "id": "battle_record_members",
+          "gates": [
+            { "kind": "manufacture_recipe_count", "recipe": "battle_record", "min": 1 }
+          ],
+          "roles": [
+            {
+              "id": "control_cores",
+              "facility": "control_center",
+              "candidates": [{ "name": "焰尾", "elite": 2 }, { "name": "薇薇安娜", "elite": 2 }],
+              "min_count": 2,
+              "max_count": 2,
+              "selection": "all_available",
+              "same_room": true
+            },
+            {
+              "id": "manufacturers",
+              "facility": "factory",
+              "recipe": "battle_record",
+              "candidates": [{ "name": "灰毫", "elite": 2 }, { "name": "远牙", "elite": 2 }, { "name": "野鬃", "elite": 2 }],
+              "min_count": 2,
+              "max_count": 3,
+              "selection": "all_available"
+            }
+          ],
+          "bind_all": true
+        }
+      ]
+    },
+    {
+      "id": "human_fireworks_perception",
+      "priority": 18,
+      "tier": "cross_station",
+      "alternatives": [
+        {
+          "id": "actual_perception_core",
+          "gates": [
+            { "kind": "resource_at_least", "resource": "perception", "value": 50 }
+          ],
+          "exclude_operators": ["桑葚"],
+          "roles": [
+            {
+              "id": "control_cores",
+              "facility": "control_center",
+              "candidates": [{ "name": "重岳", "elite": 0 }, { "name": "令", "elite": 2 }],
+              "min_count": 2,
+              "max_count": 2,
+              "selection": "all_available",
+              "same_room": true
+            },
+            {
+              "id": "trade_consumer",
+              "facility": "trade_post",
+              "candidates": [{ "name": "乌有", "elite": 2 }]
+            }
+          ],
+          "bind_all": true
+        }
+      ]
+    },
+    {
+      "id": "rhine_receivers",
+      "priority": 13,
+      "tier": "cross_station",
+      "alternatives": [
+        {
+          "id": "nasti_muelsyse_actual_support",
+          "roles": [
+            {
+              "id": "nasti",
+              "facility": "factory",
+              "recipe": "gold",
+              "candidates": [{ "name": "娜斯提", "elite": 2 }],
+              "fill_to_capacity": true,
+              "competitive": true
+            },
+            {
+              "id": "muelsyse",
+              "facility": "power_plant",
+              "candidates": [{ "name": "缪尔赛思", "elite": 2 }],
+              "competitive": true
+            },
+            {
+              "id": "rhine_support",
+              "facility": "dormitory",
+              "facilities": ["meeting_room", "workshop", "training_room"],
+              "candidates": [{ "name": "伊芙利特", "elite": 0 }, { "name": "塞雷娅", "elite": 0 }, { "name": "梅尔", "elite": 0 }, { "name": "麦哲伦", "elite": 0 }, { "name": "赫默", "elite": 0 }, { "name": "白面鸮", "elite": 0 }, { "name": "星源", "elite": 0 }, { "name": "多萝西", "elite": 0 }],
+              "min_count": 1,
+              "max_count": 4,
+              "selection": "ordered",
+              "one_per_room": true
+            }
+          ],
+          "active_dependencies": [
+            {
+              "consumer_roles": ["nasti", "muelsyse"],
+              "required_roles": ["rhine_support"]
+            }
+          ]
+        },
+        {
+          "id": "nasti_actual_support",
+          "roles": [
+            {
+              "id": "nasti",
+              "facility": "factory",
+              "recipe": "gold",
+              "candidates": [{ "name": "娜斯提", "elite": 2 }],
+              "fill_to_capacity": true,
+              "competitive": true
+            },
+            {
+              "id": "rhine_support",
+              "facility": "dormitory",
+              "facilities": ["meeting_room", "workshop", "training_room"],
+              "candidates": [{ "name": "伊芙利特", "elite": 0 }, { "name": "塞雷娅", "elite": 0 }, { "name": "梅尔", "elite": 0 }, { "name": "麦哲伦", "elite": 0 }, { "name": "赫默", "elite": 0 }, { "name": "白面鸮", "elite": 0 }, { "name": "星源", "elite": 0 }, { "name": "多萝西", "elite": 0 }],
+              "min_count": 1,
+              "max_count": 4,
+              "selection": "ordered",
+              "one_per_room": true
+            }
+          ],
+          "active_dependencies": [
+            {
+              "consumer_roles": ["nasti"],
+              "required_roles": ["rhine_support"]
+            }
+          ]
+        },
+        {
+          "id": "muelsyse_actual_support",
+          "roles": [
+            {
+              "id": "muelsyse",
+              "facility": "power_plant",
+              "candidates": [{ "name": "缪尔赛思", "elite": 2 }],
+              "competitive": true
+            },
+            {
+              "id": "rhine_support",
+              "facility": "dormitory",
+              "facilities": ["meeting_room", "workshop", "training_room"],
+              "candidates": [{ "name": "伊芙利特", "elite": 0 }, { "name": "塞雷娅", "elite": 0 }, { "name": "梅尔", "elite": 0 }, { "name": "麦哲伦", "elite": 0 }, { "name": "赫默", "elite": 0 }, { "name": "白面鸮", "elite": 0 }, { "name": "星源", "elite": 0 }, { "name": "多萝西", "elite": 0 }],
+              "min_count": 1,
+              "max_count": 5,
+              "selection": "ordered",
+              "one_per_room": true
+            }
+          ],
+          "active_dependencies": [
+            {
+              "consumer_roles": ["muelsyse"],
+              "required_roles": ["rhine_support"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

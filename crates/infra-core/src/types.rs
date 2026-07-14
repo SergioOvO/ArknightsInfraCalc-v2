@@ -102,7 +102,7 @@ pub enum Selector {
     ControlOperatorCount,
     /// 无人机上限（承曦·巡线框架）。
     DroneCap,
-    /// 基建内莱茵生命干员数（娜斯提·造价高昂等；最多 5，不含副手）。
+    /// 基建内莱茵生命干员总数（保存至 6；娜斯提消费时自行截断到 5）。
     RhineLifeInBase,
     /// 基建内除自身外莱茵生命干员数（缪尔赛思·生态科主任，最多 5）。
     RhineLifeInBaseExcludingSelf,

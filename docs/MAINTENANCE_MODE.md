@@ -297,7 +297,7 @@ run_logged "${task_slug}-bake-validate" "workspace data and baked tables" \
 - 不要把 CLI 当作机制层。
 - 不要为单一 bug 引入新的全局抽象。
 - 不要新增匿名混合权重。
-- 不要把复杂降级体系塞回 `base_systems.json`；迷迭香仍走 `system_integrity`。
+- 不要把复杂降级体系塞回 `base_systems.json`；迷迭香、自动化、红松、莱茵和贸易核心统一由 `data/orchestration_rules.json` 编译成 resolved `AssignmentPlan`，不得恢复 `system_integrity` 专用 evaluator。
 - A-B-A 入口已移除，不再作为复现或对照路径。
 - 不要提交用户私有 operbox、xlsx、debug bundle，除非用户明确允许并已脱敏。
 - 不要用 `git add .`。

@@ -41,7 +41,7 @@ pub fn apply_power_to_layout(
             workforce.layout_for_power_room(layout, room_id, &operator.name, Some(instances));
         let input = PowerRoomInput {
             operator: operator.clone(),
-            mood,
+            mood: operator.work_mood.unwrap_or(mood),
             shift_hours,
             layout: room_layout,
         };
@@ -156,13 +156,13 @@ mod tests {
         let mut op = PowerOperator::new("缪尔赛思", 2, vec!["power_rec_rhine[000]".into()]);
         op.tags = vec![TAG_RHINE.into()];
         let mut layout = LayoutContext::default();
-        layout.rhine_life_in_base = 5;
+        layout.rhine_life_in_base = 6;
         let mut input = PowerRoomInput::with_operator(op);
         input.layout = layout;
         let result = solve_power(&input, &table).unwrap();
-        // +10% 基础 + 4×3%（除自身外 4 名莱茵）
+        // +10% 基础 + 5×3%（总数 6，排除自身后满额 5）
         assert!(
-            result.final_efficiency == Efficiency::from_decimal(1.220),
+            result.final_efficiency == Efficiency::from_decimal(1.250),
             "got {}",
             result.final_efficiency
         );

@@ -117,7 +117,9 @@ impl WorkforceIndex {
                         room_id: room.id.clone(),
                         operator: op.clone(),
                     });
-                    if is_platform_operator(&op.name) {
+                    // 显式 0 心情的 Lancet-2 仍在发电站、可触发中枢森蚺，
+                    // 但不作为“其他发电站作业平台”阻断晨曦。
+                    if is_platform_operator(&op.name) && op.work_mood != Some(0) {
                         platform_rooms.push(room.id.clone());
                     }
                 }
@@ -153,7 +155,7 @@ impl WorkforceIndex {
             &all_base_names,
             &training_assist,
             TAG_RHINE,
-            5,
+            6,
         );
 
         let durin_in_base = count_tagged_in_base_excluding(
@@ -463,6 +465,26 @@ mod tests {
     }
 
     #[test]
+    fn zero_mood_platform_stays_in_power_but_does_not_block_other_power() {
+        let bp = BaseBlueprint::template_243_use_this().unwrap();
+        let mut assignment = BaseAssignment::default();
+        assignment.set_power_operator(
+            "power_1",
+            AssignedOperator::new("Lancet-2", 0).with_work_mood(Some(0)),
+        );
+        assignment.set_power_operator("power_2", AssignedOperator::new("承曦格雷伊", 2));
+        let idx = WorkforceIndex::build(&bp, &assignment, None);
+        assert!(idx.power_workforce.iter().any(|name| name == "Lancet-2"));
+        assert!(!idx.other_power_has_platform(&RoomId::from("power_2")));
+
+        let mut normal = BaseAssignment::default();
+        normal.set_power_operator("power_1", AssignedOperator::new("Lancet-2", 0));
+        normal.set_power_operator("power_2", AssignedOperator::new("承曦格雷伊", 2));
+        let normal_idx = WorkforceIndex::build(&bp, &normal, None);
+        assert!(normal_idx.other_power_has_platform(&RoomId::from("power_2")));
+    }
+
+    #[test]
     fn elite_facility_count_ignores_promoted_non_elite_operators() {
         let bp = BaseBlueprint::template_243_use_this().unwrap();
         let mut assignment = BaseAssignment::default();
@@ -511,7 +533,7 @@ mod tests {
         .collect();
         assignment.training_assist = Some(AssignedOperator::new("流明", 2));
         let idx = WorkforceIndex::build(&bp, &assignment, Some(&instances));
-        assert_eq!(idx.rhine_life_in_base, 5);
+        assert_eq!(idx.rhine_life_in_base, 6);
     }
 
     #[test]

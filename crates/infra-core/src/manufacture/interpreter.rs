@@ -139,7 +139,7 @@ impl ManuContext {
             .iter()
             .map(String::as_str)
             .collect();
-        let mut count = usize::from(self.layout.rhine_life_in_base);
+        let mut count = usize::from(self.layout.rhine_life_in_base.min(5));
         for operator in &self.operators {
             if operator
                 .tags

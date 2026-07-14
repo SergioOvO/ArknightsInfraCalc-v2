@@ -1,7 +1,7 @@
-//! 跨设施成套方案：小目录 + 贪心认领（`claim_base_systems`）。
+//! 尚未迁移体系的兼容 registry：小目录 + 贪心认领（`claim_base_systems`）。
 //!
 //! 数据：`data/base_systems.json`（来源：公孙长乐工具人表等固定组合）。
-//! 在 `assign_shift` 开头认领，已占房间由后续设施贪心跳过。
+//! 在高优先声明式 Rule 之后、late competitive Rule 之前认领。
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -265,11 +265,6 @@ struct BaseSystemsCache {
 }
 
 static BASE_SYSTEMS_CACHE: OnceLock<Option<BaseSystemsCache>> = OnceLock::new();
-
-#[cfg(test)]
-const BLACKKEY: &str = "黑键";
-#[cfg(test)]
-const CLOSURE: &str = "可露希尔";
 
 pub fn load_base_systems(path: &Path) -> Result<BaseSystemsFile> {
     let raw = std::fs::read_to_string(path)?;
@@ -863,7 +858,7 @@ pub fn apply_registry_system_claim(
 }
 
 /// 按 `priority` 认领可行成套方案；写入 `assignment` 与 `used`。
-/// `skip_system_ids`：已由 `system_integrity` 等路径处理的体系 id（如迷迭香链）。
+/// `skip_system_ids`：已由声明式 Rule 处理或按规则互斥关闭的兼容体系 id。
 pub fn claim_base_systems(
     blueprint: &BaseBlueprint,
     operbox: &OperBox,
@@ -1084,23 +1079,12 @@ mod tests {
     use super::*;
     use crate::instances::default_instances_path;
     use crate::layout::shift::AssignShiftMode;
-    use crate::layout::{BaseBlueprint, RoomProduct};
+    use crate::layout::BaseBlueprint;
     use crate::skill_table::default_skill_table_path;
 
     fn ideal_e2_operbox() -> OperBox {
         let path = crate::skill_table::data_path("schedule_243/operbox_ideal_e2.json").unwrap();
         OperBox::load(&path).unwrap()
-    }
-
-    fn operbox_without_names(base: &OperBox, exclude: &[&str]) -> OperBox {
-        let exclude: HashSet<_> = exclude.iter().copied().collect();
-        let entries: Vec<_> = base
-            .entries
-            .iter()
-            .filter(|e| !exclude.contains(e.name.as_str()))
-            .cloned()
-            .collect();
-        OperBox::from_entries(entries)
     }
 
     fn pinus_claimed(assignment: &BaseAssignment) -> bool {
@@ -1126,17 +1110,19 @@ mod tests {
         }
         assert!(
             !ids.contains("rosemary_perception"),
-            "迷迭香感知链走代码化体系层（system_integrity），不进 registry"
+            "迷迭香感知链走 orchestration_rules，不进 registry"
         );
         assert!(ids.contains("witch_long_beta"));
         assert!(ids.contains("blackkey_closure"));
         assert!(
             !ids.contains("pinus_sylvestris"),
-            "红松林走代码化体系层，不进 registry"
+            "红松林走 orchestration_rules，不进 registry"
         );
         assert!(ids.contains("lungmen_manu_pair"));
-        assert!(ids.contains("gongsun_greyy2_power_line"));
-        assert!(ids.contains("automation_group"), "自动化组应已注册");
+        assert!(
+            !ids.contains("gongsun_greyy2_power_line") && !ids.contains("automation_group"),
+            "自动化组及发电线已迁入 orchestration_rules，不得保留 legacy registry"
+        );
         assert!(
             !ids.contains("standardization_mizuki"),
             "标准化组合由制造候选池和效率搜索自然产生，不进入 registry"
@@ -1177,32 +1163,6 @@ mod tests {
                 "叙拉古成员不得由 registry 强制认领: {name}"
             );
         }
-    }
-
-    #[test]
-    fn legacy_claim_witch_long_beta_priority_without_docus() {
-        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let operbox = operbox_without_names(&ideal_e2_operbox(), &["但书"]);
-        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-
-        let mut assignment = BaseAssignment::default();
-        let mut used = HashSet::new();
-        claim_base_systems(
-            &blueprint,
-            &operbox,
-            &table,
-            AssignShiftMode::Peak,
-            &mut assignment,
-            &mut used,
-            &HashSet::new(),
-        )
-        .unwrap();
-
-        assert!(used.contains("巫恋") && used.contains("龙舌兰"));
-        assert!(
-            !used.contains(BLACKKEY) && !used.contains(CLOSURE),
-            "无但书上下文时龙巫仍应优先于可露希尔站"
-        );
     }
 
     #[test]
@@ -1261,177 +1221,14 @@ mod tests {
     }
 
     #[test]
-    fn claim_gongsun_greyy2_power_line_on_ideal_e2_peak() {
-        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let operbox = ideal_e2_operbox();
-        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-
-        let mut assignment = BaseAssignment::default();
-        let mut used = HashSet::new();
-        // 自动化组 (cross_station priority 20) 会先抢占承曦格雷伊
-        let mut skip = HashSet::new();
-        skip.insert("automation_group".to_string());
-        claim_base_systems(
-            &blueprint,
-            &operbox,
-            &table,
-            AssignShiftMode::Peak,
-            &mut assignment,
-            &mut used,
-            &skip,
-        )
-        .unwrap();
-
-        let power_ops: Vec<String> = blueprint
-            .rooms
+    fn legacy_automation_systems_are_absent_from_registry() {
+        let cache = base_systems_cache().expect("base_systems loaded");
+        let ids: HashSet<_> = cache
+            .systems
             .iter()
-            .filter(|r| r.kind == FacilityKind::PowerPlant)
-            .flat_map(|r| {
-                assignment
-                    .operators_in(&r.id)
-                    .iter()
-                    .map(|o| o.name.clone())
-            })
+            .map(|system| system.id.as_str())
             .collect();
-        assert!(
-            power_ops.contains(&"承曦格雷伊".to_string()),
-            "发电组应认领承曦格雷伊: {:?}",
-            power_ops
-        );
-        assert!(power_ops.contains(&"格雷伊".to_string()), "{power_ops:?}");
-        assert!(
-            power_ops.iter().any(|n| n == "布丁" || n == "炎熔"),
-            "第三发电位: {power_ops:?}"
-        );
-    }
-
-    // ── automation_group ──
-
-    fn automation_claimed(assignment: &BaseAssignment) -> bool {
-        let power_has_chengxi = assignment
-            .rooms
-            .iter()
-            .any(|r| r.operators.iter().any(|o| o.name == "承曦格雷伊"));
-        let factory_has_qingliu_wendy = assignment.rooms.iter().any(|r| {
-            r.operators.iter().any(|o| o.name == "清流")
-                && r.operators.iter().any(|o| o.name == "温蒂")
-        });
-        power_has_chengxi && factory_has_qingliu_wendy
-    }
-
-    #[test]
-    fn claim_automation_group_on_ideal_e2_peak() {
-        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let operbox = ideal_e2_operbox();
-        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-
-        let mut assignment = BaseAssignment::default();
-        let mut used = HashSet::new();
-        claim_base_systems(
-            &blueprint,
-            &operbox,
-            &table,
-            AssignShiftMode::Peak,
-            &mut assignment,
-            &mut used,
-            &HashSet::new(),
-        )
-        .unwrap();
-
-        assert!(
-            automation_claimed(&assignment),
-            "自动化组应认领承曦格雷伊(发电) + 清流+温蒂(制造)"
-        );
-    }
-
-    #[test]
-    fn claim_automation_group_uses_gold_factory_when_room_ids_shift() {
-        let mut blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        for room in &mut blueprint.rooms {
-            if room.id.0 == "manu_3" {
-                room.product = Some(RoomProduct::Factory {
-                    recipe: crate::types::RecipeKind::BattleRecord,
-                });
-            } else if room.id.0 == "manu_1" {
-                room.product = Some(RoomProduct::Factory {
-                    recipe: crate::types::RecipeKind::Gold,
-                });
-            }
-        }
-        let operbox = ideal_e2_operbox();
-        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-
-        let mut assignment = BaseAssignment::default();
-        let mut used = HashSet::new();
-        claim_base_systems(
-            &blueprint,
-            &operbox,
-            &table,
-            AssignShiftMode::Peak,
-            &mut assignment,
-            &mut used,
-            &HashSet::new(),
-        )
-        .unwrap();
-
-        let manu_1 = assignment.operators_in(&RoomId::from("manu_1"));
-        assert!(
-            manu_1.iter().any(|op| op.name == "清流") && manu_1.iter().any(|op| op.name == "温蒂"),
-            "自动化制造位应跟随赤金产线，而不是固定 manu_3: {manu_1:?}"
-        );
-        assert!(
-            assignment
-                .operators_in(&RoomId::from("manu_3"))
-                .iter()
-                .all(|op| op.name != "清流" && op.name != "温蒂"),
-            "manu_3 已是经验站，不应承接自动化组"
-        );
-    }
-
-    #[test]
-    fn claim_automation_group_skipped_without_weedy_e2() {
-        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let operbox = operbox_without_names(&ideal_e2_operbox(), &["温蒂"]);
-        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-
-        let mut assignment = BaseAssignment::default();
-        let mut used = HashSet::new();
-        claim_base_systems(
-            &blueprint,
-            &operbox,
-            &table,
-            AssignShiftMode::Peak,
-            &mut assignment,
-            &mut used,
-            &HashSet::new(),
-        )
-        .unwrap();
-
-        assert!(!automation_claimed(&assignment), "缺温蒂时不应认领自动化组");
-    }
-
-    #[test]
-    fn claim_automation_group_skipped_without_chengxi_greyy() {
-        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let operbox = operbox_without_names(&ideal_e2_operbox(), &["承曦格雷伊"]);
-        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-
-        let mut assignment = BaseAssignment::default();
-        let mut used = HashSet::new();
-        claim_base_systems(
-            &blueprint,
-            &operbox,
-            &table,
-            AssignShiftMode::Peak,
-            &mut assignment,
-            &mut used,
-            &HashSet::new(),
-        )
-        .unwrap();
-
-        assert!(
-            !automation_claimed(&assignment),
-            "缺承曦格雷伊时不应认领自动化组"
-        );
+        assert!(!ids.contains("automation_group"));
+        assert!(!ids.contains("gongsun_greyy2_power_line"));
     }
 }

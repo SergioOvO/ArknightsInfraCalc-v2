@@ -8,15 +8,20 @@
 
 | 体系 | 状态 | 说明 |
 |------|------|------|
-| 红松林 | 已完成审计、修复与端到端补证 | 提交 `9ca679a`、`53060b8`；当前口径见 `RED_PINE_FOREST_CHAIN.md` |
+| 红松林 | 已完成审计并迁入通用规则编译器 | 双中枢、实际 2/3 名红松制造成员、BR 配方和全员 bind 由 resolved plan 保证；赤金线不是门槛 |
+| 自动化组 | 已完成本轮声明式迁移 | 二/三电有限 alternatives、温蒂硬核心、Lancet-2 工作/休息状态已进入 plan；第三人完整 solver 比较仍是已知风险 |
+| 迷迭香感知链 | 已完成本轮声明式迁移 | 双核心 + 实际感知 ≥50、显式 prefer、条件互斥、producer bind 已进入 plan；低心情令与 witch 低档阈值仍是风险 |
+| 莱茵 receiver | 已完成第一版 late competitive 迁移 | 真实支持空位、5/6 人计数、制造/发电 Pareto 和单向 active dependency 已实现；支持设施跨域机会成本未计入 objective |
+| 贸易核心 | 已完成声明式迁移 | 一贸龙门币可露希尔、多贸龙门币但书、全源石不启用；只固定核心并声明 continuous role |
 | 控制中枢编排 / 人间烟火 | 已完成审计、修复、主审与端到端补证 | 提交 `3aceaab`、`2b73ae7`；已实现 `required_count` 候选约束、纯/感知互斥、共享烟火、桑葚办公室轮换及中枢满 5。剩余风险：三班心情恢复仍采用当前最小状态模型。 |
 | 普通制造候选边界 / 标准化误注册 | 已完成审计、修复、主审、反例与真实 `plan` 补证 | 提交 `4a7aa9f`；普通制造改为全合法普通候选按 `final_efficiency` 自然搜索，删除 standardization registry 与自然入选触发的 exact bind，system-only 干员只由显式 anchor 加回，并修复跨房 / gamma 上下文与最终 snapshot 生命周期。此行只表示普通制造候选边界完成，不表示完整莱茵或自动化体系审计完成。 |
 | 其他体系 | 待逐项审计 | 后续 Agent 必须一次只选择一个，不得合并成全仓库泛查 |
 
 本轮仍未关闭的风险必须保留在后续审计范围内：
 
-- **完整莱茵**：缪尔赛思是否进入普通 power 候选、power search 的 excluding-self 口径，以及为凑莱茵计数主动把挂件放入非生产设施，均未审计完成。
-- **完整自动化**：缺承曦格雷伊时使用三座物理电站的降级，以及 252 / 342 等布局下的激活、效率和轮换，均未审计完成。
+- **莱茵第一版 objective**：制造/发电机会成本已比较，但支持设施的办公室刷新、训练、加工和宿舍恢复价值没有进入跨域 objective。
+- **自动化第三人**：两电中枢森蚺分支可使用三级房第三位，但当前按 alternative 声明顺序选人，尚非逐候选完整 solver 比较。
+- **迷迭香剩余项**：低心情令 alternative 未接入；显式 witch 例外尚无“低档”精确可计算阈值。
 - **轮换再优化**：gamma 仍复用 peak-control seed；Recovery 也不会重新选择制造组合。这是当前 policy，不得误报为跨班联合最优。
 - **公开 API 兼容性**：两个公开 re-export API `assign_team_producer_rooms`、`assign_team_gamma_half` 新增了上下文参数；内部调用已迁移，但外部 Rust 调用方存在 source-breaking 风险。
 
@@ -206,7 +211,7 @@ subagent 执行的任何 test 调用都无例外必须按 [`AGENTS.md` 的验证
 
 红松林标准全精二结果最初看似正确，但补最小人数和跨站端到端测试后发现：同一制造房已有多个 required anchor 时，fill 只保留首个成员并覆盖整房。第二名成员有时会被后续搜索重新选中，因此普通输出可能掩盖结构错误。
 
-最终修复没有为红松干员或固定房间写特判，而是让制造 fill 通用地保留全部 recipe anchor；体系本身由 `PinusPlan` 统一产出激活条件、双中枢 anchor、实际拥有的 2/3 名制造 anchor 和全员 `shift_bind`。这个案例说明，后续体系必须用最低人数、竞争候选和跨站容量反例证明，而不能只看满配总效率。
+最终修复没有为红松干员或固定房间写特判，而是让制造 fill 通用地保留全部 recipe anchor；体系本身由 `orchestration_rules.json` 的 gate/role 编译出双中枢 anchor、实际拥有的 2/3 名制造 anchor 和全员 `shift_bind`。这个案例说明，后续体系必须用最低人数、竞争候选和跨站容量反例证明，而不能只看满配总效率。
 
 ## 9. 普通制造自然搜索案例留下的通用教训
 

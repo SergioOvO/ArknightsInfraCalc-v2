@@ -4,10 +4,11 @@ use crate::layout::blueprint::{FacilityKind, RoomId};
 use crate::layout::shift::AssignShiftMode;
 use crate::layout::system::{RegistrySystemClaim, SlotFillMode};
 use crate::layout::tier::OperatorTier;
+use crate::trade::input::TradeOrderKind;
 use crate::types::RecipeKind;
 use std::collections::HashSet;
 
-/// 单个 slot 的落位方式（Phase 0 以 fixed / optional 为主；bond / core 在 Phase 2+ 扩展）。
+/// 兼容 registry claim 的单个 slot 落位方式；声明式 Rule 直接产出 `SystemAnchor`。
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SlotFill {
@@ -40,10 +41,7 @@ pub struct ActivatedSystem {
     pub slots: Vec<SlotFill>,
 }
 
-// ── Phase 2 体系语义类型（ADR 0001 决策 C） ──────────────────────────────
-// 当前仅定义类型并挂在 `AssignmentPlan` 上（默认空），不改变排班结果。
-// 由后续 Phase（体系层接线 / execute 三态 / anchor fill）逐步产出与消费。
-// 设计依据：docs/TODO/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md §2。
+// ── 当前声明式体系语义类型 ─────────────────────────────────────────────
 
 /// anchor 填充策略：决定 fill 阶段如何补齐 anchor 房的队友。
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -57,7 +55,7 @@ pub enum AnchorFillPolicy {
     Plain,
 }
 
-/// 体系锚点：钉核心干员与设施，队友由 fill 阶段补齐（蓝本 `system_integrity/plan.rs:30`）。
+/// 体系锚点：钉核心干员与已解析设施/房间，队友由 fill 阶段补齐。
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct SystemAnchor {
     pub system_id: String,
@@ -68,7 +66,24 @@ pub struct SystemAnchor {
     pub room_id: Option<RoomId>,
     /// 制造 anchor 的配方约束；非制造设施为 `None`。
     pub recipe: Option<RecipeKind>,
+    /// 贸易 anchor 的订单约束；非贸易设施为 `None`。
+    pub trade_order: Option<TradeOrderKind>,
+    /// 单个干员的特殊工作心情；例如 Lancet-2 红脸上班。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub work_mood: Option<u8>,
+    /// 该绑定组休息时的非宿舍去向；由轮换导出通用消费。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rest_facility: Option<FacilityKind>,
     pub fill_policy: AnchorFillPolicy,
+}
+
+/// 通用规则编译器已经选定的有限方案。后续阶段只消费结果，不再重跑体系选型。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct SelectedRuleAlternative {
+    pub rule_id: String,
+    pub alternative_id: String,
+    pub priority: i32,
+    pub operators: Vec<String>,
 }
 
 /// 只提供全局 / 跨设施资源的 producer slot（蓝本 `OptionalProducer`）。
@@ -106,12 +121,30 @@ pub struct DegradationLadder {
     pub producers_missing: Vec<String>,
 }
 
-/// 同班绑定（已存在于 `system_integrity/plan.rs:21`，迁入 plan 供轮换消费）。
+/// exact 同班绑定：plan 供轮换消费，不承担进编责任。
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct ShiftBind {
     pub operators: Vec<String>,
+    /// 0 表示只绑定同队，不声明固定工作班次数。
     pub on_shifts: u8,
+    /// 0 表示不声明固定休息班次数。
     pub off_shifts: u8,
+}
+
+/// 单向在岗依赖：任一 consumer 在岗时，实际入选的 required 成员必须在基建内。
+/// 当前轮换器把 required 作为全周期共享岗位；consumer 休息时不反向要求 required 离岗。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ActiveDependency {
+    pub consumers: Vec<String>,
+    pub required: Vec<String>,
+}
+
+/// 需要在所有可持续工作班次优先回岗的已解析角色；轮换层只负责通用恢复策略。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ContinuousRole {
+    pub operator: String,
+    pub facility: FacilityKind,
+    pub room_id: RoomId,
 }
 
 /// 中枢搜索候选组约束：由 solver 在候选中至少选择 `min_count` 人。
@@ -125,22 +158,31 @@ pub struct ControlCandidateRequirement {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct AssignmentPlan {
     pub mode: AssignShiftMode,
-    /// 计划阶段已确定的体系（`base_systems` 选型结果）。
+    /// 计划阶段已确定的规则 alternatives 与兼容 registry claims 的统一视图。
     pub activated: Vec<ActivatedSystem>,
     /// `base_systems.json` 认领明细（`execute_plan` 落位用）。
     pub registry_claims: Vec<RegistrySystemClaim>,
-    /// Phase 2 体系语义：两路径（registry + 代码化体系层）汇合产出。
-    /// 当前默认空，由后续 Phase 产出与消费，不影响现有排班。
+    /// 声明式规则编译结果；一条 rule 最多选择一个 finite alternative。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub selected_rules: Vec<SelectedRuleAlternative>,
+    /// 规则编译器与兼容 registry 汇合后的实际 required placements；room 已解析。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub anchors: Vec<SystemAnchor>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub producers: Vec<ProducerSlot>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub constraints: Vec<SystemConstraint>,
+    /// 已选 alternative 明确排除的干员；fill / rotation 不得从普通候选重新引入。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub excluded_operators: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub degradations: Vec<DegradationLadder>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shift_binds: Vec<ShiftBind>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub active_dependencies: Vec<ActiveDependency>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub continuous_roles: Vec<ContinuousRole>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub control_candidate_requirements: Vec<ControlCandidateRequirement>,
 }
@@ -181,10 +223,10 @@ impl AssignmentPlan {
                 })
             })
         };
-        let perception_active = self
+        let pure_fireworks_active = self
             .activated
             .iter()
-            .any(|system| system.system_id == "human_fireworks_perception");
+            .any(|system| system.system_id == "human_fireworks_pure");
 
         let mut add = |operators: &[&str]| {
             if self.shift_binds.iter().any(|bind| {
@@ -225,10 +267,7 @@ impl AssignmentPlan {
         }
 
         let wuyou_active = anywhere_in(FacilityKind::TradePost, &["乌有"]);
-        if perception_active && wuyou_active && in_control("重岳") && in_control("令") {
-            add(&["重岳", "令", "乌有"]);
-        } else if !perception_active && wuyou_active && anywhere_in(FacilityKind::Office, &["桑葚"])
-        {
+        if pure_fireworks_active && wuyou_active && anywhere_in(FacilityKind::Office, &["桑葚"]) {
             let mut operators = vec!["桑葚", "乌有"];
             if in_control("重岳") {
                 operators.push("重岳");
@@ -247,11 +286,15 @@ impl AssignmentPlan {
             mode,
             activated: Vec::new(),
             registry_claims: Vec::new(),
+            selected_rules: Vec::new(),
             anchors: Vec::new(),
             producers: Vec::new(),
             constraints: Vec::new(),
+            excluded_operators: Vec::new(),
             degradations: Vec::new(),
             shift_binds: Vec::new(),
+            active_dependencies: Vec::new(),
+            continuous_roles: Vec::new(),
             control_candidate_requirements: Vec::new(),
         }
     }
@@ -469,32 +512,10 @@ mod tests {
     }
 
     #[test]
-    fn actual_fireworks_bind_uses_selected_branch_members() {
+    fn pure_fireworks_legacy_bind_uses_actual_selected_members() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let mut assignment = BaseAssignment::default();
-        assignment.set_room(
-            "control",
-            vec![
-                AssignedOperator::new("重岳", 2),
-                AssignedOperator::new("令", 2),
-            ],
-        );
         set_trade_group(&mut assignment, &["乌有"]);
-
-        let mut perception = AssignmentPlan::recovery(AssignShiftMode::Peak);
-        perception.activated.push(ActivatedSystem {
-            system_id: "human_fireworks_perception".to_string(),
-            priority: 0,
-            tier: crate::layout::tier::OperatorTier::CrossStation,
-            slots: Vec::new(),
-        });
-        perception.derive_actual_shift_binds(&blueprint, &assignment);
-        assert!(perception.shift_binds.iter().any(|bind| {
-            ["乌有", "重岳", "令"]
-                .iter()
-                .all(|name| bind.operators.iter().any(|bound| bound == name))
-        }));
-
         let office_id = blueprint
             .rooms
             .iter()
@@ -505,6 +526,12 @@ mod tests {
         assignment.set_room(office_id, vec![AssignedOperator::new("桑葚", 2)]);
         assignment.set_room("control", vec![AssignedOperator::new("令", 2)]);
         let mut pure = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        pure.activated.push(ActivatedSystem {
+            system_id: "human_fireworks_pure".to_string(),
+            priority: 18,
+            tier: crate::layout::tier::OperatorTier::CrossStation,
+            slots: Vec::new(),
+        });
         pure.derive_actual_shift_binds(&blueprint, &assignment);
         assert!(pure.shift_binds.iter().any(|bind| {
             ["乌有", "桑葚", "令"]

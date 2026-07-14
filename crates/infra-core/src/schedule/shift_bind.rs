@@ -1,6 +1,6 @@
 //! 班次绑定：指定干员组在 αβγ 轮换中 **同上同下**（上 N 休 M）。
 //!
-//! 绑定来源：统一 `AssignmentPlan.shift_binds`（由体系层 `evaluate_systems` 产出）。
+//! 绑定来源：统一 `AssignmentPlan.shift_binds`（由声明式规则编译器产出）。
 //! 消费方：`schedule_team_rotation`（非编排层、非 global effect）。
 
 use std::collections::HashSet;
@@ -206,15 +206,17 @@ pub fn verify_shift_binds(
         }
         let team = team_of_operator(report, present[0])
             .ok_or_else(|| format!("{}: 未找到 {} 所属队", label, present[0]))?;
-        let rest = resting_shift_index(team);
-        for name in &present {
-            if operator_in_shift(report, rest, name) {
-                return Err(format!(
-                    "{}: {} 应在休息班 shift{} 缺席",
-                    label,
-                    name,
-                    rest + 1
-                ));
+        if bind.off_shifts > 0 {
+            let rest = resting_shift_index(team);
+            for name in &present {
+                if operator_in_shift(report, rest, name) {
+                    return Err(format!(
+                        "{}: {} 应在休息班 shift{} 缺席",
+                        label,
+                        name,
+                        rest + 1
+                    ));
+                }
             }
         }
         let active = report
@@ -226,7 +228,7 @@ pub fn verify_shift_binds(
                     .all(|n| operator_in_shift(report, s.index, n))
             })
             .count();
-        if active != bind.on_shifts as usize {
+        if bind.on_shifts > 0 && active != bind.on_shifts as usize {
             return Err(format!(
                 "{}: 期望上岗 {} 班，实际 {}",
                 label, bind.on_shifts, active

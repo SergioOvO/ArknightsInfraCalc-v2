@@ -17,7 +17,7 @@
 - **发电站**：`search_power_assignment`（充能 + 虚拟发电折算）
 - **全基建宏观排班**：`assign_shift`（编排 `build_plan` → `execute_plan`）已落地（`layout test` / `plan` / `team-rotation` 默认调用）
 - **box_profile**：练度分析工具（`plan` / `layout analyze`）
-- **编排层**：`base_systems.json` 体系认领（但书链、巫恋、可露希尔黑键、红松林等）；`cross_facility` global atom
+- **编排层**：`orchestration_rules.json` 声明贸易核心、迷迭香、自动化、红松、莱茵；`base_systems.json` 仅承载尚未迁移的兼容 registry；`cross_facility` 结算 global atom
 
 ### 各域落地状态
 
@@ -34,7 +34,7 @@
 **当前边界**：mood 内核与 peak 主力最长工作时间已接入；宿管分配、按 ETA 改写短班、
 全基建连续心情最优化仍由后续上层规划器负责。见 [mood_eta_design.md](../plans/mood_eta_design.md)。
 
-**全基建单班进驻编制**（`assign_shift` → `build_plan` / `execute_plan`、并行搜 + `used` 顺序落位）：现行见 **[BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md)**；**编排层 Phase 0–3 / 5 已落地**（`layout/orchestrate/`、`base_systems.json`）。剩余 Phase 计划在维护期默认冻结，除非用户明确要求继续功能建设。
+**全基建单班进驻编制**（`assign_shift` → `build_plan` / `execute_plan`、并行搜 + `used` 顺序落位）：现行见 **[BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md)**；声明式规则由 `layout/orchestrate/rules.rs` 把 `data/orchestration_rules.json` 编译成完全解析的 `AssignmentPlan`，兼容 registry 在主规则与 late competitive rule 之间执行。
 
 ---
 
@@ -145,7 +145,7 @@ ArknightsInfraCalc-v2/
 | `blueprint.rs` | `BaseBlueprint`、`RoomBlueprint`、`FacilityKind`、`RoomProduct`；`trade_station_scenario`、`manu_line_scenario` |
 | `assignment.rs` | `BaseAssignment`、`AssignedOperator`、`RoomAssignment` |
 | `assign.rs` | **`assign_shift` / `assign_shift_with_plan`**：编排 `build_plan` → `execute_plan`；贸易余站贪心 |
-| `orchestrate/` | **`AssignmentPlan`**、`select_registry_systems`、`execute_plan`（System → Plan → Execute；tier 两阶段贪心） |
+| `orchestrate/` | **`AssignmentPlan`**、通用 rules compiler、registry 兼容汇合、`execute_plan`（Rule → resolved Plan → Execute；executor 不按体系名分派） |
 | `resolve.rs` | `resolve_base`：蓝图+编制 → `ResolvedBase`；集成 `cross_facility` global 池 |
 | `context.rs` | `LayoutContext`、`SharedLayout`、`DEFAULT_DORM_OCCUPANT_COUNT` |
 | `shift.rs` | `AssignShiftMode`（`Peak` / `Recovery`） |
@@ -216,7 +216,8 @@ ArknightsInfraCalc-v2/
 | **`operator_instances.json`** | `干员@tier_0` / `干员@tier_up` → `buff_ids`；干员归属唯一真相 | Cursor |
 | **`trade_shortcuts.json`** | L3 组合表化最优解 + verify / reference 锚点；`gsl_ling_jie_yaxin` 仅参考，不 active 匹配 | 双方 |
 | **`trade_segments.json`** | 链段注册表（docus_syracusa / blackkey_closure / vina_lungmen / penguin_*）+ 贸易 core role fallback 链（docus / closure / witch） | 双方 |
-| **`base_systems.json`** | 编排层体系认领（`select_registry_systems` / `execute_plan`）；字段含 `tier`（`cross_station` / `same_station`）、priority、`exclusive_group`、slots；贸易核心优先不再靠 fixed registry 抢站 | 脚本 + 手工 |
+| **`orchestration_rules.json`** | 声明式有限 alternatives：贸易核心、迷迭香、自动化、红松、莱茵；gate/role/relation/工作状态/轮换依赖由同一编译器消费 | 手工（Markdown 为业务真源） |
+| **`base_systems.json`** | 尚未迁移体系的兼容 registry；字段含 `tier`、priority、`exclusive_group`、slots；不得再加入复杂降级体系 | 脚本 + 手工 |
 | **`REGRESSION_CASES.csv`** | CLI `verify` 用例：期望最终效率、机制等效效率与 `rule_id` | 双方 |
 | **`UNIT_OUTPUT_ANCHORS.csv`** | 单位产出 / GSL 赤金锚点 | 双方 |
 | **`prts_trade_skills.json`** / `.csv` / `_table.html` | PRTS 贸易站技能原文快照（核对用） | 脚本抓取 |
@@ -275,7 +276,7 @@ ArknightsInfraCalc-v2/
 | 组合表化（巫恋/可露希尔档） | `trade_shortcuts.json` | `shortcut.rs`、`REGRESSION_CASES.csv`、`verify/fixtures.rs` |
 | 搜索变慢/评分不对 | `search/trade.rs` | `solver.rs` 的 score 逻辑 |
 | 三班轮换 | `schedule/team_rotation.rs`、`schedule/shift_bind.rs` | `operbox` 数据、`TradeSearchOptions` |
-| 编排层 / 体系认领 | [ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md) | `layout/orchestrate/`、`data/base_systems.json` |
+| 编排层 / 体系认领 | [ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md) | `layout/orchestrate/`、`data/orchestration_rules.json`、兼容 `data/base_systems.json` |
 | 全基建单班进驻编制 | [BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md) | `layout/assign.rs`、`layout/orchestrate/` |
 | 宏观排班/中枢搜索 | `layout/assign.rs`、`search/control.rs` | `assign.rs` 的 `assign_control` / `assign_dorm_producers` |
 | αβγ 三队轮换 | `schedule/team_rotation.rs` | `export/maa.rs` 导出 |

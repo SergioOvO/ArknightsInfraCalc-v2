@@ -1,6 +1,6 @@
 # 架构导览：从 `plan` 到 MAA 排班
 
-> 状态：当前实现导览，事实快照为 2026-07-14。本文只解释已经存在的调用链；历史计划和未来候选架构不属于当前运行时。
+> 状态：当前实现导览，事实快照为 2026-07-15。本文只解释已经存在的调用链；历史计划和未来候选架构不属于当前运行时。
 
 本文适合第一次追踪完整排班结果的开发者。维护或修 bug 前仍应先读 [AGENTS.md](../AGENTS.md)、[MAINTENANCE_MODE.md](MAINTENANCE_MODE.md) 和 [PROJECT_MAP.md](PROJECT_MAP.md)。如果只想理解基建业务过程而不关心代码入口，读 [GONGSUN_RUNTIME_OVERVIEW.md](GONGSUN_RUNTIME_OVERVIEW.md)。
 
@@ -10,7 +10,7 @@
 |---|---|---|
 | 当前用户裁决 | 当前对话中明确补充或纠正的业务口径；应先同步到 Markdown | [SYSTEM_AUDIT_WORKFLOW.md](SYSTEM_AUDIT_WORKFLOW.md) |
 | Markdown 真源 | 业务语义与预期行为的最高权威；代码、数据和旧测试不能反推或推翻它 | [INDEX.md](INDEX.md)、`docs/公孙长乐的体系分析文档/` |
-| `data/` | 技能、干员实例、体系、shortcut、布局和回归锚点的运行时载体 | `operator_instances.json`、`skill_table.json`、`base_systems.json`、`trade_shortcuts.json` |
+| `data/` | 技能、干员实例、声明式编排规则、兼容体系、shortcut、布局和回归锚点的运行时载体 | `operator_instances.json`、`skill_table.json`、`orchestration_rules.json`、`base_systems.json`、`trade_shortcuts.json` |
 | L1 | 把 `buff_id` 解释为 EffectAtom 行为；解释器不认识干员名 | [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md)、[trade/interpreter.rs](../crates/infra-core/src/trade/interpreter.rs)、[manufacture/interpreter.rs](../crates/infra-core/src/manufacture/interpreter.rs) |
 | L2 | 处理不能只靠局部 atom 表达的机制域求解 | [gold_flow.rs](../crates/infra-core/src/trade/gold_flow.rs)、[order_mechanic.rs](../crates/infra-core/src/trade/order_mechanic.rs)、[unit_output.rs](../crates/infra-core/src/trade/unit_output.rs) |
 | L3 | 对固定最优或难 atom 化的贸易组合做 shortcut 结算 | [shortcut.rs](../crates/infra-core/src/trade/shortcut.rs)、[segment.rs](../crates/infra-core/src/trade/segment.rs)、[INTERNAL/SHORTCUT_MATCHING.md](INTERNAL/SHORTCUT_MATCHING.md) |
@@ -73,37 +73,40 @@ OperBoxEntry
 
 因此排查“账号有干员但没进池”时，应依次检查姓名匹配、练度 tier、设施绑定、`buff_id` 和池过滤，而不是先改搜索排序。
 
-## 5. `build_plan`：只做 System 选型，不做效率求解
+## 5. `build_plan`：结构选型 + late competitive 比较，输出统一 Plan
 
 高峰班从 `schedule_team_rotation` 调用 `assign_shift_with_plan_skip`，后者在 [layout/assign.rs](../crates/infra-core/src/layout/assign.rs) 中先调用 [orchestrate/select.rs](../crates/infra-core/src/layout/orchestrate/select.rs) 的 `build_plan`。
 
-`build_plan` 合并两种来源：
+`build_plan` 按唯一优先级顺序合并三段来源：
 
-- `system_integrity/` 的代码化体系判定，例如迷迭香与红松林；
-- `base_systems.json` 的 registry claim。
+1. 先编译 `orchestration_rules.json` 中 `priority >= 19` 的声明式 Rule；
+2. 再选择 `base_systems.json` 的兼容 registry claims，且只看前段已解析后的真实占位、排除与容量；
+3. 最后编译 `priority <= 18` 的 late Rule，读取前两段落位后的真实空位。
 
 输出统一的 `AssignmentPlan`，包含：
 
-- `registry_claims` 与已激活体系；
-- required anchors；
+- `selected_rules`、`registry_claims` 与已激活体系；
+- 已经解析到实际房间的 required anchors；
 - optional producers；
 - 同房/禁同房等 constraints；
+- 路径级 `excluded_operators`；
 - degradation 信息；
 - shift binds；
+- actual active dependencies 与 continuous roles；
 - 中枢搜索候选要求。
 
-这里不调用贸易、制造或中枢 solver。required anchor、`shift_bind` 和 shortcut 也不是同一种东西：anchor 保证进编，bind 约束已进编人员的跨班关系，shortcut 只负责最终组合结算。
+高优先硬规则只按结构不变量解析 required core，不靠 solver 决定硬核心；late competitive Rule 可调用已有制造/发电 domain solver，与普通基线做 Pareto 比较，resource gate 也可读取候选 assignment 的 `resolve_base` 结果，但规则层不复制机制公式。required anchor、`shift_bind` 和 shortcut 也不是同一种东西：anchor 保证进编，bind 约束已进编人员的跨班关系，shortcut 只负责最终组合结算。
 
 更详细的不变量见 [ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md) 和 [ADR 0001](ADR/0001-layout-assignment-decomposition.md)。
 
 ## 6. `execute_plan` 与 `used`：把计划落成初始编制
 
-[orchestrate/execute.rs](../crates/infra-core/src/layout/orchestrate/execute.rs) 的 `execute_plan` 接受 seed assignment 和 `AssignmentPlan`，应用 registry claims，返回：
+[orchestrate/execute.rs](../crates/infra-core/src/layout/orchestrate/execute.rs) 的 `execute_plan` 接受 seed assignment 和 `AssignmentPlan`，直接落位全部 resolved anchors 与兼容 registry claims，并把 `excluded_operators` 扩展进 `used`，返回：
 
 - 已经落位的 `BaseAssignment`；
 - 同步的全局 `used: HashSet<String>`。
 
-随后 [layout/assign/pipeline.rs](../crates/infra-core/src/layout/assign/pipeline.rs) 再放置计划中的代码化 anchors，并继续使用同一份 `used`。`used` 是跨设施人员互斥的运行时事实；任何提前落位都会改变后续设施的可选池。
+随后 [layout/assign/pipeline.rs](../crates/infra-core/src/layout/assign/pipeline.rs) 直接消费这份已落位 assignment、`used` 与 plan 约束，继续设施建池、补位和 `resolve`；不再二次放置另一套代码化 anchors。`used` 是跨设施人员互斥的运行时事实；任何提前落位或路径级排除都会改变后续设施的可选池。
 
 这也是编排 bug 不能在最下游“塞一个人”的原因：若硬核心应在 `AssignmentPlan` 表达，却只在 fill 阶段补人，其他设施已经可能抢走该干员或其队友。
 
@@ -111,9 +114,9 @@ OperBoxEntry
 
 [layout/assign/pipeline.rs](../crates/infra-core/src/layout/assign/pipeline.rs) 是单班阶段顺序的事实源。Peak 主路径当前执行：
 
-1. `execute_plan`，并放置代码化 anchors。
+1. `execute_plan` 一次性落位 plan 中的 resolved anchors 与 registry claims，并合并 exclusions 到 `used`。
 2. 从 operbox 建 control/trade/manufacture/power 四类池。
-3. 把 plan tier、候选要求和搜索 anchor 注入池。
+3. 把 plan tier、候选要求、constraints 与已解析 anchor 的搜索元数据注入池。
 4. 比较普通高峰前缀与当前登记的可选动态贸易 producer 前缀。
 5. 每个前缀依次处理中枢、体系 producer、宿舍 producer、发电和贸易；阶段间通过 `resolve_snapshot` 获取新上下文。
 6. 只让胜出的前缀进入制造站填充。

@@ -3,62 +3,16 @@ use std::collections::HashSet;
 use crate::error::Result;
 use crate::instances::OperatorInstances;
 use crate::layout::assignment::{AssignedOperator, BaseAssignment};
-use crate::layout::blueprint::{BaseBlueprint, FacilityKind, RoomId, RoomProduct};
+use crate::layout::blueprint::{BaseBlueprint, FacilityKind, RoomId};
 use crate::operbox::OperBox;
 
 const SENXI_DORM_CUISINE_BUFF: &str = "dorm_rec_bd_dungeon[000]";
 const SPHINX_NAME: &str = "深巡";
 const URRBIAN_NAME: &str = "乌尔比安";
 
-pub(super) fn place_system_anchors(
-    blueprint: &BaseBlueprint,
-    anchors: &[crate::layout::orchestrate::SystemAnchor],
-    assignment: &mut BaseAssignment,
-    used: &mut HashSet<String>,
-) -> Result<()> {
-    for anchor in anchors {
-        if used.contains(&anchor.operator) {
-            return Err(crate::error::Error::msg(format!(
-                "required anchor {} already occupied before {} placement",
-                anchor.operator, anchor.system_id
-            )));
-        }
-        let accepts = |room: &&crate::layout::blueprint::RoomBlueprint| {
-            room.kind == anchor.facility
-                && assignment.operators_in(&room.id).len() < room.operator_capacity()
-                && anchor.recipe.is_none_or(|required| {
-                    matches!(room.product, Some(RoomProduct::Factory { recipe }) if recipe == required)
-                })
-        };
-        let room_id = match &anchor.room_id {
-            Some(id) => blueprint
-                .rooms
-                .iter()
-                .find(|room| &room.id == id && accepts(room))
-                .map(|room| room.id.clone()),
-            None => blueprint
-                .rooms
-                .iter()
-                .find(accepts)
-                .map(|room| room.id.clone()),
-        }
-        .ok_or_else(|| {
-            crate::error::Error::msg(format!(
-                "required anchor {} for {} has no facility capacity",
-                anchor.operator, anchor.system_id
-            ))
-        })?;
-        let mut operators = assignment.operators_in(&room_id).to_vec();
-        operators.push(AssignedOperator::new(anchor.operator.clone(), anchor.elite));
-        assignment.set_room(room_id, operators);
-        used.insert(anchor.operator.clone());
-    }
-    Ok(())
-}
-
 /// 落位统一 plan 的体系 producer（感知链：夕中枢 / 絮雨办公室 / 爱丽丝·车尔尼宿舍）。
 ///
-/// producer 由 `build_plan` 经 `evaluate_systems` 产出为 `ProducerSlot`（仅在拥有且达练度时
+/// 兼容旧 registry producer slot（仅在拥有且达练度时
 /// 出现），本函数按设施落位：中枢补位（满 5 跳过）、办公室/宿舍取首个空房。用真实 progress
 /// 落位以保持效率不变；不在此重复 owns/elite 判定（已由体系层 gate）。
 pub(super) fn place_system_producers(

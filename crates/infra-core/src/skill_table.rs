@@ -281,6 +281,10 @@ fn exact_embedded_data(name: &str) -> Option<(&'static str, &'static [u8])> {
             env!("CARGO_MANIFEST_DIR"),
             "/../../data/base_systems.json"
         )) as &[u8],
+        "orchestration_rules.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/orchestration_rules.json"
+        )) as &[u8],
         "trade_segments.json" => include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../data/trade_segments.json"
@@ -382,6 +386,7 @@ fn exact_embedded_data(name: &str) -> Option<(&'static str, &'static [u8])> {
             "mood_model.json" => "mood_model.json",
             "standalone_roster.json" => "standalone_roster.json",
             "base_systems.json" => "base_systems.json",
+            "orchestration_rules.json" => "orchestration_rules.json",
             "trade_segments.json" => "trade_segments.json",
             "trade_shortcuts.json" => "trade_shortcuts.json",
             "training_recommendations.json" => "training_recommendations.json",
@@ -449,6 +454,7 @@ mod tests {
             "mood_model.json",
             "standalone_roster.json",
             "base_systems.json",
+            "orchestration_rules.json",
             "trade_segments.json",
             "trade_shortcuts.json",
             "training_recommendations.json",

@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use crate::error::Result;
 use crate::layout::assignment::BaseAssignment;
-use crate::layout::blueprint::BaseBlueprint;
+use crate::layout::blueprint::{BaseBlueprint, RoomProduct};
 use crate::layout::shift::AssignShiftMode;
 use crate::layout::system::apply_registry_system_claim;
 use crate::operbox::OperBox;
@@ -27,15 +27,60 @@ pub fn execute_plan(
     plan: &AssignmentPlan,
     seed: &BaseAssignment,
 ) -> Result<ExecuteResult> {
-    let _ = (blueprint, operbox, table);
+    let _ = table;
     let mut assignment = seed.clone();
     let mut used = assignment.operator_names();
 
     if plan.mode == AssignShiftMode::Peak {
+        for anchor in &plan.anchors {
+            if used.contains(&anchor.operator) {
+                return Err(crate::error::Error::msg(format!(
+                    "planned operator {} for {} was occupied before execute",
+                    anchor.operator, anchor.system_id
+                )));
+            }
+            let room_id = anchor.room_id.as_ref().ok_or_else(|| {
+                crate::error::Error::msg(format!(
+                    "unresolved room for planned operator {} in {}",
+                    anchor.operator, anchor.system_id
+                ))
+            })?;
+            let room = blueprint.room(room_id).ok_or_else(|| {
+                crate::error::Error::msg(format!("planned room {} no longer exists", room_id.0))
+            })?;
+            let product_matches = anchor.recipe.is_none_or(|required| {
+                matches!(room.product, Some(RoomProduct::Factory { recipe }) if recipe == required)
+            }) && anchor.trade_order.is_none_or(|required| {
+                matches!(room.product, Some(RoomProduct::Trade { order }) if order == required)
+            });
+            if room.kind != anchor.facility
+                || !product_matches
+                || assignment.operators_in(room_id).len() >= room.operator_capacity()
+            {
+                return Err(crate::error::Error::msg(format!(
+                    "planned placement {} -> {} is no longer feasible",
+                    anchor.operator, room_id.0
+                )));
+            }
+            let progress = operbox.progress_of(&anchor.operator).ok_or_else(|| {
+                crate::error::Error::msg(format!(
+                    "planned operator {} disappeared from operbox",
+                    anchor.operator
+                ))
+            })?;
+            let mut operators = assignment.operators_in(room_id).to_vec();
+            operators.push(
+                crate::layout::AssignedOperator::from_progress(&anchor.operator, progress)
+                    .with_work_mood(anchor.work_mood),
+            );
+            assignment.set_room(room_id.clone(), operators);
+            used.insert(anchor.operator.clone());
+        }
         for claim in &plan.registry_claims {
             apply_registry_system_claim(blueprint, claim, &mut assignment, &mut used)?;
         }
     }
+    used.extend(plan.excluded_operators.iter().cloned());
 
     Ok(ExecuteResult { assignment, used })
 }

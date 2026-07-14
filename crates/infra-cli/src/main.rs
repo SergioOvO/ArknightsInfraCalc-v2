@@ -68,7 +68,7 @@ fn run() -> Result<(), Error> {
 
 fn print_usage() {
     eprintln!("Usage:");
-    eprintln!("  infra-cli plan --operbox <path.json|.xlsx> [--layout <path>] [--baseline <operbox>] [--top <n>]");
+    eprintln!("  infra-cli plan --operbox <path.json|.xlsx> [--layout <path>] [--baseline <operbox>] [--top <n>] [--prefer <system=alternative>]");
     eprintln!(
         "      [--profile-out <file.json>] [--output-dir <dir>] [--maa-out <file.json>] [--json]"
     );
