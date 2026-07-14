@@ -1,15 +1,25 @@
-# 动态 Producer A+：完整候选列 + 精确索引 Join
+# 动态 Producer A+：设施无关候选列 + 精确索引 Join
 
 > 状态：**ready-on-request，尚未实现**。
 > 用户确认方向：凛御银灰、戴菲恩、八幡海铃进入同一套可选中枢 producer 生命周期。
 > 算法偏好：问题规模小，优先“多烘焙、按完全等价签名做小型精确 Join”的模型；不扫描原始全笛卡尔积，DP、Pareto 与 branch-and-bound 不作为首版前提。
 > 本文用途：交给下一位 Agent 的实施 TODO；不能用来描述当前 `HEAD` 已有能力。
 
+> 设计边界补充：首期只实现八幡海铃、戴菲恩、凛御银灰三个贸易目标
+> producer，但 rule、候选行、dependency、winner commit 与 Bake manifest 必须按
+> **设施无关**模型设计。涤火杰西卡等制造目标 producer 是下一目标域的验收样例，
+> 不能为其复制第二套 pipeline、rotation 或 cache 语义。
+
 ## 1. 一句话目标
 
 从同一个 pre-control seed 同时考察合法中枢组合和全部贸易房组合，让三名 producer 只通过实际技能公式改变候选得分；每个中枢候选先执行现有确定性的 system/dorm producer 与 power 前缀，再把全部贸易房一次性写入临时 assignment、统一 resolve，最后只 commit 一个完整 prefix winner。
 
 当前“普通前缀 + 每个 producer 分别重跑前缀”、戴菲恩固定 `meta_vina` 和轮换层按名字补救的路径全部删除。Bake 只替代候选生成与重复求值；catalog 缺失、过期或不兼容时，必须用同一候选集合做 live 枚举，因此只能变慢，不能换答案。
+
+首期执行器可以只支持 `control -> trade`，但公共模型不得命名或编码成只能服务贸易站的
+一次性结构。最终边界是 `joint prefix`：中枢候选改变 support、`used`、全局资源或目标
+设施 response 时，由目标域适配器提供候选特征和真实 solver 求值；通用层只负责 logical
+mask、signature、合法性 join、winner 一次提交和 resolved dependency。
 
 ## 2. 实施前必须统一的真源
 
@@ -84,6 +94,58 @@ consumer 集为空时不生成 bind。集合非空时，producer 与这些实际
 - 同一逻辑干员只有一个 logical operator id；E0/E2 variant 不能同时占两个岗位。
 - operbox、tier、plan、room capacity、已有 `used` 和禁同房关系都在运行时重新过滤。
 
+### 3.5 含中枢成员的组合分类
+
+不能把所有“中枢成员影响其他设施”的组合都当成首期三个可选贸易 producer，也不能把
+公共抽象写死成 `joint_control_trade`。当前已知组合按责任边界分为三类：
+
+#### A. 可选 deferred producer
+
+这类成员是否入选取决于实际 consumer 或目标房 response，单独持有不构成 required
+anchor：
+
+| Producer | 目标域 / consumer | 当前处置 |
+|----------|-------------------|----------|
+| 八幡海铃 | 全贸易站叙拉古 workforce | 首期实现 |
+| 戴菲恩 | 各贸易房本地格拉斯哥 workforce | 首期实现 |
+| 凛御银灰 | 各贸易房谢拉格三人阈值 | 首期实现 |
+| 涤火杰西卡 | 制造站黑钢 workforce | 下一 manufacture domain；公共 schema 的扩展验收样例 |
+| 灵知 | 本房谢拉格贸易成员，负效率换订单上限 | 单独裁决 comparator 后接入 trade domain |
+| 歌蕾蒂娅 | 基建内深海猎人及其生产技能 | 后续 global/workforce domain；同时受最长工作时间约束 |
+| 维什戴尔 | 赫德雷实际进入贸易站时的本房订单上限 | 后续 room-local trade response |
+
+涤火杰西卡与首期三人具有相同 bootstrap 问题：先选中枢时制造 consumer 尚未落位，先选
+制造时 producer 又尚未入选。首期可以不实现 manufacture join，但若公共类型无法在不复制
+pipeline/rotation/cache 的前提下表达她，说明抽象仍然过窄。
+
+灵知不能简单折算成动态贸易注入百分点。他的真实 response 同时包含效率下降与订单上限
+增加，必须由完整贸易 solver / 单位产出模型求值；不得与凛御银灰共享 producer bit、
+signature 或孑 variant。
+
+#### B. System / plan 已确认的硬组合
+
+这类组合先由 `AssignmentPlan` 产出 anchor、producer、constraint 或 degradation，再作为
+joint prefix 的 seed/support 输入；joint solver 不负责重新决定其业务激活条件：
+
+- 红松林：焰尾、薇薇安娜与红松制造成员；
+- 人间烟火：重岳/令候选组、乌有，纯分支另含桑葚；
+- 怪猎：火龙S黑角、麒麟R夜刀与调查团资源链；
+- 自动化在相应布局下的森蚺中枢 + Lancet-2 发电支持；
+- 迷迭香感知链中由计划和降级规则选出的中枢 producer。
+
+硬组合仍可能改变目标设施 response，所以候选 signature 必须携带其最终资源和 capability；
+但不得把 required anchor 降级成“如果效率高就自然入选”。
+
+#### C. 尚待业务审计的 fixed 组合
+
+`data/base_systems.json::lungmen_manu_pair` 当前固定斩业星熊 E2 + 诗怀雅 E0。技能结构
+只能证明二者可组合提供全制造 +3% 与全贸易 +7%，不能单独证明它们是缺一不可的原子
+System。实施本计划时保持现状，不借机删除或强化；应另行按体系审计工作流确认其原子性。
+
+森蚺、火龙S黑角/麒麟R夜刀等既可能出现在硬体系，也可能携带普通候选可见的效果。
+rule registry 必须区分 `plan_required` 与 `deferred_optional` 来源，不能仅按 buff id 或姓名
+把同一成员永久归入一种选型类别。
+
 ## 4. 首期问题边界
 
 首期重建“中枢决定后会改变 `used` / layout 的整个制造前缀”，其中只有 control + trade 做联合选型；system/dorm producer 与 power 仍服从当前顺序、作为每个中枢候选的确定性支持阶段：
@@ -101,6 +163,11 @@ manufacture / remaining facilities keep current lifecycle
 ```
 
 它不宣称全基建或全班次的数学全局最优。power 仍按当前顺序先于贸易选择，不与贸易做机会成本联合优化；制造仍在 prefix winner 提交后，从剩余 `used` 中搜索。本计划不顺手把 control↔manufacture producer 全部并入首期指数状态。
+
+这里的“首期不并入 manufacture”只限制目标域实现范围，不限制公共 schema。首期类型应使用
+`DeferredProducerRule`、`TargetDomain`、`JointPrefixCandidate` 等设施无关命名；贸易房特有
+计数、role 和 solver response 放在 trade domain adapter 内。不得以首期范围为由把核心类型
+命名为 `TradeDeferredProducerRule`，再为涤火杰西卡复制一套制造版本。
 
 标准 243 的 0 / 1 / 2 间贸易房是首期 Bake 快路径。live 参考实现应把贸易房表示为向量并能正确枚举更多房间；三间以上可以慢，但不能退回按 producer 分别重跑的旧语义。只有 Bake 的响应表可以先限制在已声明 room signature，不兼容布局走同语义 live 枚举。
 
@@ -188,6 +255,21 @@ join partition 必须保留 `siracusa_by_room`、`glasgow_by_room` 和 `karlan_q
 2. `PeakPrefixComparatorV0`：每个 control prefix 先用上一个 comparator 选出自己的贸易 tuple；不同 prefix 仍只比较现有 `ControlInjectRawSumV0` / `policy_sort_key`。相等时先选当前普通 `assign_control` 候选宇宙本来就可达的 `ordinary_eligible` row，再按现有 control-search 稳定顺序和 logical operator id tuple 排序；producer 自然出现在 ordinary row 时仍保留 ordinary-first 资格。不偷偷加入贸易总和或匿名跨域权重。
 
 这精确复现当前评分契约，同时让 producer 的实际 full-layout 注入进入每房 solver。若未来希望不同 control prefix 直接比较贸易总 `final_efficiency`，必须另行请用户裁决并更新 `SCORING_MODEL.md`，不能借 A+ 偷换目标函数。
+
+#### 实施前未决的 comparator 口径
+
+戴菲恩对不同贸易房可能产生不同注入，例如两个房间的 Glasgow 分布为 `(2,1)` 时，各房
+分别得到 `20%` 与 `10%`。现有 `ControlInjectRawSumV0` 的 `trade_inject` 是单一标量，
+Markdown 尚未定义这种 room-local response 在跨 control prefix 比较时如何折算。实施前必须
+由用户在以下口径或另一条明确公式中裁决，并先更新 `SCORING_MODEL.md`：
+
+1. 各贸易房动态注入百分点之和；
+2. 直接比较各房真实 `final_efficiency` tuple；
+3. 其他具名、可解释的 comparator。
+
+同样，灵知的“效率下降、订单上限增加”不能进入裸注入百分点 comparator。灵知是否由
+单位产出、`final_efficiency` 或现有固定 role 决定选型，必须另行裁决；首期不得假借
+凛御银灰规则顺手改变。
 
 ## 6. 首版算法：签名完备的索引 Join
 
@@ -314,9 +396,9 @@ catalog row/response 精确命中
 
 | 不变量 | 单一负责边界 |
 |--------|--------------|
-| producer 规则、tier、target 与作用域 | `DeferredProducerRule` / `DeferredProducerSignature` registry，由 atom/capability 提取 |
-| 候选全集与 bitset | joint candidate catalog + live candidate factory，共用同一 row schema |
-| control + trade 联合合法性 | `joint_control_trade` 枚举器 |
+| producer 规则、tier、target 与作用域 | 设施无关 `DeferredProducerRule` / `DeferredProducerSignature` registry，由 atom/capability 提取 |
+| 候选全集与 bitset | joint candidate catalog + live candidate factory，共用同一设施无关 row envelope |
+| control + 目标设施联合合法性 | `joint_prefix` 枚举器；首期由 trade domain adapter 提供房间行和 comparator |
 | 完整跨房公式 | 完整临时 assignment 上的 `resolve_base` + 真实 room solver |
 | winner 一次提交 | joint solver 返回的 `JointPrefixCandidate`，包含 control/support/power/trade |
 | 同上同下 | winner 生成的 `ResolvedProducerDependency`，rotation 只消费 |
@@ -371,11 +453,24 @@ catalog row/response 精确命中
 建议新建独立模块：
 
 ```text
-search/deferred_producer.rs
-search/joint_control_trade.rs
+search/deferred_producer/
+  rule.rs
+  signature.rs
+  dependency.rs
+search/joint_prefix/
+  candidate.rs
+  facility_domain.rs
+  trade.rs
+  join.rs
+  comparator.rs
 ```
 
 交付：候选 row、logical/variant mask、每个 control 候选的 system/dorm/power 支持 prefix、完全等价 signature bucket、best-first disjoint join、完整临时 assignment resolve、一次 winner commit。此时即使没有 Bake，也必须语义正确。
+
+`facility_domain` 定义目标设施适配边界；首期只实现 trade adapter。公共 rule 至少能表达
+`TradeAllRooms`、`TradeCurrentRoom`、`ManufactureAllRooms`、
+`ManufactureCurrentRoom`、`PowerSupport`、`GlobalResource` 这些目标类别，但未启用的类别
+必须显式返回 unsupported 并走同语义 live 路由，不能静默当收益为 0。
 
 ### Phase 3：A+ candidate catalog
 
@@ -460,6 +555,17 @@ search/joint_control_trade.rs
 - 损坏/反序列化失败安全回到 live，不传播半张 catalog。
 - 生成中断不会让读取方看到新旧文件混合。
 
+### 13.6 共享边界与后续域
+
+- 红松林、人间烟火、怪猎、自动化和迷迭香的 required anchor / degradation 不被
+  deferred solver 降级为软候选。
+- `plan_required` 与 `deferred_optional` 可同时出现在同一 control row，且 logical mask
+  仍保证同一人只占一位。
+- 用涤火杰西卡规则构造 schema/serialization round-trip 测试，证明 manufacture target
+  无需新增另一套 rule、dependency 或 manifest；首期不要求把它接入 winner 搜索。
+- 灵知与凛御银灰 signature 相互独立，凛御银灰不会激活精密计算或孑 variant。
+- unsupported target domain 明确触发 live/unsupported 结果，不会被错误当作零收益 baked hit。
+
 ## 14. 性能验收
 
 不在计划中硬编码无来源的秒数或“必须下降 35%”。Phase 0 先在同一机器、构建模式、fixture 和预热条件下保存基线，再由用户确认目标。
@@ -485,10 +591,21 @@ search/joint_control_trade.rs
 
 新增 producer 按 effect signature 和 target facility 扩展，不向 pipeline 加名字分支，也不建立一个覆盖所有人物的全局 `2^N` mask：
 
-- **涤火杰西卡**：后续作为 control → manufacture / Blacksteel workforce rule，进入制造目标域自己的 candidate catalog；不把当前标准化成员升级成 hard bind。
+- **涤火杰西卡**：作为首个 manufacture domain 扩展，使用现有设施无关 rule envelope 与
+  `JointPrefixCandidate`；manufacture adapter 提供 Blacksteel workforce 行和逐房真实
+  response。不得新建平行 pipeline/catalog，也不把自然入选的黑钢或标准化成员升级成
+  hard bind。
+- **灵知**：作为 room-local trade response 扩展；先裁决负效率与订单上限的 comparator，
+  再由真实贸易 solver 求值。与凛御银灰商业版图、孑 variant 分开建模。
+- **歌蕾蒂娅**：作为 global/workforce rule 扩展；除生产 response 外还必须携带最长工作
+  时间约束，不能仅凭效率 join 生成 12 小时主班。
+- **维什戴尔**：作为特定贸易 consumer 的 room-local limit response 扩展；只有赫德雷
+  实际在岗且 producer 实际入选时形成 dependency/capability。
 - **火龙S黑角**：后续作为 control → global resource / Monster Hunter consumer rule，显式描述木天蓼、贸易/制造 target 与资源 gate。
 
-两者只用于验证抽象可扩展性，不属于首期三 producer 验收。实施前必须分别完成领域不变量、作用域、tier、实际 consumer 和轮换审计。
+这些扩展只用于验证抽象可扩展性，不属于首期三 producer 的功能验收。实施前必须分别完成
+领域不变量、作用域、tier、实际 consumer、comparator 和轮换审计。怪猎、人间烟火、
+红松林等已确认硬体系继续由 plan 激活；设施无关 rule 只描述其响应，不接管其硬核心选型。
 
 ## 16. 非目标
 
