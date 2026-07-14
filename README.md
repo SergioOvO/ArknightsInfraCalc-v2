@@ -1,212 +1,155 @@
 # ArknightsInfraCalc v2
 
-明日方舟基建效率 / 编排 / 排班研究型求解器。
+一个面向《明日方舟》基建的效率求解、体系编排与轮换导出引擎。
 
-这个项目把明日方舟基建视为一个带有大量领域结构的 NSP（Nurse Scheduling Problem）/ 资源编排问题：如果直接在全干员、全设施、全班次、全约束上搜索，它天然接近 NP-hard 的组合爆炸；但游戏机制本身并不是随机噪声，它包含大量可解释、可验证、可复用的专家结构。
+它解决的不是“把三个最高百分比干员放进一间房”，而是：在玩家实际练度、房间容量、同一干员不能重复上岗、同房互斥、跨设施资源、体系硬核心和跨班绑定同时存在时，仍然给出可解释、可复现的排班。
 
-ArknightsInfraCalc v2 的核心目标，是把这些专家结构编码进求解器：用机制分层、体系 anchor、固定最优组合、跨设施资源注入和命名 scoring policy，将原始的大规模搜索空间降维为若干可解释的局部搜索、约束满足与分量化排序问题。
+项目最有价值的部分不是某张固定排班表，而是把基建专家知识拆成可以计算、搜索和回归验证的结构：
 
-换句话说，它不是一个只追求“给出最高分”的黑箱工具，而是一个研究如何把复杂游戏调度问题工程化、可解释化、可回归验证的范例。
+- 普通技能由声明式 `EffectAtom` 解释；
+- 赤金链、订单分布和单位产出交给专门的领域引擎；
+- 难以原子化的固定最优组合由 L3 shortcut 结算；
+- 真正的硬约束由编排层保证，其余队友尽量由实际效率自然搜索；
+- 贸易、制造、发电分别保留直接效率，不用一个匿名总分掩盖取舍。
 
-## 问题口径
+## 三分钟理解它能做什么
 
-给定：
+给定一个练度盒（operbox）和一张基建蓝图，当前引擎可以：
 
-- 一个玩家的干员练度盒（operbox）；
-- 一个基建布局蓝图（如 243）；
-- 技能、体系、shortcut、全局资源等机制事实；
-- 若干业务假设（贸易站订单、制造产线、控制中枢注入、轮换方案）。
+| 能力 | 当前行为 |
+|------|----------|
+| 单房结算 | 计算贸易、制造、发电和中枢结果；贸易输出纸面效率、单位产出倍率、最终效率与规则 ID |
+| 候选搜索 | 在合法池中枚举房间组合，并按各生产域的 `final_efficiency` 排序 |
+| 单班编制 | 执行 `System → AssignmentPlan → Execute → Fill → Resolve`，用全局 `used` 保证一人一岗 |
+| 跨设施机制 | 汇总中枢注入、感知信息、人间烟火、木天蓼、虚拟发电等 producer，再让消费房读取 |
+| 体系编排 | 表达 required anchor、同房 bond、禁止同房、配方限制、降级与班次绑定 |
+| 三队轮换 | 生成 αβγ ABC 轮换：`12h + 6h + 6h`，每班两队工作、一队休息 |
+| 账号分析 | 对 operbox 生成练度画像，并与基准盒比较 |
+| 导出 | 输出人类可读排班、账号画像 JSON 和 MAA 排班 JSON；core `BaseAssignment` 本身支持 serde |
 
-求解器输出：
+贸易站是目前分层最完整的领域（L1 + L2 + L3）；制造、发电、中枢、全局资源和编排已经进入同一条全基建主路径，但各自的机制深度并不相同。当前事实地图见 [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)。
 
-- 单站贸易 / 制造 / 发电 / 中枢效率；
-- 贸易订单效率、赤金效率、制造经验效率等分量；
-- 全基建单班进驻编制；
-- αβγ ABC 三队轮换；
-- 账号画像与 MAA 排班 JSON。
+2026-07-14 的机制登记册收录 727 条原始机制，运行时数据包含 297 个技能定义、487 个练度实例（282 个逻辑干员）、12 个编排 System 和 16 个贸易 shortcut。仅控制中枢、贸易站、制造站的设施全集就分别对应 `C(55,5)=3,478,761`、`C(77,3)=73,150`、`C(90,3)=117,480` 个原始满房组合。这些数字不是“覆盖率 100%”的营销口号，而是为什么项目必须同时建设机制分层、候选池、Bake 与严格回归的工程尺度。详见 [性能工程](docs/PERFORMANCE_ENGINEERING.md) 和 [已建模干员](docs/MODELLED_OPERATORS.md)。
 
-项目刻意不把所有目标揉成匿名综合分。跨贸易、制造、power、global inject 的结果优先按分量展示；确实需要排序时，必须进入命名 `scoring` policy。
-
-## 方法论
-
-本项目的基本研究判断是：
-
-> 不要试图用一个通用公式吞掉整个基建。先承认问题的组合复杂性，再用专家策略把它压到可求解、可解释、可验证的子空间。
-
-因此，代码结构按层承担不同责任：
-
-| 层 | 作用 |
-|----|------|
-| 机制事实 | `skill_table.json` / `operator_instances.json` 记录 buff_id、干员实例与 EffectAtom |
-| L1 解释器 | 只认 `buff_id`，按 Phase 执行 Selector / Condition / Action |
-| L2 域引擎 | 处理赤金链、订单分布、单位产出等机制域最优解 |
-| L3 shortcut | 表化固定最优 / 难 atom 化组合，作为专家策略锚点 |
-| 体系编排 | 将 anchor、producer、constraint、degradation 转成 `AssignmentPlan` |
-| 局部搜索 | 只在剩余自由度中穷举或贪心搜索 |
-| scoring policy | 对需要排序的混合结果使用命名 policy，避免隐式混量纲 |
-
-这套分层使得“专家策略”不是口头经验，而是可以被数据文件、代码模块、回归锚点和文档共同约束的工程对象。
-
-## 当前能力
-
-| 能力 | 说明 |
-|------|------|
-| 单站求解 | 三人同房 → 直接最终效率 / 机制等效效率 / 日产量 |
-| 池搜索 | 从 operbox 可建模干员中穷举 C(n,3) Top-K |
-| 自定义布局 | 加载 `BaseBlueprint` JSON，按指定基建结构求解 |
-| 体系编排 | 通过 `base_systems.json` 与代码化体系层认领固定组合、anchor 与降级路径 |
-| 三班轮换 | αβγ ABC 三队轮换（`plan` 或 `layout team-rotation`） |
-| 账号画像 | 练度分析 + 排班建议（`plan` / `layout analyze`） |
-| 回归验证 | CSV 锚点 + 硬编码夹具，防止机制回退 |
-| MAA 导出 | 输出可供 MAA 使用的排班 JSON |
-
-当前主力域是贸易站：L1 解释器、L2 域引擎、L3 shortcut 与回归验证较完整。制造站、控制中枢、发电站、全局资源和编排层已有基础实现，并继续向分量化 scoring 与体系编排收敛。
-
-非目标：心情排班、宿管恢复、全基建连续时间最优化。这些属于更上层规划器；本项目聚焦效率求解与可解释编排。
-
-## 快速开始
-
-### 环境要求
-
-- Rust 1.70+（workspace：`infra-core` + `infra-cli`）
-- Python 3.14+（可选，仅 `scripts/` 数据维护；推荐 [uv](https://github.com/astral-sh/uv)）
-
-```bash
-cargo build -p infra-cli
-cargo test -p infra-core
-```
-
-### 回归验证
-
-不需要 operbox，直接验证机制锚点：
-
-```bash
-cargo run -p infra-cli -- verify --all
-cargo run -p infra-cli -- verify --case reg_gsl_closure_tier90
-```
-
-### 一体化方案
-
-默认 243 布局；`--operbox` 支持 JSON 或一图流 xlsx。该入口会执行账号分析、αβγ 三队轮换，并可导出 MAA JSON。
-
-```bash
-cargo run -p infra-cli -- plan \
-  --operbox data/fixtures/243/operbox_full_e2.json \
-  --maa-out out/243_maa.json
-```
-
-### 243 标准样例
-
-仓库自带 [data/fixtures/243/](data/fixtures/243/) 测试夹具，无需自备练度表：
-
-```bash
-cargo run -p infra-cli -- layout test \
-  --layout data/fixtures/243/layout.json \
-  --operbox data/fixtures/243/operbox_full_e2.json \
-  --text
-```
-
-### 仅排班 + MAA
-
-```bash
-cargo run -p infra-cli -- layout team-rotation \
-  --layout data/fixtures/243/layout.json \
-  --operbox data/fixtures/243/operbox_full_e2.json \
-  --maa-out out/243_maa.json
-```
-
-### 其他常用命令
-
-```bash
-cargo run -p infra-cli -- bench \
-  --operbox data/fixtures/243/operbox_full_e2.json \
-  --text
-
-cargo run -p infra-cli -- pool --trade
-cargo run -p infra-cli -- search trade --top 20
-cargo run -p infra-cli -- trade yield closure_solo
-```
-
-完整子命令说明见 [docs/INFRA_CLI.md](docs/INFRA_CLI.md)。
-
-## 求解流水线
+## 架构一览
 
 ```text
-operbox / roster + operator_instances + skill_table
-        ↓
-  pool（可建模干员池，C(n,3) 组合基数）
-        ↓
-  search（穷举三人组，rayon 并行） 或 schedule（三班贪心逐站）
-        ↓
-  solve_trade_with_shift（单站核心）
-        ├─ L1 interpreter      Phase 排序 → Selector / Condition / Action
-        ├─ L2 gold_flow        赤金虚拟线链
-        ├─ L2 order_mechanic   订单分布 → 机制等效效率
-        └─ L3 shortcut         trade_shortcuts.json 表化最优解
-        ↓
-  unit_output                  单位贸易量 / 无人机 / 日产量
+维护期 Markdown（业务语义与预期行为）
+                  ↓
+operator_instances + skill_table + systems / segments / shortcuts
+                  ↓
+         operbox + BaseBlueprint
+                  ↓
+      pool / role / System 候选边界
+                  ↓
+     build_plan → execute_plan → fill
+                  ↓
+ resolve_base：workforce → 发电/中枢/办公室
+               → cross_facility → 全局转化 → 各房输入快照
+                  ↓
+       各设施 search / solver（L1、L2、L3 分层）
+                  ↓
+ BaseAssignment → αβγ rotation → MAA JSON
 ```
 
-关键约束：
+这里有一条重要边界：shortcut 负责“这个实际组合怎样结算”，不能代替“谁必须进编”；`shift_bind` 负责已入选成员怎样同上同下，也不能代替 required anchor。正因为这些责任被分开，项目才能同时容纳硬体系和自然搜索。
 
-1. `skill_table.id` 必须等于解包 `buff_id`。
-2. 干员归属只在 `operator_instances.json`。
-3. L1 解释器不认识干员名，只解释机制 atom。
-4. `atoms: []` 可以表示委托给 L2 / L3 / 特例域处理，不等于未建模。
-5. 贸易搜索 `score == trade_pct == order_eff_total`；`gold_pct` 单独展示。
-6. 跨域结果需要排序时，只能通过命名 scoring policy。
+更完整的运行说明见 [docs/OVERVIEW.md](docs/OVERVIEW.md)，术语见 [docs/GLOSSARY.md](docs/GLOSSARY.md)。
 
-机制细节见 [docs/EFFECT_ATOM_DESIGN.md](docs/EFFECT_ATOM_DESIGN.md)，评分口径见 [docs/SCORING_MODEL.md](docs/SCORING_MODEL.md)。
+## 直接运行一套真实方案
+
+日常运行只需要能构建本 workspace 的 Rust / Cargo 工具链；Python 仅用于 `scripts/` 下的数据维护。仓库自带全精二 243 夹具。下面的命令会执行账号分析、αβγ 三队轮换，并分别留下账号画像和 MAA JSON：
+
+```bash
+cargo run -q -p infra-cli -- plan \
+  --operbox data/fixtures/243/operbox_full_e2.json \
+  --profile-out out/readme-profile.json \
+  --maa-out out/readme-maa.json
+```
+
+只探测单班自定义布局：
+
+```bash
+cargo run -q -p infra-cli -- layout test \
+  --layout data/fixtures/243/layout.json \
+  --operbox data/fixtures/243/operbox_full_e2.json \
+  --text
+```
+
+运行机制回归入口：
+
+```bash
+cargo run -q -p infra-cli -- verify --all
+```
+
+生成并验证本机 Bake 候选表：
+
+```bash
+cargo run -q -p infra-cli -- bake all
+cargo run -q -p infra-cli -- bake validate
+```
+
+`plan`、`layout team-rotation`、`layout eval`、`trade yield` 等完整参数见 [docs/INFRA_CLI.md](docs/INFRA_CLI.md)。
+
+## 正确性优先，也认真对待性能
+
+组合搜索会很快膨胀，但本项目不会用不透明剪枝换取一个看似漂亮的答案。
+
+当前性能策略包括：
+
+- 贸易等适用领域使用工具人池和 role policy 缩小候选边界；普通排班制造仍搜索全部合法普通制造候选；
+- 单房组合求值可用 Rayon 并行，跨房则按稳定生命周期提交并重新 `resolve`；
+- Bake 可生成 schema v10 的 3/2/1 人单房候选索引；运行时只有在数据指纹、布局、练度和动态上下文都兼容时才读取；仓库内旧 catalog 失配时会安全回退；
+- Bake 不兼容、缺失或过期时回退到实时 solver。缓存失效只应影响速度，不能改变语义；
+- `Efficiency` 用千分整数保存和排序，避免浮点尾差改变候选次序。
+
+当前单班编制仍是领域约束下的分阶段、逐房搜索，不宣称全基建整数规划意义上的全局最优。动态贸易 producer 的统一联合搜索与完整候选列 Bake（A+）是**未来计划**，尚不是当前能力；设计边界见 [docs/TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md](docs/TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)。
+
+## 为什么结果值得审计
+
+项目把“可信”做成了可检查的工程链路：
+
+1. 维护期 Markdown 是业务语义和预期行为的最高权威；当前对话中的用户裁决优先。
+2. `skill_table.id == buff_id`，干员与技能归属只在 `operator_instances.json` 维护。
+3. L1 解释器只认 `buff_id`，不会按干员中文名偷偷改公式。
+4. 生产域统一输出三位小数直接效率；机制等效效率只作解释，不会重复乘入产出。
+5. CSV 回归锚点、单位产出锚点、Rust 测试和真实 CLI 夹具覆盖不同责任层。
+6. 维护流程要求先复现、定位生命周期边界、删除冲突旧路径、补不变量回归，并保留可点击验证日志和 JSON 产物。
+
+这不意味着仓库永远没有 bug；它意味着一个结果可以追到文档口径、数据条目、解释阶段、搜索边界、回归断言和实际 CLI 输出，而不是只能相信一张最终截图。
+
+## 从哪里开始读
+
+| 你是谁 / 想做什么 | 入口 |
+|-------------------|------|
+| 第一次了解项目 | [docs/OVERVIEW.md](docs/OVERVIEW.md) → [docs/GLOSSARY.md](docs/GLOSSARY.md) |
+| 想沿一次真实请求看代码 | [docs/ARCHITECTURE_TOUR.md](docs/ARCHITECTURE_TOUR.md)、[docs/EXAMPLES/243_FULL_E2.md](docs/EXAMPLES/243_FULL_E2.md) |
+| 懂基建策略，不关心代码 | [docs/GONGSUN_RUNTIME_OVERVIEW.md](docs/GONGSUN_RUNTIME_OVERVIEW.md) |
+| 想运行 CLI 或接前端 | [docs/INFRA_CLI.md](docs/INFRA_CLI.md)、[docs/FRONTEND_CLI.md](docs/FRONTEND_CLI.md) |
+| 想判断结果或性能是否可信 | [docs/QUALITY_AND_AUDIT.md](docs/QUALITY_AND_AUDIT.md)、[docs/PERFORMANCE_ENGINEERING.md](docs/PERFORMANCE_ENGINEERING.md) |
+| 想理解机制建模 | [docs/EFFECT_ATOM_DESIGN.md](docs/EFFECT_ATOM_DESIGN.md)、[docs/EFFICIENCY_MODEL.md](docs/EFFICIENCY_MODEL.md) |
+| 想理解编排与轮换 | [docs/BASE_ASSIGNMENT.md](docs/BASE_ASSIGNMENT.md)、[docs/SCHEDULE_ROTATION.md](docs/SCHEDULE_ROTATION.md) |
+| 想修 bug / 审计体系 | [AGENTS.md](AGENTS.md)、[docs/MAINTENANCE_MODE.md](docs/MAINTENANCE_MODE.md)、[docs/SYSTEM_AUDIT_WORKFLOW.md](docs/SYSTEM_AUDIT_WORKFLOW.md) |
+| 想查文件和模块 | [docs/INDEX.md](docs/INDEX.md)、[docs/PROJECT_MAP.md](docs/PROJECT_MAP.md) |
+
+## 明确的非目标
+
+- 宿管自动分配与完整心情恢复规划；
+- 根据 ETA 自动改写所有班次时长；
+- 全基建连续时间最优化；
+- 对所有房间、所有班次做无界全局组合搜索；
+- 用 CLI、fixture 或下游特判承载游戏机制；
+- 把贸易、制造和发电揉成不可解释的匿名总分。
 
 ## 仓库结构
 
 ```text
-crates/
-  infra-core/     类型、EffectAtom 解释器、求解、搜索、编排、排班
-  infra-cli/      命令行：plan / layout / verify / 输出
-data/             skill_table、干员实例、体系、shortcut、布局模板、回归用例
-docs/             文档入口、模块地图、TODO、ADR、归档、设计参考
-release/          前端发布包（infra-cli/infra-cli.exe、layout-gen、fixtures）
-scripts/          Python：技能表构建、operbox 转换、数据审计
-tests/fixtures/   最小 JSON 夹具
+crates/infra-core/   机制、搜索、编排、排班、导出
+crates/infra-cli/    参数、加载、输出、回归命令
+data/                运行时模型、体系、shortcut、夹具和锚点
+docs/                当前事实、领域语义、维护流程、TODO 与归档
+scripts/             数据构建与审计脚本
 ```
-
-文档入口见 [docs/INDEX.md](docs/INDEX.md)，项目地图见 [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)。AI / agent 协作请先读 [AGENTS.md](AGENTS.md)。
-
-## 数据真源
-
-| 文件 | 作用 |
-|------|------|
-| `data/skill_table.json` | `buff_id` → EffectAtom；空 `atoms` 表示委托域引擎 |
-| `data/operator_instances.json` | 干员 @tier → buff_ids，是干员归属唯一真相 |
-| `data/trade_shortcuts.json` | L3 组合锚点与固定最优策略 |
-| `data/base_systems.json` | 编排层体系认领 |
-| `data/REGRESSION_CASES.csv` | CLI verify 期望值 |
-| `data/UNIT_OUTPUT_ANCHORS.csv` | 单位产出 / 赤金锚点 |
-| `data/fixtures/243/` | 243 标准测试样例 |
-| `data/layout/*.json` | 基建蓝图模板 |
-
-```bash
-python scripts/build_skill_table.py
-python scripts/xlsx_to_operbox.py
-```
-
-个人练度表（`.xlsx`）与本地 operbox 导出默认已在 `.gitignore` 中，不会误提交。
-
-## 开发入口
-
-```bash
-cargo test -p infra-core
-cargo run -p infra-cli -- verify --all
-```
-
-- 评分 / 排序口径：[docs/SCORING_MODEL.md](docs/SCORING_MODEL.md)、[docs/SCORING_REFACTOR_PLAN.md](docs/SCORING_REFACTOR_PLAN.md)
-- 收尾期 bug 修复：[docs/MAINTENANCE_MODE.md](docs/MAINTENANCE_MODE.md)
-- 编排 / 体系 / meta 组合：[docs/ADR/0001-layout-assignment-decomposition.md](docs/ADR/0001-layout-assignment-decomposition.md)
-- CLI / 前端集成：[docs/INFRA_CLI.md](docs/INFRA_CLI.md)、[docs/FRONTEND_CLI.md](docs/FRONTEND_CLI.md)
-- 历史建设期 TODO：[docs/TODO/](docs/TODO/)（收尾期默认冻结）
-- 归档材料：[docs/ARCHIVE/](docs/ARCHIVE/)
-- 待建模干员：[docs/需要完成的干员建模.md](docs/需要完成的干员建模.md)
 
 ## License
 

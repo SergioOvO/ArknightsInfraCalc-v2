@@ -1,0 +1,523 @@
+# 动态 Producer A+：完整候选列 + 精确索引 Join
+
+> 状态：**ready-on-request，尚未实现**。
+> 用户确认方向：凛御银灰、戴菲恩、八幡海铃进入同一套可选中枢 producer 生命周期。
+> 算法偏好：问题规模小，优先“多烘焙、按完全等价签名做小型精确 Join”的模型；不扫描原始全笛卡尔积，DP、Pareto 与 branch-and-bound 不作为首版前提。
+> 本文用途：交给下一位 Agent 的实施 TODO；不能用来描述当前 `HEAD` 已有能力。
+
+## 1. 一句话目标
+
+从同一个 pre-control seed 同时考察合法中枢组合和全部贸易房组合，让三名 producer 只通过实际技能公式改变候选得分；每个中枢候选先执行现有确定性的 system/dorm producer 与 power 前缀，再把全部贸易房一次性写入临时 assignment、统一 resolve，最后只 commit 一个完整 prefix winner。
+
+当前“普通前缀 + 每个 producer 分别重跑前缀”、戴菲恩固定 `meta_vina` 和轮换层按名字补救的路径全部删除。Bake 只替代候选生成与重复求值；catalog 缺失、过期或不兼容时，必须用同一候选集合做 live 枚举，因此只能变慢，不能换答案。
+
+## 2. 实施前必须统一的真源
+
+业务语义服从用户当前裁决和维护期 Markdown。实施前先读：
+
+- [QUALITY_AND_AUDIT.md](../QUALITY_AND_AUDIT.md)
+- [SYSTEM_AUDIT_WORKFLOW.md](../SYSTEM_AUDIT_WORKFLOW.md)
+- [CONTROL_CENTER_ASSIGNMENT.md](../CONTROL_CENTER_ASSIGNMENT.md)
+- [BASE_ASSIGNMENT.md](../BASE_ASSIGNMENT.md)
+- [ORCHESTRATION_LAYER.md](../ORCHESTRATION_LAYER.md)
+- [SCHEDULE_ROTATION.md](../SCHEDULE_ROTATION.md)
+- [SCORING_MODEL.md](../SCORING_MODEL.md)
+- [INTERNAL/SHORTCUT_MATCHING.md](../INTERNAL/SHORTCUT_MATCHING.md)
+
+本轮文档整理已经把用户口径同步到 `AGENTS.md`、`CONTROL_CENTER_ASSIGNMENT.md` 和 `BASE_ASSIGNMENT.md`。实现文档保留 legacy 行为说明，但已显式标记为已知缺口；下一位 Agent 应在删除代码路径的同一提交中清理这些历史段落：
+
+| 位置 | 当前状态 | 实施动作 |
+|------|----------|----------|
+| `CONTROL_CENTER_ASSIGNMENT.md`、`AGENTS.md` | 已写入三 producer 权威公式与生命周期 | 代码必须服从；实现完成后移除“已知缺口”状态 |
+| `ORCHESTRATION_LAYER.md`、`SCHEDULE_ROTATION.md` | `meta_vina` 已标成当前 legacy 行为 | 删除 legacy role 说明，改成统一 joint solver 当前事实 |
+| `INTERNAL/SHORTCUT_MATCHING.md` | 已区分 legacy 选型与可保留的最终结算 | 删除选型入口；shortcut 只保留实际组合结算 |
+| `data/skill_table.json` | 戴菲恩使用跨贸易站总人数 selector | 改为逐贸易房 room-local 响应规则 |
+| `data/base_systems.json` 与生成脚本 | 仍包含 `vina_lungmen` fixed System | 从 registry 和生成源一起删除，不只改生成产物 |
+
+若上述当前 Markdown 还有其他相互冲突的业务表述，必须先逐项列给用户；不得依据现有 top hit 自行折中。
+
+## 3. 用户确认的领域不变量
+
+### 3.1 三名 producer 共用同一生命周期
+
+凛御银灰、戴菲恩、八幡海铃都是**可选中枢 producer**，不是 fixed System、required anchor 或固定套餐：
+
+1. 账号拥有或 producer 在候选池中，不能单独强制进编。
+2. 是否入选由同一批 control + trade 联合候选的真实结果决定。
+3. 没有实际消费者时动态贸易收益为 0；普通中枢组合可以自然胜出。
+4. consumer 可以不上、单走、分居不同贸易站或自然同站；除已有独立 hard core 外，不新增固定三人组。
+5. shortcut 只结算已经选中的实际同房组合，不能激活 producer、强塞 consumer 或改变候选优先级。
+6. producer、consumer 和其他中枢成员在 winner 产生前都不能写入主 `assignment` / `used`。
+7. pipeline 以 atom / deferred rule signature 工作，不按三个人名分别分支。
+
+### 3.2 精确公式、tier 与作用域
+
+设贸易房集合为 `R`，`n_s(r)`、`n_g(r)`、`n_k(r)` 分别是房间 `r` 中实际上岗的叙拉古、格拉斯哥、谢拉格标签人数。
+
+| Producer | 激活 tier | 对每间贸易房 `r` 的注入 | 作用域 |
+|----------|-----------|--------------------------|--------|
+| 八幡海铃 | E2 / `tier_up` | `5 × Σ(q∈R) n_s(q)` | 跨所有贸易站求叙拉古总人数，然后对各贸易房注入同一数值 |
+| 戴菲恩 | E2 / `tier_up` | `10 × n_g(r)` | **逐贸易房本地计数**；`(3,0)` 与 `(2,1)` 不能合并成一个全局总数 |
+| 凛御银灰 | E0 起 / `tier_0`、`tier_up` | `10 × Σ(q∈R) I[n_k(q) ≥ 3]` | 逐站判断是否至少 3 名谢拉格，再统计达标贸易站数 |
+
+数值单位是订单获取效率百分点。相同 inject family 继续取最大，不同 family 按现有 `GlobalInjectManifest` 规则相加。
+
+凛御银灰的「商业版图」只包含上述逐站阈值。灵知的「精密计算」、孑 E0/E2 形态和 `karlan_precision` 是另一条独立机制，**不得**由凛御银灰的 producer bit 激活或写进本规则。
+
+### 3.3 实际 consumer 与轮换依赖
+
+只有 winner 中真正贡献数值的成员进入 `ResolvedProducerDependency`：
+
+| Producer | dependency 中的实际 consumer |
+|----------|-------------------------------|
+| 八幡海铃 | 所有实际进驻贸易站、带 `cc.g.siracusa` 的成员 |
+| 戴菲恩 | 各贸易房内实际贡献本房计数的 `cc.g.glasgow` 成员 |
+| 凛御银灰 | 每个达到 `n_k(r) ≥ 3` 的贸易房内，构成该阈值的全部 `cc.g.karlan` 成员 |
+
+consumer 集为空时不生成 bind。集合非空时，producer 与这些实际 consumer 同上同下、上 2 休 1；不要求不同贸易站的 consumer 被搬到同房。producer 休息班注入必须为 0，未入选成员不得在 rotation 阶段重新强塞。
+
+### 3.4 候选完整性
+
+- 工具人池是热路径候选边界；动态规则必须按 tag / capability 做结构化扩池，不能因人员不在 standalone 名录而漏掉合法 consumer。
+- 完整 catalog 或 live 扩池必须覆盖当前 role、anchor、producer rule 与房间约束声明的全部候选。
+- System-only 成员只由明确 plan anchor 引入，不能泄漏到普通池。
+- 同一逻辑干员只有一个 logical operator id；E0/E2 variant 不能同时占两个岗位。
+- operbox、tier、plan、room capacity、已有 `used` 和禁同房关系都在运行时重新过滤。
+
+## 4. 首期问题边界
+
+首期重建“中枢决定后会改变 `used` / layout 的整个制造前缀”，其中只有 control + trade 做联合选型；system/dorm producer 与 power 仍服从当前顺序、作为每个中枢候选的确定性支持阶段：
+
+```text
+execute seed / required anchors
+          ↓
+control candidate
+          ↓
+system/dorm producers → resolve → power
+          ↓
+joint all trade rooms
+          ↓ prefix winner commit once
+manufacture / remaining facilities keep current lifecycle
+```
+
+它不宣称全基建或全班次的数学全局最优。power 仍按当前顺序先于贸易选择，不与贸易做机会成本联合优化；制造仍在 prefix winner 提交后，从剩余 `used` 中搜索。本计划不顺手把 control↔manufacture producer 全部并入首期指数状态。
+
+标准 243 的 0 / 1 / 2 间贸易房是首期 Bake 快路径。live 参考实现应把贸易房表示为向量并能正确枚举更多房间；三间以上可以慢，但不能退回按 producer 分别重跑的旧语义。只有 Bake 的响应表可以先限制在已声明 room signature，不兼容布局走同语义 live 枚举。
+
+## 5. 数学模型
+
+### 5.1 有限候选集合
+
+这里的候选全集不是把设施绑定表中的 55 名中枢、77 名贸易干员无条件做全笛卡尔积，而是把项目已经接受的**结构化候选边界**正式化：
+
+- control universe = plan pins / requirements + 所有 deferred producer / 当前 policy 有效技能 + standalone 中枢 + 有界无技能 filler；
+- trade universe = 当前 hard/core role 的完整合法伙伴 + standalone plain + 三类 target tag 全员 + shortcut / condition 所需 capability；
+- 任何新 atom / tag / role capability 必须先进入结构化扩池；本次查询遇到未知或无法分类的 condition/capability 时，该设施立即扩为完整 live facility pool，再进入同一个 signature-indexed join，不能静默忽略。
+
+工具人表因此真正减少组合量，而 tag / capability expansion 保证本任务相关消费者不会被白名单裁掉。A+ 首期的“精确”是指在这份有文档、有测试的候选 universe 内不使用固定 top-K 或近似剪枝；它仍不宣称对所有设施绑定人员做全基建数学全局最优。
+
+从同一个 execute/pre-control seed 构造：
+
+- `C`：满足中枢目标容量 5（可用合法角色不足时取实际最大人数）、required anchors、candidate requirements、operbox/tier 和现有 `used` 的全部合法中枢组合；
+- `P(c)`：中枢候选 `c` 确定后，按当前生命周期放置的 system/dorm producers、resolve 后的 power 结果及其占用 mask；它是候选 prefix 的一部分，不在 winner 前写回主状态；
+- `T_r`：贸易房 `r` 满足容量、订单、已有 anchor、禁同房和当前非 producer role 合法性的全部单房组合；
+- `U`：进入联合搜索前已经占用的 logical operator bitset。
+
+`meta_vina` 不再定义一个候选层。推进之王、摩根、维娜·维多利亚及其他格拉斯哥成员，只要符合普通贸易候选规则，就与其他组合一起按真实 `final_efficiency` 竞争。
+
+每一行至少携带：
+
+```text
+logical_operator_mask
+variant/effect signature
+room signature
+siracusa_count
+glasgow_count_in_this_room
+karlan_count_in_this_room
+role / shortcut capability
+stable row id
+```
+
+### 5.2 合法联合 tuple
+
+一个联合候选 `x=(c,t_1,...,t_m)` 合法，当且仅当：
+
+```text
+c.mask & U == 0
+P(c).mask & (U | c.mask) == 0
+t_r.mask & (U | c.mask | P(c).mask) == 0       for every r
+t_r.mask & t_q.mask == 0                       for every r != q
+all anchors / room constraints / role legality hold
+```
+
+bitset 只负责姓名互斥和运行时过滤，不负责技能公式。
+
+### 5.3 Effect signature
+
+完整 tuple 先生成小型、可验证的动态签名：
+
+```text
+producer_rules(c)
+siracusa_by_room = [n_s(r)]
+siracusa_total = Σ siracusa_by_room
+glasgow_by_room = [n_g(r)]
+karlan_qualified_by_room = [I[n_k(r) >= 3]]
+karlan_qualified_rooms = Σ karlan_qualified_by_room
+external OperatorInBase / OperatorInTrade presence
+existing named control/global inject components
+room levels / capacities / order kinds
+```
+
+join partition 必须保留 `siracusa_by_room`、`glasgow_by_room` 和 `karlan_qualified_by_room`，并验证每个实际 row 的局部值与对应分量完全相等；聚合 total 只用于 response 公式。否则可能在 `siracusa_total=2` 的响应下错误连接出 `2+2`，或在“1 个达标站”下选出两个达标站。Silver signature 不附带灵知 precision 或孑 variant。
+
+### 5.4 求值与比较
+
+求值分为可复用的 control prefix 和 trade tuple 两层：
+
+1. 从同一个 seed 克隆临时 assignment，放入完整中枢组合。
+2. 执行该候选对应的 system/dorm producer 与 power 支持阶段，并对这个 control prefix resolve 一次。
+3. 对 trade tuple 用 baked row feature 推导完整 effect signature；精确 response 命中时直接读取同一 solver 离线生成的结果。
+4. response miss 时，把**所有**贸易房同时放入临时 assignment，调用一次 `resolve_base`，让每间贸易房都看到最终跨房 workforce，再用真实 solver / shortcut 结算；相同完整 signature 可在本轮 memo。
+5. 用项目当前具名 comparator 比较完整候选；生产房内部仍按 `final_efficiency`，不得加入公孙人工固定分或匿名跨域权重。
+6. 对暂定 winner 必须构造完整临时 assignment 再真实 resolve 一次，并核对 baked breakdown / `rule_id`。若不一致，整次查询拒绝该 catalog 并用 live reference 重跑，不能只修正 winner 分数。
+7. 由真实 winner 记录 `ResolvedProducerDependency`，然后一次 commit。
+
+本计划不授权重写评分。首期把当前过程式顺序显式命名为两个 comparator：
+
+1. `TradeFillLexicographicV0`：统一 `role_rank` 全序为 `docus → closure → witch → witch_fallback → karlan → penguin → plain`；一行同时命中多个 role 时取最先匹配者，源石单只允许 plain。房间顺序由唯一 `ordered_trade_rooms` 生成：保留现有但书二级金单站优先规则，其余按 blueprint 顺序 / 稳定 room id。逐房先比较 `role_rank`，再比较该房 `final_efficiency`，最后用稳定 row id 打破同分。`meta_vina` 不再占一个层级。
+2. `PeakPrefixComparatorV0`：每个 control prefix 先用上一个 comparator 选出自己的贸易 tuple；不同 prefix 仍只比较现有 `ControlInjectRawSumV0` / `policy_sort_key`。相等时先选当前普通 `assign_control` 候选宇宙本来就可达的 `ordinary_eligible` row，再按现有 control-search 稳定顺序和 logical operator id tuple 排序；producer 自然出现在 ordinary row 时仍保留 ordinary-first 资格。不偷偷加入贸易总和或匿名跨域权重。
+
+这精确复现当前评分契约，同时让 producer 的实际 full-layout 注入进入每房 solver。若未来希望不同 control prefix 直接比较贸易总 `final_efficiency`，必须另行请用户裁决并更新 `SCORING_MODEL.md`，不能借 A+ 偷换目标函数。
+
+## 6. 首版算法：签名完备的索引 Join
+
+不能直接遍历 `C × T₁ × T₂`。按设施绑定全集计算，仅两个三级贸易站就有数十亿互斥 room pair，再乘中枢会达到不可执行的量级。A+ 的简单之处来自**离线完整行 + 精确响应签名索引**，不是原始笛卡尔积。
+
+### 6.1 只按完全等价签名分桶
+
+1. 生成结构化 universe 内全部 control / trade row，不截固定 top-K。
+2. 每个 control row 在当前 seed 下生成 `control + support` prefix row，携带完整 logical mask。
+3. control prefix 按“对 comparator 和所有目标房响应完全相同”的 producer/effect signature 分桶。
+4. trade row 按 room signature、明确的 `role_rank`、每房局部 faction counts、shortcut / presence capability 分桶；具体静态分数仍留在 row 上，并为每个已支持 control effect signature 烘焙排序视图。
+5. 桶内不删除任何 operator mask 不同的行，只按该 control signature 下的真实 room comparator + stable row id 排序。
+
+这种 grouping 是等价类索引，不是 Pareto：bucket key 只折叠动态响应状态，不折叠实际 operator mask。标准双三级贸易站保留局部分区时，三类 producer 的核心计数格上界为 `8 producer masks × 16 Siracusa room vectors × 16 Glasgow room vectors × 4 Karlan-qualified-room vectors = 8,192`，且大量状态不可达。这个数字**不包含** external presence、其他 named inject、room signature、role/shortcut capability 和 tier variant，不能当成完整 bucket 总数或内存上界；Phase 0 必须实测完整维度。账号可用性、具体静态效率和 `used` 冲突仍由桶内每一行保留。
+
+### 6.2 运行时精确 Join
+
+```text
+best = None
+for control_effect_bucket in compatible_control_buckets:
+    for reachable_trade_feature_state in indexed_feature_states(control_signature):
+        sorted_views = baked_or_live_row_responses(control_signature, trade_feature_state)
+        rows = first_compatible_rows(
+            control_effect_bucket.rows,
+            sorted_views.room_rows,
+            available_variant_mask,
+            used_mask,
+            TradeFillLexicographicV0,
+        )
+        if rows exist:
+            candidate = materialize_exact_row_responses(rows, sorted_views)
+            best = PeakPrefixComparatorV0(best, candidate)
+validate_best_on_full_live_assignment_or_rerun()
+commit(best) exactly once
+```
+
+`first_compatible_rows` 对已排序的 3～N 个行列表做小型 best-first 索引 join。每个 `BakedRoomResponse(row_id, exact full signature)` 必须在入堆前可得；各列表在**同一个完整 control + feature signature** 下按对应房级 comparator 单调排序。最大堆 key 使用完整词典序 comparator，并维护 visited index-tuple 集；mask 冲突时只扩展相邻索引。只有满足这些前提，首个通过 operbox / tier / `used` / 局部分区一致性 / 跨房 disjoint 的 tuple 才是该签名组合内的精确最优。pop 后不得再出现会改变排序的 L3 分数或 row-specific response。
+
+同构贸易房可用稳定 row id 约束消除 `(A,B)` / `(B,A)` 对称重复；房级或订单不同则保留有序 bucket tuple。同一完整 signature 的 live solver 结果可在本轮 memo。cache miss 时现场构建相同 bucket / response，继续走同一个 indexed join，不能退回旧普通前缀或 per-producer pipeline。
+
+首期不需要通用 DP、Pareto frontier 或 branch-and-bound。若 effect bucket 数或 heap 扩展数经实测仍过大，再提交可与本节 live reference 做差分验证的优化；正确性基线始终是“完整行保留 + 完全等价分桶 + 首个兼容最优 tuple”的索引 join。
+
+## 7. A+ Bake 物化什么
+
+### 7.1 紧凑行
+
+建议 schema 至少分为：
+
+```text
+OperatorDictionary
+  logical_id(name)
+  variant_id(name, tier, effect signature)
+
+BakedControlRow
+  logical mask + variant ids + producer/effect signature
+  static named-policy components + ordinary_eligible/source rank + stable row id
+
+BakedTradeRow
+  logical mask + variant ids + room signature
+  local faction counts + presence bits + role_rank/shortcut capability
+
+BakedRoomResponse
+  row id + exact supported effect signature
+  true solver efficiency/breakdown/rule_id
+```
+
+不物化所有 `LayoutContext` 的笛卡尔积，也不保存一个脱离 signature 的“永久最终分数”。首期可以为三名 producer 的有限组合及常见计数响应多烘焙几份结果；这是小型有限表，不是全局人物 `2^N` mask。
+
+### 7.2 Tier 边界
+
+最简单的首期快速表使用标准 full-E2 variant：
+
+- 八幡海铃与戴菲恩只有 E2 producer rule；
+- 凛御银灰 E0/E2 都有相同商业版图规则，full-E2 表使用其 E2 variant；
+- 混合 tier、未知 variant 或 catalog 未覆盖的 operator 现场生成对应行并进入同一个 live 枚举；不得把它当成“不存在”。
+
+后续若混合 tier 命中率确有价值，再扩展 `(logical_id, tier_variant)` catalog。logical mask 始终按姓名去重。
+
+### 7.3 工具人池与完整行
+
+工具人池应单独形成连续热区；role anchor、三类 producer 的 target tag、shortcut capability 和 plan anchor 形成结构化扩区。运行时可以先扫描热区，但完整求解必须继续覆盖任务声明的全部扩区。
+
+这正是工具人池的正确作用：减少大多数普通候选的扫描量，同时由 capability-driven expansion 保证稀有组合不会因为不在白名单中消失。
+
+## 8. Cache 兼容与 live 后备
+
+catalog 使用前至少校验：
+
+- schema 与 semantic model version；
+- generator fingerprint；
+- operator dictionary、producer-rule registry 和 variant model；
+- skill table、operator instances、standalone roster、segments、shortcuts、systems 和 baseline layout 的逻辑相对路径 + 内容 hash；
+- room signature、tier 假设、mood / shift 假设和 Bake options；
+- catalog 自身 bytes/hash、row count 与 index checksum。
+
+统一后备规则：
+
+```text
+catalog row/response 精确命中
+    → 用 baked row 或 baked solver response
+任一 mismatch / missing row / unknown variant / unsupported context
+    → live 生成或 live resolve 同一个候选
+    → 继续进入同一完整候选行 + 签名索引 Join
+```
+
+不能在 mismatch 时改用 top-K、旧 schema 分数或 per-producer pipeline。生成过程写入 generation-id 临时目录，全部文件与 checksum 校验完成后再原子切换；读取方不能只依赖进程内 `RUNTIME_BAKE_IN_PROGRESS`。
+
+## 9. 当前违规位置
+
+| 生命周期 | 当前位置 | 为什么违反不变量 |
+|----------|----------|------------------|
+| data / selector | `data/skill_table.json` 的戴菲恩 atom | `TaggedCountInTradeSum` 把逐房 Glasgow 错写成跨站总数 |
+| select / plan | `data/base_systems.json::vina_lungmen`、生成脚本、registry 选型 | 可选 producer 被升级为 fixed System + 固定 trade role |
+| control candidate | `search/control.rs::control_entry_optional_dynamic_trade_tags` | 只对白名单 buff 建 Haru 类主动分支，三 producer 没有统一 rule extractor |
+| prefix | `layout/assign/pipeline.rs::dynamic_trade_producer_candidates`、`run_peak_prefix_candidate` | 普通路径后再按 producer 逐个重跑完整前缀；producer 增加时线性膨胀 |
+| trade role | `layout/assign/trade_fill.rs`、`search/role_pick.rs` 的 `meta_vina` | 固定 package / 有序 role 代替实际候选效率搜索 |
+| cross-room resolve | 当前候选级 workforce 投影 | 按房顺序提交会让前房看不到后房最终标签；联合 tuple 必须完整落位后统一 resolve |
+| rotation | `schedule/team_rotation.rs` optional dynamic 分支 | 搜索未输出通用 dependency，rotation 被迫重新推断 tag、blocked pool 和 presence |
+| Bake | `bake.rs` schema v10 单房 baseline 表 | 不能表达当前联合 rule/tier/room signature；只允许安全拒绝，不可直接复用 |
+
+## 10. 单一责任边界
+
+修复后的唯一责任链：
+
+| 不变量 | 单一负责边界 |
+|--------|--------------|
+| producer 规则、tier、target 与作用域 | `DeferredProducerRule` / `DeferredProducerSignature` registry，由 atom/capability 提取 |
+| 候选全集与 bitset | joint candidate catalog + live candidate factory，共用同一 row schema |
+| control + trade 联合合法性 | `joint_control_trade` 枚举器 |
+| 完整跨房公式 | 完整临时 assignment 上的 `resolve_base` + 真实 room solver |
+| winner 一次提交 | joint solver 返回的 `JointPrefixCandidate`，包含 control/support/power/trade |
+| 同上同下 | winner 生成的 `ResolvedProducerDependency`，rotation 只消费 |
+| cache 安全 | Bake manifest/gate；miss 进入同语义 live 枚举 |
+
+如果同一规则仍要在 pipeline、role 和 rotation 分别按名字判断，说明责任边界尚未完成，不得宣称修复。
+
+## 11. 删除清单
+
+实施完成时删除或改写：
+
+- Haru-only `control_entry_optional_dynamic_trade_tags` 白名单，改为通用 deferred rule extractor。
+- `dynamic_trade_producer_candidates` 的逐 producer 循环。
+- `run_peak_prefix_candidate(required_dynamic_producer)` / `assign_control_requiring_any` 为动态 producer 复制整条前缀的路径；若 API 仍被其他硬约束使用，拆出与 producer 无关的通用部分。
+- `PeakPrefixCandidate` 中只为多前缀竞赛存在的状态与注释。
+- `data/base_systems.json::vina_lungmen` fixed System，以及 `scripts/build_base_systems_from_gongsun_xlsx.py` 的生成条目。
+- `trade_segments.json` / role 配置、`trade_fill.rs`、`role_pick.rs` 中用于自动选型的 `meta_vina` 顺序与错误测试。
+- 仅凭 `control_has_daifeen_e2` / `control_has_haru_e2` 名字 flag 激活 package 的路径；L3 若需 producer gate，改读 resolved capability。
+- rotation 中为 optional producer 重新推断 tag、blocked pool、team override 或 unavailable 的特殊调度；改读 resolved dependency。
+- 固定房号、固定班次、当前 top hit 和旧 Vina package 的快照期待。
+
+保留：
+
+- `gsl_vina_lungmen` 等 shortcut 作为**实际组合的最终结算规则**，前提是它不再参与选型优先级；
+- `GlobalInjectManifest` 的 family 合并；
+- 真实 `resolve_base`、candidate projection 和逐房 solver；
+- rotation 的通用中枢满 5、bind presence 与设施容量校验；
+- cache mismatch 的 live 后备。
+
+## 12. 实施阶段
+
+### Phase 0：统一 Markdown 与保存基线
+
+- 主 Agent 先按 `SYSTEM_AUDIT_WORKFLOW.md` 在对话中提交四项修改前门禁；实现交给 subagent，主 Agent 负责逐层审阅与最终证明。
+- 按第 2 节统一所有当前权威 Markdown。
+- 保存用户真实 `plan`、最小 operbox、当前阶段耗时、candidate 数、profile/MAA JSON 和 full-suite 精确失败集合。
+- 把当前 peak-prefix comparator 抽象口径写入 `SCORING_MODEL.md`；不新增目标函数。
+
+### Phase 1：正确的 rule 与逐房 scope
+
+预计涉及：
+
+- `types.rs` / `global_resource/inject.rs`
+- `control/interpreter.rs`
+- `layout/workforce.rs` / `layout/resolve.rs`
+- `data/skill_table.json` / `operator_instances.json`
+
+交付：通用 deferred rule；Haru 跨站总数、Daifeen room-local、Silver 每站阈值的独立单元测试。
+
+### Phase 2：先写 live reference indexed join
+
+建议新建独立模块：
+
+```text
+search/deferred_producer.rs
+search/joint_control_trade.rs
+```
+
+交付：候选 row、logical/variant mask、每个 control 候选的 system/dorm/power 支持 prefix、完全等价 signature bucket、best-first disjoint join、完整临时 assignment resolve、一次 winner commit。此时即使没有 Bake，也必须语义正确。
+
+### Phase 3：A+ candidate catalog
+
+预计涉及 `bake.rs`，规模足够大时再拆 `bake/candidate_catalog.rs`：
+
+- 紧凑 control/trade row；
+- E2 快路径 response；
+- effect-signature index；
+- bitset runtime filter；
+- live miss 接口与差分校验。
+
+### Phase 4：Pipeline 集成与旧路径删除
+
+预计涉及：
+
+- `layout/assign/pipeline.rs`
+- `layout/assign/control_fill.rs`
+- `layout/assign/trade_fill.rs`
+- `search/role_pick.rs`
+- `data/base_systems.json` 与生成脚本
+
+交付：单一 joint selection boundary，并完成第 11 节删除清单。
+
+### Phase 5：通用 rotation dependency
+
+预计涉及：
+
+- `layout/orchestrate/plan.rs`
+- `schedule/team_rotation.rs`
+- `schedule/shift_bind.rs`
+
+交付：三种 rule 共用 `ResolvedProducerDependency`；实际 consumer bind、休息班关闭、中枢满 5。MAA exporter 只消费 core assignment，不新增机制。
+
+### Phase 6：Cache 生成安全与验证
+
+- generation-id 临时目录 + 原子切换；
+- catalog 自身 hash/bytes/row count/checksum；
+- `infra-cli bake validate` 输出精确 mismatch 原因；
+- 默认 243、混合 tier、非标准 layout、cache hit/miss 的差分验证。
+
+## 13. 回归矩阵
+
+### 13.1 Rule / scope
+
+- Haru E0 不激活；E2 对 0 / 1 / 2 / 多个实际 Siracusa trade consumer 分别为 `0 / 5 / 10 / ...`。
+- Daifeen 仅 E2 激活；`(3,0)` 与 `(2,1)` 逐房结果不同，制造、宿舍和仅在基建内不计数。
+- Silver E0/E2 均激活；`3+0` 命中 1 站，`2+1` 命中 0 站，两站各 3 人命中 2 站。
+- Silver 不激活灵知 precision，也不改变孑 variant。
+- 同 family 最大、跨 family 相加。
+
+### 13.2 联合索引 Join
+
+- 普通路径不选消费者，但 producer + consumer 联合后胜出的 bootstrap。
+- 有消费者但普通 control 仍胜出。
+- 三 producer 分别胜出、两两共存、三者共存和全部落败。
+- control、贸易房 1、贸易房 2 的 logical mask 无交集；冲突时能扫描到更深的合法行。
+- 同构房对称去重不改变 winner；不同房级保持有序。
+- 工具人热区之外、由 tag/capability 扩入的合法 consumer 可以胜出。
+- winner 前主 assignment/used 不变，winner 后只提交一次。
+- 完整 tuple resolve 让第一间贸易房也看到第二间房最终 workforce。
+
+### 13.3 Role / shortcut
+
+- 删除 Vina fixed/meta role 后，格拉斯哥组合可因实际效率自然胜出，也可自然落败。
+- Docus、closure、witch 等独立 hard/core 规则保持；同一合法层内统一按 `final_efficiency`。
+- Shortcut 只结算实际同房组合，不决定 producer 激活与进编。
+- `gsl_vina_lungmen` 若保留，只在实际成员和 resolved producer gate 同时满足时命中。
+
+### 13.4 Rotation
+
+- dependency 只含实际贡献 consumer；0 consumer 不绑定。
+- 三 producer 与各自 consumer 的 presence vector 一致，跨站不强制同房。
+- producer 休息班 dynamic effect 为 0。
+- 每班中枢 5 人、生产房满编、同一班无重复干员。
+- 未入选成员不会被 gamma 或 unavailable 特判重新强塞。
+
+### 13.5 Bake / fallback
+
+- schema、generator、输入、layout、tier、rule registry、catalog hash 任一变化都拒绝旧 response。
+- 未烘焙 tier / operator / room signature 现场生成并进入同一 signature bucket / indexed join。
+- Bake hit 与强制 live 的候选集合、winner、breakdown 和 `rule_id` 完全一致。
+- 损坏/反序列化失败安全回到 live，不传播半张 catalog。
+- 生成中断不会让读取方看到新旧文件混合。
+
+## 14. 性能验收
+
+不在计划中硬编码无来源的秒数或“必须下降 35%”。Phase 0 先在同一机器、构建模式、fixture 和预热条件下保存基线，再由用户确认目标。
+
+至少记录：
+
+- `|C|`、每个 `|T_r|`、effect-signature bucket 数；
+- logical mask / operbox / used 拒绝数；
+- 兼容 tuple 检查数与对称去重数；
+- baked row/response hit、live row generation、live resolve 和 memo hit 数；
+- catalog 行数、磁盘大小、加载时间和内存；
+- peak joint 阶段、完整 `plan` 与 rotation 总耗时。
+
+验收顺序：
+
+1. live reference 与 Bake winner 完全一致；
+2. 不再随 producer 数量重复跑完整 prefix；
+3. cache miss 只增加耗时；
+4. 若签名索引 join 已满足实际使用，不引入 DP/Pareto/B&B；
+5. 只有实测证明仍慢，才单独提交可与 live reference 差分验证的优化提案。
+
+## 15. 后续 producer 如何扩展
+
+新增 producer 按 effect signature 和 target facility 扩展，不向 pipeline 加名字分支，也不建立一个覆盖所有人物的全局 `2^N` mask：
+
+- **涤火杰西卡**：后续作为 control → manufacture / Blacksteel workforce rule，进入制造目标域自己的 candidate catalog；不把当前标准化成员升级成 hard bind。
+- **火龙S黑角**：后续作为 control → global resource / Monster Hunter consumer rule，显式描述木天蓼、贸易/制造 target 与资源 gate。
+
+两者只用于验证抽象可扩展性，不属于首期三 producer 验收。实施前必须分别完成领域不变量、作用域、tier、实际 consumer 和轮换审计。
+
+## 16. 非目标
+
+- 宿管恢复、完整心情预算和全基建连续时间最优化。
+- 首期把 control、trade、manufacture、power、office 一次合成全局指数搜索。
+- 为当前全精二 lineup、固定 room id 或班次下标写策略。
+- 用 catalog 结果替代最终完整 assignment resolve。
+- 用公孙人工固定效率给 producer 或 package 排名。
+- 在没有实测必要性时提前建设通用 DP、Pareto 或 branch-and-bound 框架。
+
+## 17. 完成证明
+
+最终交付逐项填写：
+
+| 不变量 | 唯一代码保证 | 删除的冲突 | 回归 | 真实 CLI | Bake/live 证据 |
+|--------|--------------|------------|------|----------|----------------|
+| 三 producer 自然可选 | rule registry + joint enumerator | Haru 多前缀 / Vina fixed role | 0/1/multi/bootstrap | 243 + 最小 operbox | winner 完全一致 |
+| Daifeen 逐房 | room-local signature + resolver | trade-sum selector | `(3,0)` / `(2,1)` | 两贸易房明细 | response/live 一致 |
+| Silver 逐站阈值 | `tag@min` room vector | aggregate / precision 混用 | `3+0` / `2+1` | 跨站 layout | signature hash |
+| winner 一次 commit | `JointPrefixCandidate` | 分支提前写 used | seed 不变 / duplicate | profile + MAA | miss 只变慢 |
+| 通用轮换 | resolved dependency | producer 特殊调度 | bind/rest/control5 | 三班输出 | 不适用 |
+
+最终回复必须另列：
+
+- 根因层和旧模型为什么允许非法状态；
+- 新的单一事实源；
+- 删除的 data/code/test 路径；
+- build、定向测试、full suite、真实 `plan`、Bake hit/miss 与性能日志；
+- 本轮新增失败、既有失败和未验证风险；
+- profile / MAA JSON 的可点击路径与 commit hash。
+
+缺少任一项，不得宣称 A+ 已完成。

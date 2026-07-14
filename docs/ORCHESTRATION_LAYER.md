@@ -122,8 +122,10 @@ crates/infra-core/src/layout/orchestrate/
 
 ### 4.3 贸易 meta：跨站体系、同站锚点与核心优先
 
-来源：`MECHANICS_REGISTRY.csv` 中「当与 X 在同一个贸易站」+ 公孙工具人表。  
+来源：`MECHANICS_REGISTRY.csv` 中「当与 X 在同一个贸易站」+ 公孙工具人表。
 `base_systems.json` 保留跨站体系和历史同站锚点；当前 `assign_shift` 主路径会跳过 `witch_long_beta`、`blackkey_closure`、企鹅、推王等低优先 registry 抢站条目，贸易余站改由 `data/trade_segments.json` 的 `roles` 执行核心优先。
+
+> **已知实现缺口（2026-07-14）**：以下 `meta_vina`、`vina_lungmen` 和按 producer 分别重跑前缀的描述是当前 legacy 行为，不是业务目标。用户已确认八幡海铃、戴菲恩、凛御银灰应共用一次自然联合搜索；精确不变量以 [CONTROL_CENTER_ASSIGNMENT.md](CONTROL_CENTER_ASSIGNMENT.md) 为准，实施见 [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md](TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)。
 
 #### 已落地的数据与运行时归属
 
@@ -133,7 +135,7 @@ crates/infra-core/src/layout/orchestrate/
 | `closure` | 可露希尔核心优先 | `gsl_blackkey_closure` / `gsl_closure_*` | 强制包含可露希尔；优先黑键可露锚点，缺黑键仍保留可露 |
 | `witch` / `witch_fallback` | 龙巫 / 巫恋兜底 | `gsl_witch_*` | `witch` 强制包含精二巫恋 + 龙舌兰；无龙舌兰时 `witch_fallback` 低于推王组，只做巫恋兜底 |
 | `ling_jie_karlan` | control producer + L1 自然搜索 | `gsl_ling_jie_yaxin` 仅参考 | 只认领灵知 E2 中枢；精1孑由贸易搜索注入 |
-| `meta_vina` / `penguin_*` | bond / segment 锚点 | `gsl_vina_lungmen` / `gsl_penguin_*` | 推王组是第 4 优先贸易站（但书/可露/龙巫之后、灵知孑之前）；企鹅低于灵知孑 |
+| `meta_vina` / `penguin_*` | legacy Vina role / 企鹅 segment | `gsl_vina_lungmen` / `gsl_penguin_*` | `meta_vina` 当前仍把推王组放在第 4 优先，待删除；Vina shortcut 仅可保留为实际组合结算。企鹅逻辑不在本缺口范围 |
 | `rosemary_perception*` | **global effect** | — | 已移出编排；`assign_perception_producers` + scope=global |
 
 #### 贸易核心 role 顺序
@@ -143,10 +145,10 @@ crates/infra-core/src/layout/orchestrate/
 1. `docus`：拥有精二但书时，无条件作为全部金单贸易站的第一核心；有空二级金单站时优先进二级站，然后一次性搜索所有“必须包含但书”的候选并按 `final_efficiency` 取最高。`gsl_docus_solo` / `gsl_docus_syracusa` 由求解器按实际组合自然命中，不是候选优先级；没有精二但书时不启用该 role。
 2. `closure`：`gsl_blackkey_closure` 优先；否则 `gsl_closure_*`；否则包含可露希尔的最高可用三人组。
 3. `witch`：必须同时包含精二巫恋、精二龙舌兰和裁缝 β/α；blank shortcut 不进入自动 role。
-4. `meta_vina`：戴菲恩 producer 激活时命中推王 + 摩根 + 维娜，优先级高于灵知孑与无龙舌兰巫恋兜底。
+4. **legacy `meta_vina`（待删除）**：当前由戴菲恩 producer 激活推王 + 摩根 + 维娜固定优先；目标状态让全部格拉斯哥贸易候选按实际 `final_efficiency` 自然竞争。
 5. `witch_fallback` / `karlan` / `penguin` / plain：无龙舌兰巫恋兜底、灵知孑、企鹅、散件工具人三人组，且排除黑键与巫恋同房冲突。
 
-这条顺序是核心优先策略，不是固定三人组优先级。八幡海铃只作为可选中枢 producer，伺夜、贝洛内只作为普通贸易候选；三人都不由编排层强制入编。伺夜与贝洛内不要求同站，三人同房只是可能自然选中的 shortcut；八幡与单个贸易消费者的极端组合同样合法。
+除已标记的 legacy `meta_vina` 外，这条顺序表达独立 core / fallback 策略，不是任意固定三人组优先级。八幡海铃、戴菲恩、凛御银灰都只作为可选中枢 producer；叙拉古、格拉斯哥、谢拉格 consumer 的实际组合由合法候选和 solver 决定。伺夜与贝洛内不要求同站，八幡与单个贸易消费者的极端组合同样合法。
 
 #### Phase 2 待建（贸易 bond）
 
@@ -164,14 +166,14 @@ crates/infra-core/src/layout/orchestrate/
 | 机制 | CSV | 原因 |
 |------|-----|------|
 | 新约能天使「同城加急单」 | 同站每名拉特兰 +15% | tag 叠层，非固定二人 bond |
-| 维娜「外贸决议」 | 同站 GSG 干员 +10% | L1 tag 搜索自然结算；推王组只作为戴菲恩 producer-gated shortcut |
+| 维娜「外贸决议」 | 同站 GSG 干员 +10% | L1 tag 搜索自然结算；Vina shortcut 只结算实际组合，不再作为戴菲恩 producer-gated 选型入口 |
 | 孑「市井之道」 | 站内含义依赖订单上限与技能顺序 | 灵知线由 L1 搜索自然上浮，非固定 trade slot / active L3 |
 
-Producer 前提（跨房，非 global pool）：
+当前 legacy producer 前提（跨房，非 global pool；待按统一 deferred rule 改写）：
 
 - 叙拉古：八幡海铃 E2 的动态贸易标签倍率；仅在八幡与实际叙拉古贸易成员自然同时入选时生效，`haru_e2_in_control` 只保留为 L3 链段 producer 事实
 - 喀兰：`karlan_precision`（灵知 E2）
-- 推王：`戴菲恩` E2 在中枢（运筹好手）
+- 推王：当前以 `戴菲恩` E2 在中枢激活 legacy role；目标为戴菲恩逐贸易房 Glasgow `+10%/人` 的自然联合搜索
 
 ### 4.4 制造同房 bond（自动化链配套，Phase 2+）
 
@@ -190,7 +192,7 @@ Producer 前提（跨房，非 global pool）：
 |------|------|------|
 | 烈夏 E2 | **古米在贸易站**（患难拍档） | 制造站选人时须保留贸易古米位 |
 | 清流 E1 | 每贸易站 → 当前制造站金 +20% | 自动化组已含；非 bond |
-| 戴菲恩 E2 | 中枢 producer | 推王组 `prerequisites` |
+| 戴菲恩 E2 | 中枢 producer | 当前仍连接 legacy 推王组 `prerequisites`；目标改为逐房 Glasgow 自然候选 |
 
 ---
 
@@ -228,7 +230,7 @@ Producer 前提（跨房，非 global pool）：
 
 - **核心**：`witch` 是龙巫，强制包含精二巫恋 + 龙舌兰。
 - **fallback**：自动龙巫内部仅裁缝 β → 裁缝 α；`gsl_witch_long_blank` 只保留单站结算兼容。
-- **兜底**：无龙舌兰时走 `witch_fallback`，只强制包含巫恋，优先级低于推王组。
+- **兜底**：无龙舌兰时走 `witch_fallback`，只强制包含巫恋；当前优先级低于 legacy 推王组，该相对顺序随 `meta_vina` 一并待删除。
 - **编排**：不再把 `witch_long_beta` 当固定三人组早占站；由 role policy 在贸易余站搜索里强制包含龙巫锚点。
 
 ### Phase 4 — global effect 收拢（与编排并行）
@@ -245,7 +247,7 @@ Producer 前提（跨房，非 global pool）：
 
 ### Phase 5 — team-rotation 对齐
 
-- [x] α/β 从 peak 切半保留编排已认领贸易 meta；γ 走 `assign_team_gamma_half`（同样使用 docus → closure → witch → meta_vina → witch_fallback → plain 的贸易 role 顺序）
+- [x] α/β 从 peak 切半保留编排已认领贸易 meta；γ 走 `assign_team_gamma_half`（当前仍使用含 legacy `meta_vina` 的贸易 role 顺序）
 - [x] `assign_shift_with_plan` + `TeamRotationReport.peak_plan` 供轮换层只读编排计划
 
 ---
@@ -254,7 +256,7 @@ Producer 前提（跨房，非 global pool）：
 
 1. **编排单测不调 solve**；shortcut 单测才调 `resolve_trade_shortcut`。
 2. **每个 System 一条 golden test**（`operbox_full_e2` 或最小 roster）。
-3. 端到端：`layout team-rotation` + [fixtures/243](fixtures/243/README.md)。
+3. 端到端：`layout team-rotation` + [fixtures/243](../data/fixtures/243/README.md)。
 4. 迁移期可用环境变量/feature 对比旧 `assign_shift` 总分（短期）。
 
 ---

@@ -166,6 +166,17 @@
 2. `MECHANICS_REGISTRY.csv` 中“同一个贸易站”“在基建内”“每个进驻在贸易站的叙拉古干员”是三种不同作用域，不得合并成固定同房组合。
 3. 搜索自然把伺夜、贝洛内放在同站是允许的；编排层不得把同站写成体系激活前提。
 
+#### 可选动态贸易 producer（已确认口径，统一实现待办）
+
+修改八幡海铃、戴菲恩、凛御银灰的中枢—贸易联合搜索前，必须读取 [`docs/CONTROL_CENTER_ASSIGNMENT.md`](docs/CONTROL_CENTER_ASSIGNMENT.md) 和 [`docs/TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md`](docs/TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)。当前代码仍有 Haru 专用多前缀与 Vina legacy role；它们是已知实现缺口，不得反推业务规则。
+
+1. 三者都是可选中枢 producer，不是 fixed System / required anchor；必须与实际贸易候选联合比较，无 consumer 时动态收益为 0。
+2. 八幡海铃 E2：每名实际进驻任意贸易站的叙拉古干员，为各贸易房注入 `+5%`。
+3. 戴菲恩 E2：每间贸易房只按**本房**格拉斯哥人数注入 `+10%/人`；不得先跨站求和。
+4. 凛御银灰 E0 起：每个实际拥有至少 3 名谢拉格干员的贸易站，为各贸易房注入 `+10%`。该规则与灵知精密计算、孑 variant 完全独立。
+5. `meta_vina` / `vina_lungmen` 不得决定选型；shortcut 若保留，只结算最终实际同房组合。
+6. winner 只为实际贡献 consumer 生成同上同下 dependency；不同贸易站不强制同房，未入选或未贡献成员不绑定。
+
 ## 4. Bug 路由
 
 | 现象 | 先读 | 优先入口 |

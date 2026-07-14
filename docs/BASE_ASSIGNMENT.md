@@ -73,12 +73,14 @@ operbox + blueprint
 2. **控制中枢补位** `control`（木天蓼 / 全局贸易·制造 % 等；不足 5 人时用 `search_control_combos` 补满）
 3. **宿舍 / 感知 producer**（如森西、迷迭香感知源；先落位再 `resolve_base`）
 4. **发电各站**（每站 1 人，`search_power_assignment` 同款 `used`）
-5. **贸易余站**（未被 registry 占用的金单贸易站先走 `docus → closure → witch → meta_vina → witch_fallback → karlan → penguin → plain` role；源石单走 plain）
+5. **贸易余站**（当前 legacy 路径仍走 `docus → closure → witch → meta_vina → witch_fallback → karlan → penguin → plain`；其中 `meta_vina` 已确认应删除并回到自然候选，见下方已知缺口；源石单走 plain）
 6. **制造各产线**（按蓝图 `manu_line_scenario`：各制造房按配方独立搜索 `C(n,k)`）
 
 同类型多房间：按蓝图 `rooms` 数组顺序或稳定 `room_id` 字典序。
 
-**贸易 core priority**：精二但书是所有金单贸易站的第一核心；存在空二级金单站时先把该站交给但书，再在所有可用干员中按 `final_efficiency` 选择最高效率队友。八幡海铃、伺夜、贝洛内都不是编排硬核心，也不通过 registry 强制进编：普通中枢候选与包含动态贸易 producer 的中枢候选分别完成贸易自然搜索，再按现有具名中枢 policy 比较；伺夜、贝洛内作为合法普通贸易候选进入足量 standalone 池，可上 0/1/2 人且不预设同房，八幡海铃在没有叙拉古贸易成员时「家族认可」收益为 0。`gsl_docus_solo` / `gsl_docus_syracusa` 只在求解实际同房候选时提供机制结算，不参与队友候选优先顺序。迷迭香体系激活时，黑键作为 required trade anchor 保证进编；可露缺黑键仍上可露。自动龙巫必须包含巫恋 + 龙舌兰 + 裁缝 β/α，普通白板只保留单站结算兼容，不进入自动 role；无龙舌兰的巫恋兜底低于推王组。
+**贸易 core priority**：精二但书是所有金单贸易站的第一核心；存在空二级金单站时先把该站交给但书，再在所有可用干员中按 `final_efficiency` 选择最高效率队友。八幡海铃、伺夜、贝洛内都不是编排硬核心，也不通过 registry 强制进编：伺夜、贝洛内可上 0/1/2 人且不预设同房，八幡海铃在没有叙拉古贸易成员时「家族认可」收益为 0。`gsl_docus_solo` / `gsl_docus_syracusa` 只在求解实际同房候选时提供机制结算，不参与队友候选优先顺序。迷迭香体系激活时，黑键作为 required trade anchor 保证进编；可露缺黑键仍上可露。自动龙巫必须包含巫恋 + 龙舌兰 + 裁缝 β/α，普通白板只保留单站结算兼容，不进入自动 role。
+
+**已确认缺口**：八幡海铃、戴菲恩、凛御银灰应共用一次 control + trade 联合枚举；戴菲恩不得通过 `vina_lungmen` / `meta_vina` 固定推王组，凛御银灰也不得借用灵知精密计算。当前代码仍是 Haru 专用多前缀和 Vina legacy role，尚未符合该口径。精确公式、删除清单和 A+ 交接见 [CONTROL_CENTER_ASSIGNMENT.md](CONTROL_CENTER_ASSIGNMENT.md) 与 [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md](TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)。
 
 ---
 

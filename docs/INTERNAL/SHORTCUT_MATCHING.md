@@ -32,10 +32,12 @@
 
 **贸易 core role fallback 链**：
 
+> `meta_vina` 是截至 2026-07-14 仍存在的 legacy 选型路径，已确认应从自动 role / fixed System 中删除。戴菲恩、八幡海铃、凛御银灰的选型真源见 [CONTROL_CENTER_ASSIGNMENT.md](../CONTROL_CENTER_ASSIGNMENT.md)；A+ 改造见 [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md](../TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)。`gsl_vina_lungmen` 如保留，只能结算最终实际组合。
+
 - `docus`：仅执行 `unfiltered + must_include_name=但书`，并要求但书精二；全部候选统一按 `final_efficiency` 排序。`gsl_docus_syracusa` / `gsl_docus_solo` 由 shortcut matcher 对实际候选自然结算，不参与 pick step 优先级。无精二但书时 role 失败，由调用方进入下一个 role 或 plain。
 - `closure`：`gsl_blackkey_closure` 优先，再 `closure` 分档，最后 `unfiltered + must_include_name=可露希尔`。黑键缺失不影响可露希尔核心上站。
 - `witch`：`filtered hit_filter=witch + must_include_names=[巫恋, 龙舌兰]`，只接受 `gsl_witch_long_beta` / `gsl_witch_long_alpha`；blank 仅用于单站结算兼容。`witch_fallback` 使用独立过滤器，不与龙巫约束混用。
-- `meta_vina`：仅 `segment/vina_lungmen`，且必须由 `daifeen_e2_in_control` producer 激活；无 producer 时失败，不 fallback 成 plain。推进之王以 0% 贸易触发器入池，用于触发摩根/格拉斯哥同站技能；优先级高于无龙舌兰巫恋兜底。
+- **legacy `meta_vina`（待删除）**：当前仅走 `segment/vina_lungmen`，并由 `daifeen_e2_in_control` 激活固定优先；目标状态让相关成员进入普通合法候选，按 `final_efficiency` 自然胜出或落败。
 - `witch_fallback`：`filtered hit_filter=witch + must_include_name=巫恋`，只做无龙舌兰时的低优先兜底。
 
 `resolve_trade_shortcut` 在巫恋/可露之前调用 `match_registered_trade_segment`（按 `priority`）。
