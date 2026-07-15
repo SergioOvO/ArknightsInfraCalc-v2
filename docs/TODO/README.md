@@ -15,6 +15,8 @@
 
 2026-07-03 用户确认 `QUALITY_90_TO_95_PLAN.md` 过度设计，且 `feedback/` 本批线上反馈 bug 已修复。项目现在处于正常维护期：没有默认主动 TODO 队列。新问题按 [../MAINTENANCE_MODE.md](../MAINTENANCE_MODE.md) 处理；已关闭反馈从 [../../feedback/TRACKING.md](../../feedback/TRACKING.md) 查证。
 
+工作流优化实施计划已完成 A-E 批次，归档于 [../ARCHIVE/done/AGENT_WORKFLOW_OPTIMIZATION_PLAN.md](../ARCHIVE/done/AGENT_WORKFLOW_OPTIMIZATION_PLAN.md)；当前执行入口是根 `AGENTS.md`、维护/质量文档、项目 Skills 和 `scripts/codex/`。
+
 | 文件 | 状态 | 用途 |
 |------|------|------|
 | [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md](DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md) | ready-on-request | 用户已确认的下一位 Agent 交接：三类可选中枢 producer 的 live 精确索引 Join 与 A+ Bake；尚未实现，不自动执行 |
