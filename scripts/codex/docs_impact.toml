@@ -77,6 +77,13 @@ generated_check = ["markdown-links"]
 domain_route = "受影响干员或机制对应的当前领域 Markdown"
 
 [[rules]]
+id = "layout-data"
+globs = ["data/layout/**", "data/fixtures/**"]
+required_check = ["docs/BASE_ASSIGNMENT.md", "docs/PROJECT_MAP.md"]
+generated_check = ["markdown-links"]
+domain_route = "布局蓝图与标准 fixture 的当前事实文档"
+
+[[rules]]
 id = "system-data"
 globs = ["data/base_systems.json", "data/trade_shortcuts.json", "data/trade_segments.json"]
 required_check = ["docs/ORCHESTRATION_LAYER.md", "docs/INTERNAL/SHORTCUT_MATCHING.md"]
