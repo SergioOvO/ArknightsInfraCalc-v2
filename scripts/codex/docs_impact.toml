@@ -99,6 +99,6 @@ generated_check = ["markdown-links"]
 
 [[rules]]
 id = "agent-workflow"
-globs = ["AGENTS.md", ".agents/skills/**", "scripts/codex/**"]
+globs = ["AGENTS.md", ".agents/skills/**", ".codex/agents/**", ".opencode/agents/**", "scripts/codex/**"]
 required_check = ["docs/MAINTENANCE_MODE.md", "docs/QUALITY_AND_AUDIT.md", "docs/SYSTEM_AUDIT_WORKFLOW.md"]
 generated_check = ["markdown-links"]
