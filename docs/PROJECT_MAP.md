@@ -268,6 +268,7 @@ ArknightsInfraCalc-v2/
 | `codex/render_evidence.py` | 校验 manifest / status / 日志 / 产物并生成证据 Markdown |
 | `codex/check_docs_impact.py` | 根据 changed paths 和责任映射检查文档影响声明 |
 | `codex/check_task_scope.py` | 检查实际 diff、范围扩展和 deferred side findings |
+| `codex/check_repository_facts.py` | CI 检查稳定 Markdown 链接、状态字段和 CLI 命令地图 |
 
 ---
 
