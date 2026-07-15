@@ -82,6 +82,7 @@ started_at="$(date -Is)"
 started_ns="$(date +%s%N)"
 command=("$@")
 printf -v command_display '%q ' "${command[@]}"
+command_json="$(python3 -c 'import json, sys; print(json.dumps(sys.argv[1:], ensure_ascii=False))' "${command[@]}")"
 
 {
   printf 'cwd=%s\n' "$caller_cwd"
@@ -147,11 +148,12 @@ for artifact in "${artifacts[@]}"; do
 done
 
 set +e
-python3 "$script_dir/_manifest.py" "${manifest_args[@]}" --command "${command[@]}"
+python3 "$script_dir/_manifest.py" "${manifest_args[@]}" --command-json "$command_json"
 manifest_rc=$?
 set -e
 if ((manifest_rc != 0)); then
   printf 'manifest_update=FAIL manifest=%s\n' "$manifest" >&2
+  exit 70
 else
   printf 'result=%s exit_code=%s\n' "$result" "$rc"
   printf 'evidence_log=%s\nstatus_file=%s\nmanifest=%s\n' "$log" "$status_file" "$manifest"

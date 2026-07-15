@@ -120,6 +120,13 @@ def _parse_artifact(value: str, cwd: Path, run_id: str) -> dict[str, str]:
     return {"kind": kind, "path": _absolute(path, cwd), "run_id": run_id}
 
 
+def _parse_command_json(value: str) -> list[str]:
+    command = json.loads(value)
+    if not isinstance(command, list) or not command or not all(isinstance(arg, str) for arg in command):
+        raise argparse.ArgumentTypeError("--command-json must encode a non-empty string array")
+    return command
+
+
 def append_run(args: argparse.Namespace) -> None:
     manifest_path = Path(args.manifest).resolve(strict=False)
     cwd = Path(args.cwd).resolve(strict=False)
@@ -184,14 +191,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--log", required=True)
     parser.add_argument("--status-file", required=True)
     parser.add_argument("--artifact", action="append", default=[])
-    parser.add_argument("--command", nargs=argparse.REMAINDER, required=True)
+    parser.add_argument("--command-json", dest="command", type=_parse_command_json, required=True)
     return parser
 
 
 def main() -> int:
     args = build_parser().parse_args()
-    if not args.command:
-        raise SystemExit("--command requires at least one argument")
     append_run(args)
     return 0
 

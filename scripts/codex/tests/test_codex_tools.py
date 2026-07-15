@@ -103,6 +103,7 @@ class EvidenceRunnerTests(unittest.TestCase):
         *,
         inputs: str = "self-test input",
         artifacts: list[str] | None = None,
+        metadata: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         args = [
             "bash",
@@ -118,6 +119,8 @@ class EvidenceRunnerTests(unittest.TestCase):
         ]
         for artifact in artifacts or []:
             args.extend(["--artifact", artifact])
+        if metadata is not None:
+            args.extend(["--metadata", str(metadata)])
         args.extend(["--", *command])
         return subprocess.run(args, cwd=self.root, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
@@ -151,6 +154,32 @@ class EvidenceRunnerTests(unittest.TestCase):
         run = self.manifest("special")["runs"][0]
         self.assertEqual(run["inputs"], inputs)
         self.assertEqual(run["command"][-2:], [argument, argument])
+
+    def test_command_arguments_after_double_dash_are_preserved(self) -> None:
+        command = [
+            sys.executable,
+            "-c",
+            "import sys; assert sys.argv[1:] == ['--', '--check']",
+            "--",
+            "--check",
+        ]
+        result = self.run_evidence("double-dash", command)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.manifest("double-dash")["runs"][0]["command"], command)
+
+    def test_manifest_update_failure_returns_nonzero(self) -> None:
+        metadata = self.root / "invalid-metadata.json"
+        metadata.write_text("not json\n", encoding="utf-8")
+
+        result = self.run_evidence(
+            "manifest-failure",
+            [sys.executable, "-c", "pass"],
+            metadata=metadata,
+        )
+
+        self.assertEqual(result.returncode, 70)
+        self.assertIn("manifest_update=FAIL", result.stderr)
 
     def test_concurrent_runs_do_not_overwrite(self) -> None:
         base = [
