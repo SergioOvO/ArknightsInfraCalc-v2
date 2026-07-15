@@ -13,7 +13,7 @@
 
 现阶段普通问题的默认目标是稳定维护，不是扩张。除非用户明确要求新增功能，否则不要主动推进 `docs/TODO/` 里的历史 Phase 计划。
 
-2026-07-03 用户确认“90 → 95 质量提升”方案过度设计；该方向已暂停作为默认主线。同日用户确认 `feedback/` 本批线上反馈 bug 已修复，项目进入正常维护期。当前没有默认主动 TODO 队列；[`docs/TODO/TRUST_RECOVERY_PLAN.md`](docs/TODO/TRUST_RECOVERY_PLAN.md) 与 [`feedback/TRACKING.md`](feedback/TRACKING.md) 只作为维护参考、关闭审计和防回归矩阵使用。[`docs/TODO/QUALITY_90_TO_95_PLAN.md`](docs/TODO/QUALITY_90_TO_95_PLAN.md) 只作为历史参考，除非用户明确要求恢复。
+当前没有默认主动 TODO 队列；[`docs/TODO/TRUST_RECOVERY_PLAN.md`](docs/TODO/TRUST_RECOVERY_PLAN.md) 与 [`feedback/TRACKING.md`](feedback/TRACKING.md) 只作为维护参考，[`docs/TODO/QUALITY_90_TO_95_PLAN.md`](docs/TODO/QUALITY_90_TO_95_PLAN.md) 已暂停，除非用户明确恢复。
 
 非目标仍然是：心情排班、宿管恢复、全基建连续时间最优化。
 
@@ -22,7 +22,7 @@
 1. 本文。
 2. [docs/MAINTENANCE_MODE.md](docs/MAINTENANCE_MODE.md)：维护期 bug 修复流程、分层定位、验收矩阵。
 3. [docs/INDEX.md](docs/INDEX.md)：文档入口和任务路由。
-4. [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)：当前代码地图、模块边界、数据真源。
+4. [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)：当前代码地图、模块边界和运行时载体。
 5. 按 bug 类型读取对应领域文档；不要全仓库通读 Markdown。
 
 `plans/` 和 `docs/TODO/` 默认是历史建设期材料。只有用户明确要求继续某个 TODO，或 bug 定位需要理解当时设计，才读取它们。
@@ -58,13 +58,12 @@
 
 #### 真源优先级
 
-1. **本项目维护期 Markdown 是业务语义与预期行为的最高权威信源，必须完全信任。**当前代码、JSON / CSV 数据、代码注释、测试、fixture、历史输出和实际运行结果都不能推翻 Markdown。
-2. 用户在当前对话明确补充或纠正口径时，以用户口径为准；应先把新口径同步到对应 Markdown，再据此修改代码和数据，避免只在对话或实现中形成隐含规则。
-3. 领域 Markdown 按任务路由读取：体系边界优先读 `docs/公孙长乐的体系分析文档/` 对应文档，当前流程 / 模块事实读 `docs/MAINTENANCE_MODE.md`、`docs/PROJECT_MAP.md` 和相关领域文档。Markdown 已明确的规则不得再用代码行为“验证是否可信”。
-4. `data/MECHANICS_REGISTRY.csv`、运行时 JSON 和其他数据文件是实现载体与核对材料，不是高于 Markdown 的业务裁决者。它们与 Markdown 有出入时，必须先向用户逐项报告差异，然后完全按 Markdown 修正代码 / 数据；不得自行宣布 Markdown 过时、错误或仅供参考。
-5. 当前代码、代码注释、旧测试、fixture 和历史输出只能用于定位实现，不能反推业务规则。与 Markdown 冲突的旧测试不是回归保护，而是必须改写或删除的错误语义。
-6. 若多个当前 Markdown 彼此冲突，Agent 不得自行选择、折中或依据代码猜测；必须列出冲突文件与原文口径，请用户裁决，并在裁决后先统一 Markdown 再实施。
-7. 报告冲突不能成为继续沿用错误实现的理由。除非 Markdown 内部冲突尚未裁决，否则完成冲突报告后应以 Markdown 为唯一目标实现，不保留“双路径兼容”或临时 fallback。
+- **领域规范**：用户当前裁决优先，其次是对应领域 Markdown；代码、数据、注释、测试、fixture 和输出不能推翻它。用户纠正口径时先更新领域 Markdown，再更新实现。
+- **实现事实**：当前 CLI、类型、模块和调用链以代码与生成的 help 为证据；描述性项目地图过时时修正文档，不要求代码迁就旧地图。
+- **流程规范**：Agent 的复现、审计、验证和提交以根规则、maintenance、quality、formal audit 文档和项目 Skills 为准。
+- **运行时载体**：JSON、CSV、fixture 和 Bake 数据负责承载实现，不负责裁决业务语义。
+
+两个当前领域 Markdown 冲突时必须逐项报告并请用户裁决，不能自行折中、依据代码猜测或保留双路径兼容。旧测试若保护错误语义，应改写或删除。
 
 #### 实现纪律
 
@@ -87,46 +86,25 @@
 
 #### 完成前强制证明
 
-实现完成后，Agent 必须逐条提供下表信息；缺任一列不得宣称 bug 已修复：
-
-| 项 | 必须说明 |
-|----|----------|
-| 不变量 | 用户确认的原句或等价精确定义 |
-| 代码保证 | 唯一负责保证它的类型 / 字段 / 函数 |
-| 删除的冲突 | 被移除的旧路径、旧 fallback、旧特判或旧测试 |
-| 回归 | 对应测试名与断言内容 |
-| 端到端结果 | 用户实际 CLI 路径中的房间 / 队伍 / 关键字段 |
-
-最终回复还必须单独列出：
-
-1. 根因所在层以及旧模型为什么允许非法状态。
-2. 新的单一事实源，禁止只罗列修改文件。
-3. 未通过的测试，并区分本轮回归、既有失败和未验证风险。
-4. 实际运行过的用户入口；只跑单元测试时不得声称排班 bug 已完整修复。
+体系修复按 [QUALITY_AND_AUDIT.md](docs/QUALITY_AND_AUDIT.md) 的完成证明表逐条提交不变量、唯一代码保证、删除的冲突、回归、真实入口结果和证据。另行说明根因层、旧模型为何允许非法状态、新的单一事实源，以及本轮失败、既有失败和未验证风险；只跑单元测试时不得声称排班 bug 已完整修复。
 
 ### 2.2 验证留痕硬门禁
 
-以下规则适用于主 Agent 和所有 subagent，属于完成门禁，不是建议：
+所有用于结论的 build、test、CLI、benchmark、格式和结构校验都必须通过 [统一证据工具](docs/QUALITY_AND_AUDIT.md) 或其兼容包装器留痕；裸跑结果不能作为交付证据。每次调用必须保留完整 stdout/stderr、参数、cwd、输入、时间、耗时、exit code 和 PASS/FAIL，并使用任务专属日志与产物路径。
 
-1. **任何 test 调用都无例外必须留痕**，探索、复现、回归和最终验证全部包括；每一个 `cargo test` 调用即使通过也必须把完整 stdout + stderr 单独保存到 `target/codex-logs/` 下唯一且可辨识的日志名。其他 build、CLI smoke、benchmark、格式 / 结构校验只要用于验证结论，也必须按同样标准留痕；需要比较的重复运行不得覆盖旧日志。
-2. 每份日志必须能还原完整命令、cwd、输入 fixture / operbox / layout / assignment、开始与结束时间、exit code 和结果摘要；性能结论还必须记录耗时。长测试和 full suite 必须保留完整失败列表；有 baseline 时，日志或相邻证据文件必须记录失败集合对比，不能只比较失败数量。
-3. 如果最初在终端裸跑，交付前必须使用留痕方式重跑；滚屏输出、Agent 消息和 `/tmp` 文件都不能作为最终证据。非 test 的探索可使用 `/tmp`，但任何成为结论依据的日志或 JSON 都必须重跑或复制到 `target/codex-logs/` / `out/`；此探索例外不适用于 test，test 日志始终直接进入 `target/codex-logs/`。
-4. 真实 CLI 产物必须写入 `out/` 并使用任务专属文件名。`plan` 必须同时显式传入 `--profile-out out/<task>-profile.json` 和 `--maa-out out/<task>-maa.json`；禁止覆盖 operbox 相邻 profile、标准 fixture 或用户文件。
-5. `target/`、`out/` 默认不提交，但必须在本地保留到交付，不得为了清理工作区删除。Git commit 不能代替验证日志和生成产物。
-6. subagent 跑验证时同样必须生成上述日志。主 Agent 必须在最终回复前检查日志 / 产物实际存在，核对日志中的命令、输入、结果摘要和 exit code与 subagent 汇报一致；最终证据不能只存在于 subagent 消息或 `/tmp`。
-7. 最终回复必须有“验证证据”段，按实际运行类别分别提供 build、定向测试、full suite、真实 CLI、性能和生成 JSON 的 Markdown 可点击**绝对路径**链接，并尽量链接到结果摘要或失败列表所在行。没有链接的验证视为未完成：必须明确写“未跑”，不得声称通过。
+- 首选 `scripts/codex/run_evidence.sh --task <slug> --category <category> --stem <name> --inputs '<inputs>' -- <command>`。
+- `cargo test`、build、CLI smoke、benchmark、格式和结构校验全部适用；重复运行不得覆盖旧日志。
+- full suite 必须比较完整失败名称集合；真实 `plan` 必须显式指定任务专属 `--profile-out` 与 `--maa-out`。
+- 最终回复必须有“验证证据”段，实际未运行的 build、定向测试、full suite、CLI、性能和 JSON 必须明确写“未跑”。
+- `target/` 与 `out/` 证据保留到交付但不提交；主 Agent 必须核对自身和 subagent 的日志、exit code 与产物。
 
-最终回复链接格式：
+详细 schema、失败集合 policy 和完成证明见 [QUALITY_AND_AUDIT.md](docs/QUALITY_AND_AUDIT.md)；脚本协议见 [scripts/codex/README.md](scripts/codex/README.md)。
 
-```markdown
-### 验证证据
+### 2.3 改动半径与停止条件
 
-- Build：[构建日志](/absolute/workspace/target/codex-logs/task-build-20260714-120000.log:1)
-- 定向测试：[测试日志](/absolute/workspace/target/codex-logs/task-targeted-20260714-120100.log:42)
-- Full suite：[完整失败列表与集合对比](/absolute/workspace/target/codex-logs/task-full-20260714-120200.log:300)
-- 真实 CLI / 性能：[plan 日志](/absolute/workspace/target/codex-logs/task-plan-20260714-120300.log:1)
-- 生成 JSON：[账号分析 JSON](/absolute/workspace/out/task-profile.json)；[MAA JSON](/absolute/workspace/out/task-maa.json)
-```
+每个代码或数据写入单元在编辑前声明唯一不变量、根因层、required paths、allowed consumers、proof paths 和 explicitly deferred；同时填写 `docs_impact`。新发现若不是建立、消费或证明当前不变量所必需，进入 `side_findings`，默认不修改、不自动创建 TODO。
+
+当不变量已有唯一责任边界、冲突旧路径已删除、实际 changed paths 全部在 scope 内、定向回归与要求的真实入口已有证据、剩余发现已 deferred 时，必须停止扩张并进入审阅。新抽象没有第二个当前真实用例时默认不引入。
 
 ## 3. 硬边界
 
@@ -145,37 +123,12 @@
 
 ### 3.1 已确认的体系不变量
 
-以下口径是维护期硬约束。修改迷迭香、贸易 core role、三队轮换前，必须读取 [`docs/公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md`](docs/公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md) 和对应 `MECHANICS_REGISTRY.csv` 行。
+修改体系、跨设施、编排或轮换时必须使用项目 Skill `arknights-system-audit`，并读取对应领域 Markdown。根规则只保留下列高风险路由提示，详细语义不在此复制：
 
-#### 迷迭香感知体系
-
-1. 迷迭香 E2 与黑键 E2 是缺一不可的硬核心；缺黑键时体系整体关闭，不得降级成“只有迷迭香”。
-2. 体系激活后，peak 编制必须同时包含迷迭香和黑键。`shift_bind` 不能充当黑键进编保证。
-3. 三队轮换中迷迭香与黑键必须同队、上 2 休 1。
-4. 黑键必须位于非巫恋贸易站；黑键与但书 / 可露希尔的具体搭配由体系候选与效率搜索决定，不在这里额外钉死房号或固定三人组。
-
-#### 龙巫自动编排
-
-1. 自动编排的龙巫站必须包含巫恋、龙舌兰，以及一名持有 `tailor_alpha` 或 `tailor_beta` 的裁缝技能干员。
-2. 非裁缝技能持有者不得作为自动编排龙巫站第三人；不得用普通白板、贝洛内或其他高效率散件替代裁缝位。
-3. 历史 `gsl_witch_*_blank` 若为单站结算兼容而保留，不得进入自动编排 `witch` role 的候选集合。
-
-#### 叙拉古跨站语义
-
-1. 八幡海铃、伺夜、贝洛内按跨站机制建模；伺夜与贝洛内不要求同站。
-2. `MECHANICS_REGISTRY.csv` 中“同一个贸易站”“在基建内”“每个进驻在贸易站的叙拉古干员”是三种不同作用域，不得合并成固定同房组合。
-3. 搜索自然把伺夜、贝洛内放在同站是允许的；编排层不得把同站写成体系激活前提。
-
-#### 可选动态贸易 producer（已确认口径，统一实现待办）
-
-修改八幡海铃、戴菲恩、凛御银灰的中枢—贸易联合搜索前，必须读取 [`docs/CONTROL_CENTER_ASSIGNMENT.md`](docs/CONTROL_CENTER_ASSIGNMENT.md) 和 [`docs/TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md`](docs/TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)。当前代码仍有 Haru 专用多前缀与 Vina legacy role；它们是已知实现缺口，不得反推业务规则。
-
-1. 三者都是可选中枢 producer，不是 fixed System / required anchor；必须与实际贸易候选联合比较，无 consumer 时动态收益为 0。
-2. 八幡海铃 E2：每名实际进驻任意贸易站的叙拉古干员，为各贸易房注入 `+5%`。
-3. 戴菲恩 E2：每间贸易房只按**本房**格拉斯哥人数注入 `+10%/人`；不得先跨站求和。
-4. 凛御银灰 E0 起：每个实际拥有至少 3 名谢拉格干员的贸易站，为各贸易房注入 `+10%`。该规则与灵知精密计算、孑 variant 完全独立。
-5. `meta_vina` / `vina_lungmen` 不得决定选型；shortcut 若保留，只结算最终实际同房组合。
-6. winner 只为实际贡献 consumer 生成同上同下 dependency；不同贸易站不强制同房，未入选或未贡献成员不绑定。
+- 迷迭香体系的双硬核心、peak 进编和同队轮换见 [`ROSEMARY_PERCEPTION_CHAIN.md`](docs/公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md)；`shift_bind` 不能代替 required anchor。
+- 自动龙巫第三人必须通过裁缝 role，具体候选和兼容 shortcut 见对应体系 Markdown 与编排规则。
+- 叙拉古“同房”“跨站”“在基建内”是不同作用域，不得因当前 top hit 合并成固定同房组合。
+- 八幡海铃、戴菲恩、凛御银灰是可选 producer，不是 fixed System；联合搜索口径见 [CONTROL_CENTER_ASSIGNMENT.md](docs/CONTROL_CENTER_ASSIGNMENT.md) 与 [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md](docs/TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)。
 
 ## 4. Bug 路由
 
@@ -224,111 +177,11 @@
    - 发电搜索：`final_efficiency`
    - 中枢搜索：`ControlInjectRawSumV0`，即 `trade_inject + manu_gold + manu_br` 的局部 heuristic
 
-## 6. 默认命令
+## 6. 验证与默认入口
 
-本仓库 warning 多。所有用于验证的命令都必须通过下面的 Bash 模板运行；不得把后续示例改回裸跑。模板为每次调用生成唯一 `.log` 和 `.status`，保留完整 stdout + stderr、命令、输入、cwd、时间、耗时、exit code 和 PASS / FAIL 摘要，不依赖 `tee` 的管道退出码。Cargo 自带的测试计数 / 失败列表和 CLI 摘要保留在完整输出中；若命令本身没有足够的结果摘要，交付前必须向日志追加 `result_summary=...`。性能比较和 full suite baseline 对比也必须追加到对应日志或独立的 `target/codex-logs/` 证据文件。
+验证命令和证据 schema 的唯一入口是 [QUALITY_AND_AUDIT.md](docs/QUALITY_AND_AUDIT.md) 与 [scripts/codex/README.md](scripts/codex/README.md)。所有用于结论的命令都必须通过 `scripts/codex/run_evidence.sh` 或兼容包装器执行；不要复制旧的 shell function。
 
-```bash
-run_logged() (
-  set +e
-  local stem="$1"
-  local inputs="$2"
-  shift 2
-  local stamp log status_file started ended elapsed rc result
-  stamp="$(date +%Y%m%d-%H%M%S)-${RANDOM}"
-  log="target/codex-logs/${stem}-${stamp}.log"
-  status_file="${log%.log}.status"
-  mkdir -p target/codex-logs out
-  started="$(date -Is)"
-  {
-    printf 'cwd=%s\n' "$PWD"
-    printf 'started_at=%s\n' "$started"
-    printf 'inputs=%s\n' "$inputs"
-    printf 'command='
-    printf '%q ' "$@"
-    printf '\n--- stdout+stderr ---\n'
-  } >"$log"
-  SECONDS=0
-  "$@" >>"$log" 2>&1
-  rc=$?
-  elapsed=$SECONDS
-  ended="$(date -Is)"
-  if ((rc == 0)); then result=PASS; else result=FAIL; fi
-  {
-    printf '\n--- evidence metadata ---\n'
-    printf 'ended_at=%s\n' "$ended"
-    printf 'elapsed_seconds=%s\n' "$elapsed"
-    printf 'exit_code=%s\n' "$rc"
-    printf 'result_summary=%s\n' "$result"
-  } >>"$log"
-  {
-    printf 'log=%s\n' "$PWD/$log"
-    printf 'exit_code=%s\n' "$rc"
-    printf 'result_summary=%s\n' "$result"
-  } >"$status_file"
-  printf 'evidence_log=%s/%s\nstatus_file=%s/%s\n' "$PWD" "$log" "$PWD" "$status_file"
-  exit "$rc"
-)
-```
-
-先为当前任务设置短名称；下面每一个调用都会生成独立日志，不会覆盖旧证据：
-
-```bash
-task_slug="issue-short-name"
-
-run_logged "${task_slug}-infra-core-test-build" \
-  "workspace sources" \
-  cargo test -p infra-core --no-run
-run_logged "${task_slug}-infra-core-full" \
-  "workspace sources; baseline=<path-or-none>" \
-  cargo test -p infra-core --quiet
-
-run_logged "${task_slug}-infra-cli-build" \
-  "workspace sources" \
-  cargo build -p infra-cli
-run_logged "${task_slug}-verify-all" \
-  "data fixtures under data/" \
-  cargo run -q -p infra-cli -- verify --all
-```
-
-编译失败时直接检查对应完整日志；不能用一次未留痕的重跑代替它。若从日志提取失败集合做 baseline 对比，提取结果也要保存在新的 `target/codex-logs/<task>-failure-set-<stamp>.log`，并记录来源日志。
-
-### 用户说“跑一遍模拟”
-
-默认理解为：全精2 练度盒 + 243 布局 + 账号分析 + αβγ ABC 三队轮换 + 写出 MAA JSON。
-
-```bash
-run_logged "${task_slug}-plan" \
-  "operbox=data/fixtures/243/operbox_full_e2.json; profile=out/${task_slug}-profile.json; maa=out/${task_slug}-maa.json" \
-  cargo run -q -p infra-cli -- plan \
-  --operbox data/fixtures/243/operbox_full_e2.json \
-  --profile-out "out/${task_slug}-profile.json" \
-  --maa-out "out/${task_slug}-maa.json"
-```
-
-仅排班时：
-
-```bash
-run_logged "${task_slug}-team-rotation" \
-  "layout=data/fixtures/243/layout.json; operbox=data/fixtures/243/operbox_full_e2.json; maa=out/${task_slug}-rotation-maa.json" \
-  cargo run -q -p infra-cli -- layout team-rotation \
-  --layout data/fixtures/243/layout.json \
-  --operbox data/fixtures/243/operbox_full_e2.json \
-  --maa-out "out/${task_slug}-rotation-maa.json"
-```
-
-不要用 `layout test`（单班探测）代替模拟；A-B-A 入口已移除。
-
-### 改机制后的 smoke test
-
-```bash
-run_logged "${task_slug}-layout-smoke" \
-  "layout=data/fixtures/243/layout.json; operbox=data/fixtures/243/operbox_full_e2.json" \
-  cargo run -q -p infra-cli -- layout test \
-  --layout data/fixtures/243/layout.json \
-  --operbox data/fixtures/243/operbox_full_e2.json \
-  --text
-```
+用户说“跑一遍模拟”时，使用 [MAINTENANCE_MODE.md](docs/MAINTENANCE_MODE.md) 中的任务专属 `plan` 命令，并显式写 `--profile-out` 与 `--maa-out` 到 `out/`。只排班使用 `layout team-rotation`；单班探测使用 `layout test`，不能互相替代。Full suite 的失败集合用 `scripts/codex/compare_test_failures.py` 比较，最终清单用 `render_evidence.py` 生成。
 
 ## 7. Git 协作默认
 
@@ -339,7 +192,8 @@ run_logged "${task_slug}-layout-smoke" \
 3. 若本轮改动和既有用户改动在同一文件内交织，不能可靠拆分时不要强行提交。
 4. 验证通过，或验证未跑但原因已说明时，若本轮改动形成独立单元，默认创建简短 commit。
 5. 不自动 `amend`、`rebase`、`reset`、`checkout --` 或清理未跟踪文件。
-6. `target/codex-logs/` 和 `out/` 的任务证据默认不 stage / commit，但必须保留到交付；不得为了让 `git status` 更干净而删除。commit hash 不能替代最终回复中的日志 / 产物链接。
+6. `target/codex-runs/`、兼容日志和 `out/` 的任务证据默认不 stage / commit，但必须保留到交付；不得为了让 `git status` 更干净而删除。commit hash 不能替代最终回复中的日志 / 产物链接。
+7. 共享工作区同一时间最多一个写入者；已有其他任务改动时优先使用从明确 `base_sha` 建立的独立 worktree。只读 explorer / extractor / reviewer 可以并行。
 
 ### 7.1 Rust 格式化口径
 

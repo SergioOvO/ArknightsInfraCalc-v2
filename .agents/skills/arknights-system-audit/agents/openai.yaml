@@ -1,0 +1,4 @@
+interface:
+  display_name: "Arknights System Audit"
+  short_description: "Audit Arknights system invariants"
+  default_prompt: "Use $arknights-system-audit to audit this system change."

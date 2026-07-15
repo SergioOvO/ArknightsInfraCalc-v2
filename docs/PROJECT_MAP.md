@@ -67,6 +67,7 @@ ArknightsInfraCalc-v2/
 ├── Cargo.toml              workspace：infra-core + infra-cli
 ├── README.md
 ├── AGENTS.md               Agent / 新会话首读（链到本文）
+├── .agents/skills/         项目 Skills：maintenance / system audit / evidence
 ├── docs/
 │   ├── INDEX.md            文档总入口：首读、TODO、归档、任务路由
 │   ├── PROJECT_MAP.md      ← 本文：当前架构地图
@@ -87,7 +88,7 @@ ArknightsInfraCalc-v2/
 │   ├── infra-core/         库：类型、解释器、求解、搜索、排班、编排
 │   └── infra-cli/          命令行：plan / advice / verify / pool / search / trade / bench / bake / serve / layout / profile
 ├── data/                   机制注册表、干员实例、规则与回归用例（运行时实现载体）
-├── scripts/                Python：数据校验、PRTS 快照、operbox 转换
+├── scripts/                数据工具与 Codex 证据 / 范围检查器
 ├── plans/                  设计文档/提案
 └── release/                发布产物（layout-gen、fixtures）
 ```
@@ -165,7 +166,7 @@ ArknightsInfraCalc-v2/
 | `pool [--trade] [--manufacture]` | 打印贸易 / 制造池统计与跳过原因；至少选择一类，制造池需要 operbox |
 | `search trade [--roster] [--top N]` | 全池 C(n,3) 搜索 Top-K |
 | `bench --operbox <path>` | 243c 基准布局 + operbox 贸易/制造搜索（**无**怪猎木天蓼；怪猎号见下） |
-| `bake [all|trade|manufacture]` / `bake validate` | 生成或校验本地 Bake 加速表 |
+| `bake [all\|trade\|manufacture]` / `bake validate` | 生成或校验本地 Bake 加速表 |
 | `serve` | 启动前端 JSON line 常驻 worker |
 | **`layout test`** | **自定义 `BaseBlueprint` + operbox（默认 `assign_base_greedy` 宏观排班）** |
 | **`layout team-rotation`** | **αβγ ABC 三队轮换（含 MAA 导出）— 仅排班入口** |
@@ -262,6 +263,11 @@ ArknightsInfraCalc-v2/
 | `build_power_skill_table.py` | 发电技能表构建/校验 |
 | `audit_control_buffs.py` | 中枢 buff 审计 |
 | `audit_tier_mapping.py` | tier 映射审计 |
+| `codex/run_evidence.sh` | 统一执行验证命令并原子追加任务 manifest |
+| `codex/compare_test_failures.py` | 比较 Cargo full-suite 失败名称集合 |
+| `codex/render_evidence.py` | 校验 manifest / status / 日志 / 产物并生成证据 Markdown |
+| `codex/check_docs_impact.py` | 根据 changed paths 和责任映射检查文档影响声明 |
+| `codex/check_task_scope.py` | 检查实际 diff、范围扩展和 deferred side findings |
 
 ---
 
