@@ -1,0 +1,37 @@
+{
+  "change_scope": {
+    "invariant": "本轮命令必须生成可追溯且互不覆盖的验证证据",
+    "root_cause_layer": "scripts/codex evidence workflow",
+    "required_paths": [
+      "scripts/codex/**"
+    ],
+    "allowed_consumers": [],
+    "proof_paths": [
+      "scripts/codex/tests/**"
+    ],
+    "explicitly_deferred": [
+      "crates/**",
+      "data/**"
+    ]
+  },
+  "scope_expansions": [],
+  "side_findings": [],
+  "docs_impact": {
+    "status": "not-needed",
+    "checked": [
+      "docs/PROJECT_MAP.md",
+      "docs/MAINTENANCE_MODE.md",
+      "docs/QUALITY_AND_AUDIT.md",
+      "docs/SYSTEM_AUDIT_WORKFLOW.md"
+    ],
+    "updated": [],
+    "routes": [],
+    "reason": "示例仅展示 manifest 字段，不改变当前文档或产品行为"
+  },
+  "reviewer": {
+    "status": "pending",
+    "scope_invariant": "",
+    "changed_paths": [],
+    "scope_expansion_ids": []
+  }
+}
