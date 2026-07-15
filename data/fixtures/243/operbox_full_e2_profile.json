@@ -1,7 +1,7 @@
 {
   "schema_version": 4,
   "layout_label": "/home/knightcode/Projects/ArknightsInfraCalc-v2-remote-61.184.13.127/data/fixtures/243/layout.json",
-  "operbox_label": "data/fixtures/243/operbox_full_e2.json",
+  "operbox_label": "/home/knightcode/Projects/ArknightsInfraCalc-v2-remote-61.184.13.127/data/fixtures/243/operbox_full_e2.json",
   "baseline_label": "/home/knightcode/Projects/ArknightsInfraCalc-v2-remote-61.184.13.127/data/fixtures/243/schedule_export.json (full_e2)",
   "summary": {
     "owned": 418,
@@ -19,7 +19,7 @@
           "巫恋",
           "龙舌兰"
         ],
-        "final_efficiency": 2.482,
+        "final_efficiency": 2.606,
         "mechanic_equivalent_efficiency": 0.46
       },
       "baseline": {
@@ -31,7 +31,7 @@
         "final_efficiency": 2.482,
         "mechanic_equivalent_efficiency": 0.46
       },
-      "gap_ratio": 0.0,
+      "gap_ratio": 0.049959709911361665,
       "severity": "ok"
     },
     {
@@ -43,7 +43,7 @@
           "伺夜",
           "但书"
         ],
-        "final_efficiency": 2.945
+        "final_efficiency": 3.1
       },
       "baseline": {
         "operators": [
@@ -51,9 +51,9 @@
           "乌有",
           "黑键"
         ],
-        "final_efficiency": 2.093
+        "final_efficiency": 2.79
       },
-      "gap_ratio": 0.40707118967988526,
+      "gap_ratio": 0.11111111111111113,
       "severity": "ok"
     },
     {
@@ -61,11 +61,11 @@
       "label": "制造·综合",
       "current": {
         "operators": [
-          "幽灵鲨",
-          "安哲拉",
-          "阿罗玛"
+          "温蒂",
+          "清流",
+          "森蚺"
         ],
-        "final_efficiency": 8.956
+        "final_efficiency": 9.096
       },
       "baseline": {
         "operators": [
@@ -75,7 +75,7 @@
         ],
         "final_efficiency": 8.392
       },
-      "gap_ratio": 0.06720686367969496,
+      "gap_ratio": 0.0838894184938037,
       "severity": "ok"
     },
     {
@@ -83,11 +83,11 @@
       "label": "制造·赤金产线",
       "current": {
         "operators": [
-          "幽灵鲨",
-          "安哲拉",
-          "阿罗玛"
+          "温蒂",
+          "清流",
+          "森蚺"
         ],
-        "final_efficiency": 2.268
+        "final_efficiency": 2.363
       },
       "baseline": {
         "operators": [
@@ -97,7 +97,7 @@
         ],
         "final_efficiency": 2.238
       },
-      "gap_ratio": 0.013404825737265329,
+      "gap_ratio": 0.05585344057193923,
       "severity": "ok"
     },
     {
@@ -106,10 +106,10 @@
       "current": {
         "operators": [
           "乌尔比安",
-          "斯卡蒂",
-          "野鬃"
+          "断罪者",
+          "裂响"
         ],
-        "final_efficiency": 2.21
+        "final_efficiency": 2.185
       },
       "baseline": {
         "operators": [
@@ -119,7 +119,7 @@
         ],
         "final_efficiency": 1.958
       },
-      "gap_ratio": 0.12870275791624106,
+      "gap_ratio": 0.11593462717058227,
       "severity": "ok"
     },
     {
@@ -127,13 +127,13 @@
       "label": "轮休·24h贸易加权",
       "current": {
         "operators": [],
-        "final_efficiency": 5.288
+        "final_efficiency": 5.35
       },
       "baseline": {
         "operators": [],
-        "final_efficiency": 4.968
+        "final_efficiency": 5.313
       },
-      "gap_ratio": 0.06441223832528187,
+      "gap_ratio": 0.006964050442311297,
       "severity": "ok"
     },
     {
@@ -141,23 +141,23 @@
       "label": "轮休·24h制造加权",
       "current": {
         "operators": [],
-        "final_efficiency": 9.175
+        "final_efficiency": 9.273
       },
       "baseline": {
         "operators": [],
         "final_efficiency": 8.951
       },
-      "gap_ratio": 0.025025136856217205,
+      "gap_ratio": 0.0359736342308121,
       "severity": "ok"
     }
   ],
   "rotation": {
-    "daily_trade_efficiency": 5.288,
-    "daily_manufacture_efficiency": 9.175,
-    "daily_power_efficiency": 3.552
+    "daily_trade_efficiency": 5.35,
+    "daily_manufacture_efficiency": 9.273,
+    "daily_power_efficiency": 3.589
   },
   "baseline_rotation": {
-    "daily_trade_efficiency": 4.968,
+    "daily_trade_efficiency": 5.313,
     "daily_manufacture_efficiency": 8.951,
     "daily_power_efficiency": 3.552
   },
