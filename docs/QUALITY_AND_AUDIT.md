@@ -1,14 +1,14 @@
-# 质量与验证证据总则
+# 质量、求解保证与验证证据总则
 
-> 状态：维护期当前规则。
-> 责任：本文件是验证、完成证明、失败基线和 Bake 安全的唯一文字真源。
+> 状态：Current。
+> 责任：本文件是风险分层验证、求解保证、完成证明、失败基线和 Bake 安全的唯一文字真源。
 > 边界：不裁决领域业务语义；业务规则以用户裁决和对应领域 Markdown 为准。
 
 ## 1. 入口与适用范围
 
-- 普通 bug 和结果不对：先读 [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)。
+- 普通 bug 和结果不对：使用项目 Skill `arknights-maintenance`；复现入口不清时再读 [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md) 对应章节。
 - 体系 / 编排正式审计：只在 `formal-audit` 模式读取 [SYSTEM_AUDIT_WORKFLOW.md](SYSTEM_AUDIT_WORKFLOW.md)。
-- 当前代码与命令事实：读取 [PROJECT_MAP.md](PROJECT_MAP.md)；领域文档由 [INDEX.md](INDEX.md) 路由。
+- 当前代码与命令事实不清时，定向读取 [PROJECT_MAP.md](PROJECT_MAP.md)；领域文档未知时由 [INDEX.md](INDEX.md) 路由。
 - 命令执行和 manifest：使用 [scripts/codex/README.md](../scripts/codex/README.md)。
 
 本文件不复制四项体系审计、完整生命周期问题表或普通 bug 复现命令；这些内容分别由 system audit 和 maintenance 文档负责。
@@ -16,6 +16,47 @@
 ## 2. 业务语义边界
 
 验证只能证明命令、输入、输出和证据的一致性，不能用代码行为、旧测试、fixture、历史输出或脚本结果推翻领域 Markdown。两个当前领域 Markdown 冲突时，任务状态必须为 `blocked`，等待用户裁决；不能选择一份继续实现。
+
+### 2.1 搜索空间与保证等级
+
+任何会改变 eligibility、候选生成、剪枝、分解、目标、top-K、Bake 或 cache 的修改必须声明保证等级：
+
+| 等级 | 含义 | 完整搜索中的要求 |
+|---|---|---|
+| `hard_constraint` | 违反 canonical 领域语义，候选非法 | 记录规则、输入事实和违规 witness |
+| `safe_reduction` | dominance、symmetry 或 bound 保证不删除最优解 | 说明适用前提、保持的完整目标和组合兼容性 |
+| `search_heuristic` | 只改变搜索顺序或资源分配 | exact 路径必须能恢复完整候选 |
+| `policy_restriction` | 用户具名选择限制空间或改变取舍 | 结果只对该 policy 范围作保证 |
+| `approximation` | 为时间 / 内存主动放弃完整性 | 报告停止原因、fallback 和降低后的结果状态 |
+
+不能从当前 top hit、priority、白名单或常见组合反推 hard constraint。无法证明降维安全时，不得声称对 canonical 完整空间全局最优。
+
+建议结果状态区分：
+
+- `EXACT_OPTIMAL`：对当前 canonical 模型和目标已证明最优；
+- `POLICY_OPTIMAL`：只对具名 policy 限制后的空间已证明最优；
+- `BEST_FOUND`：当前最好可行解，未证明最优；
+- `UNKNOWN` / `TIME_LIMIT`：搜索未完成；
+- `INFEASIBLE`：已证明 canonical 模型无解；
+- `NO_CANDIDATE_UNDER_POLICY`：当前策略未找到，不能冒充无解。
+
+多目标优先显式词典序或分阶段优化。匿名加权只有在高层权重严格覆盖全部低层可能贡献时才等价。
+
+### 2.2 风险分层验证
+
+| 改动类型 | 最低证明 |
+|---|---|
+| 文案、展示、纯 export 字段 | 格式 / 结构、export fidelity、对应入口 |
+| owner 内数据或局部逻辑 | 最小反例、相邻反例、受影响真实入口 |
+| hard constraint / eligibility | 激活、拒绝、边界反例、最终可行性 |
+| objective / tie-break | 分量、边界、等价最优处理 |
+| safe reduction / pruning | 关闭 reduction 的差分、小实例 oracle 或等价证明、组合规则反例 |
+| decomposition / candidate generation | 小实例全局对照、跨域反例、候选完整性 |
+| cache / Bake / performance | fresh-vs-cache、fallback、benchmark、保证状态 |
+| Team / Shift / export | 分组与状态不变量、真实 `plan` / MAA fidelity |
+| 大型 quality-refactor | old/new differential、旧路径删除、迁移与收益基线 |
+
+低风险文档或 owner-local 修复不强制运行所有全局类别；高风险搜索空间变化不能只靠一个 golden snapshot。
 
 ## 3. 回归分层
 
@@ -88,7 +129,7 @@
 
 ## 5. Full suite 与失败基线
 
-本仓库当前不能被笼统描述为“全套测试全绿”。历史和当前维护证据中存在既有失败；具体集合以本轮开始前保存的完整 baseline 日志为准，不在本文硬编码一个容易过时的数量。
+本仓库当前不能被笼统描述为“全套测试全绿”。历史和当前证据中存在既有失败；具体集合以本轮开始前保存的完整 baseline 日志为准，不在本文硬编码一个容易过时的数量。
 
 Full suite 验收必须：
 

@@ -1,49 +1,50 @@
 ---
 name: arknights-system-audit
-description: Audit ArknightsInfraCalc systems, hard cores, producers, same-room or cross-station scope, required anchors, rotation binds, and orchestration changes across the full lifecycle. Use for system bugs, cross-facility behavior, producer selection, required anchors, rotation binding, or a user-requested formal audit; do not infer domain rules from top hits or current fixtures.
+description: Audit or repair ArknightsInfraCalc systems and conformance boundaries involving hard cores, producers, same-room/cross-station/in-base scope, required admission, Team/Shift binds, orchestration, rotation, or export. Use formal-audit only for a user-requested strict audit or conflicting canonical Markdown.
 ---
 
-# Arknights System Audit
+# Arknights System and Conformance Audit
 
-Use this skill when a rule must be structurally guaranteed by the system/plan boundary rather than accidentally produced by search order.
+Use this Skill when a domain invariant must be structurally guaranteed by System/Rule/Plan/search/schedule rather than accidentally produced by current ranking or room order.
 
-## Select the Mode
+## Select the Protocol
 
-- Use `system-fix` when the current governing Markdown is clear: produce the four-item audit, declare scope, then implement after the audit without two user waits.
-- Use `formal-audit` when the user asks for a strict itemized audit or current domain Markdown conflicts: submit the audit, wait for rule rulings, submit the modification plan, wait for approval, then implement with one writer and a read-only reviewer.
-- Never choose between conflicting Markdown documents from code, CSV, tests, fixtures, or output. Ask the user and update the authoritative Markdown first.
+- **System conformance**: canonical Markdown is clear. Perform the four-item pre-write audit, then implement without two approval waits.
+- **Formal audit**: the user requests strict itemized audit, or current canonical Markdown conflicts. Read `docs/SYSTEM_AUDIT_WORKFLOW.md` completely and obey its two waits.
+- **Read-only audit**: report facts and counterexamples without acquiring write authority.
 
-## Audit Invariants First
+Do not load the formal workflow for ordinary system conformance. Use `docs/INDEX.md` only to locate the target canonical document and `docs/PROJECT_MAP.md` only when the code owner is unclear.
 
-Read `AGENTS.md`, [maintenance mode](../../../docs/MAINTENANCE_MODE.md), [system audit workflow](../../../docs/SYSTEM_AUDIT_WORKFLOW.md), the target system Markdown, and the relevant registry/data rows. Write an invariant table covering:
+## Extract Invariants
 
-- hard cores, elite levels, minimum counts, and whether all available members are required;
-- optional producers and whether they are anchors;
-- same-room, cross-station, in-base, recipe, and facility-capacity scope;
-- mutual exclusion and shared-room/resource competition;
-- team, shift, work/rest, and binding semantics;
-- closure and real downgrade conditions;
-- numeric scope and effect atoms.
+Read the target canonical Markdown completely and inspect only its relevant registry/data rows. Cover as applicable:
 
-## Trace the Lifecycle
+- hard cores, tiers, minimum/all-available counts, optional producers;
+- same-room, cross-station, in-base, recipe, capacity and mutual exclusion;
+- Team membership, Shift work/rest, binding and closure/degradation;
+- numeric scope, effect atoms and user-selected policy.
 
-For each invariant, inspect `select -> plan -> execute -> fill -> resolve -> rotation -> export`. Record the exact file/type/function where it can be lost and distinguish:
+Code, data, fixtures, tests, and current top hits are implementation evidence, not rule sources.
 
-- activation from actual anchor entry;
-- role filters from final solver comparison;
-- `shift_bind` from the guarantee that a member is actually assigned;
-- shortcut settlement from system selection and membership;
-- cross-station scope from same-room coincidence;
-- final snapshots from candidate/partial assignment context;
-- rotation bindings from accidental `used` or room ordering;
-- export fidelity from internal assignment state.
+## Trace and Challenge
 
-Use minimum-member, missing-core, competing-candidate, reordered-room, cross-station-capacity, and work/rest closure counterexamples where they can change the responsibility boundary. A standard full-E2 top hit is not structural proof.
+Trace only as far as necessary through `select -> plan -> execute -> fill -> resolve -> rotation -> export`. Distinguish admission from activation/bind, eligibility from required placement, settlement from selection, and final output from a coincidental sample.
 
-## Scope and Handoff
+Use the counterexample that can change the owner: missing core, minimum members, competing candidate, reordered room, cross-station capacity, work/rest closure, or policy change. Do not require the complete counterexample catalog when the violation is already owner-local.
 
-Before writing, report the four items: domain invariants, violating lifecycle location, the single responsibility boundary that will guarantee each invariant, and the old fallback/special case/test to delete or rewrite. Add `change_scope` with one primary invariant, root-cause layer, allowed paths, proof paths, and explicitly deferred discoveries. Put adjacent issues in `side_findings` with a disposition of `deferred`; do not create TODOs automatically.
+## Before Writing
 
-Keep domain Markdown as the business source of truth. Do not encode a rule by operator name, room id, shift index, priority, tag, shortcut, or current top hit. Do not add a second special case in pipeline, role, and rotation when the plan/system schema should own the fact.
+Report:
 
-After implementation, require invariant-level regression and the real `plan` or `layout team-rotation` entry for scheduling/export changes. Use `arknights-evidence` for logs and `scripts/codex/check_task_scope.py` for the final changed-path review. Report root cause, old illegal-state path, new single source of truth, deleted conflicts, tests, CLI result, and unresolved risks.
+1. confirmed domain invariants;
+2. exact stage/file/type/function first allowing each invalid state;
+3. the single post-fix owner;
+4. old fallback, special case, comment, or test to delete/rewrite.
+
+Declare one primary invariant, required/consumer/proof paths, and deferred findings. Never encode a repair through room id, Shift index, fixture, current top hit, or a bind/tag/priority/shortcut that cannot guarantee admission.
+
+## Review and Prove
+
+Use independent read-only exploration and invariant extraction by default when both code reality and domain documents are nontrivial. Freeze the responsibility boundary before one writer starts. For rebuilds, use an adversarial reviewer on the actual diff and evidence.
+
+Require invariant-level regression and a real `plan` or `layout team-rotation` entry for scheduling/export changes. Use `arknights-evidence` for all command evidence and final scope/docs checks. Report the old illegal path, new owner, deleted conflicts, exact/heuristic impact if search space changed, tests, CLI result, and unresolved risks.

@@ -1,29 +1,39 @@
 ---
 name: arknights-evidence
-description: Run and audit reproducible evidence for ArknightsInfraCalc builds, tests, CLI smoke checks, benchmarks, formatting, generated JSON, full-suite failure baselines, documentation impact, and task scope. Use whenever a conclusion depends on a command or artifact; never replace domain review with a script result.
+description: Record and audit reproducible ArknightsInfraCalc build, test, CLI, benchmark, format, structure, generated-artifact, docs-impact, task-scope, and solver-assurance evidence. Use whenever a conclusion depends on a command or artifact; never replace domain or optimality review with a script result.
 ---
 
 # Arknights Evidence
 
-Use the repository evidence tools for every build, test, CLI, benchmark, format, or structure check that supports a conclusion. A command that was run without a retained log must be rerun through the wrapper before delivery.
+Use repository evidence tools for every build, test, CLI, benchmark, format, or structure check supporting a conclusion. A bare run must be rerun through the wrapper before delivery.
 
-## Record a Run
+## Record Runs
 
-1. Create a task manifest or metadata file with `change_scope`, `scope_expansions`, `side_findings`, `docs_impact`, and reviewer fields. Start from [the example](../../../scripts/codex/task_metadata.example.json).
-2. Run the command with `scripts/codex/run_evidence.sh --task <slug> --category <category> --stem <name> --inputs '<reproducible inputs>' -- [command args...]`.
-3. Use `--artifact kind=path` for profile, MAA, comparison reports, or other generated files. The wrapper executes an argument array, records cwd/inputs/command/timing/exit code, returns the original exit code, and atomically appends a task manifest.
-4. Keep each repeated run. Never overwrite an earlier log or use a shared generic output filename for a new comparison.
+1. Create task metadata from `scripts/codex/task_metadata.example.json`: one invariant, root layer, required/consumer/proof/deferred paths, docs impact, side findings, and reviewer fields.
+2. Run `scripts/codex/run_evidence.sh --task <slug> --category <category> --stem <name> --inputs '<inputs>' -- <command...>`.
+3. Register generated profile, MAA, comparison, or report files with repeated `--artifact kind=path`.
+4. Keep every rerun. Do not overwrite failures or use shared output names.
 
-Use these categories: `build`, `targeted-test`, `full-suite`, `cli`, `performance`, `format`, and `structure`. Include the actual fixture, layout, operbox, assignment, and output paths in `--inputs`.
+Use categories `build`, `targeted-test`, `full-suite`, `cli`, `performance`, `format`, and `structure`. Include actual layout, operbox, assignment, fixture, policy, output, baseline, seed, and time limit when relevant.
 
-## Compare and Render
+## Match Evidence to Risk
 
-For a full suite, run `scripts/codex/compare_test_failures.py` against complete Cargo logs. It extracts exact failure-name sets, writes JSON and Markdown reports, returns 1 for added failures, 0 for an unchanged/reduced set, and 2 for truncation or an unrecognized format. Compare the set, not only the count.
+- Owner-local data/logic fix: minimal reproducer, adjacent counterexample, and affected real entry.
+- Hard constraint or eligibility: activation/rejection boundaries and final feasibility.
+- Objective/tie-break: component and equivalent-optimum checks.
+- Candidate generation, pruning, decomposition, Bake/cache, or performance: read the solver-assurance sections of `docs/QUALITY_AND_AUDIT.md`; record guarantee class, differential/oracle or fallback evidence, candidate/benchmark facts, and result status.
+- Schedule/export: Team/Shift invariants plus real `plan`/MAA fidelity.
 
-Before claiming completion:
+Do not impose every global category on a low-risk documentation or owner-local fix. Do not let a high-risk search-space change pass on one golden snapshot.
 
-1. Run `scripts/codex/check_docs_impact.py --manifest <manifest>`; resolve `updated`, `not-needed`, `blocked`, required document, route, link, and generated-fact errors.
-2. Run `scripts/codex/check_task_scope.py --manifest <manifest>`; do not suppress undeclared paths, deferred paths, or missing expansion reasons.
-3. Run `scripts/codex/render_evidence.py --manifest <manifest> --output <report>` and inspect its explicit “未跑” categories, exit-code consistency, artifact existence, scope, and deferred findings.
+## Compare and Finish
 
-The renderer is evidence formatting, not a semantic judge. The main Agent must still inspect domain output against Markdown, decide whether a test expresses correct semantics, and distinguish new failures, baseline failures, and unverified risks. A missing build, targeted test, full suite, real CLI, performance run, or JSON artifact must be reported as not run rather than implied to pass.
+For full suite, use `scripts/codex/compare_test_failures.py` on complete Cargo logs and compare exact failure-name sets.
+
+Before completion run:
+
+1. `scripts/codex/check_docs_impact.py --manifest <manifest>`;
+2. `scripts/codex/check_task_scope.py --manifest <manifest>`;
+3. `scripts/codex/render_evidence.py --manifest <manifest> --output <report>`.
+
+Inspect logs, status files, exit codes, artifacts, changed paths, deferred findings, and renderer “未跑” categories. An extractor may organize complex logs or failure sets, but the main Agent must judge domain semantics, exact/heuristic claims, and final completion.

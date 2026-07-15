@@ -1,37 +1,36 @@
 ---
 name: arknights-maintenance
-description: Reproduce and repair ArknightsInfraCalc maintenance issues with the smallest responsible change, focused regression coverage, and a real CLI proof. Use for bug reports, wrong results, CLI, data, solver, layout, schedule, export, or "run it once" requests; hand formal system audits to arknights-system-audit and all validation evidence to arknights-evidence.
+description: Reproduce and repair ArknightsInfraCalc bugs with a change sized to the real responsibility boundary. Use for wrong results, CLI, data, solver, layout, schedule, export, regressions, or "run it once" requests; allow small owner-local fixes and escalate structural system issues to arknights-system-audit.
 ---
 
-# Arknights Maintenance
+# Arknights Debug and Repair
 
-Use this skill for ordinary maintenance work. Preserve domain semantics and keep the change tied to one observable invariant.
+Keep one observable invariant in scope. A small change is correct when the existing owner can already express the rule; rebuild only when the owner is missing, split, or structurally unable to prevent the invalid state.
 
-## Route
+## Route Progressively
 
-1. Read the repository `AGENTS.md`, then [maintenance mode](../../../docs/MAINTENANCE_MODE.md), [project map](../../../docs/PROJECT_MAP.md), and the domain document routed by [INDEX](../../../docs/INDEX.md).
-2. Choose `maintenance` for local CLI/data/solver issues. Choose `system-fix` for a system, cross-facility, orchestration, or rotation issue when the governing Markdown is clear. Choose `formal-audit` only when the user asks for a strict audit or current domain Markdown conflicts; hand that flow to `arknights-system-audit`.
-3. Record the actual command, layout, operbox, assignment, expected result, and current result. Reproduce through the existing CLI entry before editing.
+1. Read repository `AGENTS.md` and record the actual command/input, expected result, and current result.
+2. Read the canonical domain document for the affected rule. Use `docs/INDEX.md` only when that document is unknown.
+3. Reproduce through the existing user entry. Read the relevant `docs/MAINTENANCE_MODE.md` section only when the reproduction or acceptance entry is unclear.
+4. Inspect `docs/PROJECT_MAP.md` only when the command, owner, or lifecycle location cannot be found directly from code/search.
+5. Use `arknights-evidence` whenever a command or artifact supports a conclusion.
 
-## Before Writing
+## Classify Before Writing
 
-Declare a task scope in the evidence manifest or task brief:
+- **Local repair**: canonical semantics are clear, the correct owner exists, and the error is internal to it. Fix it directly; do not demand preparatory architecture work.
+- **Conformance repair**: the model cannot express the invariant or multiple downstream paths compensate for it. State the invariant, first violating stage, new single owner, and conflict paths to delete. For systems, cross-facility, Plan admission, scope, or rotation binds, use `arknights-system-audit`.
+- **Independent quality issue**: the current bug can be fixed in the existing owner and adjacent structure only affects future cost. Finish the bug, record the evidence-backed finding, and route it to `arknights-quality` rather than expanding this task.
+- **Feature**: the request changes capability, feasible behavior, policy, output contract, or user mode. Route to `arknights-feature`.
 
-- one precise invariant;
-- the layer where the invalid state first appears;
-- `required_paths`, `allowed_consumers`, `proof_paths`, and `explicitly_deferred`;
-- expected regression and the user-facing CLI entry;
-- `docs_impact` with checked documents and a concrete reason.
-
-For `system-fix`, also provide the four-item audit: domain invariants, violating lifecycle location, the single post-fix responsibility boundary, and the old conflict paths to delete or rewrite. Do not use a downstream fallback, `shift_bind`, priority, room id, operator name, or current top hit as a substitute for a declared invariant.
-
-If Markdown semantics conflict, stop writing and request the user’s ruling. Ordinary implementation choices do not require a second approval or a subagent. With an existing dirty worktree, avoid writing concurrently; use an isolated worktree when practical.
+If canonical Markdown conflicts, stop semantic writing and request a ruling. Code, tests, fixtures, and output cannot choose the rule.
 
 ## Implement and Stop
 
-1. Change only the layer that first permits the invalid state. Keep the normal `select -> plan -> execute -> fill -> resolve -> rotation -> export` path intact.
-2. Add regression assertions for activation/closure, members, scope, recipe, rotation, or exported fields as applicable, not only a total efficiency snapshot.
-3. Run evidence commands through `scripts/codex/run_evidence.sh`; use categories `targeted-test`, `cli`, `build`, or `performance` and register generated artifacts.
-4. Stop when the invariant has one responsible boundary, direct conflict paths are removed, every changed path is declared, focused regression and the required real entry have evidence, and remaining discoveries are deferred side findings.
+1. Change the earliest owner that permits the invalid state; keep normal domain paths intact.
+2. Add a minimal reproducer plus adjacent counterexample. For candidate/search changes, test eligibility and exclusion, not only the top result.
+3. Run the risk-matched real entry and focused regression through the evidence wrapper.
+4. Stop when one owner guarantees the invariant, direct conflict paths are gone, changed paths are declared, and remaining discoveries are deferred.
 
-Do not revive unrelated TODO plans, repair the existing full-suite debt in a local bug, or expand a fix merely because adjacent code is nearby. Report the root-cause layer, single fact source, changed paths, deferred findings, documentation decision, tests, real CLI entry, and evidence links.
+Use a read-only explorer when the first illegal state or owner is unclear; use an extractor for complex logs/baselines; use an adversarial reviewer for medium/high-risk solver, schedule, system, or export changes. Skip delegation when no independent judgment axis exists.
+
+Report root cause, why the old model allowed the state, the single fact owner, changed paths, deferred findings, docs impact, tests, real entry, evidence, and unresolved risks.

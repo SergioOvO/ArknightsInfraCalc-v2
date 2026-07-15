@@ -1,14 +1,14 @@
 # 项目地图（Agent / 开发者入门）
 
-> **新会话请先读 [AGENTS.md](../AGENTS.md)**，再读 [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)、[INDEX.md](INDEX.md) 和本文。机制细节见 [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md)，直接效率数值架构见 [EFFICIENCY_MODEL.md](EFFICIENCY_MODEL.md)，评分口径见 [SCORING_MODEL.md](SCORING_MODEL.md)。历史 TODO 默认冻结；归档材料见 [ARCHIVE/](ARCHIVE/)。大文件内部边界见 [INTERNAL/](INTERNAL/)。
+> 本文是当前代码、数据和命令地图，不是每个 Agent 任务的无条件首读。先由 [AGENTS.md](../AGENTS.md) 选择 Skill；只有 owner、入口或调用链不明时才定向读取本文。领域语义见对应 canonical Markdown，文档位置未知时查 [INDEX.md](INDEX.md)。
 
 如果读者懂基建体系但不关心代码入口，先看 [GONGSUN_RUNTIME_OVERVIEW.md](GONGSUN_RUNTIME_OVERVIEW.md)。
 
-**结构已定稿，项目进入正常维护 / bug 修复期**：不再做大范围源码拆分；靠文档路由到正确函数段。默认工作流是复现、定位、最小修复、补回归，见 [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)。
+项目同时进行 debug、文档一致性重建、feature 和独立 quality-refactor。改动大小由当前不变量的真实责任边界决定；debug 见 [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)，任务路由见 [INDEX.md](INDEX.md)。
 
 ## 项目是什么
 
-明日方舟**基建**效率求解器（v2 绿场重写）。给定干员练度（operbox）与场景假设（布局、产线数、全局资源等），计算同房三人组的贸易/制造效率、机制等效效率、单位产出，并支持**全基建单班进驻编制**（`assign_base_greedy`）、**αβγ ABC 三队轮换**（`schedule_team_rotation`）以及穷举搜索。旧版三班 A-B-A 已从 CLI 与 core API 移除，见 [SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md)。
+明日方舟**基建**效率求解器（v2 绿场重写）。给定干员练度（operbox）与场景假设（布局、产线数、全局资源等），计算同房三人组的贸易/制造效率、机制等效效率、单位产出，并支持**全基建单班进驻编制**（`assign_base_greedy`）、当前 **Team A/B/C + Shift 1/2/3** 轮换（`schedule_team_rotation`）以及穷举搜索。旧版 A-B-A 已从 CLI 与 core API 移除，见 [SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md)。
 
 **当前范围**：
 - **贸易站**：主力完成（L1+L2+L3+回归齐全）
@@ -23,8 +23,8 @@
 
 | 域 | L1 | L2 | L3 | 搜索 | 排班 | CLI 回归 | 说明 |
 |----|----|----|-----|------|------|----------|------|
-| **贸易站** | ✅ | ✅ | ✅ | ✅ | ✅ αβγ ABC | ✅ | 主力；A-B-A 已移除 |
-| **制造站** | ✅ | — | — | ✅ | ✅ αβγ（含产线拆解） | — | 见 [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md) |
+| **贸易站** | ✅ | ✅ | ✅ | ✅ | ✅ Team ABC / Shift 1–3 | ✅ | 主力；A-B-A 已移除 |
+| **制造站** | ✅ | — | — | ✅ | ✅ Shift 1–3（含产线拆解） | — | 见 [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md) |
 | **控制中枢** | ✅ | — | — | ✅ `search_control_combos` | ✅ 宏观排班内 | — | `control/`：木天蓼 producer、精2 全局注入、公招/心情补位 |
 | **发电站** | ✅ | — | — | ✅ `search_power_assignment` | ✅ 宏观排班内 | — | 充能 + 虚拟发电折算（晨曦等） |
 | **全局资源** | 注册表 ✅ | 池 ✅ | — | — | — | — | P0：木天蓼 / 人间烟火（简化）/ 魔物料理（基准注入） |
@@ -45,7 +45,7 @@ operbox / roster + operator_instances + skill_table
         ↓
   pool（可建模干员池，C(n,3) 组合基数）
         ↓
-  search（穷举三人组，rayon 并行） 或  schedule（三班贪心逐站）
+  search（穷举三人组，rayon 并行） 或  schedule（当前 Shift 1–3 逐站）
         ↓
   solve_trade_with_shift（单站核心）
         ├─ L1 interpreter   Phase 排序 → Selector/Condition/Action
@@ -67,7 +67,7 @@ ArknightsInfraCalc-v2/
 ├── Cargo.toml              workspace：infra-core + infra-cli
 ├── README.md
 ├── AGENTS.md               Agent / 新会话首读（链到本文）
-├── .agents/skills/         项目 Skills：maintenance / system audit / evidence
+├── .agents/skills/         项目 Skills：debug / feature / quality / system audit / evidence
 ├── docs/
 │   ├── INDEX.md            文档总入口：首读、TODO、归档、任务路由
 │   ├── PROJECT_MAP.md      ← 本文：当前架构地图
@@ -77,11 +77,11 @@ ArknightsInfraCalc-v2/
 │   ├── BASE_ASSIGNMENT.md      全基建进驻编制（宏观排班）设计
 │   ├── ORCHESTRATION_LAYER.md  编排层 System → Plan → Execute（Phase 0–3/5 已落地）
 │   ├── FRONTEND_CLI.md         前端集成：`plan`、MAA JSON、layout-gen
-│   ├── SCHEDULE_ROTATION.md    αβγ ABC 轮换现行契约
+│   ├── SCHEDULE_ROTATION.md    Team ABC / Shift 1–3 轮换现行契约
 │   ├── SYSTEM_CHAINS.md        谜迭香/自动化/红松林/莱茵 体系链参考
 │   ├── INFRA_CLI.md            infra-cli 模块职责与改动边界
-│   ├── MAINTENANCE_MODE.md     维护期 bug 修复流程、回归与验收矩阵
-│   ├── TODO/                   历史建设期计划；维护期默认冻结
+│   ├── MAINTENANCE_MODE.md     Debug / conformance 修复流程、回归与验收矩阵
+│   ├── TODO/                   未实施提案；仅在当前 feature/quality 任务明确恢复后执行
 │   ├── ARCHIVE/                已完成 / 废弃 / 历史材料
 │   └── INTERNAL/               大文件内部地图（interpreter / shortcut）
 ├── crates/
@@ -109,7 +109,7 @@ ArknightsInfraCalc-v2/
 | **error** | `src/error.rs` | 统一 `Error` / `Result` |
 | **pool** | `src/pool/trade.rs`、`pool/manufacture.rs`、`pool/control.rs`、`pool/power.rs`、`pool/base.rs` | 设施可求解池；泛型 `PoolCore<T>` 消除结构体重复 |
 | **search** | `src/search/trade.rs`、`search/manufacture.rs`、`search/control.rs`、`search/power.rs`、`search/role_pick.rs` | C(n,k) 穷举 + 评分；中枢/发电搜索 |
-| **schedule** | `src/schedule/team_rotation.rs`、`schedule/shift_bind.rs`、`schedule/base_rotation.rs` | **αβγ ABC 轮换**；`base_rotation.rs` 只保留逐房直接效率结算 → [SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md) |
+| **schedule** | `src/schedule/team_rotation.rs`、`schedule/shift_bind.rs`、`schedule/base_rotation.rs` | **Team ABC / Shift 1–3 轮换**；`base_rotation.rs` 只保留逐房直接效率结算 → [SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md) |
 | **control** | `src/control/` | 中枢 `solve_control` → `apply_control_to_layout` 写回 layout 全局注入 |
 | **global_resource** | `src/global_resource/` | `GlobalResourceKey`、`REGISTRY`、`CONVERSIONS`、`GlobalResourcePool`、`GlobalInjectManifest` |
 | **layout** | `src/layout/` | `BaseBlueprint` / `BaseAssignment` / `resolve_base` / `assign_shift` / `orchestrate/` / `system.rs` |
@@ -160,7 +160,7 @@ ArknightsInfraCalc-v2/
 
 | 命令 | 用途 |
 |------|------|
-| **`plan`** | **用户主入口 / Agent 默认模拟入口**：账号画像 JSON + αβγ 三队排班 + MAA；`--operbox` 支持 JSON/xlsx；布局默认 243 |
+| **`plan`** | **用户主入口 / Agent 默认模拟入口**：账号画像 JSON + Team ABC / Shift 1–3 排班 + MAA；`--operbox` 支持 JSON/xlsx；布局默认 243 |
 | `advice --operbox <path>` | 根据规则文件输出账号建议；支持 JSON / pretty 输出 |
 | `verify --case <id>` / `--all` | 跑 `REGRESSION_CASES.csv` + `UNIT_OUTPUT_ANCHORS.csv` |
 | `pool [--trade] [--manufacture]` | 打印贸易 / 制造池统计与跳过原因；至少选择一类，制造池需要 operbox |
@@ -169,17 +169,17 @@ ArknightsInfraCalc-v2/
 | `bake [all\|trade\|manufacture]` / `bake validate` | 生成或校验本地 Bake 加速表 |
 | `serve` | 启动前端 JSON line 常驻 worker |
 | **`layout test`** | **自定义 `BaseBlueprint` + operbox（默认 `assign_base_greedy` 宏观排班）** |
-| **`layout team-rotation`** | **αβγ ABC 三队轮换（含 MAA 导出）— 仅排班入口** |
+| **`layout team-rotation`** | **Team ABC / Shift 1–3 轮换（含 MAA 导出）— 仅排班入口** |
 | **`layout analyze`** | **练度 box profile 分析（对比基线）** |
 | **`layout eval`** | **评估指定编制各房间效率** |
 | `profile layout-full` / `profile analyze-compare` | CLI 性能画像 / 分析链路对比辅助 |
 | `trade yield <fixture> [--level] [--shift]` | 单站产量探测（fixture 名见 `verify/fixtures.rs` 的 `unit_fixture`） |
 
-**Agent 默认夹具**（无用户路径时）：`data/fixtures/243/layout.json` + `data/fixtures/243/operbox_full_e2.json` — 见 [AGENTS.md](../AGENTS.md) §6。
+**Agent 默认夹具**（无用户路径时）：`data/fixtures/243/layout.json` + `data/fixtures/243/operbox_full_e2.json`。具体复现和证据参数见 [Debug 指南](MAINTENANCE_MODE.md)。
 
-**用户说「跑一遍模拟」**：默认跑 `plan --maa-out out/243_maa.json`（账号分析 + αβγ 排班）；仅排班时才用 `layout team-rotation` — 见 [AGENTS.md](../AGENTS.md) §6.2、[SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md)、[INFRA_CLI.md](INFRA_CLI.md)「跑一遍模拟」。
+**用户说「跑一遍模拟」**：默认跑 `plan`（账号分析 + Team ABC / Shift 1–3 排班）；仅排班时才用 `layout team-rotation`。具体任务专属输出参数见 [Debug 指南](MAINTENANCE_MODE.md) 和 [INFRA_CLI.md](INFRA_CLI.md)「跑一遍模拟」。
 
-**模块职责（必读）**：[INFRA_CLI.md](INFRA_CLI.md) — 约定 `commands` / `verify` / `output` 分工，避免把机制或夹具塞回 `main.rs`。
+**CLI 任务按需读取**：[INFRA_CLI.md](INFRA_CLI.md) 约定 `commands` / `verify` / `output` 分工，避免把机制或夹具塞回 `main.rs`。
 
 ### `infra-cli` 源码索引
 
@@ -290,12 +290,12 @@ ArknightsInfraCalc-v2/
 | 订单违约/裁缝/特别订单 | `order_mechanic.rs` | `shortcut.rs`、`trade_shortcuts.json` |
 | 组合表化（巫恋/可露希尔档） | `trade_shortcuts.json` | `shortcut.rs`、`REGRESSION_CASES.csv`、`verify/fixtures.rs` |
 | 搜索变慢/评分不对 | `search/trade.rs` | `solver.rs` 的 score 逻辑 |
-| 三班轮换 | `schedule/team_rotation.rs`、`schedule/shift_bind.rs` | `operbox` 数据、`TradeSearchOptions` |
+| Team ABC / Shift 1–3 | `schedule/team_rotation.rs`、`schedule/shift_bind.rs` | `operbox` 数据、`TradeSearchOptions` |
 | 编排层 / 体系认领 | [ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md) | `layout/orchestrate/`、`data/orchestration_rules.json`、兼容 `data/base_systems.json` |
 | 全基建单班进驻编制 | [BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md) | `layout/assign.rs`、`layout/orchestrate/` |
 | 宏观排班/中枢搜索 | `layout/assign.rs`、`search/control.rs` | `assign.rs` 的 `assign_control` / `assign_dorm_producers` |
-| αβγ 三队轮换 | `schedule/team_rotation.rs` | `export/maa.rs` 导出 |
-| ABC 三队轮换（含制造/发电） | `schedule/team_rotation.rs` | `layout team-rotation` |
+| Team ABC / Shift 1–3 | `schedule/team_rotation.rs` | `export/maa.rs` 导出 |
+| 当前轮换（含制造/发电） | `schedule/team_rotation.rs` | `layout team-rotation` |
 | 单位产出/无人机 | `unit_output.rs` | `UNIT_OUTPUT_ANCHORS.csv`、`verify/fixtures.rs` |
 | 改 CLI 结构 / 回归夹具放哪 | [INFRA_CLI.md](INFRA_CLI.md) | 勿在 `main.rs` 堆新夹具 |
 | L1 Phase / Condition 局部改 | [INTERNAL/TRADE_INTERPRETER.md](INTERNAL/TRADE_INTERPRETER.md) | 通读 interpreter 全文 |
@@ -312,15 +312,14 @@ ArknightsInfraCalc-v2/
 
 ---
 
-## 新 Agent 推荐阅读顺序
+## Agent 渐进式读取
 
-1. **[AGENTS.md](../AGENTS.md)**（含 **§5 改机制工序**）→ **[INDEX.md](INDEX.md)** → **本文**
-2. [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) **§一、§八**（原则 + 三层架构）
-3. 若改干员：[AGENTS.md §5](../AGENTS.md) + [需要完成的干员建模.md](需要完成的干员建模.md) 定稿案例
-4. 若改求解：`trade/solver.rs`（50 行内看清调用链）→ [INTERNAL/](INTERNAL/) 定位 L1/L2/L3 函数段
-5. 若改宏观排班或搜索：`layout/assign.rs` / `search/control.rs` / `search/power.rs`
-6. 若改制造：[MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)
-7. 若改数据：`data/skill_table.json` 一条样例 + `operator_instances.json` 对应干员
+1. 先读 [AGENTS.md](../AGENTS.md) 并选择对应项目 Skill。
+2. Skill 指定的 canonical 领域文档必须完整读取；位置未知时才查 [INDEX.md](INDEX.md)。
+3. 代码 owner、入口或调用链未知时，从本文对应表格定位，不要求通读全文。
+4. 改干员时读 [需要完成的干员建模.md](需要完成的干员建模.md) 和对应领域文档。
+5. 改求解时从相应 `solver.rs` / `search/*.rs` 入口进入，再按需用 [INTERNAL/](INTERNAL/) 定位大文件函数段。
+6. 改制造读取 [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)；改数据只读相关 JSON 条目和其 canonical 规则。
 
 **不必通读**：`interpreter.rs` / `output.rs` 全文（用 INTERNAL 地图或 `emit_*` 名定位）、`MECHANICS_REGISTRY.csv`、PRTS HTML 快照、xlsx 练度表二进制。
 
@@ -341,16 +340,16 @@ ArknightsInfraCalc-v2/
 | [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) | EffectAtom 模型、词汇表、分层求解概要、全局资源注册表 |
 | [MODELLED_OPERATORS.md](MODELLED_OPERATORS.md) | 已建模干员索引（从 EFFECT_ATOM_DESIGN.md §4 抽出） |
 | [SYSTEM_CHAINS.md](SYSTEM_CHAINS.md) | 谜迭香/自动化/红松林/莱茵 四大体系链参考手册 |
-| [INDEX.md](INDEX.md) | 文档入口、维护期路由、TODO / ARCHIVE 分层 |
-| [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md) | 维护期 bug 修复流程、分层定位、回归与验收矩阵 |
-| [TODO/](TODO/) | 历史建设期计划；维护期默认冻结 |
+| [INDEX.md](INDEX.md) | 渐进式文档路由、任务 Skill、TODO / ARCHIVE 分层 |
+| [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md) | Debug / conformance 修复流程、分层定位、回归与验收矩阵 |
+| [TODO/](TODO/) | 未实施提案；由当前 feature/quality 任务显式恢复 |
 | [ARCHIVE/](ARCHIVE/) | 已完成、废弃或历史文档 |
 | [INFRA_CLI.md](INFRA_CLI.md) | CLI 分层原则、`commands` / `verify` / `output` 职责 |
 | [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md) | 制造站实现范围与缺口 |
 | [BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md) | 全基建单班进驻编制设计（已落地） |
 | [ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md) | 编排层 System / Plan / Execute（Phase 0–3/5 已落地；剩余 Phase 默认冻结） |
 | [FRONTEND_CLI.md](FRONTEND_CLI.md) | 前端集成：`plan`、MAA JSON、layout-gen |
-| [SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md) | αβγ ABC 轮换与现行入口 |
+| [SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md) | Team ABC / Shift 1–3 轮换与现行入口 |
 | [INTERNAL/](INTERNAL/) | `interpreter` / `shortcut` 大文件内部地图 |
-| [AGENTS.md](../AGENTS.md) | Agent 新会话首读、维护期规则、不变式、验证命令 |
+| [AGENTS.md](../AGENTS.md) | Agent 新会话首读、任务分类、全局硬门禁和 Skill 路由 |
 | [README.md](../README.md) | 项目原则摘要与快速命令 |
