@@ -81,6 +81,11 @@ pub fn execute_plan(
         }
     }
     used.extend(plan.excluded_operators.iter().cloned());
+    used.extend(
+        plan.rotation_reserves
+            .iter()
+            .flat_map(|reserve| reserve.operators.iter().cloned()),
+    );
 
     Ok(ExecuteResult { assignment, used })
 }

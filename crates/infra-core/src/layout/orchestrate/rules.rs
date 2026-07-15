@@ -22,8 +22,8 @@ use crate::trade::input::TradeOrderKind;
 use crate::types::RecipeKind;
 
 use super::plan::{
-    ActivatedSystem, ActiveDependency, AnchorFillPolicy, ContinuousRole, SelectedRuleAlternative,
-    ShiftBind, SlotFill, SystemAnchor, SystemConstraint,
+    ActivatedSystem, ActiveDependency, AnchorFillPolicy, ContinuousRole, ReserveReusePolicy,
+    SelectedRuleAlternative, ShiftBind, SlotFill, SystemAnchor, SystemConstraint,
 };
 
 #[derive(Debug, Clone, Deserialize)]
@@ -60,6 +60,9 @@ pub(super) struct AlternativeSpec {
     pub gates: Vec<GateSpec>,
     #[serde(default)]
     pub roles: Vec<RoleSpec>,
+    /// 满足自身 gate 时优先事务性替换部分基础 roles；整包不可行则回退原 alternative。
+    #[serde(default)]
+    pub conditional_packs: Vec<ConditionalPackSpec>,
     #[serde(default)]
     pub relations: Vec<RelationSpec>,
     #[serde(default)]
@@ -78,6 +81,19 @@ pub(super) struct AlternativeSpec {
     pub off_shifts: u8,
     #[serde(default)]
     pub continuous: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub(super) struct ConditionalPackSpec {
+    pub id: String,
+    #[serde(default)]
+    pub gates: Vec<GateSpec>,
+    #[serde(default)]
+    pub replace_roles: Vec<String>,
+    #[serde(default)]
+    pub roles: Vec<RoleSpec>,
+    #[serde(default)]
+    pub relations: Vec<RelationSpec>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -130,6 +146,23 @@ pub(super) enum GateSpec {
         name: String,
         #[serde(default)]
         elite: u8,
+    },
+    /// 复用正式贸易 role + solver 验证候选 assignment 剩余人员能否组成合法 cohort。
+    TradeRoleFeasible {
+        role: String,
+        order: TradeOrderKind,
+        #[serde(default)]
+        all_matching_rooms: bool,
+        /// 成功时把正式搜索选中的同一组成员写入 Plan，供 peak 预留与 rotation 消费。
+        #[serde(default)]
+        reserve_as: Option<String>,
+        /// reserve 在 gamma half 中的复用方式；只有生成 reserve 时才有实际作用。
+        #[serde(default)]
+        reuse_policy: ReserveReusePolicy,
+        /// reserve 必须在 exact bind 的自然 H1/H2 打包结果中两边均有目标。
+        /// 不满足时整个 conditional pack 事务性降级，而不是留给 schedule 搬房或报错。
+        #[serde(default)]
+        require_pre_split_halves: bool,
     },
 }
 
@@ -212,6 +245,7 @@ pub(super) struct CompiledRules {
     pub shift_binds: Vec<ShiftBind>,
     pub active_dependencies: Vec<ActiveDependency>,
     pub continuous_roles: Vec<ContinuousRole>,
+    pub rotation_reserves: Vec<super::plan::ResolvedRoleReserve>,
     pub skip_registry_ids: HashSet<String>,
     pub scratch: BaseAssignment,
 }
@@ -269,6 +303,7 @@ pub(super) fn compile_rules(
     seed: &BaseAssignment,
     inherited_excluded: &HashSet<String>,
     externally_skipped: &HashSet<String>,
+    disabled_conditional_packs: &HashSet<String>,
     priority_range: std::ops::RangeInclusive<i32>,
 ) -> Result<CompiledRules> {
     let mut rules: Vec<_> = catalog.rules.iter().collect();
@@ -283,6 +318,7 @@ pub(super) fn compile_rules(
         shift_binds: Vec::new(),
         active_dependencies: Vec::new(),
         continuous_roles: Vec::new(),
+        rotation_reserves: Vec::new(),
         skip_registry_ids: HashSet::new(),
         scratch: seed.clone(),
     };
@@ -325,28 +361,98 @@ pub(super) fn compile_rules(
             {
                 continue;
             }
-            let mut candidate_assignment = out.scratch.clone();
             let alternative_baseline = out.scratch.clone();
-            let mut candidate_used = used.clone();
-            candidate_used.extend(excluded.iter().cloned());
-            let mut candidate_anchors = Vec::new();
-            let candidate_constraints = compile_relations(&alternative.relations);
-            if !place_roles(
-                &rule.id,
-                &alternative.roles,
-                ctx,
-                &out.constraints,
-                &candidate_constraints,
-                &mut candidate_assignment,
-                &mut candidate_used,
-                &mut candidate_anchors,
-                &alternative_baseline,
-            ) {
-                continue;
+            let mut variants: Vec<(
+                Vec<RoleSpec>,
+                Vec<RelationSpec>,
+                Option<(&str, &[GateSpec])>,
+            )> = alternative
+                .conditional_packs
+                .iter()
+                .filter(|pack| {
+                    !disabled_conditional_packs.contains(&format!("{}:{}", rule.id, pack.id))
+                })
+                .filter(|pack| static_gates_match(&pack.gates, ctx))
+                .map(|pack| {
+                    (
+                        roles_with_conditional_pack(&alternative.roles, pack),
+                        alternative
+                            .relations
+                            .iter()
+                            .chain(&pack.relations)
+                            .cloned()
+                            .collect(),
+                        Some((pack.id.as_str(), pack.gates.as_slice())),
+                    )
+                })
+                .collect();
+            variants.push((
+                alternative.roles.clone(),
+                alternative.relations.clone(),
+                None,
+            ));
+            let mut placed = None;
+            for (candidate_roles, candidate_relations, conditional_pack) in variants {
+                let mut candidate_assignment = out.scratch.clone();
+                let mut candidate_used = used.clone();
+                candidate_used.extend(excluded.iter().cloned());
+                let mut candidate_anchors = Vec::new();
+                let candidate_constraints = compile_relations(&candidate_relations);
+                if !place_roles(
+                    &rule.id,
+                    &candidate_roles,
+                    ctx,
+                    &out.constraints,
+                    &candidate_constraints,
+                    &mut candidate_assignment,
+                    &mut candidate_used,
+                    &mut candidate_anchors,
+                    &alternative_baseline,
+                ) {
+                    continue;
+                }
+                let mut candidate_reserves = Vec::new();
+                if let Some((_, gates)) = conditional_pack {
+                    let Some(reserves) =
+                        dynamic_gates_match(gates, ctx, &candidate_assignment, &candidate_used)?
+                    else {
+                        continue;
+                    };
+                    candidate_reserves.extend(reserves);
+                }
+                let Some(reserves) = dynamic_gates_match(
+                    &alternative.gates,
+                    ctx,
+                    &candidate_assignment,
+                    &candidate_used,
+                )?
+                else {
+                    continue;
+                };
+                candidate_reserves.extend(reserves);
+                placed = Some((
+                    candidate_assignment,
+                    candidate_used,
+                    candidate_anchors,
+                    candidate_constraints,
+                    candidate_roles,
+                    conditional_pack.map(|(id, _)| id.to_string()),
+                    candidate_reserves,
+                ));
+                break;
             }
-            if !resource_gates_match(&alternative.gates, ctx, &candidate_assignment)? {
+            let Some((
+                candidate_assignment,
+                _candidate_used,
+                candidate_anchors,
+                candidate_constraints,
+                candidate_roles,
+                conditional_pack_id,
+                candidate_reserves,
+            )) = placed
+            else {
                 continue;
-            }
+            };
 
             let operators: Vec<String> = candidate_anchors
                 .iter()
@@ -369,7 +475,7 @@ pub(super) fn compile_rules(
             } else {
                 selected_operators_for_roles(
                     &alternative.bind_roles,
-                    &alternative.roles,
+                    &candidate_roles,
                     &candidate_anchors,
                 )
             };
@@ -384,7 +490,7 @@ pub(super) fn compile_rules(
             }
             for dependency in compile_active_dependencies(
                 &alternative.active_dependencies,
-                &alternative.roles,
+                &candidate_roles,
                 &candidate_anchors,
             ) {
                 out.active_dependencies.push(dependency);
@@ -399,6 +505,19 @@ pub(super) fn compile_rules(
                         })
                     }));
             }
+            out.rotation_reserves
+                .extend(candidate_reserves.into_iter().map(|reserve| {
+                    super::plan::ResolvedRoleReserve {
+                        system_id: rule.id.clone(),
+                        reserve_id: reserve.reserve_id,
+                        role_id: reserve.role_id,
+                        facility: FacilityKind::TradePost,
+                        operators: reserve.operators,
+                        eligible_rooms: reserve.eligible_rooms,
+                        reuse_policy: reserve.reuse_policy,
+                        require_pre_split_halves: reserve.require_pre_split_halves,
+                    }
+                }));
             out.anchors.extend(candidate_anchors);
             out.constraints.extend(candidate_constraints);
             out.excluded_operators
@@ -406,6 +525,7 @@ pub(super) fn compile_rules(
             out.selected.push(SelectedRuleAlternative {
                 rule_id: rule.id.clone(),
                 alternative_id: alternative.id.clone(),
+                conditional_pack_id,
                 priority: rule.priority,
                 operators,
             });
@@ -427,6 +547,29 @@ pub(super) fn compile_rules(
     }
 
     Ok(out)
+}
+
+fn roles_with_conditional_pack(
+    base_roles: &[RoleSpec],
+    pack: &ConditionalPackSpec,
+) -> Vec<RoleSpec> {
+    let replaced: HashSet<&str> = pack.replace_roles.iter().map(String::as_str).collect();
+    let mut roles = Vec::with_capacity(base_roles.len() + pack.roles.len());
+    let mut inserted = false;
+    for role in base_roles {
+        if replaced.contains(role.id.as_str()) {
+            if !inserted {
+                roles.extend(pack.roles.iter().cloned());
+                inserted = true;
+            }
+        } else {
+            roles.push(role.clone());
+        }
+    }
+    if !inserted {
+        roles.extend(pack.roles.iter().cloned());
+    }
+    roles
 }
 
 fn compile_active_dependencies(
@@ -506,7 +649,7 @@ fn static_gates_match(gates: &[GateSpec], ctx: &RuleCompileContext<'_>) -> bool 
                 .min(u8::MAX as usize) as u8;
             in_range(count, *min, *max)
         }
-        GateSpec::ResourceAtLeast { .. } => true,
+        GateSpec::ResourceAtLeast { .. } | GateSpec::TradeRoleFeasible { .. } => true,
         GateSpec::OperatorAvailable { name, elite } => ctx
             .operbox
             .progress_of(name)
@@ -522,20 +665,28 @@ fn in_range(value: u8, min: u8, max: Option<u8>) -> bool {
     value >= min && max.is_none_or(|max| value <= max)
 }
 
-fn resource_gates_match(
+struct GateReserve {
+    reserve_id: String,
+    role_id: String,
+    operators: Vec<String>,
+    eligible_rooms: Vec<crate::layout::blueprint::RoomId>,
+    reuse_policy: ReserveReusePolicy,
+    require_pre_split_halves: bool,
+}
+
+fn dynamic_gates_match(
     gates: &[GateSpec],
     ctx: &RuleCompileContext<'_>,
     assignment: &BaseAssignment,
-) -> Result<bool> {
-    let resource_gates: Vec<_> = gates
-        .iter()
-        .filter_map(|gate| match gate {
-            GateSpec::ResourceAtLeast { resource, value } => Some((resource, *value)),
-            _ => None,
-        })
-        .collect();
-    if resource_gates.is_empty() {
-        return Ok(true);
+    used: &HashSet<String>,
+) -> Result<Option<Vec<GateReserve>>> {
+    if !gates.iter().any(|gate| {
+        matches!(
+            gate,
+            GateSpec::ResourceAtLeast { .. } | GateSpec::TradeRoleFeasible { .. }
+        )
+    }) {
+        return Ok(Some(Vec::new()));
     }
     let resolved = crate::layout::resolve_base(
         ctx.blueprint,
@@ -545,10 +696,115 @@ fn resource_gates_match(
         ctx.mood,
         None,
     )?;
-    Ok(resource_gates.into_iter().all(|(resource, value)| {
-        GlobalResourceKey::parse(resource)
-            .is_some_and(|key| resolved.layout.global.get(key) >= value)
-    }))
+    let mut reserves = Vec::new();
+    for gate in gates {
+        match gate {
+            GateSpec::ResourceAtLeast { resource, value } => {
+                if !GlobalResourceKey::parse(resource)
+                    .is_some_and(|key| resolved.layout.global.get(key) >= *value)
+                {
+                    return Ok(None);
+                }
+            }
+            GateSpec::TradeRoleFeasible {
+                role,
+                order,
+                all_matching_rooms,
+                reserve_as,
+                reuse_policy,
+                require_pre_split_halves,
+            } => {
+                let pool = crate::pool::build_trade_pool(
+                    &ctx.operbox.trade_roster(ctx.instances),
+                    ctx.instances,
+                    ctx.table,
+                )?;
+                let mut matching_rooms: Vec<_> = ctx
+                    .blueprint
+                    .rooms
+                    .iter()
+                    .filter(|room| {
+                        matches!(
+                            room.product,
+                            Some(RoomProduct::Trade { order: actual }) if actual == *order
+                        )
+                    })
+                    .collect();
+                matching_rooms.sort_by(|left, right| left.id.0.cmp(&right.id.0));
+                if matching_rooms.is_empty() {
+                    return Ok(None);
+                }
+                let options_for = |room: &RoomBlueprint| crate::search::TradeSearchOptions {
+                    trade_level: room.level,
+                    operator_capacity: room.operator_capacity(),
+                    mood: ctx.mood,
+                    top_k: 20,
+                    gold_production_lines: resolved.gold_manu_line_count(),
+                    layout: Arc::new(resolved.layout.clone()),
+                    shift_hours: 24.0,
+                    order_mode: crate::trade::input::TradeSearchOrderMode::Single(*order),
+                    use_baked: false,
+                    full_pool: true,
+                };
+                let first_room = matching_rooms[0];
+                if first_room.operator_capacity() < 3 {
+                    return Ok(None);
+                }
+                let Ok(first_hit) = crate::search::pick_trade_role_hit(
+                    role,
+                    &pool,
+                    ctx.table,
+                    options_for(first_room),
+                    &resolved.layout,
+                    used,
+                    20,
+                ) else {
+                    return Ok(None);
+                };
+                let reserved_operators = first_hit.names;
+                let reserved_operator_set: HashSet<_> =
+                    reserved_operators.iter().cloned().collect();
+                let room_feasible = |room: &&RoomBlueprint| {
+                    if room.operator_capacity() < 3 {
+                        return false;
+                    }
+                    crate::search::pick_trade_role_hit_requiring(
+                        role,
+                        &pool,
+                        ctx.table,
+                        options_for(room),
+                        &resolved.layout,
+                        used,
+                        20,
+                        &reserved_operators,
+                    )
+                    .is_ok_and(|hit| {
+                        hit.names.iter().cloned().collect::<HashSet<_>>() == reserved_operator_set
+                    })
+                };
+                let feasible = if *all_matching_rooms {
+                    matching_rooms.iter().all(room_feasible)
+                } else {
+                    matching_rooms.iter().any(room_feasible)
+                };
+                if !feasible {
+                    return Ok(None);
+                }
+                if let Some(reserve_id) = reserve_as {
+                    reserves.push(GateReserve {
+                        reserve_id: reserve_id.clone(),
+                        role_id: role.clone(),
+                        operators: reserved_operators,
+                        eligible_rooms: matching_rooms.iter().map(|room| room.id.clone()).collect(),
+                        reuse_policy: *reuse_policy,
+                        require_pre_split_halves: *require_pre_split_halves,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(Some(reserves))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1487,6 +1743,7 @@ mod tests {
             seed,
             inherited_excluded,
             &HashSet::new(),
+            &HashSet::new(),
             priority_range,
         )
         .unwrap()
@@ -1693,6 +1950,186 @@ mod tests {
             room("power-a", FacilityKind::PowerPlant, 3, None),
             room("power-b", FacilityKind::PowerPlant, 3, None),
         ])
+    }
+
+    fn rosemary_two_trade_blueprint() -> BaseBlueprint {
+        let mut bp = rosemary_blueprint();
+        bp.rooms.push(room(
+            "trade-b",
+            FacilityKind::TradePost,
+            3,
+            Some(RoomProduct::Trade {
+                order: TradeOrderKind::Gold,
+            }),
+        ));
+        bp
+    }
+
+    fn three_trade_cohort_operbox(include: &[&str]) -> OperBox {
+        let entries = [
+            ("但书", 2),
+            ("可露希尔", 2),
+            ("迷迭香", 2),
+            ("黑键", 2),
+            ("八幡海铃", 2),
+            ("夕", 0),
+            ("巫恋", 2),
+            ("龙舌兰", 2),
+            ("柏喙", 2),
+        ];
+        let filtered: Vec<_> = entries
+            .into_iter()
+            .filter(|(name, _)| include.contains(name))
+            .collect();
+        operbox(&filtered)
+    }
+
+    #[test]
+    fn rosemary_conditional_pack_reserves_full_three_trade_cohorts() {
+        let bp = rosemary_two_trade_blueprint();
+        let all = [
+            "但书",
+            "可露希尔",
+            "迷迭香",
+            "黑键",
+            "八幡海铃",
+            "夕",
+            "巫恋",
+            "龙舌兰",
+            "柏喙",
+        ];
+        let compiled = compile(
+            &bp,
+            &three_trade_cohort_operbox(&all),
+            &BaseAssignment::default(),
+        );
+        let selected = compiled
+            .selected
+            .iter()
+            .find(|selected| selected.rule_id == "rosemary_perception")
+            .unwrap();
+        assert_eq!(selected.alternative_id, "recruit_refresh");
+        assert_eq!(
+            selected.conditional_pack_id.as_deref(),
+            Some("three_trade_cohorts")
+        );
+        let docus_room = compiled
+            .scratch
+            .rooms
+            .iter()
+            .find(|room| {
+                room.operators
+                    .iter()
+                    .any(|operator| operator.name == "但书")
+            })
+            .unwrap();
+        let blackkey_room = compiled
+            .scratch
+            .rooms
+            .iter()
+            .find(|room| {
+                room.operators
+                    .iter()
+                    .any(|operator| operator.name == "黑键")
+            })
+            .unwrap();
+        assert_ne!(docus_room.room_id, blackkey_room.room_id);
+        assert!(blackkey_room
+            .operators
+            .iter()
+            .any(|operator| operator.name == "可露希尔"));
+        assert!(docus_room
+            .operators
+            .iter()
+            .all(|operator| operator.name != "黑键" && operator.name != "可露希尔"));
+        assert_eq!(compiled.rotation_reserves.len(), 1);
+        let mut reserve_operators = compiled.rotation_reserves[0].operators.clone();
+        reserve_operators.sort();
+        assert_eq!(reserve_operators, vec!["巫恋", "柏喙", "龙舌兰"]);
+        assert_eq!(compiled.rotation_reserves[0].eligible_rooms.len(), 2);
+        assert_eq!(
+            compiled.rotation_reserves[0].reuse_policy,
+            ReserveReusePolicy::EveryEligibleHalf
+        );
+        assert!(compiled.rotation_reserves[0].require_pre_split_halves);
+    }
+
+    #[test]
+    fn rosemary_conditional_pack_degrades_without_each_full_cohort_requirement() {
+        let bp = rosemary_two_trade_blueprint();
+        let all = [
+            "但书",
+            "可露希尔",
+            "迷迭香",
+            "黑键",
+            "八幡海铃",
+            "夕",
+            "巫恋",
+            "龙舌兰",
+            "柏喙",
+        ];
+        for missing in ["可露希尔", "巫恋", "龙舌兰", "柏喙"] {
+            let include: Vec<_> = all
+                .iter()
+                .copied()
+                .filter(|name| *name != missing)
+                .collect();
+            let compiled = compile(
+                &bp,
+                &three_trade_cohort_operbox(&include),
+                &BaseAssignment::default(),
+            );
+            let selected = compiled
+                .selected
+                .iter()
+                .find(|selected| selected.rule_id == "rosemary_perception")
+                .unwrap_or_else(|| panic!("missing {missing} must not close Rosemary itself"));
+            assert_eq!(selected.conditional_pack_id, None, "missing {missing}");
+            assert!(compiled.rotation_reserves.is_empty(), "missing {missing}");
+            assert!(
+                compiled
+                    .anchors
+                    .iter()
+                    .all(|anchor| anchor.operator != "可露希尔"),
+                "missing {missing}: fallback must not force Closure"
+            );
+        }
+
+        let inactive_names: Vec<_> = all.iter().copied().filter(|name| *name != "夕").collect();
+        let inactive = compile(
+            &bp,
+            &three_trade_cohort_operbox(&inactive_names),
+            &BaseAssignment::default(),
+        );
+        assert_eq!(selected(&inactive, "rosemary_perception"), None);
+        assert!(inactive.rotation_reserves.is_empty());
+        assert!(inactive
+            .anchors
+            .iter()
+            .all(|anchor| anchor.operator != "可露希尔"));
+
+        let mut constrained = bp.clone();
+        constrained
+            .rooms
+            .iter_mut()
+            .find(|room| room.id.0 == "trade")
+            .unwrap()
+            .level = 2;
+        let capacity_fallback = compile(
+            &constrained,
+            &three_trade_cohort_operbox(&all),
+            &BaseAssignment::default(),
+        );
+        assert_eq!(
+            capacity_fallback
+                .selected
+                .iter()
+                .find(|selected| selected.rule_id == "rosemary_perception")
+                .unwrap()
+                .conditional_pack_id,
+            None,
+            "C 必须能复用到两间目标房，任一容量不足都不能激活完整 pack"
+        );
     }
 
     #[test]

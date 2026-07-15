@@ -82,6 +82,8 @@ pub struct SystemAnchor {
 pub struct SelectedRuleAlternative {
     pub rule_id: String,
     pub alternative_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conditional_pack_id: Option<String>,
     pub priority: i32,
     pub operators: Vec<String>,
 }
@@ -147,6 +149,97 @@ pub struct ContinuousRole {
     pub room_id: RoomId,
 }
 
+/// 已解析 reserve 在相邻 gamma half 中的复用策略。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReserveReusePolicy {
+    /// 只在按 H1、H2 顺序遇到的首个合法 half 中使用一次。
+    #[default]
+    Once,
+    /// H1、H2 都必须有合法目标，并在两边复用同一组实际成员。
+    EveryEligibleHalf,
+}
+
+/// 由正式 role/solver 解析但不进入 peak 的轮换 cohort；peak fill 必须预留，rotation
+/// 在声明的目标房间中复用同一组实际成员。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ResolvedRoleReserve {
+    pub system_id: String,
+    pub reserve_id: String,
+    pub role_id: String,
+    pub facility: FacilityKind,
+    pub operators: Vec<String>,
+    pub eligible_rooms: Vec<RoomId>,
+    pub reuse_policy: ReserveReusePolicy,
+    /// 该 reserve 只能在既有 exact bind 的自然 H1/H2 打包结果中两边都有目标时成立。
+    /// 计划编译器在提交 conditional pack 前消费此门禁；schedule 不负责事后改写选型。
+    pub require_pre_split_halves: bool,
+}
+
+/// 按 exact bind 连通分量打包生产房，作为计划可行性与 schedule 切半的共同事实源。
+/// reserve 尚未参与此过程；需要两半复用的 conditional pack 必须先证明自然打包结果
+/// 已经在 H1/H2 各有一个合法目标，不能依靠 schedule 事后搬动分量来挽救选型。
+pub(crate) fn pack_production_components<'a>(
+    blueprint: &crate::layout::BaseBlueprint,
+    assignment: &crate::layout::BaseAssignment,
+    binds: impl IntoIterator<Item = &'a [String]>,
+) -> Result<[Vec<Vec<RoomId>>; 2], String> {
+    let production_rooms: Vec<RoomId> = blueprint
+        .rooms
+        .iter()
+        .filter(|room| {
+            matches!(
+                room.kind,
+                FacilityKind::TradePost | FacilityKind::Factory | FacilityKind::PowerPlant
+            )
+        })
+        .map(|room| room.id.clone())
+        .collect();
+    let mut components: Vec<Vec<RoomId>> = production_rooms
+        .iter()
+        .cloned()
+        .map(|room| vec![room])
+        .collect();
+
+    for operators in binds {
+        let mut bound_rooms = Vec::new();
+        for name in operators {
+            let room = assignment
+                .rooms
+                .iter()
+                .find(|room| room.operators.iter().any(|operator| &operator.name == name))
+                .ok_or_else(|| format!("shift bind operator {name} missing from peak"))?;
+            if production_rooms.contains(&room.room_id) && !bound_rooms.contains(&room.room_id) {
+                bound_rooms.push(room.room_id.clone());
+            }
+        }
+        if bound_rooms.len() < 2 {
+            continue;
+        }
+        let mut merged = Vec::new();
+        components.retain(|component| {
+            if component.iter().any(|room| bound_rooms.contains(room)) {
+                merged.extend(component.iter().cloned());
+                false
+            } else {
+                true
+            }
+        });
+        merged.sort_by(|left, right| left.0.cmp(&right.0));
+        merged.dedup();
+        components.push(merged);
+    }
+
+    components.sort_by_key(|component| std::cmp::Reverse(component.len()));
+    let mut halves: [Vec<Vec<RoomId>>; 2] = Default::default();
+    for component in components {
+        let load = |items: &[Vec<RoomId>]| items.iter().map(Vec::len).sum::<usize>();
+        let target = usize::from(load(&halves[1]) < load(&halves[0]));
+        halves[target].push(component);
+    }
+    Ok(halves)
+}
+
 /// 中枢搜索候选组约束：由 solver 在候选中至少选择 `min_count` 人。
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct ControlCandidateRequirement {
@@ -183,6 +276,8 @@ pub struct AssignmentPlan {
     pub active_dependencies: Vec<ActiveDependency>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub continuous_roles: Vec<ContinuousRole>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rotation_reserves: Vec<ResolvedRoleReserve>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub control_candidate_requirements: Vec<ControlCandidateRequirement>,
 }
@@ -295,6 +390,7 @@ impl AssignmentPlan {
             shift_binds: Vec::new(),
             active_dependencies: Vec::new(),
             continuous_roles: Vec::new(),
+            rotation_reserves: Vec::new(),
             control_candidate_requirements: Vec::new(),
         }
     }

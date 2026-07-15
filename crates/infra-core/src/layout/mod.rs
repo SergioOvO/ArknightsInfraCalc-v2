@@ -25,10 +25,11 @@ pub use blueprint::{
 pub use context::{
     trade_station_tagged_gte_key, LayoutContext, SharedLayout, DEFAULT_DORM_OCCUPANT_COUNT,
 };
+pub(crate) use orchestrate::pack_production_components;
 pub use orchestrate::{
     build_plan, build_plan_with_runtime, execute_plan, ActivatedSystem, ActiveDependency,
-    AssignmentPlan, ContinuousRole, ControlCandidateRequirement, ExecuteResult,
-    SelectedRuleAlternative, SlotFill,
+    AssignmentPlan, ContinuousRole, ControlCandidateRequirement, ExecuteResult, ReserveReusePolicy,
+    ResolvedRoleReserve, SelectedRuleAlternative, SlotFill,
 };
 pub use resolve::{
     resolve_automation_group_1_layout, resolve_base, resolve_search_baseline_layout,

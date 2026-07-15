@@ -9,9 +9,11 @@ mod rules;
 mod select;
 
 pub use execute::{execute_plan, ExecuteResult};
+pub(crate) use plan::pack_production_components;
 pub use plan::{
     ActivatedSystem, ActiveDependency, AssignmentPlan, ContinuousRole, ControlCandidateRequirement,
-    ProducerSlot, SelectedRuleAlternative, SlotFill, SystemAnchor, SystemConstraint,
+    ProducerSlot, ReserveReusePolicy, ResolvedRoleReserve, SelectedRuleAlternative, SlotFill,
+    SystemAnchor, SystemConstraint,
 };
 pub use select::{build_plan, build_plan_with_runtime};
 
@@ -137,6 +139,19 @@ mod tests {
             selected.rule_id == "human_fireworks_perception"
                 && selected.alternative_id == "actual_perception_core"
         }));
+        let rosemary = plan
+            .selected_rules
+            .iter()
+            .find(|selected| selected.rule_id == "rosemary_perception")
+            .unwrap();
+        assert_eq!(
+            rosemary.conditional_pack_id, None,
+            "感知烟火 bind 经中枢连通两座贸易房时，三 cohort pack 必须在 plan 阶段事务性降级"
+        );
+        assert!(
+            plan.rotation_reserves.is_empty(),
+            "降级不得遗留不可分 half 的 cohort C reserve"
+        );
         let attached: Vec<_> = plan
             .anchors
             .iter()

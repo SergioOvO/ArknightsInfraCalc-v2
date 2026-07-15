@@ -12,7 +12,8 @@ use crate::layout::{
     assign_control, assign_manu_room_with_anchors, assign_shift_with_plan_skip,
     assign_team_gamma_half, pinned_assignment_excluding, resolve_base, ActivatedSystem,
     AssignBaseOptions, AssignShiftMode, AssignedOperator, AssignmentPlan, BaseAssignment,
-    BaseBlueprint, FacilityKind, LayoutContext, RoomId, RoomProduct, SlotFill,
+    BaseBlueprint, FacilityKind, LayoutContext, ReserveReusePolicy, ResolvedRoleReserve, RoomId,
+    RoomProduct, SlotFill,
 };
 use crate::mood::{shift_eta, MoodModel, ShiftEta};
 use crate::office::{solve_office, OfficeOperator, OfficeRoomInput};
@@ -445,69 +446,83 @@ fn split_production_facilities(
     blueprint: &BaseBlueprint,
     peak: &BaseAssignment,
     binds: &[RuntimeShiftBind],
+    reserves: &[ResolvedRoleReserve],
 ) -> Result<[FacilityHalf; 2]> {
-    let production_rooms: Vec<RoomId> = blueprint
-        .rooms
-        .iter()
-        .filter(|room| {
-            matches!(
-                room.kind,
-                FacilityKind::TradePost | FacilityKind::Factory | FacilityKind::PowerPlant
-            )
-        })
-        .map(|room| room.id.clone())
-        .collect();
     let room_kind: HashMap<_, _> = blueprint
         .rooms
         .iter()
         .map(|room| (room.id.clone(), room.kind))
         .collect();
-    let mut components: Vec<Vec<RoomId>> = production_rooms
+    let mut half_components = crate::layout::pack_production_components(
+        blueprint,
+        peak,
+        binds.iter().map(|bind| bind.operators.as_slice()),
+    )
+    .map_err(Error::msg)?;
+
+    for reserve in reserves
         .iter()
-        .cloned()
-        .map(|room| vec![room])
-        .collect();
-    for bind in binds {
-        let mut bound_rooms = Vec::new();
-        for name in &bind.operators {
-            let room = peak
-                .rooms
-                .iter()
-                .find(|room| room.operators.iter().any(|op| &op.name == name))
-                .ok_or_else(|| {
-                    Error::msg(format!("shift bind operator {name} missing from peak"))
-                })?;
-            if production_rooms.contains(&room.room_id) && !bound_rooms.contains(&room.room_id) {
-                bound_rooms.push(room.room_id.clone());
-            }
-        }
-        if bound_rooms.len() < 2 {
+        .filter(|reserve| reserve.reuse_policy == ReserveReusePolicy::EveryEligibleHalf)
+    {
+        let has_target = |components: &[Vec<RoomId>]| {
+            components.iter().any(|component| {
+                component
+                    .iter()
+                    .any(|room| reserve.eligible_rooms.contains(room))
+            })
+        };
+        let has_h1 = has_target(&half_components[0]);
+        let has_h2 = has_target(&half_components[1]);
+        if has_h1 && has_h2 {
             continue;
         }
-        let mut merged = Vec::new();
-        components.retain(|component| {
-            if component.iter().any(|room| bound_rooms.contains(room)) {
-                merged.extend(component.iter().cloned());
-                false
-            } else {
-                true
-            }
-        });
-        merged.sort_by(|a, b| a.0.cmp(&b.0));
-        merged.dedup();
-        components.push(merged);
+        if !has_h1 && !has_h2 {
+            return Err(Error::msg(format!(
+                "rotation reserve {} has no production component in H1/H2",
+                reserve.reserve_id
+            )));
+        }
+        let source = usize::from(!has_h1);
+        let target = 1 - source;
+        let eligible_count = |component: &[RoomId]| {
+            component
+                .iter()
+                .filter(|room| reserve.eligible_rooms.contains(room))
+                .count()
+        };
+        let component_index =
+            half_components[source]
+                .iter()
+                .enumerate()
+                .find_map(|(index, component)| {
+                    (eligible_count(component) > 0
+                        && half_components[source].iter().enumerate().any(
+                            |(other_index, other)| {
+                                other_index != index && eligible_count(other) > 0
+                            },
+                        ))
+                    .then_some(index)
+                });
+        let Some(component_index) = component_index else {
+            return Err(Error::msg(format!(
+                "rotation reserve {} eligible rooms are inseparable across H1/H2",
+                reserve.reserve_id
+            )));
+        };
+        let moved = half_components[source].remove(component_index);
+        half_components[target].push(moved);
     }
-    components.sort_by_key(|component| std::cmp::Reverse(component.len()));
+
     let mut halves: [FacilityHalf; 2] = Default::default();
-    for component in components {
-        let load = |half: &FacilityHalf| half.trade.len() + half.manu.len() + half.power.len();
-        let target = usize::from(load(&halves[1]) < load(&halves[0]));
-        for room in component {
-            match room_kind[&room] {
-                FacilityKind::TradePost => halves[target].trade.push(room),
-                FacilityKind::Factory => halves[target].manu.push(room),
-                FacilityKind::PowerPlant => halves[target].power.push(room),
-                _ => unreachable!(),
+    for (half_index, components) in half_components.into_iter().enumerate() {
+        for component in components {
+            for room in component {
+                match room_kind[&room] {
+                    FacilityKind::TradePost => halves[half_index].trade.push(room),
+                    FacilityKind::Factory => halves[half_index].manu.push(room),
+                    FacilityKind::PowerPlant => halves[half_index].power.push(room),
+                    _ => unreachable!(),
+                }
             }
         }
     }
@@ -559,6 +574,219 @@ fn assign_gamma_half(
         assignment,
         used,
     )
+}
+
+fn reserve_target_for_half(
+    blueprint: &BaseBlueprint,
+    reserve: &ResolvedRoleReserve,
+    half: &FacilityHalf,
+) -> Result<Option<RoomId>> {
+    let half_rooms = match reserve.facility {
+        FacilityKind::TradePost => &half.trade,
+        FacilityKind::Factory => &half.manu,
+        FacilityKind::PowerPlant => &half.power,
+        facility => {
+            return Err(Error::msg(format!(
+                "rotation reserve {} has unsupported facility {:?}",
+                reserve.reserve_id, facility
+            )))
+        }
+    };
+    let mut targets: Vec<_> = reserve
+        .eligible_rooms
+        .iter()
+        .filter(|room_id| half_rooms.contains(room_id))
+        .cloned()
+        .collect();
+    targets.sort_by(|left, right| left.0.cmp(&right.0));
+    if let Some(room_id) = targets.first() {
+        if blueprint.room(room_id).is_none() {
+            return Err(Error::msg(format!(
+                "rotation reserve {} target room {} missing",
+                reserve.reserve_id, room_id.0
+            )));
+        }
+    }
+    Ok(targets.into_iter().next())
+}
+
+fn place_rotation_reserve_at(
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    reserve: &ResolvedRoleReserve,
+    room_id: &RoomId,
+    assignment: &mut BaseAssignment,
+    used: &mut HashSet<String>,
+) -> Result<()> {
+    let room = blueprint.room(room_id).ok_or_else(|| {
+        Error::msg(format!(
+            "rotation reserve {} target room {} missing",
+            reserve.reserve_id, room_id.0
+        ))
+    })?;
+    if room.kind != reserve.facility {
+        return Err(Error::msg(format!(
+            "rotation reserve {} target room {} has facility {:?}, expected {:?}",
+            reserve.reserve_id, room_id.0, room.kind, reserve.facility
+        )));
+    }
+    if !assignment.operators_in(room_id).is_empty()
+        || reserve.operators.len() > room.operator_capacity()
+        || reserve.operators.iter().any(|name| used.contains(name))
+    {
+        return Err(Error::msg(format!(
+            "rotation reserve {} cannot occupy {}",
+            reserve.reserve_id, room_id.0
+        )));
+    }
+    let operators = reserve
+        .operators
+        .iter()
+        .map(|name| {
+            let progress = operbox.progress_of(name).ok_or_else(|| {
+                Error::msg(format!(
+                    "rotation reserve {} operator {} missing from operbox",
+                    reserve.reserve_id, name
+                ))
+            })?;
+            Ok(AssignedOperator::from_progress(name, progress))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    used.extend(reserve.operators.iter().cloned());
+    assignment.set_room(room_id.clone(), operators);
+    Ok(())
+}
+
+fn place_rotation_reserves_for_halves(
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    reserves: &[ResolvedRoleReserve],
+    h1: &FacilityHalf,
+    assignment_h1: &mut BaseAssignment,
+    used_h1: &mut HashSet<String>,
+    h2: &FacilityHalf,
+    assignment_h2: &mut BaseAssignment,
+    used_h2: &mut HashSet<String>,
+) -> Result<()> {
+    for reserve in reserves {
+        let target_h1 = reserve_target_for_half(blueprint, reserve, h1)?;
+        let target_h2 = reserve_target_for_half(blueprint, reserve, h2)?;
+        match reserve.reuse_policy {
+            ReserveReusePolicy::Once => {
+                if let Some(target) = target_h1 {
+                    place_rotation_reserve_at(
+                        blueprint,
+                        operbox,
+                        reserve,
+                        &target,
+                        assignment_h1,
+                        used_h1,
+                    )?;
+                } else if let Some(target) = target_h2 {
+                    place_rotation_reserve_at(
+                        blueprint,
+                        operbox,
+                        reserve,
+                        &target,
+                        assignment_h2,
+                        used_h2,
+                    )?;
+                } else {
+                    return Err(Error::msg(format!(
+                        "rotation reserve {} has no eligible H1/H2 target",
+                        reserve.reserve_id
+                    )));
+                }
+            }
+            ReserveReusePolicy::EveryEligibleHalf => {
+                let target_h1 = target_h1.ok_or_else(|| {
+                    Error::msg(format!(
+                        "rotation reserve {} missing eligible H1 target",
+                        reserve.reserve_id
+                    ))
+                })?;
+                let target_h2 = target_h2.ok_or_else(|| {
+                    Error::msg(format!(
+                        "rotation reserve {} missing eligible H2 target; eligible={:?}; H1 trade={:?}; H2 trade={:?}",
+                        reserve.reserve_id, reserve.eligible_rooms, h1.trade, h2.trade
+                    ))
+                })?;
+                place_rotation_reserve_at(
+                    blueprint,
+                    operbox,
+                    reserve,
+                    &target_h1,
+                    assignment_h1,
+                    used_h1,
+                )?;
+                place_rotation_reserve_at(
+                    blueprint,
+                    operbox,
+                    reserve,
+                    &target_h2,
+                    assignment_h2,
+                    used_h2,
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `rotation_reserves` 只保证菲亚后处理之前的基础 γ 编制。这里在两半都完成普通
+/// fill 后校验一次，防止后续改动在基础 rotation 阶段悄悄覆盖已解析 cohort。
+fn validate_rotation_reserves_before_postprocess(
+    blueprint: &BaseBlueprint,
+    reserves: &[ResolvedRoleReserve],
+    h1: &FacilityHalf,
+    assignment_h1: &BaseAssignment,
+    h2: &FacilityHalf,
+    assignment_h2: &BaseAssignment,
+) -> Result<()> {
+    let matches_reserve =
+        |assignment: &BaseAssignment, room_id: &RoomId, reserve: &ResolvedRoleReserve| {
+            let actual = assignment.operators_in(room_id);
+            actual.len() == reserve.operators.len()
+                && actual
+                    .iter()
+                    .all(|operator| reserve.operators.contains(&operator.name))
+        };
+
+    for reserve in reserves {
+        let target_h1 = reserve_target_for_half(blueprint, reserve, h1)?;
+        let target_h2 = reserve_target_for_half(blueprint, reserve, h2)?;
+        let require_match =
+            |half: &str, target: Option<RoomId>, assignment: &BaseAssignment| -> Result<()> {
+                let target = target.ok_or_else(|| {
+                    Error::msg(format!(
+                        "rotation reserve {} missing {half} target before postprocess",
+                        reserve.reserve_id
+                    ))
+                })?;
+                if !matches_reserve(assignment, &target, reserve) {
+                    return Err(Error::msg(format!(
+                        "rotation reserve {} was overwritten in {half} room {} before postprocess",
+                        reserve.reserve_id, target.0
+                    )));
+                }
+                Ok(())
+            };
+
+        match reserve.reuse_policy {
+            ReserveReusePolicy::Once => {
+                if let Some(target) = target_h1 {
+                    require_match("H1", Some(target), assignment_h1)?;
+                } else {
+                    require_match("H2", target_h2, assignment_h2)?;
+                }
+            }
+            ReserveReusePolicy::EveryEligibleHalf => {
+                require_match("H1", target_h1, assignment_h1)?;
+                require_match("H2", target_h2, assignment_h2)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn gamma_trade_pool(
@@ -1917,7 +2145,8 @@ pub fn schedule_team_rotation(
         .collect();
 
     // 班次绑定（上2休1）来自统一 plan，不再硬编码具体体系。
-    let [h1, h2] = split_production_facilities(blueprint, &peak, &shift_binds)?;
+    let [h1, h2] =
+        split_production_facilities(blueprint, &peak, &shift_binds, &peak_plan.rotation_reserves)?;
 
     // 3) α/β 从 peak 编制按 H1/H2 切半（保留编排已认领的 meta 锚点）；γ 走贸易 role 替补。
     let alpha = production_half_from_peak(&peak, &h1);
@@ -1947,6 +2176,29 @@ pub fn schedule_team_rotation(
         &h2,
         &beta,
     );
+    let mut gamma_h2 = BaseAssignment::default();
+    let mut used_g2 = used_ab.clone();
+    let gamma_h2_context = gamma_production_coexist_seed(
+        blueprint,
+        &shared,
+        &peak,
+        &shift_binds,
+        &optional_dynamic_tags_by_producer,
+        &h2,
+        &h1,
+        &alpha,
+    );
+    place_rotation_reserves_for_halves(
+        blueprint,
+        operbox,
+        &peak_plan.rotation_reserves,
+        &h1,
+        &mut gamma_h1,
+        &mut used_g1,
+        &h2,
+        &mut gamma_h2,
+        &mut used_g2,
+    )?;
     assign_gamma_half(
         blueprint,
         instances,
@@ -1972,18 +2224,6 @@ pub fn schedule_team_rotation(
     )?
     .layout_snapshot();
 
-    let mut gamma_h2 = BaseAssignment::default();
-    let mut used_g2 = used_ab.clone();
-    let gamma_h2_context = gamma_production_coexist_seed(
-        blueprint,
-        &shared,
-        &peak,
-        &shift_binds,
-        &optional_dynamic_tags_by_producer,
-        &h2,
-        &h1,
-        &alpha,
-    );
     assign_gamma_half(
         blueprint,
         instances,
@@ -1996,6 +2236,14 @@ pub fn schedule_team_rotation(
         &h2,
         &mut gamma_h2,
         &mut used_g2,
+    )?;
+    validate_rotation_reserves_before_postprocess(
+        blueprint,
+        &peak_plan.rotation_reserves,
+        &h1,
+        &gamma_h1,
+        &h2,
+        &gamma_h2,
     )?;
     let t3 = Instant::now();
 
@@ -2766,8 +3014,10 @@ mod tests {
     use crate::instances::default_instances_path;
     use crate::layout::{assign_shift, blackkey_witch_same_trade_room};
     use crate::operbox::{
-        default_operbox_full_e2_path, default_operbox_gongsun_path, OperBoxEntry,
+        default_layout_243_path, default_operbox_full_e2_path, default_operbox_gongsun_path,
+        OperBoxEntry,
     };
+    use crate::trade::TradeOrderKind;
 
     #[test]
     fn sui_control_mood_uses_active_operator_state() {
@@ -3003,6 +3253,144 @@ mod tests {
         (blueprint, operbox, instances, table)
     }
 
+    fn user_243_fixtures() -> (BaseBlueprint, OperBox, OperatorInstances, SkillTable) {
+        let (_, operbox, instances, table) = fixtures();
+        let blueprint = BaseBlueprint::load(&default_layout_243_path().unwrap()).unwrap();
+        (blueprint, operbox, instances, table)
+    }
+
+    fn witch_rotation_reserve() -> ResolvedRoleReserve {
+        ResolvedRoleReserve {
+            system_id: "rosemary_perception".to_string(),
+            reserve_id: "trade_cohort_c".to_string(),
+            role_id: "witch".to_string(),
+            facility: FacilityKind::TradePost,
+            operators: vec!["巫恋".to_string(), "龙舌兰".to_string(), "柏喙".to_string()],
+            eligible_rooms: vec![RoomId::from("trade_1"), RoomId::from("trade_2")],
+            reuse_policy: ReserveReusePolicy::EveryEligibleHalf,
+            require_pre_split_halves: true,
+        }
+    }
+
+    #[test]
+    fn rotation_reserve_reuses_exact_operator_set_in_both_halves() {
+        let (blueprint, operbox, _, _) = fixtures();
+        let h1 = FacilityHalf {
+            trade: vec![RoomId::from("trade_1")],
+            ..FacilityHalf::default()
+        };
+        let h2 = FacilityHalf {
+            trade: vec![RoomId::from("trade_2")],
+            ..FacilityHalf::default()
+        };
+        let reserve = witch_rotation_reserve();
+        let mut assignment_h1 = BaseAssignment::default();
+        let mut assignment_h2 = BaseAssignment::default();
+        let mut used_h1 = HashSet::new();
+        let mut used_h2 = HashSet::new();
+
+        place_rotation_reserves_for_halves(
+            &blueprint,
+            &operbox,
+            std::slice::from_ref(&reserve),
+            &h1,
+            &mut assignment_h1,
+            &mut used_h1,
+            &h2,
+            &mut assignment_h2,
+            &mut used_h2,
+        )
+        .unwrap();
+        validate_rotation_reserves_before_postprocess(
+            &blueprint,
+            std::slice::from_ref(&reserve),
+            &h1,
+            &assignment_h1,
+            &h2,
+            &assignment_h2,
+        )
+        .unwrap();
+
+        for assignment in [&assignment_h1, &assignment_h2] {
+            let names: Vec<_> = assignment
+                .operators_in(&RoomId::from("trade_1"))
+                .iter()
+                .chain(assignment.operators_in(&RoomId::from("trade_2")).iter())
+                .map(|operator| operator.name.as_str())
+                .collect();
+            assert_eq!(names, vec!["巫恋", "龙舌兰", "柏喙"]);
+        }
+        assert_eq!(used_h1, used_h2);
+    }
+
+    #[test]
+    fn rotation_reserve_pre_postprocess_validation_rejects_overwrite() {
+        let (blueprint, operbox, _, _) = fixtures();
+        let h1 = FacilityHalf {
+            trade: vec![RoomId::from("trade_1")],
+            ..FacilityHalf::default()
+        };
+        let h2 = FacilityHalf {
+            trade: vec![RoomId::from("trade_2")],
+            ..FacilityHalf::default()
+        };
+        let reserve = witch_rotation_reserve();
+        let mut assignment_h1 = BaseAssignment::default();
+        let mut assignment_h2 = BaseAssignment::default();
+        place_rotation_reserves_for_halves(
+            &blueprint,
+            &operbox,
+            std::slice::from_ref(&reserve),
+            &h1,
+            &mut assignment_h1,
+            &mut HashSet::new(),
+            &h2,
+            &mut assignment_h2,
+            &mut HashSet::new(),
+        )
+        .unwrap();
+        assignment_h2.set_room(
+            "trade_2",
+            vec![AssignedOperator::new("被错误覆盖的干员", 2)],
+        );
+
+        let error = validate_rotation_reserves_before_postprocess(
+            &blueprint,
+            std::slice::from_ref(&reserve),
+            &h1,
+            &assignment_h1,
+            &h2,
+            &assignment_h2,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("overwritten in H2"));
+    }
+
+    #[test]
+    fn rotation_reserve_every_eligible_half_rejects_missing_target() {
+        let (blueprint, operbox, _, _) = fixtures();
+        let h1 = FacilityHalf {
+            trade: vec![RoomId::from("trade_1")],
+            ..FacilityHalf::default()
+        };
+        let h2 = FacilityHalf::default();
+        let reserve = witch_rotation_reserve();
+
+        let error = place_rotation_reserves_for_halves(
+            &blueprint,
+            &operbox,
+            std::slice::from_ref(&reserve),
+            &h1,
+            &mut BaseAssignment::default(),
+            &mut HashSet::new(),
+            &h2,
+            &mut BaseAssignment::default(),
+            &mut HashSet::new(),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("missing eligible H2 target"));
+    }
+
     fn assert_pinus_rotation(
         report: &TeamRotationReport,
         blueprint: &BaseBlueprint,
@@ -3094,6 +3482,105 @@ mod tests {
                     .iter()
                     .all(|name| room.operators.iter().any(|op| op.name == *name))
         })
+    }
+
+    fn assert_three_trade_cohort_plan(
+        report: &TeamRotationReport,
+        blueprint: &BaseBlueprint,
+    ) -> Vec<String> {
+        let selected = report
+            .peak_plan
+            .selected_rules
+            .iter()
+            .find(|selected| selected.rule_id == "rosemary_perception")
+            .expect("full Rosemary pack must select the Rosemary rule");
+        assert_eq!(
+            selected.conditional_pack_id.as_deref(),
+            Some("three_trade_cohorts")
+        );
+        let reserve = report
+            .peak_plan
+            .rotation_reserves
+            .iter()
+            .find(|reserve| reserve.reserve_id == "trade_cohort_c")
+            .expect("full Rosemary pack must resolve cohort C");
+        assert_eq!(reserve.reuse_policy, ReserveReusePolicy::EveryEligibleHalf);
+        assert_eq!(reserve.operators.len(), 3);
+        assert!(reserve.operators.iter().any(|name| name == "巫恋"));
+        assert!(reserve.operators.iter().any(|name| name == "龙舌兰"));
+        assert!(reserve
+            .operators
+            .iter()
+            .any(|name| name != "巫恋" && name != "龙舌兰"));
+
+        assert!(trade_room_contains(
+            &report.shifts[0].assignment,
+            blueprint,
+            &["但书", "伺夜", "贝洛内"]
+        ));
+        assert!(trade_room_contains(
+            &report.shifts[0].assignment,
+            blueprint,
+            &["可露希尔", "黑键"]
+        ));
+        let peak_names = report.shifts[0].assignment.operator_names();
+        assert!(reserve
+            .operators
+            .iter()
+            .all(|operator| !peak_names.contains(operator)));
+        reserve.operators.clone()
+    }
+
+    #[test]
+    fn team_rotation_full_e2_resolves_gamma_cohort_before_postprocess() {
+        let (blueprint, operbox, instances, table) = user_243_fixtures();
+        let report = schedule_team_rotation(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 20,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_three_trade_cohort_plan(&report, &blueprint);
+    }
+
+    #[test]
+    fn team_rotation_three_trade_cohorts_keep_unique_tailor_out_of_peak() {
+        let (blueprint, full, instances, table) = user_243_fixtures();
+        let operbox = full.excluding(&HashSet::from([
+            "卡夫卡".to_string(),
+            "折光".to_string(),
+            "明椒".to_string(),
+            "渡桥".to_string(),
+            "贝娜".to_string(),
+        ]));
+        let report = schedule_team_rotation(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 20,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let reserve = assert_three_trade_cohort_plan(&report, &blueprint);
+        let mut sorted_reserve = reserve.clone();
+        sorted_reserve.sort();
+        assert_eq!(
+            sorted_reserve,
+            vec!["巫恋".to_string(), "柏喙".to_string(), "龙舌兰".to_string()]
+        );
+        assert!(report
+            .peak_plan
+            .anchors
+            .iter()
+            .all(|anchor| { !reserve.iter().any(|name| name == &anchor.operator) }));
     }
 
     #[test]
@@ -3934,7 +4421,7 @@ mod tests {
 
     #[test]
     fn team_rotation_fiammetta_returns_peak_core_and_rests_replacement() {
-        let (blueprint, operbox, instances, table) = fixtures();
+        let (blueprint, operbox, instances, table) = user_243_fixtures();
         let report = schedule_team_rotation(
             &blueprint,
             &operbox,
@@ -3956,6 +4443,23 @@ mod tests {
 
         let (shift, action) = actions[0];
         assert_eq!(action.target, "但书");
+        let peak_anchor = report
+            .peak_plan
+            .anchors
+            .iter()
+            .find(|anchor| anchor.operator == action.target)
+            .expect("但书必须是 peak required anchor");
+        assert_eq!(peak_anchor.room_id.as_ref(), Some(&action.room_id));
+        let source_room = blueprint
+            .room(&action.room_id)
+            .expect("菲亚回岗原房必须仍在 layout");
+        assert_eq!(source_room.kind, FacilityKind::TradePost);
+        assert!(matches!(
+            source_room.product,
+            Some(RoomProduct::Trade {
+                order: TradeOrderKind::Gold
+            })
+        ));
         assert!(
             shift
                 .assignment
@@ -3976,11 +4480,30 @@ mod tests {
             Some(shift.resting_team),
             "菲亚回岗应是休息队主力的显式例外"
         );
+        for shift in &report.shifts {
+            let names: Vec<_> = shift
+                .assignment
+                .rooms
+                .iter()
+                .flat_map(|room| room.operators.iter().map(|operator| &operator.name))
+                .collect();
+            assert_eq!(
+                names.len(),
+                names.iter().copied().collect::<HashSet<_>>().len(),
+                "shift {} 不得因菲亚回岗产生重复干员",
+                shift.index + 1
+            );
+            assert!(
+                !blackkey_witch_same_trade_room(&shift.assignment, &blueprint),
+                "shift {} 菲亚后仍必须保持黑键与巫恋禁同房",
+                shift.index + 1
+            );
+        }
     }
 
     #[test]
     fn team_rotation_without_fiammetta_does_not_create_return_action() {
-        let (blueprint, operbox, instances, table) = fixtures();
+        let (blueprint, operbox, instances, table) = user_243_fixtures();
         let no_fiammetta = operbox.excluding(&HashSet::from(["菲亚梅塔".to_string()]));
         let report = schedule_team_rotation(
             &blueprint,
@@ -5043,7 +5566,7 @@ mod tests {
             off_shifts: 1,
         };
 
-        let [h1, h2] = split_production_facilities(&blueprint, &peak, &[bind]).unwrap();
+        let [h1, h2] = split_production_facilities(&blueprint, &peak, &[bind], &[]).unwrap();
         let bound = [
             RoomId::from("manu_1"),
             RoomId::from("manu_2"),
@@ -5429,7 +5952,7 @@ mod tests {
             on_shifts: 2,
             off_shifts: 1,
         };
-        let error = split_production_facilities(&blueprint, &peak, &[bind]).unwrap_err();
+        let error = split_production_facilities(&blueprint, &peak, &[bind], &[]).unwrap_err();
         assert!(error.to_string().contains("missing from peak"));
     }
 
@@ -5526,14 +6049,7 @@ mod tests {
 
     #[test]
     fn continuous_trade_core_uses_plan_for_fiammetta_return() {
-        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let instances =
-            crate::instances::OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
-        let table = crate::skill_table::SkillTable::load(
-            &crate::skill_table::default_skill_table_path().unwrap(),
-        )
-        .unwrap();
-        let full = OperBox::load(&default_operbox_full_e2_path().unwrap()).unwrap();
+        let (blueprint, full, instances, table) = user_243_fixtures();
         let options = AssignBaseOptions::default();
 
         let with_fiammetta =

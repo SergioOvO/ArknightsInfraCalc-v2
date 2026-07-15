@@ -20,7 +20,10 @@ pub use power::{
     search_power_assignment, search_power_top, PowerEfficiencyBreakdown, PowerSearchHit,
     PowerSearchOptions, PowerSearchReport, PowerStationAssignment, VIRTUAL_POWER_MANU_EQUIV,
 };
-pub use role_pick::{hit_docus_syracusa_shortcut, pick_docus_trade_hit, pick_trade_role_hit};
+pub use role_pick::{
+    hit_docus_syracusa_shortcut, pick_docus_trade_hit, pick_trade_role_hit,
+    pick_trade_role_hit_requiring,
+};
 pub use trade::{
     hit_blackkey_closure_shortcut, hit_closure_shortcut, hit_docus_solo_shortcut,
     hit_witch_shortcut, search_trade_triples, search_trade_triples_filtered, SearchTripleFilter,

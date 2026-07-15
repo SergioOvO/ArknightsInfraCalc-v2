@@ -16,6 +16,8 @@
 
 八幡海铃和焰狐龙梓兰不生产感知，不能单独满足 50 感知门槛；二者决定公招刷新/黄票路径的收益取向，而不是迷迭香体系的硬核心。
 
+双贸易站中体系已启动，且但书、可露希尔和完整龙巫均可形成时，基础贸易排班必须容纳 A=但书核心站、B=可露希尔+黑键站、C=巫恋+龙舌兰+合法裁缝三组；peak 为 A+B，γ 复用 C，在 `apply_fiammetta_return` 前形成 `A+B → B+C → C+A`。A/B 还必须在全部 exact bind 落位后的自然 H1/H2 打包中可分；若不可分或需要 schedule 事后搬动分量，计划编译器事务性降级为基础 alternative。菲亚后处理允许但书回到 peak 原房并换下一名当班人员，因此最终 assignment / MAA 不要求继续保持精确三组。该规则不固定房号或队伍标签，也不把黑键—可露希尔扩张为其他布局/降级态的全局固定组合。
+
 ---
 
 ## 2. 布局与路径选择
@@ -124,7 +126,7 @@
 ### 4.4 效率散件
 
 - 迷迭香同房队友由制造搜索决定，不再固定阿罗玛+砾。
-- 黑键同房队友由贸易搜索决定；一贸龙门币布局先预留可露希尔，多贸龙门币布局先预留但书，黑键、龙舌兰等在剩余容量中按约束与最终效率竞争。
+- 黑键同房队友由贸易搜索决定；一贸龙门币布局先预留可露希尔，多贸龙门币布局先预留但书。双贸易完整三 cohort 条件成立时，声明式 packing 把黑键与可露希尔共同解析为 B，并与但书 A 分房；B 的第三人仍由正式搜索决定。缺可露、缺完整龙巫或体系未启动时不套用该完整 packing。
 - 二电公招刷新/黄票路径允许巫恋+黑键时，第三人优先龙舌兰或可露希尔。
 - 任何散件都不能覆盖两个硬核心，也不能绕过 §2.3 的巫恋例外条件。
 
@@ -204,6 +206,7 @@
 - 核心只绑定设施类型，不绑定固定房间编号。
 - 迷迭香与清流、温蒂不得同制造站。
 - 黑键通常不得与巫恋同站；二电公招刷新/黄票例外必须由路径和布局同时确认。
+- 双贸易完整三 cohort alternative 中，但书 A 与可露希尔+黑键 B 必须是两个实际贸易房；禁止黑键 first-fit 占用 A 的队友容量。基础 rotation 中 C 在 A/B 各自休息班复用同一合法龙巫组；菲亚后处理可合法替换最终班次中的一名成员。
 - 爱丽丝和车尔尼必须都实际进入宿舍，才能称为满配；同一宿舍不是硬前提，宿舍等级和实际进驻才是数值前提。
 
 ---
@@ -216,6 +219,7 @@
 | `anchors` | 核心、路径成员与实际 producer 的具体干员、设施和 room id；这是进编保证 |
 | `constraints` | 普通路径禁止迷迭香与清流/温蒂同房、黑键与巫恋同站；显式二电例外不生成后者 |
 | `shift_binds` | 只绑定核心和实际感知 producer；八幡海铃、焰狐龙梓兰、琴柳等非 producer 路径收益位不误入 bind |
+| `rotation_reserves` | 保存由正式 role / solver 解析、但不进入 peak 的实际 cohort；`every_eligible_half + require_pre_split_halves` 先在 plan 阶段验证 H1/H2 各有自然目标，失败则整包降级；已提交 reserve 在菲亚后处理前复用同一组成员，基础 fill 覆盖才由 rotation 报错，不保护最终后处理结果 |
 
 `shift_bind` 只约束已经由 anchor 进编的成员，不能代替 admission；`bind_roles` 只从本 alternative 的实际 role 结果生成绑定。
 
@@ -228,10 +232,10 @@
 | `select` | 通用规则编译器枚举有限 alternatives；核心与路径成员先落临时 assignment，再由 `resolve_base` 读取实际感知，达到 50 才提交 |
 | `plan` | `--prefer rosemary_perception=<alternative>` 优先尝试指定路径，不可行时按数据顺序回退；未知值报错。Rosemary active 时只关闭纯烟火；priority 18 的独立声明式感知附带 rule 在实际感知 ≥50、重岳+令+乌有均可落位时才激活，并通过 plan exclusion 防止桑葚被普通办公室补位重新引入 |
 | `execute` | 只消费已解析 anchors；旧 `system_integrity` Rosemary evaluator/apply 路径已删除 |
-| `fill` | 迷迭香与黑键房只固定核心，队友由正式制造/贸易搜索补齐；条件互斥读取 plan constraints |
+| `fill` | 完整双贸易态由声明式 role packing 先解析 A/B：但书与可露希尔+黑键分房；各房剩余队友再由正式搜索补齐。降级态只消费实际可行 anchors；条件互斥读取 plan constraints |
 | `resolve` | control、office、dorm 和 global atom 汇总一份共享感知，核心各自读取；琴柳不计为感知 producer |
-| `rotation` | 核心与实际 producer 同队上 2 休 1；Office 走通用轮换补位，Dorm 等非生产 anchor 按 cohort 回原房，不再被 shared 三班钉死 |
-| `export` | MAA 忠实导出三班最终 assignment，不在导出层重判路径 |
+| `rotation` | 核心与实际 producer 同队上 2 休 1；完整双贸易态先消费 peak A+B，并复用 γ 龙巫 C 形成基础 A+B/B+C/C+A；随后 `apply_fiammetta_return` 可让但书回到原房并换下一名当班人员。Office 走通用轮换补位，Dorm 等非生产 anchor 按 cohort 回原房，不再被 shared 三班钉死 |
+| `export` | MAA 忠实导出菲亚后处理后的最终工作 assignment 与 Fiammetta action；具体宿舍操作由 MAA 自动处理，不在导出层恢复或重判基础三组 |
 
 ---
 
@@ -275,9 +279,12 @@
 | producer | 令心情 <12 | 可作为 optional producer，优先级低于正常路径 |
 | 贸易约束 | 三电，或二电但未选择公招刷新/黄票路径 | 黑键与巫恋不得同站 |
 | 贸易约束 | 二电公招刷新/黄票路径、感知已达 50 但处于低档 | 允许巫恋+黑键，第三人优先龙舌兰/可露希尔 |
+| 贸易 packing | 双贸易、Rosemary active、但书/可露/完整龙巫均可形成 | peak 同时形成 A=但书效率站与 B=可露+黑键搜索站；黑键不占 A；γ 复用合法 C |
+| 贸易 packing 降级 | 缺可露、缺完整龙巫或 Rosemary inactive | 只关闭对应 cohort/packing，不伪造完整 A/B/C |
 | 机制结算 | 75 感知 | 黑键输出按 floor 得到 37% |
-| 轮换 | 完整 peak | 核心和四名 producer 的同班关系、核心上 2 休 1 |
-| 导出 | MAA 三班 | 房间成员和工作/休息状态忠实反映 plan |
+| 轮换 | 完整双贸易 peak | 核心和实际 producer 的同班关系、核心上 2 休 1；菲亚前基础贸易三组逐班为 A+B、B+C、C+A |
+| 菲亚后处理 | 但书为当前最高优先级且存在合法替换位 | 但书回到 peak 原房，换下一名当班人员；最终班次不再要求精确 A/B/C 或 C 两班 exact |
+| 导出 | MAA 三班 | 工作房成员忠实反映最终 assignment，并输出 Fiammetta action；displaced 的宿舍操作由 MAA 自动处理 |
 
 ---
 

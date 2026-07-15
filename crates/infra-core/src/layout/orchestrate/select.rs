@@ -1,6 +1,6 @@
 //! System 选型：产出 `AssignmentPlan`（不调 solve）。
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::instances::{default_instances_path, OperatorInstances};
 use crate::layout::assignment::BaseAssignment;
 use crate::layout::blueprint::BaseBlueprint;
@@ -13,7 +13,7 @@ use crate::skill_table::{default_skill_table_path, SkillTable};
 use super::plan::{registry_as_activated, AssignmentPlan};
 use super::rules::{
     compile_rules, default_rule_catalog_path, load_rule_catalog, validate_rule_preferences,
-    RuleCompileContext,
+    RuleCatalog, RuleCompileContext,
 };
 
 /// 根据 operbox / 蓝图 / 班次模式 / 种子编制构建编排计划。
@@ -60,9 +60,49 @@ pub fn build_plan_with_runtime(
 
     let catalog = load_rule_catalog(&default_rule_catalog_path()?)?;
     validate_rule_preferences(&catalog, preferences)?;
+    let mut disabled_conditional_packs = std::collections::HashSet::new();
+    loop {
+        let (plan, scratch) = compile_plan_once(
+            &catalog,
+            blueprint,
+            operbox,
+            instances,
+            table,
+            mood,
+            preferences,
+            mode,
+            seed,
+            skip_system_ids,
+            &disabled_conditional_packs,
+        )?;
+        let Some(pack_key) = pre_split_pack_violation(blueprint, &scratch, &plan)? else {
+            return Ok(plan);
+        };
+        if !disabled_conditional_packs.insert(pack_key.clone()) {
+            return Err(Error::msg(format!(
+                "conditional pack {pack_key} remained rotation-infeasible after downgrade"
+            )));
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compile_plan_once(
+    catalog: &RuleCatalog,
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+    mood: f64,
+    preferences: &std::collections::HashMap<String, String>,
+    mode: AssignShiftMode,
+    seed: &BaseAssignment,
+    skip_system_ids: &std::collections::HashSet<String>,
+    disabled_conditional_packs: &std::collections::HashSet<String>,
+) -> Result<(AssignmentPlan, BaseAssignment)> {
     // priority >= 19 是用户确认的硬/主要体系；先于 legacy registry 编译。
     let mut compiled = compile_rules(
-        &catalog,
+        catalog,
         &RuleCompileContext {
             blueprint,
             operbox,
@@ -75,6 +115,7 @@ pub fn build_plan_with_runtime(
         seed,
         &std::collections::HashSet::new(),
         skip_system_ids,
+        disabled_conditional_packs,
         19..=i32::MAX,
     )?;
     let mut registry_skip = skip_system_ids.clone();
@@ -99,7 +140,7 @@ pub fn build_plan_with_runtime(
     }
     // priority <= 18 的软候选只读取主要体系和 registry 都落位后的真实空位。
     let late = compile_rules(
-        &catalog,
+        catalog,
         &RuleCompileContext {
             blueprint,
             operbox,
@@ -112,8 +153,10 @@ pub fn build_plan_with_runtime(
         &scratch,
         &inherited_excluded,
         &registry_skip,
+        disabled_conditional_packs,
         i32::MIN..=18,
     )?;
+    let final_scratch = late.scratch.clone();
     compiled.activated.extend(late.activated);
     compiled.selected.extend(late.selected);
     compiled.anchors.extend(late.anchors);
@@ -124,6 +167,7 @@ pub fn build_plan_with_runtime(
         .active_dependencies
         .extend(late.active_dependencies);
     compiled.continuous_roles.extend(late.continuous_roles);
+    compiled.rotation_reserves.extend(late.rotation_reserves);
     let mut activated: Vec<_> = registry_claims.iter().map(registry_as_activated).collect();
     activated.extend(compiled.activated);
     let control_candidate_requirements = registry_claims
@@ -140,7 +184,7 @@ pub fn build_plan_with_runtime(
         })
         .collect();
 
-    Ok(AssignmentPlan {
+    let plan = AssignmentPlan {
         mode,
         activated,
         registry_claims,
@@ -153,6 +197,64 @@ pub fn build_plan_with_runtime(
         shift_binds: compiled.shift_binds,
         active_dependencies: compiled.active_dependencies,
         continuous_roles: compiled.continuous_roles,
+        rotation_reserves: compiled.rotation_reserves,
         control_candidate_requirements,
-    })
+    };
+    Ok((plan, final_scratch))
+}
+
+fn pre_split_pack_violation(
+    blueprint: &BaseBlueprint,
+    scratch: &BaseAssignment,
+    plan: &AssignmentPlan,
+) -> Result<Option<String>> {
+    let guarded: Vec<_> = plan
+        .rotation_reserves
+        .iter()
+        .filter(|reserve| {
+            reserve.require_pre_split_halves
+                && reserve.reuse_policy == super::plan::ReserveReusePolicy::EveryEligibleHalf
+        })
+        .collect();
+    if guarded.is_empty() {
+        return Ok(None);
+    }
+    let halves = super::pack_production_components(
+        blueprint,
+        scratch,
+        plan.shift_binds
+            .iter()
+            .map(|bind| bind.operators.as_slice()),
+    )
+    .map_err(Error::msg)?;
+    for reserve in guarded {
+        let has_target = |components: &[Vec<crate::layout::RoomId>]| {
+            components.iter().any(|component| {
+                component
+                    .iter()
+                    .any(|room| reserve.eligible_rooms.contains(room))
+            })
+        };
+        if has_target(&halves[0]) && has_target(&halves[1]) {
+            continue;
+        }
+        let selected = plan
+            .selected_rules
+            .iter()
+            .find(|selected| selected.rule_id == reserve.system_id)
+            .ok_or_else(|| {
+                Error::msg(format!(
+                    "rotation reserve {} has no selected rule owner {}",
+                    reserve.reserve_id, reserve.system_id
+                ))
+            })?;
+        let pack_id = selected.conditional_pack_id.as_deref().ok_or_else(|| {
+            Error::msg(format!(
+                "guarded rotation reserve {} is not owned by a conditional pack",
+                reserve.reserve_id
+            ))
+        })?;
+        return Ok(Some(format!("{}:{pack_id}", reserve.system_id)));
+    }
+    Ok(None)
 }

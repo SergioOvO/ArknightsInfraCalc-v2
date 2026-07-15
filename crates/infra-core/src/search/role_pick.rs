@@ -39,6 +39,22 @@ pub fn pick_trade_role_hit(
     used: &HashSet<String>,
     top_k: usize,
 ) -> Result<TradeSearchHit> {
+    pick_trade_role_hit_requiring(role_id, pool, table, search_opts, layout, used, top_k, &[])
+}
+
+/// 在 role 自身核心约束之外，再要求包含一组已解析成员；用于轮换 reserve
+/// 在不同目标房复用同一个实际 cohort。
+#[allow(clippy::too_many_arguments)]
+pub fn pick_trade_role_hit_requiring(
+    role_id: &str,
+    pool: &TradePool,
+    table: &SkillTable,
+    search_opts: TradeSearchOptions,
+    layout: &LayoutContext,
+    used: &HashSet<String>,
+    top_k: usize,
+    additional_required: &[String],
+) -> Result<TradeSearchHit> {
     let sub = filter_trade_pool(pool, used);
     if sub.entries.len() < 3 {
         return Err(crate::error::Error::msg(format!(
@@ -77,7 +93,7 @@ pub fn pick_trade_role_hit(
                     table,
                     &opts,
                     Some(hit_filter),
-                    step_must_include_names(step),
+                    step_must_include_names(step, additional_required),
                     used,
                 ) {
                     return Ok(hit);
@@ -95,7 +111,7 @@ pub fn pick_trade_role_hit(
                     table,
                     &opts,
                     Some(hit_filter),
-                    step_must_include_names(step),
+                    step_must_include_names(step, additional_required),
                     used,
                 ) {
                     return Ok(hit);
@@ -113,7 +129,7 @@ pub fn pick_trade_role_hit(
                     table,
                     &opts,
                     Some(hit_filter),
-                    step_must_include_names(step),
+                    step_must_include_names(step, additional_required),
                     used,
                 ) {
                     return Ok(hit);
@@ -125,7 +141,7 @@ pub fn pick_trade_role_hit(
                     table,
                     &opts,
                     None,
-                    step_must_include_names(step),
+                    step_must_include_names(step, additional_required),
                     used,
                 ) {
                     return Ok(hit);
@@ -182,8 +198,11 @@ fn pick_with_step_filter(
     pick_disjoint_trade_hit(report.best, report.top, used)
 }
 
-fn step_must_include_names(step: &crate::trade::segment::RolePickStep) -> Vec<String> {
-    let mut names = Vec::new();
+fn step_must_include_names(
+    step: &crate::trade::segment::RolePickStep,
+    additional_required: &[String],
+) -> Vec<String> {
+    let mut names = additional_required.to_vec();
     if let Some(name) = step.must_include_name.as_ref() {
         names.push(name.clone());
     }

@@ -78,7 +78,7 @@ operbox + blueprint
 
 同类型多房间：按蓝图 `rooms` 数组顺序或稳定 `room_id` 字典序。
 
-**贸易 core priority**：只看蓝图中的实际贸易站数量与实际订单。恰有 1 间贸易站且为龙门币订单时，可露希尔是 required core；至少 2 间贸易站且任一为龙门币订单时，但书是 required core；全部贸易站均为源石订单时两者都不上。required core 解析到实际龙门币站后，再在该房从所有可用干员中按 `final_efficiency` 选择最高效率队友。八幡海铃、伺夜、贝洛内都不是编排硬核心，也不通过 registry 强制进编：伺夜、贝洛内可上 0/1/2 人且不预设同房，八幡海铃在没有叙拉古贸易成员时「家族认可」收益为 0。`gsl_docus_solo` / `gsl_docus_syracusa` 只在求解实际同房候选时提供机制结算，不参与总 core 顺序或队友候选优先顺序。迷迭香体系激活时，黑键作为 required trade anchor 保证进编。自动龙巫必须包含巫恋 + 龙舌兰 + 裁缝 β/α，普通白板只保留单站结算兼容，不进入自动 role。
+**贸易 core priority**：只看蓝图中的实际贸易站数量与实际订单。恰有 1 间贸易站且为龙门币订单时，可露希尔是 required core；至少 2 间贸易站且任一为龙门币订单时，但书是首个 required core；全部贸易站均为源石订单时两者都不上。“首个”不表示排斥其他 cohort：双贸易站中 Rosemary/黑键体系已激活，且可露希尔与完整龙巫都可形成时，Plan 必须同时保留 A=但书核心站、B=可露希尔+黑键站，并把 C=巫恋+龙舌兰+合法裁缝留给 γ 替补；A/B 队友仍由各房正式 `final_efficiency` 搜索决定。八幡海铃、伺夜、贝洛内都不是编排硬核心，也不通过 registry 强制进编：伺夜、贝洛内可上 0/1/2 人且不预设同房，full-E2 下 A 期望自然选中伺夜+贝洛内。`gsl_docus_solo` / `gsl_docus_syracusa` 只在求解实际同房候选时提供机制结算，不参与总 core 顺序或队友候选优先顺序。缺可露、缺完整龙巫或 Rosemary 未激活时分别按可行路径降级，不伪造完整三 cohort。自动龙巫的合法性仍要求巫恋 + 龙舌兰 + 裁缝 β/α，普通白板只保留单站结算兼容，不进入自动 role。
 
 **已确认缺口**：八幡海铃、戴菲恩、凛御银灰应共用一次 control + trade 联合枚举；戴菲恩不得通过 `vina_lungmen` / `meta_vina` 固定推王组，凛御银灰也不得借用灵知精密计算。当前代码仍是 Haru 专用多前缀和 Vina legacy role，尚未符合该口径。精确公式、删除清单和 A+ 交接见 [CONTROL_CENTER_ASSIGNMENT.md](CONTROL_CENTER_ASSIGNMENT.md) 与 [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md](TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)。
 

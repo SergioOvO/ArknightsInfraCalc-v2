@@ -468,7 +468,7 @@ async function runTeamRotation({ cliPath, repoRoot, layout, operbox, maaOut, tit
 ## 9. 限制（告知产品 / UI）
 
 - 干员名必须为**客户端语言**（国服中文）。
-- 不建模完整心情曲线和宿管恢复。当前每个 ABC 周期只安排一次菲亚主力回岗，并优先让被换下者进入宿舍；布局动态排序、龙巫成组服务和跨周期就绪模拟尚未实现，详见 [Fiammetta.md](Fiammetta.md)。
+- 不建模完整心情曲线和宿管恢复。当前每个 ABC 周期只安排一次菲亚主力回岗；被换下者的具体宿舍操作由 MAA 自动处理，本项目不保证写入某个宿舍槽位。基础龙巫 reserve 已由 rotation 构造，但菲亚可改写最终房间成员。布局动态排序和跨周期就绪模拟尚未实现，详见 [Fiammetta.md](Fiammetta.md)。
 - 会客室若 solver 未分配人，导出为 `autofill: true`。
 - 首次 243 全精2 operbox 排班约 **5–15 秒**（CPU 搜索）；前端应加 loading。
 

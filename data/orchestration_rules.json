@@ -89,6 +89,26 @@
             { "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 2 },
             { "kind": "resource_at_least", "resource": "perception", "value": 50 }
           ],
+          "conditional_packs": [
+            {
+              "id": "three_trade_cohorts",
+              "gates": [
+                { "kind": "facility_count", "facility": "trade_post", "min": 2, "max": 2 },
+                { "kind": "trade_order_count", "order": "gold", "min": 2, "max": 2 },
+                { "kind": "operator_available", "name": "但书", "elite": 2 },
+                { "kind": "operator_available", "name": "可露希尔", "elite": 2 },
+                { "kind": "trade_role_feasible", "role": "witch", "order": "gold", "all_matching_rooms": true, "reserve_as": "trade_cohort_c", "reuse_policy": "every_eligible_half", "require_pre_split_halves": true }
+              ],
+              "replace_roles": ["blackkey"],
+              "roles": [
+                { "id": "blackkey", "facility": "trade_post", "trade_order": "gold", "candidates": [{ "name": "黑键", "elite": 2 }], "room_group": "rosemary_trade_b" },
+                { "id": "closure", "facility": "trade_post", "trade_order": "gold", "candidates": [{ "name": "可露希尔", "elite": 2 }], "room_group": "rosemary_trade_b" }
+              ],
+              "relations": [
+                { "kind": "forbid_same_room", "a": "但书", "b": "可露希尔" }
+              ]
+            }
+          ],
           "roles": [
             { "id": "rosemary", "facility": "factory", "candidates": [{ "name": "迷迭香", "elite": 2 }] },
             { "id": "blackkey", "facility": "trade_post", "candidates": [{ "name": "黑键", "elite": 2 }] },
@@ -114,6 +134,26 @@
           "gates": [
             { "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 3 },
             { "kind": "resource_at_least", "resource": "perception", "value": 50 }
+          ],
+          "conditional_packs": [
+            {
+              "id": "three_trade_cohorts",
+              "gates": [
+                { "kind": "facility_count", "facility": "trade_post", "min": 2, "max": 2 },
+                { "kind": "trade_order_count", "order": "gold", "min": 2, "max": 2 },
+                { "kind": "operator_available", "name": "但书", "elite": 2 },
+                { "kind": "operator_available", "name": "可露希尔", "elite": 2 },
+                { "kind": "trade_role_feasible", "role": "witch", "order": "gold", "all_matching_rooms": true, "reserve_as": "trade_cohort_c", "reuse_policy": "every_eligible_half", "require_pre_split_halves": true }
+              ],
+              "replace_roles": ["blackkey"],
+              "roles": [
+                { "id": "blackkey", "facility": "trade_post", "trade_order": "gold", "candidates": [{ "name": "黑键", "elite": 2 }], "room_group": "rosemary_trade_b" },
+                { "id": "closure", "facility": "trade_post", "trade_order": "gold", "candidates": [{ "name": "可露希尔", "elite": 2 }], "room_group": "rosemary_trade_b" }
+              ],
+              "relations": [
+                { "kind": "forbid_same_room", "a": "但书", "b": "可露希尔" }
+              ]
+            }
           ],
           "roles": [
             { "id": "rosemary", "facility": "factory", "candidates": [{ "name": "迷迭香", "elite": 2 }] },
@@ -142,6 +182,26 @@
             { "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 3 },
             { "kind": "resource_at_least", "resource": "perception", "value": 50 }
           ],
+          "conditional_packs": [
+            {
+              "id": "three_trade_cohorts",
+              "gates": [
+                { "kind": "facility_count", "facility": "trade_post", "min": 2, "max": 2 },
+                { "kind": "trade_order_count", "order": "gold", "min": 2, "max": 2 },
+                { "kind": "operator_available", "name": "但书", "elite": 2 },
+                { "kind": "operator_available", "name": "可露希尔", "elite": 2 },
+                { "kind": "trade_role_feasible", "role": "witch", "order": "gold", "all_matching_rooms": true, "reserve_as": "trade_cohort_c", "reuse_policy": "every_eligible_half", "require_pre_split_halves": true }
+              ],
+              "replace_roles": ["blackkey"],
+              "roles": [
+                { "id": "blackkey", "facility": "trade_post", "trade_order": "gold", "candidates": [{ "name": "黑键", "elite": 2 }], "room_group": "rosemary_trade_b" },
+                { "id": "closure", "facility": "trade_post", "trade_order": "gold", "candidates": [{ "name": "可露希尔", "elite": 2 }], "room_group": "rosemary_trade_b" }
+              ],
+              "relations": [
+                { "kind": "forbid_same_room", "a": "但书", "b": "可露希尔" }
+              ]
+            }
+          ],
           "roles": [
             { "id": "rosemary", "facility": "factory", "candidates": [{ "name": "迷迭香", "elite": 2 }] },
             { "id": "blackkey", "facility": "trade_post", "candidates": [{ "name": "黑键", "elite": 2 }] },
@@ -160,6 +220,26 @@
           "gates": [
             { "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 3 },
             { "kind": "resource_at_least", "resource": "perception", "value": 50 }
+          ],
+          "conditional_packs": [
+            {
+              "id": "three_trade_cohorts",
+              "gates": [
+                { "kind": "facility_count", "facility": "trade_post", "min": 2, "max": 2 },
+                { "kind": "trade_order_count", "order": "gold", "min": 2, "max": 2 },
+                { "kind": "operator_available", "name": "但书", "elite": 2 },
+                { "kind": "operator_available", "name": "可露希尔", "elite": 2 },
+                { "kind": "trade_role_feasible", "role": "witch", "order": "gold", "all_matching_rooms": true, "reserve_as": "trade_cohort_c", "reuse_policy": "every_eligible_half", "require_pre_split_halves": true }
+              ],
+              "replace_roles": ["blackkey"],
+              "roles": [
+                { "id": "blackkey", "facility": "trade_post", "trade_order": "gold", "candidates": [{ "name": "黑键", "elite": 2 }], "room_group": "rosemary_trade_b" },
+                { "id": "closure", "facility": "trade_post", "trade_order": "gold", "candidates": [{ "name": "可露希尔", "elite": 2 }], "room_group": "rosemary_trade_b" }
+              ],
+              "relations": [
+                { "kind": "forbid_same_room", "a": "但书", "b": "可露希尔" }
+              ]
+            }
           ],
           "roles": [
             { "id": "rosemary", "facility": "factory", "candidates": [{ "name": "迷迭香", "elite": 2 }] },
