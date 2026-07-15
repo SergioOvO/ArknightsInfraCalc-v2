@@ -106,6 +106,19 @@
 
 当不变量已有唯一责任边界、冲突旧路径已删除、实际 changed paths 全部在 scope 内、定向回归与要求的真实入口已有证据、剩余发现已 deferred 时，必须停止扩张并进入审阅。新抽象没有第二个当前真实用例时默认不引入。
 
+### 2.4 外部 Agent 实践研究与本项目职责
+
+当用户要求搜索最新 Agent / Codex / Claude Code 使用经验、对比本项目工作流或设计 Agent 工程改进时，可在 `$HOME/AgentDocs` 使用项目 Agent `workflow-researcher` 与 Skill `refresh-agent-workflow` 进行只读研究。外部研究资产只负责当前一手来源、跨项目比较和候选建议，不是本仓库的流程真源，也不能自动修改本项目。
+
+本项目始终保留并维护自己的责任边界：
+
+- **主 Agent**：理解用户目标、选择任务模式、裁决改动半径、处理业务语义升级、审阅真实 diff 与证据，并承担最终完成判断。
+- **项目 Skills**：`arknights-maintenance`、`arknights-system-audit`、`arknights-evidence` 负责本仓库特有的维护、体系审计和验证流程。
+- **项目 subagent**：explorer / extractor / reviewer 只执行有边界的调查、提取或审阅；发现问题不等于获得修改授权，subagent 的总结不能代替主 Agent 检查。
+- **确定性工具**：`scripts/codex/` 负责证据、失败集合、文档影响和 scope 的机械检查，不裁决领域语义。
+
+采用外部研究建议时，必须作为独立的 workflow / quality 写入单元重新声明 `change_scope`、`docs_impact`、验证和明确 deferred；不能借普通维护 bug 顺手导入新框架、复制整套 Agent 市场或覆盖当前领域规则。外部 AgentDocs 不可用时，主 Agent应报告来源缺口并按本仓库现有规则继续，不得让外部依赖阻塞正常维护。
+
 ## 3. 硬边界
 
 | 层 | 规则 |
