@@ -15,7 +15,7 @@ domain_route = "对应体系的当前领域 Markdown"
 
 [[rules]]
 id = "layout-assignment"
-globs = ["crates/infra-core/src/layout/assign*", "crates/infra-core/src/layout/resolve.rs"]
+globs = ["crates/infra-core/src/layout/assign*", "crates/infra-core/src/layout/resolve.rs", "crates/infra-core/src/layout/blueprint.rs"]
 required_check = ["docs/BASE_ASSIGNMENT.md", "docs/QUALITY_AND_AUDIT.md"]
 generated_check = ["markdown-links"]
 
