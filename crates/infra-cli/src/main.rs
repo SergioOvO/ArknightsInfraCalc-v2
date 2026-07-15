@@ -76,7 +76,7 @@ fn print_usage() {
     eprintln!("  infra-cli advice --operbox <path.json> [--rules <path>] [--json] [--pretty]");
     eprintln!("  infra-cli verify --case <case_id>");
     eprintln!("  infra-cli verify --all");
-    eprintln!("  infra-cli pool --trade [--manufacture] [--roster <path>] [--operbox <path>] [-o <file.csv>] [--text]");
+    eprintln!("  infra-cli pool [--trade] [--manufacture] [--roster <path>] [--operbox <path>] [-o <file.csv>] [--text]");
     eprintln!("  infra-cli search trade [--roster <path>] [--operbox <path>] [--top <n>] [-o <file.csv>] [--text|--json]");
     eprintln!("  infra-cli bench --operbox <path> [--recipe gold|battle_record|originium] [--top <n>] [-o <file.csv>] [--text]");
     eprintln!("      (default manufacture: 4 lines = 2 gold + 2 battle_record; --recipe = single-line debug)");
@@ -88,6 +88,7 @@ fn print_usage() {
     eprintln!(
         "  infra-cli layout eval --layout <path> --operbox <path> --assignment <path> [--text]"
     );
+    eprintln!("  infra-cli layout team-rotation --layout <path> --operbox <path> [--top <n>] [--output-dir <dir>] [--maa-out <file.json>] [--maa-title <title>] [-o <file.csv>] [--text|--json]");
     eprintln!("  infra-cli profile layout-full [--layout <path>] [--operbox <path>] [--top <n>] [--runs <n>] [--label <name>]");
     eprintln!("  infra-cli profile analyze-compare [--layout <path>] [--operbox <path>] [--schedule <path>] [--runs <n>]");
     eprintln!("  infra-cli trade yield <fixture> [--level <n>] [--shift <hours>] [-o <file.csv>] [--text]");

@@ -66,7 +66,7 @@ operbox / roster + operator_instances + skill_table
 ArknightsInfraCalc-v2/
 ├── Cargo.toml              workspace：infra-core + infra-cli
 ├── README.md
-├── AGENTS.md               Cursor / 新会话首读（链到本文）
+├── AGENTS.md               Agent / 新会话首读（链到本文）
 ├── docs/
 │   ├── INDEX.md            文档总入口：首读、TODO、归档、任务路由
 │   ├── PROJECT_MAP.md      ← 本文：当前架构地图
@@ -85,8 +85,8 @@ ArknightsInfraCalc-v2/
 │   └── INTERNAL/               大文件内部地图（interpreter / shortcut）
 ├── crates/
 │   ├── infra-core/         库：类型、解释器、求解、搜索、排班、编排
-│   └── infra-cli/          命令行：verify / pool / search / schedule / trade / layout
-├── data/                   机制注册表、干员实例、回归用例（运行时真相源）
+│   └── infra-cli/          命令行：plan / advice / verify / pool / search / trade / bench / bake / serve / layout / profile
+├── data/                   机制注册表、干员实例、规则与回归用例（运行时实现载体）
 ├── scripts/                Python：数据校验、PRTS 快照、operbox 转换
 ├── plans/                  设计文档/提案
 └── release/                发布产物（layout-gen、fixtures）
@@ -160,10 +160,13 @@ ArknightsInfraCalc-v2/
 | 命令 | 用途 |
 |------|------|
 | **`plan`** | **用户主入口 / Agent 默认模拟入口**：账号画像 JSON + αβγ 三队排班 + MAA；`--operbox` 支持 JSON/xlsx；布局默认 243 |
+| `advice --operbox <path>` | 根据规则文件输出账号建议；支持 JSON / pretty 输出 |
 | `verify --case <id>` / `--all` | 跑 `REGRESSION_CASES.csv` + `UNIT_OUTPUT_ANCHORS.csv` |
-| `pool --trade` | 打印贸易站池统计与跳过原因 |
+| `pool [--trade] [--manufacture]` | 打印贸易 / 制造池统计与跳过原因；至少选择一类，制造池需要 operbox |
 | `search trade [--roster] [--top N]` | 全池 C(n,3) 搜索 Top-K |
 | `bench --operbox <path>` | 243c 基准布局 + operbox 贸易/制造搜索（**无**怪猎木天蓼；怪猎号见下） |
+| `bake [all|trade|manufacture]` / `bake validate` | 生成或校验本地 Bake 加速表 |
+| `serve` | 启动前端 JSON line 常驻 worker |
 | **`layout test`** | **自定义 `BaseBlueprint` + operbox（默认 `assign_base_greedy` 宏观排班）** |
 | **`layout team-rotation`** | **αβγ ABC 三队轮换（含 MAA 导出）— 仅排班入口** |
 | **`layout analyze`** | **练度 box profile 分析（对比基线）** |
@@ -181,10 +184,13 @@ ArknightsInfraCalc-v2/
 
 | 路径 | 职责 |
 |------|------|
-| `src/main.rs` | 进程入口、子命令路由；`pool` / `search` / `schedule` / `trade` / `bench` 编排（部分暂留 `main.rs`） |
+| `src/main.rs` | 进程入口、子命令路由；`pool` / `search` / `trade` / `bench` 编排（部分暂留 `main.rs`） |
+| `src/commands/advice.rs` | `advice`：加载建议规则并输出账号建议 |
+| `src/commands/bake.rs` | `bake`：生成或校验加速表 |
 | `src/commands/plan.rs` | **`plan`**：box profile + `schedule_team_rotation` + MAA |
-| `src/commands/layout.rs` | `layout test` / `rotation` / `team-rotation` / `analyze` / `eval` 全部子命令 |
+| `src/commands/layout.rs` | `layout test` / `team-rotation` / `analyze` / `eval` 全部子命令 |
 | `src/commands/profile.rs` | `profile layout-full` / `profile analyze-compare`：CLI 性能画像与分析链路对比 |
+| `src/commands/serve.rs` | `serve`：前端 JSON line 常驻协议 |
 | `src/commands/verify.rs` | `verify` 子命令：遍历 CSV、断言、PASS/FAIL |
 | `src/verify/cases.rs` | 加载 `REGRESSION_CASES.csv`、`UNIT_OUTPUT_ANCHORS.csv` |
 | `src/verify/fixtures.rs` | 硬编码 `TradeRoomInput`（回归 + `trade yield`） |
@@ -210,10 +216,12 @@ ArknightsInfraCalc-v2/
 
 ## `data/` 文件职责
 
-| 文件 | 角色 | 谁维护 |
+下列文件是运行时实现载体和核对材料，不裁决领域业务语义；业务规则仍以用户当前裁决和对应领域 Markdown 为准。
+
+| 文件 | 角色 | 维护方式 |
 |------|------|--------|
-| **`skill_table.json`** | `buff_id` → EffectAtom 列表；空 `atoms` = 委托 L2 | Cursor（用户确认后） |
-| **`operator_instances.json`** | `干员@tier_0` / `干员@tier_up` → `buff_ids`；干员归属唯一真相 | Cursor |
+| **`skill_table.json`** | `buff_id` → EffectAtom 列表；空 `atoms` = 委托 L2 | Agent / 维护者（业务变更需用户确认） |
+| **`operator_instances.json`** | `干员@tier_0` / `干员@tier_up` → `buff_ids` 的运行时归属映射 | Agent / 维护者 |
 | **`trade_shortcuts.json`** | L3 组合表化最优解 + verify / reference 锚点；`gsl_ling_jie_yaxin` 仅参考，不 active 匹配 | 双方 |
 | **`trade_segments.json`** | 链段注册表（docus_syracusa / blackkey_closure / vina_lungmen / penguin_*）+ 贸易 core role fallback 链（docus / closure / witch） | 双方 |
 | **`orchestration_rules.json`** | 声明式有限 alternatives：贸易核心、迷迭香、自动化、红松、莱茵；gate/role/relation/工作状态/轮换依赖由同一编译器消费 | 手工（Markdown 为业务真源） |

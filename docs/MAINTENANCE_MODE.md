@@ -12,6 +12,14 @@
 4. **回归优先**：bug 能落成 fixture / CSV / 最小 JSON，就不要只靠人工观察。
 5. **口径冻结**：不新增匿名综合分，不重启贸易-制造平衡公式，不用局部需求推翻 scoring policy。
 
+### 1.1 任务模式边界
+
+- `maintenance`：普通 CLI、数据、solver 或局部结果 bug，按本文复现、缩层、最小修复和验证。
+- `system-fix`：体系、跨设施、编排或轮换 bug，且当前领域 Markdown 已无歧义；完成四项修改前审计后可直接实施，不要求两次用户等待，也不强制调用 subagent。
+- `formal-audit`：用户明确要求逐项严格审计，或两个当前领域 Markdown 互相冲突；按 [SYSTEM_AUDIT_WORKFLOW.md](SYSTEM_AUDIT_WORKFLOW.md) 执行审计裁决与计划批准两个等待点。
+
+模式只决定流程半径，不改变业务真源和四项审计门禁。`system-fix` 发现真实语义冲突时应升级为 `formal-audit`；代码组织、局部接口和测试选择等可逆实现细节不构成升级理由。
+
 ## 2. Bug 处理流程
 
 ### 2.1 收集输入
