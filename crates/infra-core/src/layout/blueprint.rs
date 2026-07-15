@@ -375,6 +375,18 @@ mod tests {
     }
 
     #[test]
+    fn template_243_use_this_matches_standard_fixture() {
+        let bp = BaseBlueprint::template_243_use_this().unwrap();
+        let fixture_path = crate::skill_table::data_path("fixtures/243/layout.json").unwrap();
+        let fixture = BaseBlueprint::load(&fixture_path).unwrap();
+
+        assert_eq!(
+            serde_json::to_value(bp).unwrap(),
+            serde_json::to_value(fixture).unwrap()
+        );
+    }
+
+    #[test]
     fn template_252_auto1_has_two_trade() {
         let bp = BaseBlueprint::template_252_auto1().unwrap();
         assert_eq!(bp.count_facility(FacilityKind::TradePost), 2);

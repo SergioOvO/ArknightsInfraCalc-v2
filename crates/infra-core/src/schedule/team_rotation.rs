@@ -4175,37 +4175,49 @@ mod tests {
 
         let mut control_by_shift: Vec<Vec<String>> = Vec::new();
         for shift in &report.shifts {
-            control_by_shift.push(
-                shift
-                    .assignment
-                    .control_operators()
-                    .into_iter()
-                    .map(|op| op.name)
-                    .collect(),
+            let names: Vec<String> = shift
+                .assignment
+                .control_operators()
+                .into_iter()
+                .map(|op| op.name)
+                .collect();
+            let layout = resolve_base(
+                &blueprint,
+                &shift.assignment,
+                Some(&instances),
+                Some(&table),
+                24.0,
+                None,
+            )
+            .unwrap()
+            .layout_snapshot();
+
+            assert!(
+                layout.global_inject.trade_eff_pct() > 0.0,
+                "每班中枢应产生实际贸易订单效率注入: {names:?}"
             );
+            assert!(
+                layout
+                    .global_inject
+                    .manu_eff_for(crate::types::RecipeKind::Gold)
+                    > 0.0,
+                "每班中枢应产生实际赤金制造生产力注入: {names:?}"
+            );
+            assert!(
+                layout
+                    .global_inject
+                    .manu_eff_for(crate::types::RecipeKind::BattleRecord)
+                    > 0.0,
+                "每班中枢应产生实际经验书制造生产力注入: {names:?}"
+            );
+            control_by_shift.push(names);
         }
 
-        let trade_injectors = ["阿米娅", "诗怀雅", "明椒", "阿斯卡纶", "望", "火龙S黑角"];
-        let manu_injectors = ["斩业星熊", "Mon3tr", "凯尔希", "布丁", "麒麟R夜刀"];
         for names in &control_by_shift {
             assert_eq!(
                 names.len(),
                 5,
                 "每班中枢仍应满编 5 人: {:?}",
-                control_by_shift
-            );
-            assert!(
-                names
-                    .iter()
-                    .any(|name| trade_injectors.contains(&name.as_str())),
-                "每班中枢应优先包含全贸易订单效率注入: {:?}",
-                control_by_shift
-            );
-            assert!(
-                names
-                    .iter()
-                    .any(|name| manu_injectors.contains(&name.as_str())),
-                "每班中枢应优先包含全制造生产力注入: {:?}",
                 control_by_shift
             );
         }
