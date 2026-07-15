@@ -54,6 +54,8 @@ debug / feature / quality Skill 是任务意图的 primary owner；`arknights-sy
 - 修改候选集合、剪枝、分解、目标、top-K、Bake 或 cache 时，声明它是 hard constraint、safe reduction、heuristic、policy 还是 approximation；无法证明完整时不得声称全局最优。
 - 所有用于结论的验证必须通过统一 evidence 工具留痕；未跑类别明确写“未跑”。
 - 修改 Rust 后运行 `cargo fmt --all`；格式、测试和 CLI 同样通过 evidence 工具记录。
+- 新增面向人类阅读的文档时优先使用清晰的中文文件名；协议固定名、工具约定、代码生成物或外部兼容路径可保留英文。不要仅为改名批量移动现有文档。
+- 新建或恢复 `docs/TODO/` 任务时遵循其 `README.md` 生命周期；实施中同步状态、裁决和范围，完成或废弃后更新 current 文档与索引，并移动到对应 `docs/ARCHIVE/` 子目录，不把已结束 TODO 留在活动目录。
 
 ## 4. 核心分层边界
 

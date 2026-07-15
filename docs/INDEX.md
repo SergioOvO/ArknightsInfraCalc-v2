@@ -96,6 +96,7 @@ system / conformance / formal audit -> arknights-system-audit
 - `plans/`：历史设计记录，不是当前行为说明。
 
 未来计划必须标注尚未实现并链接 current facts；实施完成后更新当前文档，并归档或更新计划状态，不能让 TODO 冒充运行时能力。
+TODO 的创建、恢复、实施同步和自动归档遵循 [TODO 任务生命周期](TODO/README.md)。新增人类可读文档优先采用清晰的中文文件名；协议固定名、工具约定和外部兼容路径除外。
 
 ## 文档维护
 

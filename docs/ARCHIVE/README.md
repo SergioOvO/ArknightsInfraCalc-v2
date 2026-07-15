@@ -18,3 +18,5 @@
 2. 当前规则以 `AGENTS.md`、`docs/INDEX.md`、`docs/PROJECT_MAP.md` 和对应领域文档为准。
 3. 完成功能后，把 `docs/TODO/` 对应文件移入 `docs/ARCHIVE/done/`。
 4. 若某个方案被否决，移入 `docs/ARCHIVE/superseded/`，并在文件顶部写明替代方案。
+5. 归档由完成该 TODO 的 Agent 自动收尾：先更新 current 文档、`docs/INDEX.md` 和 `docs/TODO/README.md`，拆出仍开放的事项，再移动文件并检查仓库内引用。
+6. 新增归档文档优先沿用原 TODO 的中文文件名；不要在归档目录另建一份内容相同的总结副本。
