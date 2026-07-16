@@ -1,9 +1,11 @@
 # 动态 Producer A+：设施无关候选列 + 精确索引 Join
 
-> 状态：**ready-on-request，尚未实现**。
+> 状态：**in-progress，2026-07-17 用户授权实施**。
 > 用户确认方向：凛御银灰、戴菲恩、八幡海铃进入同一套可选中枢 producer 生命周期。
 > 算法偏好：问题规模小，优先“多烘焙、按完全等价签名做小型精确 Join”的模型；不扫描原始全笛卡尔积，DP、Pareto 与 branch-and-bound 不作为首版前提。
-> 本文用途：交给下一位 Agent 的实施 TODO；不能用来描述当前 `HEAD` 已有能力。
+> 本文用途：实施 TODO；不能用来描述当前 `HEAD` 已有能力。当前先由设施无关条件化 Bake
+> 的验证控制面开始；本文件继续负责 producer 语义、联合候选、winner commit 与 rotation
+> dependency，不再主导通用 catalog schema。
 > Bake 物化边界、并行生成、分片与运行时查询的当前方案见
 > [条件化单房响应 Bake 计划](CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md)；本文继续负责 producer
 > 业务不变量、联合候选合法性、comparator、winner commit 与 rotation dependency。

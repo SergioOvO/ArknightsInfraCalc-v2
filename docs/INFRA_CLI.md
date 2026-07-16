@@ -122,7 +122,7 @@ crates/infra-cli/src/
 |----------|--------------|------|-------------|
 | **`plan`** | `commands/plan.rs` | profile JSON 文件 + stdout 分析/排班表；可选 MAA | 必选 `--operbox`（JSON/xlsx）；布局默认 `data/fixtures/243/layout.json` |
 | `serve` | `commands/serve.rs` | stdout JSON response line；stderr 日志；前端指定输出文件 | 常驻 worker；当前支持 `method=plan` |
-| `bake` | `commands/bake.rs` | 本地 `data/baked` 目录 JSON + stderr progress/summary | `infra-core::bake`；生成运行时优先读取的 3/2/1 人候选索引表；克隆后本地生成，使用前应先 `bake validate` |
+| `bake` | `commands/bake.rs` | 本地 `data/baked` catalog + stderr progress/summary | `infra-core::bake`；生成后自动校验 signature/row，并抽样用 live solver 对账 response；`bake verify` 可对既有 catalog 重跑门禁 |
 | `verify` | `commands/verify.rs` | stdout/stderr 行文本 | `verify/cases.rs` + `verify/fixtures.rs` + `data/*.csv` |
 | `pool` | `main.rs` | `output::emit_pool` | operbox / roster → `infra-core::pool` |
 | `search trade` | `main.rs` | `output::emit_trade_search` | roster / operbox |
@@ -134,6 +134,11 @@ crates/infra-cli/src/
 | `profile layout-full` | `commands/profile.rs` | stderr 性能报告 | 开发辅助；默认路径为历史性能夹具，用户模拟不要用 |
 | `profile analyze-compare` | `commands/profile.rs` | stderr 对比报告 | 开发辅助；对比 hybrid profile 与旧 probe 链路耗时 |
 | `trade yield` | `main.rs` | `output::emit_trade_yield` | `verify::unit_fixture` |
+
+开发和正式发布 catalog 时使用 `scripts/bake_and_verify.sh [--out <dir>]`。它构建 release CLI、
+执行 `bake all` 的 catalog/live 抽样差分与机制门禁，再运行完整
+`cargo test --release --workspace`；任一步失败都不会形成可发布结论。发布二进制自身无法携带
+Rust `#[test]` harness，因此 CLI 内门禁与仓库完整测试门禁分层执行。
 
 ---
 

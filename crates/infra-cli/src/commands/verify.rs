@@ -7,14 +7,25 @@ use infra_core::trade::solve_trade_with_shift;
 use infra_core::Error;
 
 pub fn verify_cmd(args: &[String]) -> Result<(), Error> {
-    let table = SkillTable::load(&default_skill_table_path()?)?;
-    let cases = load_regression_cases(&data_path("REGRESSION_CASES.csv")?)?;
-
     let run_all = args.iter().any(|a| a == "--all");
     let case_id = args
         .windows(2)
         .find(|w| w[0] == "--case")
         .map(|w| w[1].as_str());
+    if !run_all && case_id.is_none() {
+        eprintln!("specify --case <id> or --all");
+        return Ok(());
+    }
+    run_regressions(run_all, case_id)
+}
+
+pub(crate) fn run_all_regressions() -> Result<(), Error> {
+    run_regressions(true, None)
+}
+
+fn run_regressions(run_all: bool, case_id: Option<&str>) -> Result<(), Error> {
+    let table = SkillTable::load(&default_skill_table_path()?)?;
+    let cases = load_regression_cases(&data_path("REGRESSION_CASES.csv")?)?;
 
     let mut any_fail = false;
     for case in &cases {
@@ -23,9 +34,6 @@ pub fn verify_cmd(args: &[String]) -> Result<(), Error> {
                 if case.case_id != id {
                     continue;
                 }
-            } else {
-                eprintln!("specify --case <id> or --all");
-                return Ok(());
             }
         }
 

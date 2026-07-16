@@ -83,8 +83,8 @@
 | 文件 | 状态 | 用途 |
 |------|------|------|
 | [近期已知缺口修复清单.md](近期已知缺口修复清单.md) | ready-on-request | 第 2 项已完成；其余动态 producer、迷迭香、联合最优性、Bake 和文档状态条目仍需逐项授权 |
-| [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md](DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md) | ready-on-request | 用户已确认的下一位 Agent 交接：三类可选中枢 producer 的 live 精确索引 Join 与 A+ Bake；尚未实现，不自动执行 |
-| [CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md](CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md) | ready-on-request | 动态 producer 的条件化单房响应 Bake：允许离线计算数十分钟，按中枢效果签名物化完整单房 solver response，运行时做互斥 Join 与 live 对账 |
+| [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md](DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md) | in-progress | 三类可选中枢 producer 的语义、联合候选、winner commit 与 rotation dependency；当前先实施 Bake 验证控制面 |
+| [CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md](CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md) | in-progress | 设施无关条件化响应 Bake；首批建立 Required 命中证明和生成后回归门禁，后续接入贸易、制造与 200ms 排班查询 |
 | [TRAINING_RECOMMENDER_RAG_PLAN.md](TRAINING_RECOMMENDER_RAG_PLAN.md) | proposal | 练度比对 / 练卡推荐 / RAG 解释层企划，待 Claude 与用户确认 |
 | [TRADE_EQUIVALENT_EFFICIENCY_ARCHITECTURE.md](TRADE_EQUIVALENT_EFFICIENCY_ARCHITECTURE.md) | proposal | 贸易纸面效率、社区等效换算、搜索排序与产出预估的统一量纲设计 |
 | [TRUST_RECOVERY_PLAN.md](TRUST_RECOVERY_PLAN.md) | maintenance-reference | 已修复反馈的关闭审计、防回归矩阵、新反馈处理规则 |

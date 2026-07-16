@@ -2,25 +2,45 @@ use std::path::PathBuf;
 use std::{env, fs, hash::Hash, hash::Hasher, sync::Arc};
 
 use infra_core::{
-    bake_catalogs, default_baked_out_dir, validate_baked_catalog, BakeGeneratorFingerprint,
-    BakeOptions, BakeProgressEvent, Error,
+    bake_catalogs, default_baked_out_dir, validate_baked_catalog, verify_baked_catalog_responses,
+    BakeGeneratorFingerprint, BakeOptions, BakeProgressEvent, Error,
 };
+
+use super::verify::run_all_regressions;
 
 pub fn bake_cmd(args: &[String]) -> Result<(), Error> {
     let mut options = BakeOptions::default();
     options.out_dir = default_baked_out_dir()?;
     let mut mode = "all";
     let mut validate_only = false;
+    let mut verify_only = false;
+    let mut action_seen = false;
 
     let mut i = 0usize;
     while i < args.len() {
         match args[i].as_str() {
             "all" | "trade" | "manufacture" => {
+                if action_seen {
+                    return Err(Error::msg("bake accepts exactly one action"));
+                }
                 mode = args[i].as_str();
+                action_seen = true;
                 i += 1;
             }
             "validate" => {
+                if action_seen {
+                    return Err(Error::msg("bake accepts exactly one action"));
+                }
                 validate_only = true;
+                action_seen = true;
+                i += 1;
+            }
+            "verify" => {
+                if action_seen {
+                    return Err(Error::msg("bake accepts exactly one action"));
+                }
+                verify_only = true;
+                action_seen = true;
                 i += 1;
             }
             "--out" => {
@@ -36,10 +56,15 @@ pub fn bake_cmd(args: &[String]) -> Result<(), Error> {
                         "bake --limit-per-signature requires a positive integer",
                     ));
                 };
-                options.limit_per_signature = Some(
-                    raw.parse()
-                        .map_err(|_| Error::msg("invalid --limit-per-signature value"))?,
-                );
+                let limit = raw
+                    .parse()
+                    .map_err(|_| Error::msg("invalid --limit-per-signature value"))?;
+                if limit == 0 {
+                    return Err(Error::msg(
+                        "bake --limit-per-signature requires a positive integer",
+                    ));
+                }
+                options.limit_per_signature = Some(limit);
                 i += 2;
             }
             "--help" | "-h" => {
@@ -52,14 +77,27 @@ pub fn bake_cmd(args: &[String]) -> Result<(), Error> {
         }
     }
 
+    if (validate_only || verify_only) && options.limit_per_signature.is_some() {
+        return Err(Error::msg(
+            "--limit-per-signature is only valid while generating a catalog",
+        ));
+    }
+
     let generator = current_generator_fingerprint()?;
-    if validate_only {
+    if validate_only || verify_only {
         validate_baked_catalog(&options.out_dir, &generator)?;
         eprintln!(
             "baked catalog is valid for current cli hash={} -> {}",
             generator.hash64,
             options.out_dir.display()
         );
+        if verify_only {
+            let verified = verify_baked_catalog_responses(&options.out_dir, &generator)?;
+            run_all_regressions()?;
+            eprintln!(
+                "baked catalog verification passed: sampled_responses={verified} plus mechanism regressions"
+            );
+        }
         return Ok(());
     }
     options.generator = Some(generator);
@@ -92,6 +130,13 @@ pub fn bake_cmd(args: &[String]) -> Result<(), Error> {
         report.elapsed_ms,
         report.out_dir.display()
     );
+    validate_baked_catalog(&options.out_dir, report.generator.as_ref().unwrap())?;
+    let verified =
+        verify_baked_catalog_responses(&options.out_dir, report.generator.as_ref().unwrap())?;
+    run_all_regressions()?;
+    eprintln!(
+        "baked catalog validation passed: sampled_responses={verified} plus mechanism regressions"
+    );
     Ok(())
 }
 
@@ -99,7 +144,8 @@ fn print_bake_usage() {
     eprintln!("Usage:");
     eprintln!("  infra-cli bake [all|trade|manufacture] [--out <dir>] [--limit-per-signature <n>]");
     eprintln!("  infra-cli bake validate [--out <dir>]");
-    eprintln!("      Generates indexed 3/2/1-person single-room combo_table.json by default.");
+    eprintln!("  infra-cli bake verify [--out <dir>]");
+    eprintln!("      Generates and validates indexed 3/2/1-person combo_table.bin, then runs regressions.");
 }
 
 fn print_bake_progress(event: BakeProgressEvent) {

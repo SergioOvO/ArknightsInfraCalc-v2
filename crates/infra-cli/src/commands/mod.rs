@@ -4,7 +4,7 @@ mod layout;
 mod plan;
 mod profile;
 mod serve;
-mod verify;
+pub(crate) mod verify;
 
 pub use advice::advice_cmd;
 pub use bake::bake_cmd;

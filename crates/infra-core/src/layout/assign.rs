@@ -600,7 +600,7 @@ mod tests {
                 &ManuSearchOptions {
                     recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::Gold),
                     full_pool: true,
-                    use_baked: false,
+                    bake_mode: crate::bake::BakeMode::Disabled,
                     ..Default::default()
                 },
             )
@@ -644,7 +644,7 @@ mod tests {
             &table,
             &ManuSearchOptions {
                 full_pool: true,
-                use_baked: false,
+                bake_mode: crate::bake::BakeMode::Disabled,
                 recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::Gold),
                 ..Default::default()
             },
@@ -657,7 +657,7 @@ mod tests {
             &table,
             &ManuSearchOptions {
                 full_pool: true,
-                use_baked: false,
+                bake_mode: crate::bake::BakeMode::Disabled,
                 recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::Gold),
                 must_include_name: Some("迷迭香".into()),
                 ..Default::default()
@@ -740,7 +740,7 @@ mod tests {
             &table,
             &ManuSearchOptions {
                 recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::Gold),
-                use_baked: false,
+                bake_mode: crate::bake::BakeMode::Disabled,
                 full_pool: true,
                 top_k: 10,
                 ..Default::default()

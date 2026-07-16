@@ -82,6 +82,7 @@ fn print_usage() {
     eprintln!("      (default manufacture: 4 lines = 2 gold + 2 battle_record; --recipe = single-line debug)");
     eprintln!("  infra-cli bake [all|trade|manufacture] [--out <dir>] [--limit-per-signature <n>]");
     eprintln!("  infra-cli bake validate [--out <dir>]");
+    eprintln!("  infra-cli bake verify [--out <dir>]");
     eprintln!("  infra-cli serve");
     eprintln!("  infra-cli layout test --layout <path> --operbox <path> [--assignment <path>] [--top <n>] [-o <file.csv>] [--text]");
     eprintln!("  infra-cli layout analyze --layout <path> --operbox <path> [--baseline <operbox>] [--top <n>] [-o profile.json] [--json]");

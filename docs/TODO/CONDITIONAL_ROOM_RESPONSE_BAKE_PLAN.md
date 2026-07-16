@@ -1,10 +1,42 @@
-# 条件化单房响应 Bake 计划
+# 设施无关条件化响应 Bake 实施计划
 
-> 状态：ready-on-request，尚未实现。
-> 目标：允许离线花费数分钟到数十分钟，完整预计算“单房组合在中枢有效效果下的真实
-> solver 响应”，换取运行时简单、稳定且可验证的联合选型。
+> 状态：in-progress，2026-07-17 用户授权实施。
+> 目标：允许离线花费数分钟到数十分钟，按机制依赖完整预计算“设施候选组合在相关外部
+> 状态和跨设施摘要下的真实 solver 响应”，将标准全精二 243 warm `team-rotation` 压到
+> 200ms 量级，同时保持 cache miss 只变慢、不换答案。
 > 关联计划：[动态 Producer A+](DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)。本文只负责
 > Bake 的物化边界、生成流程和运行时查询，不重新定义 producer 业务规则与 comparator。
+> 贸易是首个 vertical slice，制造是第二设施通用性验收，不复制平行 pipeline。
+
+## 0. 2026-07-17 用户裁决与实施顺序
+
+核心模型扩展为：
+
+```text
+CandidateRow
++ RelevantExternalStateSignature
++ RelevantCrossFacilitySummary
+-> ConditionalResponse
+```
+
+外部名单必须按对目标 response 的完全等价状态归一化；不同 logical operator mask 即使响应
+相同也只能共享 response，不能删除候选。状态空间通过机制依赖切片、真实可达签名、阈值/
+封顶值域和 family 归一化压缩，不使用固定 top-K 或当前 winner 剪枝。
+
+实施批次：
+
+1. **验证控制面**：`BakeMode::Auto/Disabled/Required`；Required miss 硬失败；每次生成后
+   严格校验 catalog 并运行现有机制回归；仓库正式生成入口随后运行完整 release test suite。
+2. **依赖与规模编译**：建立设施无关 dependency slice，统计 CandidateRow、外部签名、摘要、
+   response 数量、磁盘和内存；未测量前不冻结物理格式。
+3. **贸易 vertical slice**：覆盖房间局部计数、跨房聚合和跨房阈值，强制 live/baked 差分。
+4. **制造复用**：以 full-pool 和中枢到制造的外部影响验证公共 schema，不建第二套引擎。
+5. **排班查询**：预排序 response 视图、operator-mask 精确 Join、peak/γ 共存签名和 winner
+   完整 live resolve。
+6. **发布与性能**：generation-id 临时目录、checksum、原子切换、失败保留旧 generation；
+   标准 243 warm `team-rotation` p50 目标不高于 200ms。
+
+当前批次只实施第 1 项，不改变候选集合、主路径 comparator、Plan admission 或 rotation。
 
 ## 1. 核心模型
 

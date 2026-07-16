@@ -38,6 +38,22 @@ use crate::FacilityKind;
 
 pub const BAKE_SCHEMA_VERSION: u32 = 10;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BakeMode {
+    #[default]
+    Auto,
+    Disabled,
+    Required,
+}
+
+fn baked_miss<T>(mode: BakeMode, reason: impl Into<String>) -> Result<Option<T>> {
+    if mode == BakeMode::Required {
+        Err(Error::msg(format!("required Bake miss: {}", reason.into())))
+    } else {
+        Ok(None)
+    }
+}
+
 pub type BakeProgressCallback = Arc<dyn Fn(BakeProgressEvent) + Send + Sync>;
 
 #[derive(Clone)]
@@ -227,7 +243,7 @@ struct BakedComboTableDisk {
     rows: Vec<BakedComboRowDisk>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct BakedComboRowDisk {
     room_level: u8,
     operator_capacity: usize,
@@ -985,11 +1001,18 @@ fn manufacture_combo_row(
 }
 
 fn sort_signature_rows(rows: &mut [BakedComboRow]) {
-    rows.sort_by(|a, b| {
-        b.sort_efficiency
-            .cmp(&a.sort_efficiency)
-            .then_with(|| a.names.cmp(&b.names))
-    });
+    rows.sort_by(compare_baked_rows);
+}
+
+fn compare_baked_rows(a: &BakedComboRow, b: &BakedComboRow) -> std::cmp::Ordering {
+    b.sort_efficiency
+        .cmp(&a.sort_efficiency)
+        .then_with(|| {
+            b.manufacture_storage_limit
+                .unwrap_or_default()
+                .cmp(&a.manufacture_storage_limit.unwrap_or_default())
+        })
+        .then_with(|| a.operator_indices.cmp(&b.operator_indices))
 }
 
 pub fn validate_baked_catalog(out_dir: &Path, generator: &BakeGeneratorFingerprint) -> Result<()> {
@@ -1003,6 +1026,14 @@ pub fn validate_baked_catalog(out_dir: &Path, generator: &BakeGeneratorFingerpri
             BAKE_SCHEMA_VERSION,
             out_dir.display()
         )));
+    }
+    if manifest.options.limit_per_signature.is_some() {
+        return Err(Error::msg(
+            "limited baked catalog is not complete enough for runtime publication",
+        ));
+    }
+    if !manifest.options.include_trade && !manifest.options.include_manufacture {
+        return Err(Error::msg("baked catalog contains no facility"));
     }
     let Some(baked_generator) = manifest.generator.as_ref() else {
         return Err(Error::msg(format!(
@@ -1024,7 +1055,354 @@ pub fn validate_baked_catalog(out_dir: &Path, generator: &BakeGeneratorFingerpri
         )));
     }
     validate_baked_input_fingerprints(&manifest, out_dir)?;
+    let combo_path = out_dir.join("combo_table.bin");
+    let raw = fs::read(&combo_path)
+        .map_err(|e| Error::msg(format!("read {}: {e}", combo_path.display())))?;
+    let disk: BakedComboTableDisk = bincode::deserialize(&raw)
+        .map_err(|e| Error::msg(format!("read {}: {e}", combo_path.display())))?;
+    validate_baked_combo_table(&disk, generator, &manifest.options)
+}
+
+pub fn verify_baked_catalog_responses(
+    out_dir: &Path,
+    generator: &BakeGeneratorFingerprint,
+) -> Result<usize> {
+    validate_baked_catalog(out_dir, generator)?;
+    let raw = fs::read(out_dir.join("combo_table.bin"))?;
+    let disk: BakedComboTableDisk = bincode::deserialize(&raw)
+        .map_err(|e| Error::msg(format!("decode baked response verification table: {e}")))?;
+    let instances = OperatorInstances::load(&default_instances_path()?)?;
+    let table = SkillTable::load(&default_skill_table_path()?)?;
+    let roster = bake_roster(&instances);
+    let trade_pool = build_trade_pool(&roster, &instances, &table)?;
+    let manufacture_pool = build_manufacture_pool(&roster, &instances, &table)?;
+    let operator_index: HashMap<&str, usize> = disk
+        .operator_names
+        .iter()
+        .enumerate()
+        .map(|(index, name)| (name.as_str(), index))
+        .collect();
+    let layout = Arc::new(LayoutContext::search_baseline());
+    let mut verified = 0usize;
+
+    for index in &disk.indexes {
+        let mut sample_offsets = vec![0, index.len / 2, index.len - 1];
+        sample_offsets.sort_unstable();
+        sample_offsets.dedup();
+        for offset in sample_offsets {
+            let actual = &disk.rows[index.start + offset];
+            let names: Vec<_> = actual
+                .operator_indices
+                .iter()
+                .map(|operator| disk.operator_names[*operator].as_str())
+                .collect();
+            let expected = if let Some(order) = actual.order_kind {
+                let combo = pool_indices_for_names(&trade_pool, &names)?;
+                trade_combo_row(
+                    &trade_pool,
+                    &table,
+                    actual.room_level,
+                    actual.operator_capacity,
+                    order,
+                    layout.gold_manu_line_count,
+                    &layout,
+                    &combo,
+                    &index.signature_key,
+                    &operator_index,
+                    disk.mask_words,
+                )
+            } else if let Some(recipe) = actual.recipe {
+                let pool = filter_pool_to_names(
+                    &manufacture_pool,
+                    standalone_names_for(
+                        FacilityKind::Factory,
+                        StandaloneFilter::for_recipe(recipe),
+                    ),
+                );
+                let combo = pool_indices_for_names(&pool, &names)?;
+                manufacture_combo_row(
+                    &pool,
+                    &table,
+                    actual.room_level,
+                    actual.operator_capacity,
+                    recipe,
+                    &layout,
+                    &combo,
+                    &index.signature_key,
+                    &operator_index,
+                    disk.mask_words,
+                )
+            } else {
+                None
+            }
+            .ok_or_else(|| {
+                Error::msg(format!(
+                    "live solver rejected sampled baked row in {:?}",
+                    index.signature_key
+                ))
+            })?;
+            if BakedComboRowDisk::from(&expected) != *actual {
+                return Err(Error::msg(format!(
+                    "baked/live response mismatch in {:?} at row {}",
+                    index.signature_key,
+                    index.start + offset
+                )));
+            }
+            verified += 1;
+        }
+    }
+    Ok(verified)
+}
+
+fn pool_indices_for_names<T: HasName>(pool: &PoolCore<T>, names: &[&str]) -> Result<Vec<usize>> {
+    names
+        .iter()
+        .map(|name| {
+            pool.entries
+                .iter()
+                .position(|entry| entry.pool_name() == *name)
+                .ok_or_else(|| {
+                    Error::msg(format!("baked operator {name:?} is absent from live pool"))
+                })
+        })
+        .collect()
+}
+
+fn validate_baked_combo_table(
+    table: &BakedComboTableDisk,
+    generator: &BakeGeneratorFingerprint,
+    options: &BakeManifestOptions,
+) -> Result<()> {
+    if table.schema_version != BAKE_SCHEMA_VERSION {
+        return Err(Error::msg("baked table schema mismatch"));
+    }
+    let Some(table_generator) = table.generator.as_ref() else {
+        return Err(Error::msg("baked table has no generator fingerprint"));
+    };
+    if table_generator.kind != generator.kind
+        || table_generator.bytes != generator.bytes
+        || table_generator.hash64 != generator.hash64
+    {
+        return Err(Error::msg("baked table generator mismatch"));
+    }
+    if table.operator_count != table.operator_names.len() {
+        return Err(Error::msg("baked table operator count mismatch"));
+    }
+    let unique_names: std::collections::HashSet<_> = table.operator_names.iter().collect();
+    if unique_names.len() != table.operator_names.len() {
+        return Err(Error::msg("baked table contains duplicate operator names"));
+    }
+    let expected_mask_words = table.operator_count.div_ceil(64).max(1);
+    if table.mask_words != expected_mask_words {
+        return Err(Error::msg("baked table mask width mismatch"));
+    }
+    let expected = expected_signature_keys(options);
+    let actual: std::collections::BTreeSet<_> = table
+        .indexes
+        .iter()
+        .map(|index| index.signature_key.clone())
+        .collect();
+    if actual != expected {
+        return Err(Error::msg(format!(
+            "baked signature set mismatch: expected {}, found {}",
+            expected.len(),
+            actual.len()
+        )));
+    }
+
+    let mut previous_end = 0usize;
+    let mut keys = std::collections::HashSet::new();
+    for index in &table.indexes {
+        if !keys.insert(index.signature_key.as_str()) {
+            return Err(Error::msg("duplicate baked signature"));
+        }
+        let Some(end) = index.start.checked_add(index.len) else {
+            return Err(Error::msg("baked index range overflow"));
+        };
+        if index.start != previous_end || end > table.rows.len() {
+            return Err(Error::msg(format!(
+                "invalid baked index range for {:?}",
+                index.signature_key
+            )));
+        }
+        if index.len == 0 {
+            return Err(Error::msg(format!(
+                "empty baked signature {:?}",
+                index.signature_key
+            )));
+        }
+        if row_facility_from_signature(&index.signature_key).is_empty() {
+            return Err(Error::msg(format!(
+                "unknown baked signature {:?}",
+                index.signature_key
+            )));
+        }
+        for row in &table.rows[index.start..end] {
+            let mut unique_indices = row.operator_indices.clone();
+            unique_indices.sort_unstable();
+            unique_indices.dedup();
+            if row.operator_capacity != row.operator_indices.len()
+                || unique_indices.len() != row.operator_indices.len()
+                || row
+                    .operator_indices
+                    .iter()
+                    .any(|operator| *operator >= table.operator_count)
+            {
+                return Err(Error::msg(format!(
+                    "invalid baked row in signature {:?}",
+                    index.signature_key
+                )));
+            }
+            validate_baked_row_for_signature(row, &index.signature_key)?;
+        }
+        for pair in table.rows[index.start..end].windows(2) {
+            let left_storage = pair[0].manufacture_storage_limit.unwrap_or_default();
+            let right_storage = pair[1].manufacture_storage_limit.unwrap_or_default();
+            if pair[0].sort_efficiency_millis < pair[1].sort_efficiency_millis
+                || (pair[0].sort_efficiency_millis == pair[1].sort_efficiency_millis
+                    && left_storage < right_storage)
+                || (pair[0].sort_efficiency_millis == pair[1].sort_efficiency_millis
+                    && left_storage == right_storage
+                    && pair[0].operator_indices > pair[1].operator_indices)
+            {
+                return Err(Error::msg(format!(
+                    "baked rows are not sorted for {:?}",
+                    index.signature_key
+                )));
+            }
+        }
+        previous_end = end;
+    }
+    if previous_end != table.rows.len() {
+        return Err(Error::msg("baked indexes do not cover every row"));
+    }
     Ok(())
+}
+
+fn expected_signature_keys(options: &BakeManifestOptions) -> BTreeSet<String> {
+    let mut keys = BTreeSet::new();
+    let gold_lines = baked_search_baseline().gold_manu_line_count;
+    if options.include_trade {
+        for level in 1..=3 {
+            for order in [TradeOrderKind::Gold, TradeOrderKind::Originium] {
+                keys.insert(trade_lookup_key(
+                    level,
+                    station_operator_capacity(level),
+                    order,
+                    gold_lines,
+                ));
+            }
+        }
+    }
+    if options.include_manufacture {
+        for level in 1..=3 {
+            for recipe in [
+                RecipeKind::Gold,
+                RecipeKind::BattleRecord,
+                RecipeKind::Originium,
+            ] {
+                keys.insert(manufacture_lookup_key(
+                    level,
+                    station_operator_capacity(level),
+                    recipe,
+                ));
+            }
+        }
+    }
+    keys
+}
+
+fn validate_baked_row_for_signature(row: &BakedComboRowDisk, key: &str) -> Result<()> {
+    if row.operator_capacity != station_operator_capacity(row.room_level) {
+        return Err(Error::msg(format!("invalid room capacity in {key:?}")));
+    }
+    let expected_key = if let Some(order) = row.order_kind {
+        if row.recipe.is_some()
+            || !trade_response_fields_present(row)
+            || any_manufacture_response_field_present(row)
+        {
+            return Err(Error::msg(format!("invalid trade row fields in {key:?}")));
+        }
+        trade_lookup_key(
+            row.room_level,
+            row.operator_capacity,
+            order,
+            baked_search_baseline().gold_manu_line_count,
+        )
+    } else if let Some(recipe) = row.recipe {
+        if row.order_kind.is_some()
+            || !manufacture_response_fields_present(row)
+            || any_trade_response_field_present(row)
+        {
+            return Err(Error::msg(format!(
+                "invalid manufacture row fields in {key:?}"
+            )));
+        }
+        manufacture_lookup_key(row.room_level, row.operator_capacity, recipe)
+    } else {
+        return Err(Error::msg(format!("baked row has no facility in {key:?}")));
+    };
+    if expected_key != key {
+        return Err(Error::msg(format!("baked row does not match {key:?}")));
+    }
+    let final_efficiency = row
+        .trade_final_efficiency_millis
+        .or(row.manufacture_final_efficiency_millis)
+        .ok_or_else(|| Error::msg(format!("baked row has no final efficiency in {key:?}")))?;
+    if row.sort_efficiency_millis != final_efficiency {
+        return Err(Error::msg(format!(
+            "baked row sort key mismatch in {key:?}"
+        )));
+    }
+    Ok(())
+}
+
+fn trade_response_fields_present(row: &BakedComboRowDisk) -> bool {
+    row.trade_base_efficiency_millis.is_some()
+        && row.trade_occupancy_efficiency_millis.is_some()
+        && row.trade_skill_efficiency_millis.is_some()
+        && row.trade_control_efficiency_millis.is_some()
+        && row.trade_paper_efficiency_millis.is_some()
+        && row.trade_mechanic_equivalent_efficiency_millis.is_some()
+        && row.trade_unit_output_multiplier_millis.is_some()
+        && row.trade_final_efficiency_millis.is_some()
+        && row.trade_equivalent_skill_efficiency_millis.is_some()
+        && row.unit_trade_per_day.is_some()
+        && row.unit_gold_per_day.is_some()
+        && row.unit_originium_per_day.is_some()
+}
+
+fn manufacture_response_fields_present(row: &BakedComboRowDisk) -> bool {
+    row.manufacture_base_efficiency_millis.is_some()
+        && row.manufacture_occupancy_efficiency_millis.is_some()
+        && row.manufacture_skill_efficiency_millis.is_some()
+        && row.manufacture_global_efficiency_millis.is_some()
+        && row.manufacture_final_efficiency_millis.is_some()
+        && row.manufacture_storage_limit.is_some()
+}
+
+fn any_trade_response_field_present(row: &BakedComboRowDisk) -> bool {
+    row.trade_base_efficiency_millis.is_some()
+        || row.trade_occupancy_efficiency_millis.is_some()
+        || row.trade_skill_efficiency_millis.is_some()
+        || row.trade_control_efficiency_millis.is_some()
+        || row.trade_paper_efficiency_millis.is_some()
+        || row.trade_mechanic_equivalent_efficiency_millis.is_some()
+        || row.trade_unit_output_multiplier_millis.is_some()
+        || row.trade_final_efficiency_millis.is_some()
+        || row.trade_equivalent_skill_efficiency_millis.is_some()
+        || row.unit_trade_per_day.is_some()
+        || row.unit_gold_per_day.is_some()
+        || row.unit_originium_per_day.is_some()
+}
+
+fn any_manufacture_response_field_present(row: &BakedComboRowDisk) -> bool {
+    row.manufacture_base_efficiency_millis.is_some()
+        || row.manufacture_occupancy_efficiency_millis.is_some()
+        || row.manufacture_skill_efficiency_millis.is_some()
+        || row.manufacture_global_efficiency_millis.is_some()
+        || row.manufacture_final_efficiency_millis.is_some()
+        || row.manufacture_storage_limit.is_some()
 }
 
 fn validate_baked_input_fingerprints(manifest: &BakeManifest, out_dir: &Path) -> Result<()> {
@@ -1064,17 +1442,27 @@ pub fn try_baked_trade_search(
     combinations: u64,
     start: StdInstant,
 ) -> Result<Option<TradeSearchReport>> {
-    if !baked_trade_compatible(pool, options, filter) {
+    let mode = options.bake_mode;
+    if mode == BakeMode::Disabled {
         return Ok(None);
     }
+    if !filter.forbidden_pairs.is_empty() {
+        return baked_miss(mode, "trade forbidden-pair constraints are not represented");
+    }
+    if !baked_trade_compatible(pool, options, filter) {
+        return baked_miss(mode, trade_incompatibility_reason(pool, options, filter));
+    }
     let Some(table) = load_runtime_baked_table()? else {
-        return Ok(None);
+        return baked_miss(
+            mode,
+            "catalog is missing, stale, or currently being generated",
+        );
     };
     if !baked_table_covers_pool_names(
         &table.operator_index_by_name,
         pool.entries.iter().map(|entry| entry.name.as_str()),
     ) {
-        return Ok(None);
+        return baked_miss(mode, "catalog does not cover every live candidate");
     }
     let gold_lines = if options.layout.gold_manu_line_count > 0 {
         options.layout.gold_manu_line_count
@@ -1088,7 +1476,7 @@ pub fn try_baked_trade_search(
         gold_lines,
     );
     let Some((start_idx, len)) = table.index_by_key.get(&key).copied() else {
-        return Ok(None);
+        return baked_miss(mode, format!("signature {key:?} is absent"));
     };
     let available_mask = available_operator_mask(
         &table.operator_index_by_name,
@@ -1118,7 +1506,7 @@ pub fn try_baked_trade_search(
         }
     }
     if hits.is_empty() {
-        return Ok(None);
+        return baked_miss(mode, format!("signature {key:?} has no eligible row"));
     }
     let best = hits[0].clone();
     let evaluated = hits.len() as u64;
@@ -1142,21 +1530,28 @@ pub fn try_baked_manufacture_search(
     combinations: u64,
     start: StdInstant,
 ) -> Result<Option<ManuSearchReport>> {
-    if !baked_manufacture_compatible(pool, options) {
+    let mode = options.bake_mode;
+    if mode == BakeMode::Disabled {
         return Ok(None);
     }
+    if !baked_manufacture_compatible(pool, options) {
+        return baked_miss(mode, manufacture_incompatibility_reason(pool, options));
+    }
     let Some(table) = load_runtime_baked_table()? else {
-        return Ok(None);
+        return baked_miss(
+            mode,
+            "catalog is missing, stale, or currently being generated",
+        );
     };
     if !baked_table_covers_pool_names(
         &table.operator_index_by_name,
         pool.entries.iter().map(|entry| entry.name.as_str()),
     ) {
-        return Ok(None);
+        return baked_miss(mode, "catalog does not cover every live candidate");
     }
     let key = manufacture_lookup_key(options.level, options.operator_capacity, recipe);
     let Some((start_idx, len)) = table.index_by_key.get(&key).copied() else {
-        return Ok(None);
+        return baked_miss(mode, format!("signature {key:?} is absent"));
     };
     let available_mask = available_operator_mask(
         &table.operator_index_by_name,
@@ -1183,7 +1578,7 @@ pub fn try_baked_manufacture_search(
         }
     }
     if hits.is_empty() {
-        return Ok(None);
+        return baked_miss(mode, format!("signature {key:?} has no eligible row"));
     }
     let best = hits[0].clone();
     let evaluated = hits.len() as u64;
@@ -1224,20 +1619,7 @@ fn load_runtime_baked_table() -> Result<Option<&'static RuntimeBakedComboTable>>
             let _ = CACHE.set(Some(table));
             Ok(CACHE.get().and_then(|t| t.as_ref()))
         }
-        Err(err) => {
-            let msg = err.to_string();
-            if msg.contains("data/baked/manifest.json not found")
-                || msg.contains("file not found")
-                || msg.contains("No such file or directory")
-                || msg.contains("baked schema mismatch")
-                || msg.contains("baked generator mismatch")
-                || msg.contains("baked input mismatch")
-            {
-                Ok(None)
-            } else {
-                Err(err)
-            }
-        }
+        Err(_) => Ok(None),
     }
 }
 
@@ -1343,11 +1725,48 @@ fn baked_trade_compatible(
         && pool.entries.iter().all(|entry| entry.progress.elite >= 2)
 }
 
+fn trade_incompatibility_reason(
+    pool: &TradePool,
+    options: &TradeSearchOptions,
+    filter: &SearchTripleFilter,
+) -> &'static str {
+    if filter.must_operator_override.is_some() {
+        "operator override is not represented"
+    } else if (options.mood - 24.0).abs() >= f64::EPSILON {
+        "mood is not 24"
+    } else if (options.shift_hours - 24.0).abs() >= f64::EPSILON {
+        "shift duration is not 24 hours"
+    } else if !baked_trade_layout_compatible(&options.layout) {
+        "layout or trade inject differs from the baked baseline"
+    } else if trade_pool_requires_candidate_projection(pool) {
+        "candidate projection is required"
+    } else {
+        "the candidate pool contains an unsupported tier"
+    }
+}
+
 fn baked_manufacture_compatible(pool: &ManuPool, options: &ManuSearchOptions) -> bool {
     !options.full_pool
         && (options.mood - 24.0).abs() < f64::EPSILON
         && baked_manufacture_layout_compatible(&options.layout)
         && pool.entries.iter().all(|entry| entry.progress.elite >= 2)
+}
+
+fn manufacture_incompatibility_reason(
+    pool: &ManuPool,
+    options: &ManuSearchOptions,
+) -> &'static str {
+    if options.full_pool {
+        "full manufacture pool is not represented"
+    } else if (options.mood - 24.0).abs() >= f64::EPSILON {
+        "mood is not 24"
+    } else if !baked_manufacture_layout_compatible(&options.layout) {
+        "layout or manufacture inject differs from the baked baseline"
+    } else if pool.entries.iter().any(|entry| entry.progress.elite < 2) {
+        "the candidate pool contains an unsupported tier"
+    } else {
+        "query is incompatible with the baked model"
+    }
 }
 
 fn baked_search_baseline() -> &'static LayoutContext {
@@ -1503,8 +1922,7 @@ fn build_combo_table_from_rows(
         a.facility
             .cmp(&b.facility)
             .then_with(|| a.signature_key.cmp(&b.signature_key))
-            .then_with(|| b.sort_efficiency.cmp(&a.sort_efficiency))
-            .then_with(|| a.names.cmp(&b.names))
+            .then_with(|| compare_baked_rows(a, b))
     });
     for (idx, row) in rows.iter_mut().enumerate() {
         row.row_id = idx;
@@ -1546,11 +1964,10 @@ fn operator_index_and_mask(
     operator_index: &HashMap<&str, usize>,
     mask_words: usize,
 ) -> (Vec<usize>, Vec<u64>) {
-    let mut indices: Vec<_> = names
+    let indices: Vec<_> = names
         .iter()
         .filter_map(|name| operator_index.get(name.as_str()).copied())
         .collect();
-    indices.sort_unstable();
 
     let mut mask = vec![0u64; mask_words];
     for idx in &indices {
@@ -1710,6 +2127,77 @@ fn write_binary(path: PathBuf, value: &impl Serialize) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn required_bake_rejects_incompatible_trade_query() {
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let pool = TradePool {
+            entries: vec![],
+            skipped: vec![],
+        };
+        let err = try_baked_trade_search(
+            &pool,
+            &table,
+            &TradeSearchOptions {
+                shift_hours: 12.0,
+                bake_mode: BakeMode::Required,
+                ..Default::default()
+            },
+            TradeOrderKind::Gold,
+            &SearchTripleFilter::default(),
+            0,
+            StdInstant::now(),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("shift duration is not 24 hours"));
+    }
+
+    #[test]
+    fn required_bake_rejects_full_manufacture_pool() {
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let pool = ManuPool {
+            entries: vec![],
+            skipped: vec![],
+        };
+        let err = try_baked_manufacture_search(
+            &pool,
+            &table,
+            &ManuSearchOptions {
+                full_pool: true,
+                bake_mode: BakeMode::Required,
+                ..Default::default()
+            },
+            RecipeKind::Gold,
+            0,
+            StdInstant::now(),
+        )
+        .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("full manufacture pool is not represented"));
+    }
+
+    #[test]
+    fn auto_bake_preserves_incompatible_query_fallback() {
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let pool = ManuPool {
+            entries: vec![],
+            skipped: vec![],
+        };
+        let result = try_baked_manufacture_search(
+            &pool,
+            &table,
+            &ManuSearchOptions {
+                full_pool: true,
+                ..Default::default()
+            },
+            RecipeKind::Gold,
+            0,
+            StdInstant::now(),
+        )
+        .unwrap();
+        assert!(result.is_none());
+    }
 
     #[test]
     fn baked_table_must_cover_every_candidate_name() {

@@ -15,6 +15,12 @@
 5. 动态 context 不兼容时必须安全回退到实时搜索，不能使用基线旧分数。
 6. Bake row 必须由同一真实 solver 离线生成；兼容命中时运行时复用该结果，不兼容时回退 live solver。Bake 不是第二套公式。
 
+搜索 API 提供 `BakeMode::Auto / Disabled / Required`：生产默认 `Auto` 保持安全回退；回归中的
+`Required` 遇到任何兼容、catalog、signature 或 row miss 必须失败，防止测试实际回退 live
+仍被误报为 Bake 通过。`infra-cli bake` 生成后自动执行完整 signature/row 校验、每个
+signature 首/中/尾 response 的 live solver 抽样对账与现有机制回归；`bake verify` 对既有
+generation 重跑同一门禁。仓库发布入口再追加完整 release test suite。
+
 维护期约束见 [MAINTENANCE_MODE.md](MAINTENANCE_MODE.md)，制造完整池边界见 [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)，直接效率口径见 [EFFICIENCY_MODEL.md](EFFICIENCY_MODEL.md)。
 
 ## 2. 2026-07-14 组合规模快照

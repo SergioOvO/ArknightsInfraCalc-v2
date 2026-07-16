@@ -103,7 +103,7 @@ pub struct ManuSearchOptions {
     pub top_k: usize,
     pub layout: SharedLayout,
     pub must_include_name: Option<String>,
-    pub use_baked: bool,
+    pub bake_mode: crate::bake::BakeMode,
     pub full_pool: bool,
 }
 
@@ -117,7 +117,7 @@ impl Default for ManuSearchOptions {
             top_k: 5,
             layout: Arc::new(LayoutContext::search_baseline()),
             must_include_name: None,
-            use_baked: true,
+            bake_mode: crate::bake::BakeMode::Auto,
             full_pool: false,
         }
     }
@@ -260,7 +260,7 @@ fn search_manufacture_single_recipe(
     let combinations = combos.len() as u64;
     let start = Instant::now();
 
-    if options.use_baked {
+    if options.bake_mode != crate::bake::BakeMode::Disabled {
         if let Some(report) = crate::bake::try_baked_manufacture_search(
             &sub,
             table,
@@ -592,7 +592,7 @@ mod tests {
             &table,
             &ManuSearchOptions {
                 recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::Gold),
-                use_baked: false,
+                bake_mode: crate::bake::BakeMode::Disabled,
                 ..ManuSearchOptions::default()
             },
         )
@@ -690,7 +690,7 @@ mod tests {
                 operator_capacity: 2,
                 recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::BattleRecord),
                 top_k: 5,
-                use_baked: false,
+                bake_mode: crate::bake::BakeMode::Disabled,
                 full_pool: true,
                 ..ManuSearchOptions::default()
             },
@@ -970,7 +970,7 @@ mod tests {
             &table,
             &ManuSearchOptions {
                 recipe_mode: ManuSearchRecipeMode::Single(RecipeKind::BattleRecord),
-                use_baked: false,
+                bake_mode: crate::bake::BakeMode::Disabled,
                 ..ManuSearchOptions::default()
             },
         )

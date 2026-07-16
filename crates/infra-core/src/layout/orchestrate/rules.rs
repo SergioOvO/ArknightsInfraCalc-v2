@@ -744,7 +744,7 @@ fn dynamic_gates_match(
                     layout: Arc::new(resolved.layout.clone()),
                     shift_hours: 24.0,
                     order_mode: crate::trade::input::TradeSearchOrderMode::Single(*order),
-                    use_baked: false,
+                    bake_mode: crate::bake::BakeMode::Disabled,
                     full_pool: true,
                 };
                 let first_room = matching_rooms[0];
@@ -1375,7 +1375,7 @@ fn complete_manufacture_role(
         recipe_mode: crate::manufacture::ManuSearchRecipeMode::Single(recipe),
         must_include_name: Some(required[0].clone()),
         full_pool: true,
-        use_baked: false,
+        bake_mode: crate::bake::BakeMode::Disabled,
     };
     let Ok(candidate_report) =
         crate::search::search_manufacture_triples(&candidate_pool, ctx.table, &candidate_options)
@@ -1516,7 +1516,7 @@ fn score_completed_manufacture(
             recipe_mode: crate::manufacture::ManuSearchRecipeMode::Single(*recipe),
             must_include_name: None,
             full_pool: true,
-            use_baked: false,
+            bake_mode: crate::bake::BakeMode::Disabled,
         };
         let Ok(report) = crate::search::search_manufacture_triples(&sub, ctx.table, &options)
         else {

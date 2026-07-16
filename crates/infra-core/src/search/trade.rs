@@ -90,7 +90,7 @@ pub struct TradeSearchOptions {
     /// 上班时长（小时）；产量公式用 `eff × (shift/24) × 单位产出`。
     pub shift_hours: f64,
     pub order_mode: TradeSearchOrderMode,
-    pub use_baked: bool,
+    pub bake_mode: crate::bake::BakeMode,
     pub full_pool: bool,
 }
 
@@ -105,7 +105,7 @@ impl Default for TradeSearchOptions {
             layout: Arc::new(LayoutContext::search_baseline()),
             shift_hours: 24.0,
             order_mode: TradeSearchOrderMode::default(),
-            use_baked: true,
+            bake_mode: crate::bake::BakeMode::Auto,
             full_pool: false,
         }
     }
@@ -302,7 +302,7 @@ fn search_trade_single_order(
     };
 
     let start = Instant::now();
-    if options.use_baked && filter.forbidden_pairs.is_empty() {
+    if options.bake_mode != crate::bake::BakeMode::Disabled {
         if let Some(report) = crate::bake::try_baked_trade_search(
             &sub,
             table,
@@ -605,7 +605,7 @@ mod tests {
                 trade_level: 2,
                 operator_capacity: 2,
                 order_mode: TradeSearchOrderMode::Single(TradeOrderKind::Gold),
-                use_baked: false,
+                bake_mode: crate::bake::BakeMode::Disabled,
                 top_k: 10,
                 ..TradeSearchOptions::default()
             },
@@ -661,7 +661,7 @@ mod tests {
             &pool,
             &table,
             &TradeSearchOptions {
-                use_baked: false,
+                bake_mode: crate::bake::BakeMode::Disabled,
                 order_mode: TradeSearchOrderMode::Single(TradeOrderKind::Gold),
                 ..TradeSearchOptions::default()
             },
