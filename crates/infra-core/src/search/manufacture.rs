@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -286,21 +287,11 @@ fn search_manufacture_single_recipe(
                 mood: options.mood,
                 layout: Arc::clone(&options.layout),
             };
-            eval_single_recipe_hit(&base, table, recipe)
+            evaluate_manufacture_room(&base, table, recipe)
         })
         .collect();
 
-    hits.sort_by(|a, b| {
-        manufacture_efficiency_sort_key(b)
-            .cmp(&manufacture_efficiency_sort_key(a))
-            .then_with(|| {
-                b.storage
-                    .gold
-                    .max(b.storage.battle_record)
-                    .cmp(&a.storage.gold.max(a.storage.battle_record))
-            })
-            .then_with(|| a.names.cmp(&b.names))
-    });
+    hits.sort_by(compare_manufacture_hits);
 
     let evaluated = hits.len() as u64;
     let best = hits.first().cloned().unwrap_or(empty_hit());
@@ -402,7 +393,19 @@ fn manufacture_efficiency_sort_key(hit: &ManuSearchHit) -> Efficiency {
     hit.final_efficiency
 }
 
-fn eval_single_recipe_hit(
+pub(crate) fn compare_manufacture_hits(a: &ManuSearchHit, b: &ManuSearchHit) -> Ordering {
+    manufacture_efficiency_sort_key(b)
+        .cmp(&manufacture_efficiency_sort_key(a))
+        .then_with(|| {
+            b.storage
+                .gold
+                .max(b.storage.battle_record)
+                .cmp(&a.storage.gold.max(a.storage.battle_record))
+        })
+        .then_with(|| a.names.cmp(&b.names))
+}
+
+pub(crate) fn evaluate_manufacture_room(
     base: &ManuRoomInput,
     table: &SkillTable,
     recipe: RecipeKind,

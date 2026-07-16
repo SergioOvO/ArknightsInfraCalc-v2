@@ -12,6 +12,7 @@ pub use control::{
     ControlFillPolicy, ControlPolicyBreakdown, ControlSearchHit, ControlSearchOptions,
     MATATABI_CONSUMER_NAME,
 };
+pub(crate) use manufacture::{compare_manufacture_hits, evaluate_manufacture_room};
 pub use manufacture::{
     search_manufacture_triples, ManuEfficiencyBreakdown, ManuSearchHit, ManuSearchOptions,
     ManuSearchReport,

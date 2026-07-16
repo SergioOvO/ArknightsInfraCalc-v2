@@ -179,6 +179,7 @@ pub(super) enum RoleSelection {
     #[default]
     Ordered,
     AllAvailable,
+    ManufactureObjective,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -950,8 +951,19 @@ fn enumerate_role_placements<'a>(
                 .then_some((candidate, progress))
         })
         .collect();
+    if matches!(role.selection, RoleSelection::ManufactureObjective) {
+        available = manufacture_objective_candidates(
+            role,
+            ctx,
+            state,
+            existing_constraints,
+            new_constraints,
+            available,
+        );
+    }
     match role.selection {
         RoleSelection::Ordered => available.truncate(role.max_count as usize),
+        RoleSelection::ManufactureObjective => available.truncate(role.max_count as usize),
         RoleSelection::AllAvailable if available.len() > role.max_count as usize => {
             return Vec::new();
         }
@@ -1052,6 +1064,87 @@ fn enumerate_role_placements<'a>(
     } else {
         vec![placement]
     }
+}
+
+fn manufacture_objective_candidates<'a>(
+    role: &'a RoleSpec,
+    ctx: &RuleCompileContext<'_>,
+    state: &RolePlacementState,
+    existing_constraints: &[SystemConstraint],
+    new_constraints: &[SystemConstraint],
+    available: Vec<(&'a CandidateSpec, crate::roster::OperatorProgress)>,
+) -> Vec<(&'a CandidateSpec, crate::roster::OperatorProgress)> {
+    let Some(room) = matching_rooms(role, ctx, state).into_iter().next() else {
+        return Vec::new();
+    };
+    let Some(RoomProduct::Factory { recipe }) = room.product.as_ref() else {
+        return Vec::new();
+    };
+    let required: Vec<_> = state
+        .assignment
+        .operators_in(&room.id)
+        .iter()
+        .map(|operator| operator.name.clone())
+        .collect();
+    if required.len() >= room.operator_capacity() {
+        return Vec::new();
+    }
+    let Ok(resolved) = crate::layout::resolve_base(
+        ctx.blueprint,
+        &state.assignment,
+        Some(ctx.instances),
+        Some(ctx.table),
+        ctx.mood,
+        None,
+    ) else {
+        return Vec::new();
+    };
+    let layout = Arc::new(resolved.layout);
+    let eligible: Vec<_> = available
+        .into_iter()
+        .filter(|(candidate, progress)| {
+            let placement = vec![(room.id.clone(), *candidate, *progress)];
+            placement_is_valid(
+                role,
+                &placement,
+                &state.assignment,
+                ctx,
+                existing_constraints,
+                new_constraints,
+            )
+        })
+        .collect();
+    let mut ranked: Vec<_> = eligible
+        .into_iter()
+        .filter_map(|candidate| {
+            let operators: Option<Vec<_>> = required
+                .iter()
+                .chain(std::iter::once(&candidate.0.name))
+                .map(|name| {
+                    let progress = ctx.operbox.progress_of(name)?;
+                    let tier = crate::tier::PromotionTier::from_progress(progress);
+                    let buff_ids = ctx.instances.resolve_manufacture_buff_ids(name, tier);
+                    (!buff_ids.is_empty()).then(|| crate::manufacture::ManuOperator {
+                        name: name.clone(),
+                        elite: progress.elite,
+                        buff_ids,
+                        tags: ctx.instances.tags_for(name, tier),
+                    })
+                })
+                .collect();
+            let input = crate::manufacture::ManuRoomInput {
+                level: room.level,
+                operators: operators?,
+                active_recipe: *recipe,
+                mood: ctx.mood,
+                layout: Arc::clone(&layout),
+            };
+            crate::search::evaluate_manufacture_room(&input, ctx.table, *recipe)
+                .map(|hit| (candidate, hit))
+        })
+        .collect();
+    ranked.sort_by(|left, right| crate::search::compare_manufacture_hits(&left.1, &right.1));
+    ranked.into_iter().map(|(candidate, _)| candidate).collect()
 }
 
 fn matching_rooms<'a>(
@@ -1679,7 +1772,11 @@ mod tests {
                     level: 90,
                     own: true,
                     potential: 0,
-                    rarity: if *name == "Lancet-2" { 1 } else { 6 },
+                    rarity: match *name {
+                        "Lancet-2" => 1,
+                        "清流" => 4,
+                        _ => 6,
+                    },
                 })
                 .collect(),
         )
@@ -1715,6 +1812,62 @@ mod tests {
             preferences,
             i32::MIN..=i32::MAX,
         )
+    }
+
+    fn compile_catalog(
+        catalog: &RuleCatalog,
+        blueprint: &BaseBlueprint,
+        operbox: &OperBox,
+        seed: &BaseAssignment,
+    ) -> CompiledRules {
+        let instances =
+            OperatorInstances::load(&crate::instances::default_instances_path().unwrap()).unwrap();
+        let table =
+            SkillTable::load(&crate::skill_table::default_skill_table_path().unwrap()).unwrap();
+        compile_catalog_range(
+            catalog,
+            blueprint,
+            operbox,
+            &instances,
+            &table,
+            seed,
+            &HashSet::new(),
+            &HashMap::new(),
+            i32::MIN..=i32::MAX,
+        )
+    }
+
+    fn manufacture_objective_catalog(candidates: &[&str]) -> RuleCatalog {
+        serde_json::from_value(serde_json::json!({
+            "version": 1,
+            "rules": [{
+                "id": "manufacture_objective_test",
+                "priority": 20,
+                "alternatives": [{
+                    "id": "battle_record",
+                    "roles": [{
+                        "id": "wendy",
+                        "facility": "factory",
+                        "recipe": "battle_record",
+                        "candidates": [{"name": "温蒂", "elite": 2}],
+                        "room_group": "objective_room"
+                    }, {
+                        "id": "peer",
+                        "facility": "factory",
+                        "recipe": "battle_record",
+                        "candidates": candidates.iter().map(|name| serde_json::json!({
+                            "name": name,
+                            "elite": 2
+                        })).collect::<Vec<_>>(),
+                        "min_count": 0,
+                        "max_count": 1,
+                        "selection": "manufacture_objective",
+                        "room_group": "objective_room"
+                    }]
+                }]
+            }]
+        }))
+        .unwrap()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2489,6 +2642,7 @@ mod tests {
             ("森蚺", 2),
             ("Lancet-2", 0),
             ("冬时", 2),
+            ("异客", 2),
         ]);
         let compiled = compile(&bp, &roster, &BaseAssignment::default());
         assert_eq!(
@@ -2507,6 +2661,136 @@ mod tests {
             .iter()
             .all(|anchor| anchor.room_id == factory[0].room_id));
         assert!(factory.iter().any(|anchor| anchor.operator == "冬时"));
+        assert!(factory.iter().all(|anchor| anchor.operator != "异客"));
+    }
+
+    #[test]
+    fn manufacture_objective_is_order_independent_and_enforces_boundaries() {
+        let objective_blueprint =
+            |level| {
+                let mut rooms = vec![
+                    room(
+                        "factory",
+                        FacilityKind::Factory,
+                        level,
+                        Some(RoomProduct::Factory {
+                            recipe: RecipeKind::BattleRecord,
+                        }),
+                    ),
+                    room("office", FacilityKind::Office, 3, None),
+                ];
+                rooms.extend((0..5).map(|index| {
+                    room(&format!("power-{index}"), FacilityKind::PowerPlant, 3, None)
+                }));
+                blueprint(rooms)
+            };
+        let candidate = |compiled: &CompiledRules| {
+            compiled
+                .anchors
+                .iter()
+                .find(|anchor| {
+                    anchor.system_id == "manufacture_objective_test" && anchor.operator != "温蒂"
+                })
+                .map(|anchor| anchor.operator.clone())
+        };
+        let level_two = objective_blueprint(2);
+        let full = operbox(&[("温蒂", 2), ("冬时", 2), ("异客", 2)]);
+        let winter_first = compile_catalog(
+            &manufacture_objective_catalog(&["冬时", "异客"]),
+            &level_two,
+            &full,
+            &BaseAssignment::default(),
+        );
+        let passenger_first = compile_catalog(
+            &manufacture_objective_catalog(&["异客", "冬时"]),
+            &level_two,
+            &full,
+            &BaseAssignment::default(),
+        );
+        assert_eq!(candidate(&winter_first).as_deref(), Some("异客"));
+        assert_eq!(candidate(&passenger_first).as_deref(), Some("异客"));
+        assert!(winter_first
+            .anchors
+            .iter()
+            .all(|anchor| anchor.operator != "冬时"));
+
+        let mut constrained_catalog = manufacture_objective_catalog(&["冬时", "异客"]);
+        constrained_catalog.rules[0].alternatives[0]
+            .relations
+            .push(RelationSpec::ForbidSameRoom {
+                a: "异客".to_string(),
+                b: "温蒂".to_string(),
+            });
+        let constrained = compile_catalog(
+            &constrained_catalog,
+            &level_two,
+            &full,
+            &BaseAssignment::default(),
+        );
+        assert_eq!(candidate(&constrained).as_deref(), Some("冬时"));
+        assert!(constrained
+            .anchors
+            .iter()
+            .all(|anchor| anchor.operator != "异客"));
+
+        let underleveled = operbox(&[("温蒂", 2), ("冬时", 2), ("异客", 1)]);
+        let qualified = compile_catalog(
+            &manufacture_objective_catalog(&["异客", "冬时"]),
+            &level_two,
+            &underleveled,
+            &BaseAssignment::default(),
+        );
+        assert_eq!(candidate(&qualified).as_deref(), Some("冬时"));
+        assert!(qualified
+            .anchors
+            .iter()
+            .all(|anchor| anchor.operator != "异客"));
+
+        let no_candidate = compile_catalog(
+            &manufacture_objective_catalog(&["异客", "冬时"]),
+            &level_two,
+            &operbox(&[("温蒂", 2)]),
+            &BaseAssignment::default(),
+        );
+        assert_eq!(candidate(&no_candidate), None);
+        assert_eq!(
+            selected(&no_candidate, "manufacture_objective_test"),
+            Some("battle_record")
+        );
+
+        let no_slot = compile_catalog(
+            &manufacture_objective_catalog(&["冬时", "异客"]),
+            &objective_blueprint(1),
+            &full,
+            &BaseAssignment::default(),
+        );
+        assert_eq!(candidate(&no_slot), None);
+
+        let missing_core = compile_catalog(
+            &manufacture_objective_catalog(&["冬时", "异客"]),
+            &level_two,
+            &operbox(&[("冬时", 2), ("异客", 2)]),
+            &BaseAssignment::default(),
+        );
+        assert_eq!(selected(&missing_core, "manufacture_objective_test"), None);
+
+        let mut used = BaseAssignment::default();
+        used.set_room("office", vec![AssignedOperator::new("冬时", 2)]);
+        let conflict = compile_catalog(
+            &manufacture_objective_catalog(&["冬时", "异客"]),
+            &level_two,
+            &full,
+            &used,
+        );
+        assert_eq!(candidate(&conflict).as_deref(), Some("异客"));
+        assert_eq!(
+            conflict
+                .anchors
+                .iter()
+                .filter(|anchor| anchor.operator == "冬时")
+                .count(),
+            0
+        );
     }
 
     #[test]

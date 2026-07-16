@@ -274,6 +274,15 @@
           "id": "two_power_control_eunectes",
           "gates": [{ "kind": "facility_count", "facility": "power_plant", "min": 2, "max": 2 }],
           "roles": [
+            { "id": "control", "facility": "control_center", "candidates": [{ "name": "森蚺", "elite": 2 }] },
+            {
+              "id": "lancet",
+              "facility": "power_plant",
+              "candidates": [{ "name": "Lancet-2", "elite": 0 }],
+              "work_mood": 0,
+              "rest_facility": "workshop"
+            },
+            { "id": "virtual_power", "facility": "power_plant", "candidates": [{ "name": "承曦格雷伊", "elite": 2 }], "min_count": 0 },
             {
               "id": "gold_pair",
               "facility": "factory",
@@ -288,21 +297,12 @@
               "id": "gold_third",
               "facility": "factory",
               "recipe": "gold",
-              "candidates": [{ "name": "冬时", "elite": 2 }, { "name": "异客", "elite": 2 }, { "name": "掠风", "elite": 2 }],
+              "candidates": [{ "name": "异客", "elite": 2 }, { "name": "掠风", "elite": 2 }, { "name": "冬时", "elite": 2 }],
               "min_count": 0,
               "max_count": 1,
-              "selection": "ordered",
+              "selection": "manufacture_objective",
               "room_group": "automation_factory"
-            },
-            { "id": "control", "facility": "control_center", "candidates": [{ "name": "森蚺", "elite": 2 }] },
-            {
-              "id": "lancet",
-              "facility": "power_plant",
-              "candidates": [{ "name": "Lancet-2", "elite": 0 }],
-              "work_mood": 0,
-              "rest_facility": "workshop"
-            },
-            { "id": "virtual_power", "facility": "power_plant", "candidates": [{ "name": "承曦格雷伊", "elite": 2 }], "min_count": 0 }
+            }
           ],
           "bind_all": true
         },

@@ -82,7 +82,7 @@
 
 | 文件 | 状态 | 用途 |
 |------|------|------|
-| [近期已知缺口修复清单.md](近期已知缺口修复清单.md) | ready-on-request | 汇总动态 producer、自动化第三人、迷迭香低心情、制造联合最优性、Bake 安全和 canonical 状态冲突；逐项授权、逐项验证 |
+| [近期已知缺口修复清单.md](近期已知缺口修复清单.md) | ready-on-request | 第 2 项已完成；其余动态 producer、迷迭香、联合最优性、Bake 和文档状态条目仍需逐项授权 |
 | [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md](DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md) | ready-on-request | 用户已确认的下一位 Agent 交接：三类可选中枢 producer 的 live 精确索引 Join 与 A+ Bake；尚未实现，不自动执行 |
 | [CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md](CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md) | ready-on-request | 动态 producer 的条件化单房响应 Bake：允许离线计算数十分钟，按中枢效果签名物化完整单房 solver response，运行时做互斥 Join 与 live 对账 |
 | [TRAINING_RECOMMENDER_RAG_PLAN.md](TRAINING_RECOMMENDER_RAG_PLAN.md) | proposal | 练度比对 / 练卡推荐 / RAG 解释层企划，待 Claude 与用户确认 |
