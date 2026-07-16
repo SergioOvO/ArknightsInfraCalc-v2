@@ -92,6 +92,7 @@ fn print_usage() {
     eprintln!("  infra-cli layout team-rotation --layout <path> --operbox <path> [--top <n>] [--output-dir <dir>] [--maa-out <file.json>] [--maa-title <title>] [-o <file.csv>] [--text|--json]");
     eprintln!("  infra-cli profile layout-full [--layout <path>] [--operbox <path>] [--top <n>] [--runs <n>] [--label <name>]");
     eprintln!("  infra-cli profile analyze-compare [--layout <path>] [--operbox <path>] [--schedule <path>] [--runs <n>]");
+    eprintln!("  infra-cli profile bake-dependencies [-o <report.json>]");
     eprintln!("  infra-cli trade yield <fixture> [--level <n>] [--shift <hours>] [-o <file.csv>] [--text]");
     eprintln!();
     eprintln!("Output: CSV by default (UTF-8 BOM when writing to file). Use --text for human-readable stderr.");

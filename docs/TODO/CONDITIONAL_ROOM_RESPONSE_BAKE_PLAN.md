@@ -36,7 +36,20 @@ CandidateRow
 6. **发布与性能**：generation-id 临时目录、checksum、原子切换、失败保留旧 generation；
    标准 243 warm `team-rotation` p50 目标不高于 200ms。
 
-当前批次只实施第 1 项，不改变候选集合、主路径 comparator、Plan admission 或 rotation。
+当前已进入第 2 项，只实现依赖分析与规模报告，不改变候选集合、主路径 comparator、Plan
+admission 或 rotation。
+
+### 2026-07-17 依赖编译阶段
+
+已新增只读 `profile bake-dependencies` 入口。依赖编译器对当前全部 `Selector`、`Condition` 和
+`Action` 使用穷举匹配；新增枚举若未分类会导致编译失败。分类先保守区分房内、同设施、
+跨设施、全局布局和运行时状态。全局资源 producer 暂时指向 `global_resource` 中间节点，
+下一步根据 registry 和实际 consumer 展开多目标传递闭包，不把来源设施误当成最终目标。
+
+首份报告中的具体 external 数量会随 Action 隐式依赖和全局资源边补全而更新；以命令生成的
+最新 JSON 为准，不把早期 70 条观测作为冻结规模。
+完整 JSON 产物用于下一步提取贸易/制造的最小充分签名和值域；本阶段尚未据此执行状态合并
+或修改 Bake schema。
 
 ## 1. 核心模型
 

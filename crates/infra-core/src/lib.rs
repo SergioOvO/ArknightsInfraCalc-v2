@@ -11,6 +11,7 @@ pub mod mood;
 pub mod operbox;
 pub mod pool;
 pub mod profile;
+pub mod response_dependency;
 pub mod roster;
 pub mod schedule;
 pub mod scoring;
@@ -79,6 +80,10 @@ pub use pool::{
 pub use power::{
     apply_power_to_layout, charge_ramp_from_buffs, solve_power, PowerOperator, PowerResult,
     PowerRoomInput,
+};
+pub use response_dependency::{
+    build_response_dependency_report, DependencyScope, ResponseDependencyReport,
+    ResponseDependencyRow, ResponseField,
 };
 pub use roster::{OperatorProgress, Roster};
 pub use schedule::{

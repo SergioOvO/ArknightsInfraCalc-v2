@@ -11,6 +11,7 @@ use infra_core::manufacture::input::ManuSearchRecipeMode;
 use infra_core::operbox::OperBox;
 use infra_core::pool::{build_manufacture_pool, build_trade_pool};
 use infra_core::profile::{hot_path_snapshot, reset_hot_path_counters, HotPathSnapshot};
+use infra_core::response_dependency::build_response_dependency_report;
 use infra_core::schedule::schedule_team_rotation;
 use infra_core::search::{
     search_manufacture_triples, search_trade_triples, ManuSearchOptions, TradeSearchOptions,
@@ -51,13 +52,52 @@ pub fn profile_cmd(args: &[String]) -> Result<(), Error> {
     match args.first().map(String::as_str) {
         Some("layout-full") => profile_layout_full_cmd(&args[1..]),
         Some("analyze-compare") => profile_analyze_compare_cmd(&args[1..]),
+        Some("bake-dependencies") => profile_bake_dependencies_cmd(&args[1..]),
         _ => {
             eprintln!(
-                "usage:\n  infra-cli profile layout-full [--layout <path>] [--operbox <path>] [--top <n>] [--runs <n>]\n  infra-cli profile analyze-compare [--layout <path>] [--operbox <path>] [--schedule <path>] [--runs <n>]"
+                "usage:\n  infra-cli profile layout-full [--layout <path>] [--operbox <path>] [--top <n>] [--runs <n>]\n  infra-cli profile analyze-compare [--layout <path>] [--operbox <path>] [--schedule <path>] [--runs <n>]\n  infra-cli profile bake-dependencies [-o <report.json>]"
             );
             Ok(())
         }
     }
+}
+
+fn profile_bake_dependencies_cmd(args: &[String]) -> Result<(), Error> {
+    let mut output = None;
+    let mut index = 0usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "-o" | "--output" => {
+                let Some(path) = args.get(index + 1) else {
+                    return Err(Error::msg("profile bake-dependencies -o requires a path"));
+                };
+                output = Some(PathBuf::from(path));
+                index += 2;
+            }
+            other => {
+                return Err(Error::msg(format!(
+                    "unknown profile bake-dependencies argument {other:?}"
+                )));
+            }
+        }
+    }
+    let table = SkillTable::load(&default_skill_table_path()?)?;
+    let report = build_response_dependency_report(&table);
+    let json = serde_json::to_string_pretty(&report)?;
+    if let Some(path) = output {
+        std::fs::write(&path, format!("{json}\n"))?;
+        eprintln!("Bake dependency report -> {}", path.display());
+    } else {
+        println!("{json}");
+    }
+    eprintln!(
+        "skills={} atoms={} external_atoms={} external_targets={:?}",
+        report.skill_count,
+        report.atom_count,
+        report.external_atom_count,
+        report.external_by_target_facility
+    );
+    Ok(())
 }
 
 fn profile_layout_full_cmd(args: &[String]) -> Result<(), Error> {
