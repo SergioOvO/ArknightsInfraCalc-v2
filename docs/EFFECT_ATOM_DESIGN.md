@@ -174,6 +174,13 @@ L3 组合短路：shortcut + trade_shortcuts.json（表化最优解）
 感知→无声共鸣/思维链环、人间烟火→巫术结晶均在 consumer 自身房间局部换算，
 不得进入全局 `run_conversions`。
 
+**班次激活规则（2026-07-17 用户裁决）**：资源 provider 与 converter 必须在同一班实际
+上岗，转换边才激活。该规则只关闭不完整链，不负责强制任一方进编，也不默认要求同房；
+只有 winner 实际依赖该链时才派生同班 dependency。provider 与 converter 为同一逻辑干员/
+同一 buff 时自然满足。爱丽丝梦境、车尔尼小节和絮雨记忆碎片链均按独立 buff id 建模；
+絮雨的资源 atom 已从与闪击共享的 `office_rec_spd[000]` 拆到
+`office_memory_fragment[000]`，不得用干员名特判。
+
 ---
 
 ## 九、跨设施编排层

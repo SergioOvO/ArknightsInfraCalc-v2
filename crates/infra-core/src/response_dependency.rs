@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
+use crate::global_resource::CONVERSIONS;
 use crate::skill_table::SkillTable;
 use crate::types::{Action, AtomScope, Condition, Selector};
 
@@ -38,9 +39,23 @@ pub struct ResponseDependencyRow {
     pub condition_scope: Option<DependencyScope>,
     pub action_dependency: String,
     pub action_scope: DependencyScope,
+    pub reads_resources: Vec<String>,
+    pub writes_resources: Vec<String>,
     pub atom_scope: String,
     pub response_field: ResponseField,
     pub requires_external_state: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ResourceConversionDependency {
+    pub from: String,
+    pub to: String,
+    pub from_per: f64,
+    pub to_per: f64,
+    pub provider_buff_id: String,
+    pub converter_buff_id: String,
+    pub activation: String,
+    pub operation: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -52,6 +67,7 @@ pub struct ResponseDependencyReport {
     pub external_by_target_facility: BTreeMap<String, usize>,
     pub dependency_edges_by_scope: BTreeMap<DependencyScope, usize>,
     pub by_response_field: BTreeMap<ResponseField, usize>,
+    pub resource_conversions: Vec<ResourceConversionDependency>,
     pub rows: Vec<ResponseDependencyRow>,
 }
 
@@ -82,6 +98,8 @@ pub fn build_response_dependency_report(table: &SkillTable) -> ResponseDependenc
                 condition_scope: condition.map(|(_, scope)| scope),
                 action_dependency: action.0.to_string(),
                 action_scope: action.1,
+                reads_resources: read_resources(atom),
+                writes_resources: written_resources(atom),
                 atom_scope: atom_scope.to_string(),
                 response_field: response_field(&atom.action),
                 requires_external_state,
@@ -126,8 +144,56 @@ pub fn build_response_dependency_report(table: &SkillTable) -> ResponseDependenc
         external_by_target_facility,
         dependency_edges_by_scope: by_dependency_scope,
         by_response_field,
+        resource_conversions: CONVERSIONS
+            .iter()
+            .map(|conversion| ResourceConversionDependency {
+                from: conversion.from.id().to_string(),
+                to: conversion.to.id().to_string(),
+                from_per: conversion.from_per,
+                to_per: conversion.to_per,
+                provider_buff_id: conversion.provider_buff_id.to_string(),
+                converter_buff_id: conversion.converter_buff_id.to_string(),
+                activation: "provider_and_converter_active_in_same_shift".to_string(),
+                operation: "destructive_floor_conversion".to_string(),
+            })
+            .collect(),
         rows,
     }
+}
+
+fn read_resources(atom: &crate::types::EffectAtom) -> Vec<String> {
+    let mut resources = Vec::new();
+    if let Some(Selector::StatePoolFloored { key, .. }) = atom.selector.as_ref() {
+        resources.push(normalize_resource(key));
+    }
+    let action_resource = match &atom.action {
+        Action::AddLimitFromState { key, .. }
+        | Action::MoodDrainPerStateStep { key, .. }
+        | Action::StateConsume { key, .. }
+        | Action::StateConsumeToEff { key, .. } => Some(normalize_resource(key)),
+        Action::StateConvert { from, .. } => Some(normalize_resource(from)),
+        _ => None,
+    };
+    if let Some(resource) = action_resource {
+        if !resources.contains(&resource) {
+            resources.push(resource);
+        }
+    }
+    resources
+}
+
+fn written_resources(atom: &crate::types::EffectAtom) -> Vec<String> {
+    match &atom.action {
+        Action::StateProduce { key, .. } => vec![normalize_resource(key)],
+        Action::StateConvert { to, .. } => vec![normalize_resource(to)],
+        _ => Vec::new(),
+    }
+}
+
+fn normalize_resource(key: &str) -> String {
+    crate::global_resource::GlobalResourceKey::parse(key)
+        .map(|resource| resource.id().to_string())
+        .unwrap_or_else(|| key.to_ascii_lowercase())
 }
 
 fn target_facility<'a>(source: &'a str, action: &Action, atom_scope: AtomScope) -> &'a str {
@@ -302,6 +368,19 @@ mod tests {
         assert!(report.rows.iter().any(|row| {
             row.target_facility == "trade"
                 && row.selector.as_deref() == Some("tagged_count_in_trade_sum")
+        }));
+        assert!(report.resource_conversions.iter().any(|conversion| {
+            conversion.from == "dream"
+                && conversion.to == "perception"
+                && conversion.provider_buff_id == "dorm_rec_bd_n1_n2[000]"
+                && conversion.converter_buff_id == "dorm_rec_bd_n1_n2[000]"
+        }));
+        assert!(report.rows.iter().any(|row| {
+            row.skill_id == "trade_ord_spd_bd[010]"
+                && row
+                    .reads_resources
+                    .iter()
+                    .any(|resource| resource == "silent_echo")
         }));
         assert!(report.rows.iter().any(|row| {
             row.target_facility == "manufacture"

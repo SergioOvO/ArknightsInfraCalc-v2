@@ -6842,7 +6842,8 @@
       "facilities": {
         "office": {
           "buff_ids": [
-            "office_rec_spd[000]"
+            "office_rec_spd[000]",
+            "office_memory_fragment[000]"
           ],
           "stepwise": false
         }
@@ -6855,7 +6856,8 @@
       "facilities": {
         "office": {
           "buff_ids": [
-            "office_rec_spd[000]"
+            "office_rec_spd[000]",
+            "office_memory_fragment[000]"
           ],
           "stepwise": true
         }

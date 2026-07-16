@@ -5728,31 +5728,6 @@
       "atoms": [
         {
           "action": {
-            "kind": "state_produce",
-            "params": {
-              "key": "Perception",
-              "amount": -10.0
-            }
-          },
-          "scope": "global",
-          "phase": "state_write",
-          "phase_order": 5
-        },
-        {
-          "selector": "facility_level",
-          "scope": "global",
-          "action": {
-            "kind": "state_produce",
-            "params": {
-              "key": "Perception",
-              "amount": 10.0
-            }
-          },
-          "phase": "state_write",
-          "phase_order": 6
-        },
-        {
-          "action": {
             "kind": "add_flat_eff",
             "params": {
               "value": 20.0
@@ -5784,6 +5759,39 @@
           },
           "phase": "constant",
           "phase_order": 30
+        }
+      ]
+    },
+    {
+      "id": "office_memory_fragment[000]",
+      "skill_name": "巡游·追忆",
+      "facility": "office",
+      "tier": "tier_up",
+      "atoms": [
+        {
+          "action": {
+            "kind": "state_produce",
+            "params": {
+              "key": "MemoryFragment",
+              "amount": -10.0
+            }
+          },
+          "scope": "global",
+          "phase": "state_write",
+          "phase_order": 5
+        },
+        {
+          "selector": "facility_level",
+          "scope": "global",
+          "action": {
+            "kind": "state_produce",
+            "params": {
+              "key": "MemoryFragment",
+              "amount": 10.0
+            }
+          },
+          "phase": "state_write",
+          "phase_order": 6
         }
       ]
     },
@@ -6526,7 +6534,7 @@
           "action": {
             "kind": "state_produce",
             "params": {
-              "key": "Perception",
+              "key": "Dream",
               "amount": 1.0
             }
           },
@@ -6547,7 +6555,7 @@
           "action": {
             "kind": "state_produce",
             "params": {
-              "key": "Perception",
+              "key": "MusicalSection",
               "amount": 1.0
             }
           },

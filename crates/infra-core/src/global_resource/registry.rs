@@ -12,9 +12,13 @@ pub struct GlobalResourceConversion {
     /// 分子：产出 `to_per` 点 `to`。
     pub to_per: f64,
     pub skill_hint: &'static str,
+    /// Both buffs must belong to operators actually working in the current shift.
+    pub provider_buff_id: &'static str,
+    pub converter_buff_id: &'static str,
 }
 
 /// 已知跨资源转化（不含同房即时 `StateConsumeToEff` 的 div 消费）。
+/// 转换只在 provider/converter buff 同班实际活跃时执行；这里不负责进编。
 pub const CONVERSIONS: &[GlobalResourceConversion] = &[
     GlobalResourceConversion {
         from: GlobalResourceKey::Dream,
@@ -22,6 +26,8 @@ pub const CONVERSIONS: &[GlobalResourceConversion] = &[
         from_per: 1.0,
         to_per: 1.0,
         skill_hint: "爱丽丝·梦境呓语",
+        provider_buff_id: "dorm_rec_bd_n1_n2[000]",
+        converter_buff_id: "dorm_rec_bd_n1_n2[000]",
     },
     GlobalResourceConversion {
         from: GlobalResourceKey::MusicalSection,
@@ -29,6 +35,8 @@ pub const CONVERSIONS: &[GlobalResourceConversion] = &[
         from_per: 1.0,
         to_per: 1.0,
         skill_hint: "车尔尼·琴键漫步",
+        provider_buff_id: "dorm_rec_bd_n1_n3[000]",
+        converter_buff_id: "dorm_rec_bd_n1_n3[000]",
     },
     GlobalResourceConversion {
         from: GlobalResourceKey::MemoryFragment,
@@ -36,6 +44,8 @@ pub const CONVERSIONS: &[GlobalResourceConversion] = &[
         from_per: 1.0,
         to_per: 1.0,
         skill_hint: "絮雨·追忆",
+        provider_buff_id: "office_memory_fragment[000]",
+        converter_buff_id: "office_memory_fragment[000]",
     },
     // 注意：感知→无声共鸣（黑键·乐感）/ 感知→思维链环（迷迭香·超感）**不是**全局消耗边。
     // 感知是全基建共享的累加值，黑键与迷迭香各自读取全量、互不扣减（PRTS：90 感知 → 迷迭香 90% / 黑键 45%）。

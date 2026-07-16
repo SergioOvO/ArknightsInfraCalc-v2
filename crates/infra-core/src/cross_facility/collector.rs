@@ -14,6 +14,7 @@ use crate::{AssignedOperator, FacilityKind, RoomId};
 #[derive(Debug, Clone)]
 pub struct GlobalAtomEntry {
     pub atom: EffectAtom,
+    pub buff_id: String,
     pub owner_name: String,
     pub owner_elite: u8,
     pub owner_tags: Vec<String>,
@@ -58,6 +59,7 @@ pub fn collect_global_atoms(
                     }
                     entries.push(GlobalAtomEntry {
                         atom: atom.clone(),
+                        buff_id: bid.clone(),
                         owner_name: op.name.clone(),
                         owner_elite: op.elite,
                         owner_tags: tags.clone(),

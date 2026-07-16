@@ -46,6 +46,10 @@ admission 或 rotation。
 跨设施、全局布局和运行时状态。全局资源 producer 暂时指向 `global_resource` 中间节点，
 下一步根据 registry 和实际 consumer 展开多目标传递闭包，不把来源设施误当成最终目标。
 
+资源转换状态只包含“链关闭”和“provider + converter 同班完整激活”两类可达状态。缺一端的
+半链不进入条件化 response 维度；该压缩来自已确认激活语义，不是按当前 winner 做启发式剪枝。
+依赖报告同时输出 atom 的资源读写边和 conversion 的 provider/converter buff id。
+
 首份报告中的具体 external 数量会随 Action 隐式依赖和全局资源边补全而更新；以命令生成的
 最新 JSON 为准，不把早期 70 条观测作为冻结规模。
 完整 JSON 产物用于下一步提取贸易/制造的最小充分签名和值域；本阶段尚未据此执行状态合并

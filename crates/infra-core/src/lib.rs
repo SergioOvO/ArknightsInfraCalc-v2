@@ -82,8 +82,8 @@ pub use power::{
     PowerRoomInput,
 };
 pub use response_dependency::{
-    build_response_dependency_report, DependencyScope, ResponseDependencyReport,
-    ResponseDependencyRow, ResponseField,
+    build_response_dependency_report, DependencyScope, ResourceConversionDependency,
+    ResponseDependencyReport, ResponseDependencyRow, ResponseField,
 };
 pub use roster::{OperatorProgress, Roster};
 pub use schedule::{

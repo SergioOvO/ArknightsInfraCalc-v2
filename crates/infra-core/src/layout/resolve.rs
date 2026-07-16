@@ -102,6 +102,7 @@ pub fn resolve_base(
     }
     layout.gold_manu_line_count = blueprint.gold_manu_line_count();
 
+    let mut active_global_buffs = std::collections::HashSet::new();
     if let (Some(instances), Some(table)) = (instances, table) {
         let power_ops: Vec<(RoomId, PowerOperator)> = workforce
             .power_stations
@@ -156,6 +157,11 @@ pub fn resolve_base(
             blueprint, assignment, instances, table, &layout,
         );
         if !global_atoms.is_empty() {
+            active_global_buffs.extend(
+                global_atoms
+                    .iter()
+                    .map(|entry| (entry.owner_name.clone(), entry.buff_id.clone())),
+            );
             let snapshot = crate::cross_facility::orchestrate_global_atoms(
                 &global_atoms,
                 &layout,
@@ -165,7 +171,7 @@ pub fn resolve_base(
         }
     }
 
-    layout.global.run_conversions();
+    layout.global.run_conversions(&active_global_buffs);
 
     let trade_rooms = build_trade_rooms(blueprint, assignment, instances, table, &layout);
     let manu_rooms = build_manu_rooms(blueprint, assignment, instances, table, &layout);
@@ -751,6 +757,74 @@ mod tests {
             (trade.layout.global.get(GlobalResourceKey::Perception) - 36.0).abs() < f64::EPSILON,
             "黑键房应扣回自产, got {}",
             trade.layout.global.get(GlobalResourceKey::Perception)
+        );
+    }
+
+    #[test]
+    fn intermediate_resource_converts_only_with_its_active_shift_buff() {
+        let (instances, table) = pair();
+        let mut blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        blueprint
+            .scenario
+            .initial_global
+            .insert(GlobalResourceKey::Dream, 3.0);
+
+        let inactive = resolve_base(
+            &blueprint,
+            &BaseAssignment::default(),
+            Some(&instances),
+            Some(&table),
+            24.0,
+            None,
+        )
+        .unwrap();
+        assert_eq!(inactive.layout.global.get(GlobalResourceKey::Dream), 3.0);
+        assert_eq!(
+            inactive.layout.global.get(GlobalResourceKey::Perception),
+            0.0
+        );
+
+        let mut active_assignment = BaseAssignment::default();
+        active_assignment.set_room("dorm_1", vec![AssignedOperator::new("爱丽丝", 2)]);
+        let active = resolve_base(
+            &blueprint,
+            &active_assignment,
+            Some(&instances),
+            Some(&table),
+            24.0,
+            None,
+        )
+        .unwrap();
+        assert_eq!(active.layout.global.get(GlobalResourceKey::Dream), 0.0);
+        assert_eq!(active.layout.global.get(GlobalResourceKey::Perception), 6.0);
+    }
+
+    #[test]
+    fn blitz_office_buff_does_not_produce_wisps_memory_fragments() {
+        let (instances, table) = pair();
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room("office_1", vec![AssignedOperator::new("闪击", 2)]);
+
+        let resolved = resolve_base(
+            &blueprint,
+            &assignment,
+            Some(&instances),
+            Some(&table),
+            24.0,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            resolved
+                .layout
+                .global
+                .get(GlobalResourceKey::MemoryFragment),
+            0.0
+        );
+        assert_eq!(
+            resolved.layout.global.get(GlobalResourceKey::Perception),
+            0.0
         );
     }
 

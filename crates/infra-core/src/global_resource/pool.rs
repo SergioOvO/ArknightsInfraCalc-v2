@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::key::GlobalResourceKey;
 use super::registry::CONVERSIONS;
@@ -98,10 +98,19 @@ impl GlobalResourcePool {
     }
 
     /// 按 `CONVERSIONS` 注册表执行全局资源转化（固定点迭代）。
-    pub fn run_conversions(&mut self) {
+    pub fn run_conversions(&mut self, active_buffs: &HashSet<(String, String)>) {
         loop {
             let mut changed = false;
             for conv in CONVERSIONS {
+                let provider_active = active_buffs
+                    .iter()
+                    .any(|(_, buff)| buff == conv.provider_buff_id);
+                let converter_active = active_buffs
+                    .iter()
+                    .any(|(_, buff)| buff == conv.converter_buff_id);
+                if !provider_active || !converter_active {
+                    continue;
+                }
                 let from_amount = self.get(conv.from);
                 if from_amount + f64::EPSILON < conv.from_per {
                     continue;
@@ -148,9 +157,25 @@ mod tests {
     #[test]
     fn conversions_keep_shared_human_fireworks_available_to_all_consumers() {
         let mut pool = GlobalResourcePool::with_value(GlobalResourceKey::HumanFireworks, 10.0);
-        pool.run_conversions();
+        pool.run_conversions(&HashSet::new());
         assert!((pool.get(GlobalResourceKey::HumanFireworks) - 10.0).abs() < f64::EPSILON);
         assert!((pool.get(GlobalResourceKey::WitchcraftCrystal) - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn conversion_requires_active_provider_and_converter() {
+        let mut inactive = GlobalResourcePool::with_value(GlobalResourceKey::Dream, 3.0);
+        inactive.run_conversions(&HashSet::new());
+        assert_eq!(inactive.get(GlobalResourceKey::Dream), 3.0);
+        assert_eq!(inactive.get(GlobalResourceKey::Perception), 0.0);
+
+        let mut active = GlobalResourcePool::with_value(GlobalResourceKey::Dream, 3.0);
+        active.run_conversions(&HashSet::from([(
+            "爱丽丝".to_string(),
+            "dorm_rec_bd_n1_n2[000]".to_string(),
+        )]));
+        assert_eq!(active.get(GlobalResourceKey::Dream), 0.0);
+        assert_eq!(active.get(GlobalResourceKey::Perception), 3.0);
     }
 
     #[test]
