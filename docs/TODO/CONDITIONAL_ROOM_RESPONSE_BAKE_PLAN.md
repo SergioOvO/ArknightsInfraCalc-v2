@@ -8,6 +8,68 @@
 > Bake 的物化边界、生成流程和运行时查询，不重新定义 producer 业务规则与 comparator。
 > 贸易是首个 vertical slice，制造是第二设施通用性验收，不复制平行 pipeline。
 
+## 当前交接：先从真实技能提取最小机制组合
+
+> 交接状态：2026-07-17 用户要求暂停抽象 Bake 架构推演，下一位 AI 先完整读取实际干员
+> 技能，再确定首批最小组合。不要先 `grill` 用户，也不要预设按单房、半区或全基地 Bake。
+
+### 用户最新方向
+
+Bake 不应为每个干员或完整全局编制穷举响应，而应只物化**无法由单个干员独立确定的最小
+机制组合**。例如格拉斯哥链应从戴菲恩、推进之王、摩根、维娜·维多利亚的真实技能出发，
+判断哪些最小有效子集会产生不同响应；不能因为常见满组胜出，就只 Bake 满组或把它写成
+required admission。
+
+下一位 AI 的第一项工作是只读提取，不直接修改 Bake schema：
+
+1. 完整读取 `data/skill_table.json` 中贸易、制造、中枢和全局资源相关技能。
+2. 用 `data/operator_instances.json` 解析每个 buff 的实际 owner、tier、设施和 tag。
+3. 核对 L2/L3 owner：`trade/interpreter.rs`、`trade/gold_flow.rs`、
+   `trade/order_mechanic.rs`、shortcut/segment registry，以及制造 interpreter。
+4. 将技能分为“单人可独立结算”和“必须联合确定”；只对后者列最小机制闭包。
+5. 对每个闭包列出所有响应不同的有效子集、同房/同班/跨房条件、仍需运行时提供的状态，
+   以及普通队友是否可留到运行时 Join。
+6. 先输出清单给用户确认，再选择首批组合实施 Bake。
+
+建议输出表：
+
+| 机制 | owner / buff | 最小角色集合 | 响应不同的子集或阈值 | 外部状态 | 普通队友处理 |
+|---|---|---|---|---|---|
+| 格拉斯哥链 | 戴菲恩 + 实际格拉斯哥 consumer | 待读技能后填写 | 不能预填满组 | 同班、各贸易房实际 tag 数 | 运行时 Join |
+
+### 已有运行证据
+
+- 标准全精二 243 三班排班约 `2.1–2.5s`，目标仍为 `<=200ms`。
+- 现有贸易 catalog 已在 `out/bake-trade-full-20260717/` 成功生成：134,324 行，生成约
+  `0.68s`；18 条 live response 抽样和机制回归通过。
+- 隔离数据目录 `out/bake-runtime-data-20260717/` 使用该贸易 catalog 后，三班排班仍约
+  `2.0–2.4s`，说明单房贸易 Bake 不是主要收益点。
+- profile 中名为“中枢-生产前缀候选”的 `575–825ms` 不是纯中枢成本，而是每个中枢前缀下
+  的全局生产组合重复求值；不要据计时标签把问题简化成“Bake 中枢五人”。
+- 单次制造阶段观测约 `146–174ms`，γ 替补和三班评分还会重复结算；真正目标是减少重复的
+  全局机制组合求值，而不是只缓存一个普通制造三人组。
+
+相关 evidence：
+
+- `target/codex-runs/bake-trade-try-20260717/`
+- `target/codex-runs/bake-runtime-try-20260717/`
+- `target/codex-runs/manufacture-speed-check-20260717/`
+
+### 禁止提前做出的简化
+
+- 不从当前 top hit、常见攻略组或固定人名套餐推导 hard constraint。
+- 不只 Bake 满组而删除单人、二人或三人有效子集。
+- 不把同响应的不同人员 mask 删除；只允许共享 response。
+- 不为普通白板干员逐人生成重复 Bake；普通队友优先保留为 CandidateRow/runtime Join。
+- 不在尚未列清最小机制闭包前接管默认 `team-rotation`。
+- miss 必须继续 live fallback；Required 模式仍用于证明完整命中。
+
+### OpenCode subagent 交接
+
+项目 Terra、Sol、Luna 已在 commit `47c69c0` 改为 Code Online：
+`codesonline/gpt-5.6-terra|sol|luna`。OpenCode 配置不会热加载，下一位 AI 开始前应确认会话已
+重启，再使用 Terra 做大范围技能调查、Luna 做稳定字段提取、Sol 做最终边界复审。
+
 ## 0. 2026-07-17 用户裁决与实施顺序
 
 核心模型扩展为：
