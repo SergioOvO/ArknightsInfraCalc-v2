@@ -30,9 +30,11 @@ pub mod power;
 pub mod trade;
 
 pub use bake::{
-    bake_catalogs, default_baked_out_dir, validate_baked_catalog, verify_baked_catalog_responses,
-    warm_runtime_baked_table, BakeGeneratorFingerprint, BakeMode, BakeOptions, BakeProgressEvent,
-    BakeReport, BAKE_SCHEMA_VERSION,
+    bake_catalogs, default_baked_out_dir, load_complete_baked_trade_catalog,
+    validate_baked_catalog, verify_baked_catalog_responses, warm_runtime_baked_table,
+    BakeGeneratorFingerprint, BakeMode, BakeOptions, BakeProgressEvent, BakeReport,
+    BakedTradeRowId, CompleteBakedTradeCatalog, CompleteBakedTradeRow, CompleteBakedTradeRows,
+    BAKE_SCHEMA_VERSION,
 };
 pub use box_profile::{
     baseline_path_or_default, build_box_profile, render_box_profile_narrative, ActionKind,

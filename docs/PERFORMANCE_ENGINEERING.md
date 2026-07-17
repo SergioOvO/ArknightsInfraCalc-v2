@@ -110,7 +110,7 @@ operator_instances.json
 [bake.rs](../crates/infra-core/src/bake.rs) 当前声明：
 
 ```text
-BAKE_SCHEMA_VERSION = 11
+BAKE_SCHEMA_VERSION = 12
 model = binary_single_room_combo_table
 ```
 
@@ -133,14 +133,14 @@ model = binary_single_room_combo_table
 
 旧表平均约 150.6 bytes/row，但这是 schema 5 混合行格式的观测值，不能直接当作未来紧凑表的固定大小。
 
-2026-07-17 的 schema v11 首批贸易 room-local 机制 catalog 在同一完整贸易 row universe 上生成
+2026-07-17 的 schema v11 首批贸易 room-local 机制历史 catalog 在同一完整贸易 row universe 上生成
 134,324 行，其中 30,306 行携带 45 个不同机制字段组合；生成约 1.47 秒。该数字不是结构化
 response dictionary 的去重数。该数据只证明冷路径规模和
 物化覆盖，不代表默认 `team-rotation` 已接入新的跨房条件查询，也不用于推导 200ms 目标已达成。
 
 ### 关键结论
 
-代码期望 schema 11，而本地 manifest 是 schema 5。`validate_baked_catalog` 会报告 schema mismatch；运行时加载器把这一类错误视为缓存不可用并返回 `None`，搜索随后走实时路径。因此当前行为是“性能退化但结果安全”，不是使用旧表继续算。表中的大小仍是 schema 5 历史观测，不代表 v11 新字段的实测大小。
+代码期望 schema 12，而本地 manifest 是 schema 5。`validate_baked_catalog` 会报告 schema mismatch；运行时加载器把这一类错误视为缓存不可用并返回 `None`，搜索随后走实时路径。因此当前行为是“性能退化但结果安全”，不是使用旧表继续算。表中的大小仍是 schema 5 历史观测，不代表 v12 的实测大小。
 
 ## 6. Bake 冷路径
 
@@ -244,7 +244,12 @@ catalog missing / stale / schema mismatch / generator mismatch / input mismatch
 
 ## 12. 下一步：A+ 候选列烘焙（未实现）
 
-用户已明确要求把凛御银灰、戴菲恩、八幡海铃收敛到同一套可选 producer 生命周期，并优先采用“多烘焙、运行时做小型精确 Join”的简单方案。完整交接见 [动态 Producer A+ 联合 Baked Search 计划](TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)。schema v11 只完成首批贸易 room-local 观察量物化，尚不具备完整动态 producer 联合 tuple 与 runtime Join。
+用户已明确要求把凛御银灰、戴菲恩、八幡海铃收敛到同一套可选 producer 生命周期，并优先采用“多烘焙、运行时做小型精确 Join”的简单方案。完整交接见 [动态 Producer A+ 联合 Baked Search 计划](TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)。schema v12 已完成首批贸易 room-local 观察量和完整 row universe 校验，尚不具备完整动态 producer 联合 tuple 与 runtime Join。
+
+schema v12 的 debug CLI 冷进程 `bake validate`（完整贸易 134,324 rows，包含 hash/count、全量
+机制签名和 TradePool identity universe 对照）实测约 3.84 秒、峰值 RSS 80,512 KB。这是 catalog
+加载/发布门禁成本，不是 warm 查询成本；runtime handle / `OnceLock` 必须只支付一次，后续
+signature 查询不得重复反序列化、建池或全量验证。release 冷加载仍未测。
 
 首期方向不是建立新的通用 DP / Pareto 框架，而是：
 

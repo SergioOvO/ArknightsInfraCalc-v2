@@ -395,7 +395,7 @@ catalog row/response 精确命中
 | trade role | `layout/assign/trade_fill.rs`、`search/role_pick.rs` 的 `meta_vina` | 固定 package / 有序 role 代替实际候选效率搜索 |
 | cross-room resolve | 当前候选级 workforce 投影 | 按房顺序提交会让前房看不到后房最终标签；联合 tuple 必须完整落位后统一 resolve |
 | rotation | `schedule/team_rotation.rs` optional dynamic 分支 | 搜索未输出通用 dependency，rotation 被迫重新推断 tag、blocked pool 和 presence |
-| Bake | `bake.rs` schema v11 单房 baseline 表 | 已显式保存首批贸易 room-local 机制签名，但仍不能表达完整联合 rule/tier/cross-room signature；不兼容时只允许安全拒绝 |
+| Bake | `bake.rs` schema v12 单房 baseline 表 | 已显式保存首批贸易 room-local 机制签名并校验完整 row universe，但仍不能表达完整联合 rule/tier/cross-room signature；不兼容时只允许安全拒绝 |
 
 ## 10. 单一责任边界
 

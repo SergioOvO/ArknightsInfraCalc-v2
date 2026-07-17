@@ -36,7 +36,7 @@ use crate::trade::solver::solve_trade_with_shift_prevalidated;
 use crate::types::{Condition, RecipeKind, Selector};
 use crate::FacilityKind;
 
-pub const BAKE_SCHEMA_VERSION: u32 = 11;
+pub const BAKE_SCHEMA_VERSION: u32 = 12;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BakeMode {
@@ -187,6 +187,34 @@ pub struct BakeReport {
     pub elapsed_ms: u128,
 }
 
+#[derive(Debug, Clone)]
+pub struct CompleteBakedTradeRow {
+    pub row_id: BakedTradeRowId,
+    pub names: Vec<String>,
+    pub logical_mask: Vec<u64>,
+    pub siracusa_count: u8,
+    pub glasgow_count: u8,
+    pub karlan_count: u8,
+    pub baseline_response: TradeSearchHit,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BakedTradeRowId {
+    pub signature_key: String,
+    pub offset: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompleteBakedTradeRows {
+    pub signature_key: String,
+    pub rows: Vec<CompleteBakedTradeRow>,
+}
+
+pub struct CompleteBakedTradeCatalog {
+    disk: BakedComboTableDisk,
+    trade_pool: TradePool,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct BakeManifest {
     schema_version: u32,
@@ -196,6 +224,14 @@ struct BakeManifest {
     generator: Option<BakeGeneratorFingerprint>,
     inputs: Vec<BakeInputFingerprint>,
     options: BakeManifestOptions,
+    combo_table: BakeComboTableFingerprint,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct BakeComboTableFingerprint {
+    bytes: u64,
+    hash64: String,
+    rows_by_signature: BTreeMap<String, usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -245,7 +281,7 @@ struct BakedComboTableDisk {
     rows: Vec<BakedComboRowDisk>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 struct BakedComboRowDisk {
     room_level: u8,
     operator_capacity: usize,
@@ -699,10 +735,10 @@ pub fn bake_catalogs(options: &BakeOptions) -> Result<BakeReport> {
             rows: Some(combo_table_rows),
         },
     );
-    write_binary(
-        options.out_dir.join("combo_table.bin"),
-        &BakedComboTableDisk::from(&combo_table),
-    )?;
+    let combo_disk = BakedComboTableDisk::from(&combo_table);
+    let combo_bytes = bincode::serialize(&combo_disk)
+        .map_err(|e| Error::msg(format!("encode combo_table.bin: {e}")))?;
+    fs::write(options.out_dir.join("combo_table.bin"), &combo_bytes)?;
 
     let manifest = BakeManifest {
         schema_version: BAKE_SCHEMA_VERSION,
@@ -719,6 +755,15 @@ pub fn bake_catalogs(options: &BakeOptions) -> Result<BakeReport> {
                     .to_string(),
             layout_model: "single room signatures; gold trade keeps gold line count in key"
                 .to_string(),
+        },
+        combo_table: BakeComboTableFingerprint {
+            bytes: combo_bytes.len() as u64,
+            hash64: hash_bytes(&combo_bytes),
+            rows_by_signature: combo_table
+                .indexes
+                .iter()
+                .map(|index| (index.signature_key.clone(), index.len))
+                .collect(),
         },
     };
     emit_progress(
@@ -1127,6 +1172,18 @@ fn compare_baked_rows(a: &BakedComboRow, b: &BakedComboRow) -> std::cmp::Orderin
 }
 
 pub fn validate_baked_catalog(out_dir: &Path, generator: &BakeGeneratorFingerprint) -> Result<()> {
+    load_validated_baked_catalog(out_dir, generator).map(|_| ())
+}
+
+struct ValidatedBakedCatalog {
+    disk: BakedComboTableDisk,
+    trade_pool: Option<TradePool>,
+}
+
+fn load_validated_baked_catalog(
+    out_dir: &Path,
+    generator: &BakeGeneratorFingerprint,
+) -> Result<ValidatedBakedCatalog> {
     let manifest_path = out_dir.join("manifest.json");
     let raw = fs::read_to_string(&manifest_path)?;
     let manifest: BakeManifest = serde_json::from_str(&raw)?;
@@ -1169,27 +1226,42 @@ pub fn validate_baked_catalog(out_dir: &Path, generator: &BakeGeneratorFingerpri
     let combo_path = out_dir.join("combo_table.bin");
     let raw = fs::read(&combo_path)
         .map_err(|e| Error::msg(format!("read {}: {e}", combo_path.display())))?;
+    if manifest.combo_table.bytes != raw.len() as u64
+        || manifest.combo_table.hash64 != hash_bytes(&raw)
+    {
+        return Err(Error::msg("baked combo table fingerprint mismatch"));
+    }
     let disk: BakedComboTableDisk = bincode::deserialize(&raw)
         .map_err(|e| Error::msg(format!("read {}: {e}", combo_path.display())))?;
     validate_baked_combo_table(&disk, generator, &manifest.options)?;
-    if manifest.options.include_trade {
+    let rows_by_signature = disk
+        .indexes
+        .iter()
+        .map(|index| (index.signature_key.clone(), index.len))
+        .collect::<BTreeMap<_, _>>();
+    if rows_by_signature != manifest.combo_table.rows_by_signature {
+        return Err(Error::msg("baked combo table row counts mismatch"));
+    }
+    let trade_pool = if manifest.options.include_trade {
         let instances = OperatorInstances::load(&default_instances_path()?)?;
         let table = SkillTable::load(&default_skill_table_path()?)?;
         let roster = bake_roster(&instances);
         let trade_pool = build_trade_pool(&roster, &instances, &table)?;
         validate_trade_mechanism_signatures(&disk, &trade_pool)?;
-    }
-    Ok(())
+        validate_complete_trade_row_universe(&disk, &trade_pool, &table)?;
+        Some(trade_pool)
+    } else {
+        None
+    };
+    Ok(ValidatedBakedCatalog { disk, trade_pool })
 }
 
 pub fn verify_baked_catalog_responses(
     out_dir: &Path,
     generator: &BakeGeneratorFingerprint,
 ) -> Result<usize> {
-    validate_baked_catalog(out_dir, generator)?;
-    let raw = fs::read(out_dir.join("combo_table.bin"))?;
-    let disk: BakedComboTableDisk = bincode::deserialize(&raw)
-        .map_err(|e| Error::msg(format!("decode baked response verification table: {e}")))?;
+    let validated = load_validated_baked_catalog(out_dir, generator)?;
+    let disk = validated.disk;
     let instances = OperatorInstances::load(&default_instances_path()?)?;
     let table = SkillTable::load(&default_skill_table_path()?)?;
     let roster = bake_roster(&instances);
@@ -1271,6 +1343,147 @@ pub fn verify_baked_catalog_responses(
         }
     }
     Ok(verified)
+}
+
+pub fn load_complete_baked_trade_catalog(
+    out_dir: &Path,
+    generator: &BakeGeneratorFingerprint,
+) -> Result<CompleteBakedTradeCatalog> {
+    let validated = load_validated_baked_catalog(out_dir, generator)?;
+    let trade_pool = validated
+        .trade_pool
+        .ok_or_else(|| Error::msg("baked catalog does not include trade"))?;
+    Ok(CompleteBakedTradeCatalog {
+        disk: validated.disk,
+        trade_pool,
+    })
+}
+
+impl CompleteBakedTradeCatalog {
+    pub fn rows_for(
+        &self,
+        room_level: u8,
+        order_kind: TradeOrderKind,
+    ) -> Result<CompleteBakedTradeRows> {
+        let disk = &self.disk;
+        let signature_key = trade_lookup_key(
+            room_level,
+            station_operator_capacity(room_level),
+            order_kind,
+            baked_search_baseline().gold_manu_line_count,
+        );
+        let index = disk
+            .indexes
+            .iter()
+            .find(|index| index.signature_key == signature_key)
+            .ok_or_else(|| {
+                Error::msg(format!("complete baked trade rows miss {signature_key:?}"))
+            })?;
+        let mut rows = Vec::with_capacity(index.len);
+        for (offset, disk_row) in disk.rows[index.start..index.start + index.len]
+            .iter()
+            .enumerate()
+        {
+            let names = disk_row
+                .operator_indices
+                .iter()
+                .map(|operator| disk.operator_names[*operator].clone())
+                .collect::<Vec<_>>();
+            let operators = names
+                .iter()
+                .map(|name| {
+                    self.trade_pool
+                        .entry(name)
+                        .map(|entry| entry.to_trade_operator())
+                        .ok_or_else(|| {
+                            Error::msg(format!("baked trade row operator {name:?} missing"))
+                        })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let count = |tag: &str| {
+                operators
+                    .iter()
+                    .filter(|operator| operator.has_tag(tag))
+                    .count()
+                    .min(u8::MAX as usize) as u8
+            };
+            let mut row = BakedComboRow::from(disk_row.clone());
+            row.row_id = index.start + offset;
+            row.facility = "trade".to_string();
+            row.signature_key = signature_key.clone();
+            row.names = names.clone();
+            row.operator_mask = operator_mask_from_indices(&row.operator_indices, disk.mask_words);
+            rows.push(CompleteBakedTradeRow {
+                row_id: BakedTradeRowId {
+                    signature_key: signature_key.clone(),
+                    offset,
+                },
+                names,
+                logical_mask: row.operator_mask.clone(),
+                siracusa_count: count("cc.g.siracusa"),
+                glasgow_count: count("cc.g.glasgow"),
+                karlan_count: count("cc.g.karlan"),
+                baseline_response: row_to_trade_hit(&row)
+                    .ok_or_else(|| Error::msg("baked trade row has incomplete response"))?,
+            });
+        }
+        Ok(CompleteBakedTradeRows {
+            signature_key,
+            rows,
+        })
+    }
+}
+
+fn validate_complete_trade_row_universe(
+    disk: &BakedComboTableDisk,
+    trade_pool: &TradePool,
+    table: &SkillTable,
+) -> Result<()> {
+    for index in disk
+        .indexes
+        .iter()
+        .filter(|index| index.signature_key.starts_with("trade:"))
+    {
+        let first = disk
+            .rows
+            .get(index.start)
+            .ok_or_else(|| Error::msg("trade signature has no rows"))?;
+        let capacity = first.operator_capacity;
+        let mut expected = BTreeSet::new();
+        for combo in combinations_indices(trade_pool.entries.len(), capacity) {
+            let operators = build_trade_combo_operators_vec(trade_pool, &combo, None, None);
+            if trade_station_exclusive_violation(&operators, table) {
+                continue;
+            }
+            let names = operators
+                .iter()
+                .map(|operator| operator.name.as_str())
+                .collect::<Vec<_>>();
+            let indices = names
+                .iter()
+                .map(|name| {
+                    disk.operator_names
+                        .iter()
+                        .position(|candidate| candidate == name)
+                        .ok_or_else(|| {
+                            Error::msg(format!("trade universe operator {name:?} missing"))
+                        })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            expected.insert(indices);
+        }
+        let actual = disk.rows[index.start..index.start + index.len]
+            .iter()
+            .map(|row| row.operator_indices.clone())
+            .collect::<BTreeSet<_>>();
+        if actual != expected || index.len != expected.len() {
+            return Err(Error::msg(format!(
+                "baked trade row universe is incomplete for {:?}",
+                index.signature_key
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn validate_trade_mechanism_signatures(
@@ -1790,11 +2003,7 @@ fn load_runtime_baked_table_inner() -> Result<RuntimeBakedComboTable> {
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("data/baked"));
     let generator = current_exe_generator_fingerprint()?;
-    validate_baked_catalog(&out_dir, &generator)?;
-    let combo_path = out_dir.join("combo_table.bin");
-    let raw = fs::read(&combo_path)?;
-    let disk: BakedComboTableDisk = bincode::deserialize(&raw)
-        .map_err(|e| Error::msg(format!("read {}: {e}", combo_path.display())))?;
+    let disk = load_validated_baked_catalog(&out_dir, &generator)?.disk;
     let mut table = BakedComboTable::from(disk);
     let mut index_by_key = HashMap::new();
     for index in &table.indexes {
@@ -2260,13 +2469,17 @@ fn bake_input_fingerprints() -> Result<Vec<BakeInputFingerprint>> {
 
 fn fingerprint_file(path: &Path) -> Result<BakeInputFingerprint> {
     let bytes = fs::read(path)?;
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    bytes.hash(&mut hasher);
     Ok(BakeInputFingerprint {
         path: path.to_string_lossy().to_string(),
         bytes: bytes.len() as u64,
-        hash64: format!("{:016x}", hasher.finish()),
+        hash64: hash_bytes(&bytes),
     })
+}
+
+fn hash_bytes(bytes: &[u8]) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
 }
 
 fn write_json(path: PathBuf, value: &impl Serialize) -> Result<()> {
@@ -2274,12 +2487,6 @@ fn write_json(path: PathBuf, value: &impl Serialize) -> Result<()> {
     let writer = BufWriter::new(file);
     serde_json::to_writer_pretty(writer, value)
         .map_err(|e| Error::msg(format!("write {}: {e}", path.display())))
-}
-
-fn write_binary(path: PathBuf, value: &impl Serialize) -> Result<()> {
-    let bytes = bincode::serialize(value)
-        .map_err(|e| Error::msg(format!("encode {}: {e}", path.display())))?;
-    fs::write(&path, bytes).map_err(|e| Error::msg(format!("write {}: {e}", path.display())))
 }
 
 #[cfg(test)]
@@ -2442,6 +2649,91 @@ mod tests {
         assert!(err
             .to_string()
             .contains("baked trade mechanism signature mismatch"));
+    }
+
+    #[test]
+    fn complete_trade_row_adapter_returns_untruncated_rows_and_faction_counts() {
+        let out_dir = std::env::temp_dir().join(format!(
+            "infra-bake-complete-trade-rows-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&out_dir);
+        let generator = BakeGeneratorFingerprint {
+            kind: "test".to_string(),
+            path: "test".to_string(),
+            bytes: 1,
+            hash64: "complete-trade-rows".to_string(),
+        };
+        bake_catalogs(&BakeOptions {
+            out_dir: out_dir.clone(),
+            include_trade: true,
+            include_manufacture: false,
+            generator: Some(generator.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+
+        let catalog = load_complete_baked_trade_catalog(&out_dir, &generator).unwrap();
+        let rows = catalog.rows_for(3, TradeOrderKind::Gold).unwrap();
+        assert!(
+            rows.rows.len() > 20,
+            "complete adapter must not apply top_k"
+        );
+        assert!(rows.rows.iter().any(|row| row.siracusa_count > 0));
+        assert!(rows.rows.iter().any(|row| row.glasgow_count > 0));
+        assert!(rows.rows.iter().any(|row| row.karlan_count >= 3));
+        assert!(rows.rows.iter().all(|row| {
+            row.names.len() == 3
+                && !row.logical_mask.is_empty()
+                && row.baseline_response.names == row.names
+        }));
+
+        fs::remove_dir_all(out_dir).unwrap();
+    }
+
+    #[test]
+    fn complete_trade_row_validation_rejects_a_synchronously_removed_row() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = bake_roster(&instances);
+        let pool = build_trade_pool(&roster, &instances, &table).unwrap();
+        let operators = baked_operators(&instances, &roster);
+        let names = operators
+            .iter()
+            .map(|operator| operator.name.clone())
+            .collect::<Vec<_>>();
+        let operator_index = operators
+            .iter()
+            .enumerate()
+            .map(|(index, operator)| (operator.name.as_str(), index))
+            .collect::<HashMap<_, _>>();
+        let rows = bake_trade_rows(
+            &roster,
+            &instances,
+            &table,
+            &BakeOptions::default(),
+            &operator_index,
+            operators.len().div_ceil(64).max(1),
+        )
+        .unwrap();
+        let combo = build_combo_table_from_rows(
+            names,
+            operator_index.len().div_ceil(64).max(1),
+            rows.rows,
+            None,
+        );
+        let mut disk = BakedComboTableDisk::from(&combo);
+        let first_trade = disk.indexes.first_mut().unwrap();
+        disk.rows.remove(first_trade.start);
+        first_trade.len -= 1;
+        for index in disk.indexes.iter_mut().skip(1) {
+            index.start -= 1;
+        }
+
+        let err = validate_complete_trade_row_universe(&disk, &pool, &table).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("baked trade row universe is incomplete"));
     }
 
     #[test]

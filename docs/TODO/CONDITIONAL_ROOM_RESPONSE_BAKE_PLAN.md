@@ -10,7 +10,7 @@
 
 ## 当前交接：首批贸易 room-local 物化
 
-> 交接状态：2026-07-17 已完成真实技能提取、用户裁决和首批 schema v11 贸易 room-local
+> 交接状态：2026-07-17 已完成真实技能提取、用户裁决和首批 schema v12 贸易 room-local
 > 机制物化；自动联合选型仍由动态 producer TODO 跟踪。制造、L2、跨房与 runtime Join 尚未
 > 纳入本批，不预设按单房、半区或全基地完成了全部 Bake。
 
@@ -123,7 +123,7 @@ comparator 尚无当前房 tuple，会把戴菲恩收益按 0 处理；因此本
 
 #### 首批贸易 room-local 物化（2026-07-17）
 
-schema v11 已为现有完整贸易 CandidateRow 显式保存首批 room-local 机制签名：peer count、
+schema v12 已为现有完整贸易 CandidateRow 显式保存首批 room-local 机制签名：peer count、
 Glasgow peer presence / exact count、推进之王 presence、`snhunt` count 和 `laterano` count。字段只在 row 的真实 atom
 观察该状态时出现；无关普通组合不生成伪机制维度。不同 logical operator mask 均保留为独立
 row，未使用 top-K、winner 或攻略组合裁剪；本批属于 exact row-derived materialization，不改变
@@ -143,6 +143,11 @@ row，未使用 top-K、winner 或攻略组合裁剪；本批属于 exact row-de
 Catalog loader 和 verifier 都会对全部贸易 row 从实际 operators 重算机制签名，并继续对每个物理 signature 抽取
 首/中/末结构化 response 与 live solver 差分。本批尚未把制造、贸易 L2、跨房 producer signature
 或 runtime Join 接入该 key；这些输入仍由现有兼容门禁拒绝或 live fallback，Required 模式硬 miss。
+
+schema v12 进一步记录 `combo_table.bin` bytes/hash 和逐 signature row count，并从当前 TradePool
+重新枚举全部合法 operator identity set 与 catalog 精确对照。完整 trade-row adapter 只在该证明
+通过后返回一次加载的只读 catalog handle；row identity 使用 `(signature_key, offset)`，不因是否
+同时生成制造 catalog 而变化。
 
 上述顺序只用于选择首批验证面，不是 top-K、hard constraint、required admission 或近似剪枝。
 提取本身是 analysis-only；随后经用户裁决只修复戴菲恩已确定编制的 final resolve。候选集合、
