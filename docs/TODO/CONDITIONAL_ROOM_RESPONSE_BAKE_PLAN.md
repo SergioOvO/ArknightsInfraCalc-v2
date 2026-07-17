@@ -55,6 +55,35 @@ admission 或 rotation。
 完整 JSON 产物用于下一步提取贸易/制造的最小充分签名和值域；本阶段尚未据此执行状态合并
 或修改 Bake schema。
 
+#### 资源 consumer 闭包与值域公式（2026-07-17）
+
+`profile bake-dependencies` 现按 `(target_facility, response_field)` 输出资源反向闭包，并为
+每条资源读取保存结构化 `floor/div/multiplier/step/cap` 公式。闭包从目标 response 的直接读取
+出发，反向穿过 EffectAtom 的 producer/局部转换和 `CONVERSIONS` 的破坏性转换；registry
+转换边保留 provider/converter buff 与同班激活条件。`GlobalInject*` 的资源读取归入其最终
+影响的贸易/制造 efficiency 闭包，row 仍保留原始动作字段供诊断。该报告是 analysis-only，
+不参与候选生成、排序、剪枝或运行时求解。
+
+默认数据报告 `out/bake-resource-closure-20260717-final.json` 的当前规模：
+
+| 闭包 | 直接资源 | 传递闭包资源 | 来源/转换边 |
+|---|---:|---:|---:|
+| 贸易效率 | 5 | 9 | 23 |
+| 制造效率 | 7 | 11 | 26 |
+
+全表共 8 个最终设施/response 闭包、28 条值域公式。贸易效率闭包包含
+`silent_echo <- perception <- {dream, musical_section, memory_fragment}`；制造效率闭包包含
+`thought_chain_ring <- perception <- {...}`。此处箭头表示从 response 向 producer 的反向遍历；
+JSON edge 仍按 producer 到 consumer 的正向输出。制造闭包并显式包含 `virtual_power` 对
+`PowerStationCount` 的整数截断/饱和影响。报告未发现资源自环或空闭包。
+
+当前覆盖范围明确标为 `effect_atom_plus_global_conversion_registry`。贸易 L2 `gold_flow`
+读取真实赤金线数、`virtual_gold_lines` 和杜林虚拟线数，但这些依赖不由 EffectAtom 表达，现作为
+`unresolved_delegated_dependencies` 输出，不能在补上具名 L2 dependency contributor 前声称
+贸易闭包完整。28 条公式目前均标记 `requires_producer_range_analysis=true`；下一步应结合
+实际 producer、布局上界和同班 gate 求可达区间，再按断点生成有限等价类，不能直接枚举
+理论整数全域或据当前 winner 缩减。
+
 ## 1. 核心模型
 
 普通单房 Bake：

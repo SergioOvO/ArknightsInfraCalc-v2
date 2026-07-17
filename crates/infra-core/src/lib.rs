@@ -82,8 +82,10 @@ pub use power::{
     PowerRoomInput,
 };
 pub use response_dependency::{
-    build_response_dependency_report, DependencyScope, ResourceConversionDependency,
-    ResponseDependencyReport, ResponseDependencyRow, ResponseField,
+    build_response_dependency_report, DependencyScope, ResourceClosureEdge,
+    ResourceClosureEdgeKind, ResourceConversionDependency, ResourceReadFormula,
+    ResourceReverseClosure, ResourceValueDomainFact, ResponseDependencyReport,
+    ResponseDependencyRow, ResponseField, UnresolvedDelegatedDependency,
 };
 pub use roster::{OperatorProgress, Roster};
 pub use schedule::{

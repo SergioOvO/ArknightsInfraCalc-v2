@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde::Serialize;
 
@@ -58,8 +58,85 @@ pub struct ResourceConversionDependency {
     pub operation: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResourceClosureEdgeKind {
+    AtomProduce,
+    AtomConvert,
+    RegistryConversion,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ResourceClosureEdge {
+    pub kind: ResourceClosureEdgeKind,
+    pub from: Option<String>,
+    pub to: String,
+    pub skill_id: Option<String>,
+    pub atom_index: Option<usize>,
+    pub source_facility: Option<String>,
+    pub provider_buff_id: Option<String>,
+    pub converter_buff_id: Option<String>,
+    pub requires_same_shift_activation: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ResourceReverseClosure {
+    pub target_facility: String,
+    pub response_field: ResponseField,
+    pub seed_resources: Vec<String>,
+    pub resources: Vec<String>,
+    pub edges: Vec<ResourceClosureEdge>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ResourceReadFormula {
+    FloorDivideMultiplier {
+        div: f64,
+        multiplier: f64,
+    },
+    FloorStepDelta {
+        step_size: f64,
+        delta_per_step: f64,
+    },
+    FloorThenRoundMultiplier {
+        multiplier: f64,
+    },
+    LinearConvert {
+        ratio: f64,
+    },
+    IntegerTruncateSaturatingAdd {
+        cap: u64,
+        action_multiplier: f64,
+        requires_physical_base: bool,
+    },
+    DeclaredConsume {
+        div: f64,
+    },
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ResourceValueDomainFact {
+    pub skill_id: String,
+    pub atom_index: usize,
+    pub target_facility: String,
+    pub response_field: ResponseField,
+    pub resource: String,
+    pub formula: ResourceReadFormula,
+    pub requires_producer_range_analysis: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UnresolvedDelegatedDependency {
+    pub facility: String,
+    pub mechanism: String,
+    pub resource: String,
+    pub reason: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ResponseDependencyReport {
+    pub coverage: String,
     pub skill_count: usize,
     pub atom_count: usize,
     pub external_atom_count: usize,
@@ -68,6 +145,9 @@ pub struct ResponseDependencyReport {
     pub dependency_edges_by_scope: BTreeMap<DependencyScope, usize>,
     pub by_response_field: BTreeMap<ResponseField, usize>,
     pub resource_conversions: Vec<ResourceConversionDependency>,
+    pub resource_reverse_closures: Vec<ResourceReverseClosure>,
+    pub resource_value_domains: Vec<ResourceValueDomainFact>,
+    pub unresolved_delegated_dependencies: Vec<UnresolvedDelegatedDependency>,
     pub rows: Vec<ResponseDependencyRow>,
 }
 
@@ -133,7 +213,24 @@ pub fn build_response_dependency_report(table: &SkillTable) -> ResponseDependenc
         }
     }
 
+    let resource_conversions: Vec<_> = CONVERSIONS
+        .iter()
+        .map(|conversion| ResourceConversionDependency {
+            from: conversion.from.id().to_string(),
+            to: conversion.to.id().to_string(),
+            from_per: conversion.from_per,
+            to_per: conversion.to_per,
+            provider_buff_id: conversion.provider_buff_id.to_string(),
+            converter_buff_id: conversion.converter_buff_id.to_string(),
+            activation: "provider_and_converter_active_in_same_shift".to_string(),
+            operation: "destructive_floor_conversion".to_string(),
+        })
+        .collect();
+    let resource_value_domains = build_resource_value_domains(table);
+    let resource_reverse_closures = build_resource_reverse_closures(&rows, &resource_conversions);
+
     ResponseDependencyReport {
+        coverage: "effect_atom_plus_global_conversion_registry".to_string(),
         skill_count: table.skills().len(),
         atom_count: rows.len(),
         external_atom_count: rows
@@ -144,20 +241,245 @@ pub fn build_response_dependency_report(table: &SkillTable) -> ResponseDependenc
         external_by_target_facility,
         dependency_edges_by_scope: by_dependency_scope,
         by_response_field,
-        resource_conversions: CONVERSIONS
-            .iter()
-            .map(|conversion| ResourceConversionDependency {
-                from: conversion.from.id().to_string(),
-                to: conversion.to.id().to_string(),
-                from_per: conversion.from_per,
-                to_per: conversion.to_per,
-                provider_buff_id: conversion.provider_buff_id.to_string(),
-                converter_buff_id: conversion.converter_buff_id.to_string(),
-                activation: "provider_and_converter_active_in_same_shift".to_string(),
-                operation: "destructive_floor_conversion".to_string(),
-            })
-            .collect(),
+        resource_conversions,
+        resource_reverse_closures,
+        resource_value_domains,
+        unresolved_delegated_dependencies: [
+            "real_gold_lines",
+            "virtual_gold_lines",
+            "durin_virtual_lines",
+        ]
+        .into_iter()
+        .map(|resource| UnresolvedDelegatedDependency {
+            facility: "trade".to_string(),
+            mechanism: "gold_flow".to_string(),
+            resource: resource.to_string(),
+            reason: "L2 delegated mechanism is not represented by EffectAtom resource edges"
+                .to_string(),
+        })
+        .collect(),
         rows,
+    }
+}
+
+fn build_resource_reverse_closures(
+    rows: &[ResponseDependencyRow],
+    conversions: &[ResourceConversionDependency],
+) -> Vec<ResourceReverseClosure> {
+    let mut seeds: BTreeMap<(String, ResponseField), BTreeSet<String>> = BTreeMap::new();
+    for row in rows {
+        if row.target_facility == "global_resource" || row.reads_resources.is_empty() {
+            continue;
+        }
+        seeds
+            .entry((
+                row.target_facility.clone(),
+                closure_response_field(row.response_field),
+            ))
+            .or_default()
+            .extend(row.reads_resources.iter().cloned());
+    }
+
+    seeds
+        .into_iter()
+        .map(|((target_facility, response_field), seed_resources)| {
+            let mut resources = seed_resources.clone();
+            let mut queue: VecDeque<_> = seed_resources.iter().cloned().collect();
+            let mut edges = BTreeMap::new();
+            while let Some(resource) = queue.pop_front() {
+                for row in rows
+                    .iter()
+                    .filter(|row| row.writes_resources.contains(&resource))
+                {
+                    let kind = if row.reads_resources.is_empty() {
+                        ResourceClosureEdgeKind::AtomProduce
+                    } else {
+                        ResourceClosureEdgeKind::AtomConvert
+                    };
+                    let predecessors: Vec<Option<String>> = if row.reads_resources.is_empty() {
+                        vec![None]
+                    } else {
+                        row.reads_resources.iter().cloned().map(Some).collect()
+                    };
+                    for from in predecessors {
+                        if let Some(predecessor) = &from {
+                            if resources.insert(predecessor.clone()) {
+                                queue.push_back(predecessor.clone());
+                            }
+                        }
+                        let key = (
+                            kind,
+                            from.clone(),
+                            resource.clone(),
+                            Some(row.skill_id.clone()),
+                            Some(row.atom_index),
+                            None,
+                            None,
+                        );
+                        edges.entry(key).or_insert_with(|| ResourceClosureEdge {
+                            kind,
+                            from,
+                            to: resource.clone(),
+                            skill_id: Some(row.skill_id.clone()),
+                            atom_index: Some(row.atom_index),
+                            source_facility: Some(row.source_facility.clone()),
+                            provider_buff_id: None,
+                            converter_buff_id: None,
+                            requires_same_shift_activation: false,
+                        });
+                    }
+                }
+                for conversion in conversions.iter().filter(|edge| edge.to == resource) {
+                    if resources.insert(conversion.from.clone()) {
+                        queue.push_back(conversion.from.clone());
+                    }
+                    let key = (
+                        ResourceClosureEdgeKind::RegistryConversion,
+                        Some(conversion.from.clone()),
+                        resource.clone(),
+                        None,
+                        None,
+                        Some(conversion.provider_buff_id.clone()),
+                        Some(conversion.converter_buff_id.clone()),
+                    );
+                    edges.entry(key).or_insert_with(|| ResourceClosureEdge {
+                        kind: ResourceClosureEdgeKind::RegistryConversion,
+                        from: Some(conversion.from.clone()),
+                        to: resource.clone(),
+                        skill_id: None,
+                        atom_index: None,
+                        source_facility: None,
+                        provider_buff_id: Some(conversion.provider_buff_id.clone()),
+                        converter_buff_id: Some(conversion.converter_buff_id.clone()),
+                        requires_same_shift_activation: true,
+                    });
+                }
+            }
+            ResourceReverseClosure {
+                target_facility,
+                response_field,
+                seed_resources: seed_resources.into_iter().collect(),
+                resources: resources.into_iter().collect(),
+                edges: edges.into_values().collect(),
+            }
+        })
+        .collect()
+}
+
+fn build_resource_value_domains(table: &SkillTable) -> Vec<ResourceValueDomainFact> {
+    let mut facts = Vec::new();
+    for skill in table.skills() {
+        for (atom_index, atom) in skill.atoms.iter().enumerate() {
+            let target = target_facility(&skill.facility, &atom.action, atom.scope).to_string();
+            let field = closure_response_field(response_field(&atom.action));
+            if let Some(Selector::StatePoolFloored { key, div }) = atom.selector.as_ref() {
+                let multiplier = match atom.action {
+                    Action::AddFlatEffFromSelector { multiplier, .. } => multiplier,
+                    Action::GlobalInjectTradeEff { value }
+                    | Action::GlobalInjectManuEff { value, .. }
+                    | Action::GlobalInjectManuTaggedEff { value, .. } => value,
+                    _ => 1.0,
+                };
+                facts.push(ResourceValueDomainFact {
+                    skill_id: skill.id.clone(),
+                    atom_index,
+                    target_facility: target.clone(),
+                    response_field: field,
+                    resource: normalize_resource(key),
+                    formula: ResourceReadFormula::FloorDivideMultiplier {
+                        div: *div,
+                        multiplier,
+                    },
+                    requires_producer_range_analysis: true,
+                });
+            }
+            let (resource, formula) = match &atom.action {
+                Action::StateConsumeToEff {
+                    key,
+                    div,
+                    multiplier,
+                } => (
+                    key,
+                    ResourceReadFormula::FloorDivideMultiplier {
+                        div: *div,
+                        multiplier: multiplier.unwrap_or(1.0),
+                    },
+                ),
+                Action::MoodDrainPerStateStep {
+                    key,
+                    step_size,
+                    delta_per_step,
+                    ..
+                } => (
+                    key,
+                    ResourceReadFormula::FloorStepDelta {
+                        step_size: *step_size,
+                        delta_per_step: *delta_per_step,
+                    },
+                ),
+                Action::AddLimitFromState { key, multiplier } => (
+                    key,
+                    ResourceReadFormula::FloorThenRoundMultiplier {
+                        multiplier: *multiplier,
+                    },
+                ),
+                Action::StateConvert { from, ratio, .. } => {
+                    (from, ResourceReadFormula::LinearConvert { ratio: *ratio })
+                }
+                Action::StateConsume { key, div } => {
+                    (key, ResourceReadFormula::DeclaredConsume { div: *div })
+                }
+                _ => continue,
+            };
+            facts.push(ResourceValueDomainFact {
+                skill_id: skill.id.clone(),
+                atom_index,
+                target_facility: target,
+                response_field: field,
+                resource: normalize_resource(resource),
+                formula,
+                requires_producer_range_analysis: true,
+            });
+        }
+    }
+    for skill in table.skills() {
+        for (atom_index, atom) in skill.atoms.iter().enumerate() {
+            if atom.selector != Some(Selector::PowerStationCount) {
+                continue;
+            }
+            facts.push(ResourceValueDomainFact {
+                skill_id: skill.id.clone(),
+                atom_index,
+                target_facility: target_facility(&skill.facility, &atom.action, atom.scope)
+                    .to_string(),
+                response_field: closure_response_field(response_field(&atom.action)),
+                resource: "virtual_power".to_string(),
+                formula: ResourceReadFormula::IntegerTruncateSaturatingAdd {
+                    cap: 255,
+                    action_multiplier: selector_action_multiplier(&atom.action),
+                    requires_physical_base: true,
+                },
+                requires_producer_range_analysis: true,
+            });
+        }
+    }
+    facts
+}
+
+fn closure_response_field(field: ResponseField) -> ResponseField {
+    match field {
+        ResponseField::GlobalInject => ResponseField::Efficiency,
+        other => other,
+    }
+}
+
+fn selector_action_multiplier(action: &Action) -> f64 {
+    match action {
+        Action::AddFlatEffFromSelector { multiplier, .. } => *multiplier,
+        Action::GlobalInjectTradeEff { value }
+        | Action::GlobalInjectManuEff { value, .. }
+        | Action::GlobalInjectManuTaggedEff { value, .. } => *value,
+        _ => 1.0,
     }
 }
 
@@ -165,6 +487,9 @@ fn read_resources(atom: &crate::types::EffectAtom) -> Vec<String> {
     let mut resources = Vec::new();
     if let Some(Selector::StatePoolFloored { key, .. }) = atom.selector.as_ref() {
         resources.push(normalize_resource(key));
+    }
+    if atom.selector == Some(Selector::PowerStationCount) {
+        resources.push("virtual_power".to_string());
     }
     let action_resource = match &atom.action {
         Action::AddLimitFromState { key, .. }
@@ -386,6 +711,96 @@ mod tests {
             row.target_facility == "manufacture"
                 && row.selector.as_deref() == Some("tagged_count_in_manu_sum")
         }));
+        let trade_efficiency = report
+            .resource_reverse_closures
+            .iter()
+            .find(|closure| {
+                closure.target_facility == "trade"
+                    && closure.response_field == ResponseField::Efficiency
+            })
+            .expect("trade efficiency resource closure");
+        for resource in [
+            "silent_echo",
+            "perception",
+            "passion",
+            "dream",
+            "musical_section",
+            "memory_fragment",
+        ] {
+            assert!(
+                trade_efficiency
+                    .resources
+                    .iter()
+                    .any(|item| item == resource),
+                "trade closure missing {resource}"
+            );
+        }
+        assert!(trade_efficiency.edges.iter().any(|edge| {
+            edge.kind == ResourceClosureEdgeKind::RegistryConversion
+                && edge.from.as_deref() == Some("dream")
+                && edge.to == "perception"
+                && edge.requires_same_shift_activation
+        }));
+        let manufacture_efficiency = report
+            .resource_reverse_closures
+            .iter()
+            .find(|closure| {
+                closure.target_facility == "manufacture"
+                    && closure.response_field == ResponseField::Efficiency
+            })
+            .expect("manufacture efficiency resource closure");
+        for resource in ["thought_chain_ring", "perception", "virtual_power"] {
+            assert!(
+                manufacture_efficiency
+                    .resources
+                    .iter()
+                    .any(|item| item == resource),
+                "manufacture closure missing {resource}"
+            );
+        }
+        assert!(report.resource_value_domains.iter().any(|fact| {
+            fact.skill_id == "trade_ord_spd_bd[010]"
+                && fact.resource == "silent_echo"
+                && matches!(
+                    fact.formula,
+                    ResourceReadFormula::FloorDivideMultiplier {
+                        div: 2.0,
+                        multiplier: 1.0
+                    }
+                )
+        }));
+        assert!(report.resource_value_domains.iter().any(|fact| {
+            fact.skill_id == "control_prod_bd_spd[000]"
+                && fact.resource == "passion"
+                && matches!(
+                    fact.formula,
+                    ResourceReadFormula::FloorDivideMultiplier {
+                        div: 20.0,
+                        multiplier: 0.5
+                    }
+                )
+        }));
+        assert!(report.resource_value_domains.iter().any(|fact| {
+            fact.resource == "virtual_power"
+                && matches!(
+                    fact.formula,
+                    ResourceReadFormula::IntegerTruncateSaturatingAdd {
+                        cap: 255,
+                        requires_physical_base: true,
+                        ..
+                    }
+                )
+        }));
+        for resource in [
+            "real_gold_lines",
+            "virtual_gold_lines",
+            "durin_virtual_lines",
+        ] {
+            assert!(report
+                .unresolved_delegated_dependencies
+                .iter()
+                .any(|item| { item.mechanism == "gold_flow" && item.resource == resource }));
+        }
     }
 
     #[test]
