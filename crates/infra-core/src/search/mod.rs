@@ -1,4 +1,5 @@
 mod control;
+mod joint_trade;
 mod manufacture;
 mod power;
 mod role_pick;
