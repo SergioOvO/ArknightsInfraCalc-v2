@@ -121,10 +121,12 @@ pub fn bake_cmd(args: &[String]) -> Result<(), Error> {
 
     let report = bake_catalogs(&options)?;
     eprintln!(
-        "baked operators={} trade_signatures={} trade_hits={} manufacture_signatures={} manufacture_hits={} elapsed={}ms -> {}",
+        "baked operators={} trade_signatures={} trade_hits={} trade_mechanism_rows={} trade_mechanism_signatures={} manufacture_signatures={} manufacture_hits={} elapsed={}ms -> {}",
         report.operator_count,
         report.trade_signatures,
         report.trade_hits,
+        report.trade_mechanism_rows,
+        report.trade_mechanism_signatures,
         report.manufacture_signatures,
         report.manufacture_hits,
         report.elapsed_ms,

@@ -261,16 +261,13 @@ join partition 必须保留 `siracusa_by_room`、`glasgow_by_room` 和 `karlan_q
 
 这精确复现当前评分契约，同时让 producer 的实际 full-layout 注入进入每房 solver。若未来希望不同 control prefix 直接比较贸易总 `final_efficiency`，必须另行请用户裁决并更新 `SCORING_MODEL.md`，不能借 A+ 偷换目标函数。
 
-#### 实施前未决的 comparator 口径
+#### 已裁决的戴菲恩 comparator 口径
 
-戴菲恩对不同贸易房可能产生不同注入，例如两个房间的 Glasgow 分布为 `(2,1)` 时，各房
-分别得到 `20%` 与 `10%`。现有 `ControlInjectRawSumV0` 的 `trade_inject` 是单一标量，
-Markdown 尚未定义这种 room-local response 在跨 control prefix 比较时如何折算。实施前必须
-由用户在以下口径或另一条明确公式中裁决，并先更新 `SCORING_MODEL.md`：
-
-1. 各贸易房动态注入百分点之和；
-2. 直接比较各房真实 `final_efficiency` tuple；
-3. 其他具名、可解释的 comparator。
+用户于 2026-07-17 裁决：戴菲恩对不同贸易房的动态注入，在跨 control prefix 比较时使用
+各房注入百分点之和，即 `Σr (10 × n_g(r))`。例如 `(3,0)` 与 `(2,1)` 的该 policy 分量均为
+30；这只表示两个 control prefix 在戴菲恩注入总量上相等，不允许合并逐房 response signature。
+每个 prefix 内仍按各房真实 `final_efficiency` 和既有贸易 comparator 选择完整 tuple。该口径
+已同步到 `SCORING_MODEL.md`。
 
 同样，灵知的“效率下降、订单上限增加”不能进入裸注入百分点 comparator。灵知是否由
 单位产出、`final_efficiency` 或现有固定 role 决定选型，必须另行裁决；首期不得假借
@@ -398,7 +395,7 @@ catalog row/response 精确命中
 | trade role | `layout/assign/trade_fill.rs`、`search/role_pick.rs` 的 `meta_vina` | 固定 package / 有序 role 代替实际候选效率搜索 |
 | cross-room resolve | 当前候选级 workforce 投影 | 按房顺序提交会让前房看不到后房最终标签；联合 tuple 必须完整落位后统一 resolve |
 | rotation | `schedule/team_rotation.rs` optional dynamic 分支 | 搜索未输出通用 dependency，rotation 被迫重新推断 tag、blocked pool 和 presence |
-| Bake | `bake.rs` schema v10 单房 baseline 表 | 不能表达当前联合 rule/tier/room signature；只允许安全拒绝，不可直接复用 |
+| Bake | `bake.rs` schema v11 单房 baseline 表 | 已显式保存首批贸易 room-local 机制签名，但仍不能表达完整联合 rule/tier/cross-room signature；不兼容时只允许安全拒绝 |
 
 ## 10. 单一责任边界
 

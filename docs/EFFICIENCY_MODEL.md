@@ -28,7 +28,7 @@ expected_output = reference_output_per_day × final_efficiency × minutes / 1440
 - `Display` / CSV / 文本固定输出三位小数；
 - JSON 输出数值而不是百分比或原始千分整数，数值已量化到三位小数。
 
-bake schema v10 直接保存 `*_efficiency_millis: i32`，加载后还原为
+bake schema v11 直接保存 `*_efficiency_millis: i32`，加载后还原为
 `Efficiency`。因此 bake 的排序、序列化和运行时比较不再依赖浮点数，也不会受平台
 浮点尾差影响。
 
@@ -125,5 +125,5 @@ L1 技能解释（原始机制数值）
 - `REGRESSION_CASES.csv` 直接锚定三位小数 `expect_final_efficiency`；
 - `UNIT_OUTPUT_ANCHORS.csv` 独立锚定社区单位产出；
 - `verify --all` 同时验证最终效率、机制解释、规则 ID 与单位产出；
-- bake 需要 schema v10，旧 schema 不兼容，必须重新生成；
+- bake 需要 schema v11，旧 schema 不兼容，必须重新生成；
 - CLI 文本和 CSV 的效率列固定三位小数，JSON 效率为已量化的数值。

@@ -41,6 +41,20 @@ trade_inject + manu_gold + manu_br
 `breakdown.policy = ControlInjectRawSumV0` 与 `breakdown.policy_sort_key` 暴露排序依据，
 不提供 `score` / `total_score` 或 `final_efficiency`。
 
+### 3.1 戴菲恩跨中枢前缀比较
+
+用户于 2026-07-17 裁决：比较包含戴菲恩的不同 control prefix 时，戴菲恩的动态贸易注入
+分量使用各贸易房实际注入百分点之和：
+
+```text
+daifeen_trade_inject_sum = Σr (10 × n_g(r))
+```
+
+该分量属于具名中枢 policy，不是生产效率。`(3,0)` 与 `(2,1)` 在此前缀分量上同为 30，
+但两者仍是不同的逐房 response signature；不得据此合并 CandidateRow、logical operator mask
+或跨房状态。每个 control prefix 内的完整贸易 tuple 仍由各房真实 `final_efficiency` 和既有
+贸易 comparator 选择，最终 winner 仍执行完整 live resolve。
+
 ## 4. 输出约束
 
 - CLI / CSV：效率固定三位小数；

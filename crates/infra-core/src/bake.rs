@@ -30,13 +30,13 @@ use crate::search::{
     TradeSearchReport,
 };
 use crate::skill_table::{data_path, default_skill_table_path, SkillTable};
-use crate::trade::input::{TradeOrderKind, TradeRoomInput, TradeSearchOrderMode};
+use crate::trade::input::{TradeOperator, TradeOrderKind, TradeRoomInput, TradeSearchOrderMode};
 use crate::trade::shortcut::trade_station_exclusive_violation;
 use crate::trade::solver::solve_trade_with_shift_prevalidated;
-use crate::types::RecipeKind;
+use crate::types::{Condition, RecipeKind, Selector};
 use crate::FacilityKind;
 
-pub const BAKE_SCHEMA_VERSION: u32 = 10;
+pub const BAKE_SCHEMA_VERSION: u32 = 11;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BakeMode {
@@ -177,6 +177,8 @@ pub struct BakeReport {
     pub operator_count: usize,
     pub trade_signatures: usize,
     pub trade_hits: usize,
+    pub trade_mechanism_rows: usize,
+    pub trade_mechanism_signatures: usize,
     pub manufacture_signatures: usize,
     pub manufacture_hits: usize,
     pub combo_table_rows: usize,
@@ -251,6 +253,7 @@ struct BakedComboRowDisk {
     sort_efficiency_millis: i32,
     order_kind: Option<TradeOrderKind>,
     recipe: Option<RecipeKind>,
+    trade_mechanism_signature: Option<TradeRoomMechanismSignature>,
     trade_base_efficiency_millis: Option<i32>,
     trade_occupancy_efficiency_millis: Option<i32>,
     trade_skill_efficiency_millis: Option<i32>,
@@ -295,6 +298,7 @@ impl From<&BakedComboRow> for BakedComboRowDisk {
             sort_efficiency_millis: value.sort_efficiency.millis(),
             order_kind: value.order_kind,
             recipe: value.recipe,
+            trade_mechanism_signature: value.trade_mechanism_signature.clone(),
             trade_base_efficiency_millis: value.trade_base_efficiency.map(Efficiency::millis),
             trade_occupancy_efficiency_millis: value
                 .trade_occupancy_efficiency
@@ -364,6 +368,7 @@ impl From<BakedComboRowDisk> for BakedComboRow {
             sort_efficiency: Efficiency::from_millis(value.sort_efficiency_millis),
             order_kind: value.order_kind,
             recipe: value.recipe,
+            trade_mechanism_signature: value.trade_mechanism_signature,
             trade_base_efficiency: value
                 .trade_base_efficiency_millis
                 .map(Efficiency::from_millis),
@@ -453,6 +458,8 @@ struct BakedComboRow {
     order_kind: Option<TradeOrderKind>,
     #[serde(rename = "r", skip_serializing_if = "Option::is_none")]
     recipe: Option<RecipeKind>,
+    #[serde(rename = "tms", skip_serializing_if = "Option::is_none")]
+    trade_mechanism_signature: Option<TradeRoomMechanismSignature>,
     #[serde(rename = "tb", skip_serializing_if = "Option::is_none")]
     trade_base_efficiency: Option<Efficiency>,
     #[serde(rename = "to", skip_serializing_if = "Option::is_none")]
@@ -491,6 +498,92 @@ struct BakedComboRow {
     manufacture_final_efficiency: Option<Efficiency>,
     #[serde(rename = "msl", default, skip_serializing_if = "Option::is_none")]
     manufacture_storage_limit: Option<i32>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+struct TradeRoomMechanismSignature {
+    peer_count: Option<u8>,
+    glasgow_peer_present: Option<bool>,
+    glasgow_count: Option<u8>,
+    king_of_victoria_present: Option<bool>,
+    snhunt_count: Option<u8>,
+    laterano_count: Option<u8>,
+}
+
+impl TradeRoomMechanismSignature {
+    fn is_empty(&self) -> bool {
+        self == &Self::default()
+    }
+}
+
+fn trade_room_mechanism_signature(
+    operators: &[TradeOperator],
+) -> Option<TradeRoomMechanismSignature> {
+    const GLASGOW: &str = "cc.g.glasgow";
+    const SNHUNT: &str = "cc.g.snhunt";
+    const LATERANO: &str = "cc.g.laterano";
+
+    let observes_tag_count = |target: &str| {
+        operators.iter().any(|operator| {
+            operator.compiled_atoms.iter().any(|compiled| {
+                matches!(
+                    compiled.atom.selector.as_ref(),
+                    Some(Selector::TaggedCountInRoom { tag }) if tag == target
+                )
+            })
+        })
+    };
+    let glasgow_peer_present = operators
+        .iter()
+        .enumerate()
+        .filter(|(_, operator)| {
+            operator.compiled_atoms.iter().any(|compiled| {
+                matches!(
+                    compiled.atom.condition.as_ref(),
+                    Some(Condition::PeerTagInRoom { tag }) if tag == GLASGOW
+                )
+            })
+        })
+        .map(|(observer_index, _)| {
+            operators
+                .iter()
+                .enumerate()
+                .any(|(index, operator)| index != observer_index && operator.has_tag(GLASGOW))
+        })
+        .reduce(|left, right| left || right);
+    let observes_peer_count = operators.iter().any(|operator| {
+        operator
+            .compiled_atoms
+            .iter()
+            .any(|compiled| matches!(compiled.atom.selector, Some(Selector::RoomPeerCount)))
+    });
+    let observes_king = operators.iter().any(|operator| {
+        operator.compiled_atoms.iter().any(|compiled| {
+            matches!(
+                compiled.atom.condition.as_ref(),
+                Some(Condition::PartnerInRoom { name }) if name == "推进之王"
+            )
+        })
+    });
+    let count_tag = |tag: &str| {
+        operators
+            .iter()
+            .filter(|operator| operator.has_tag(tag))
+            .count()
+            .min(u8::MAX as usize) as u8
+    };
+
+    let signature = TradeRoomMechanismSignature {
+        peer_count: observes_peer_count
+            .then_some(operators.len().saturating_sub(1).min(u8::MAX as usize) as u8),
+        glasgow_peer_present,
+        glasgow_count: observes_tag_count(GLASGOW).then(|| count_tag(GLASGOW)),
+        king_of_victoria_present: observes_king
+            .then(|| operators.iter().any(|operator| operator.name == "推进之王")),
+        snhunt_count: observes_tag_count(SNHUNT).then(|| count_tag(SNHUNT)),
+        laterano_count: observes_tag_count(LATERANO).then(|| count_tag(LATERANO)),
+    };
+    (!signature.is_empty()).then_some(signature)
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -551,6 +644,8 @@ pub fn bake_catalogs(options: &BakeOptions) -> Result<BakeReport> {
 
     let mut trade_signatures = 0usize;
     let mut trade_hits = 0usize;
+    let mut trade_mechanism_rows = 0usize;
+    let mut trade_mechanism_signatures = 0usize;
     let mut rows = Vec::new();
     if options.include_trade {
         let baked = bake_trade_rows(
@@ -563,6 +658,17 @@ pub fn bake_catalogs(options: &BakeOptions) -> Result<BakeReport> {
         )?;
         trade_signatures = baked.signatures;
         trade_hits = baked.rows.len();
+        trade_mechanism_rows = baked
+            .rows
+            .iter()
+            .filter(|row| row.trade_mechanism_signature.is_some())
+            .count();
+        trade_mechanism_signatures = baked
+            .rows
+            .iter()
+            .filter_map(|row| row.trade_mechanism_signature.clone())
+            .collect::<BTreeSet<_>>()
+            .len();
         rows.extend(baked.rows);
     }
 
@@ -630,6 +736,8 @@ pub fn bake_catalogs(options: &BakeOptions) -> Result<BakeReport> {
         operator_count: operators.len(),
         trade_signatures,
         trade_hits,
+        trade_mechanism_rows,
+        trade_mechanism_signatures,
         manufacture_signatures,
         manufacture_hits,
         combo_table_rows,
@@ -819,6 +927,7 @@ fn trade_combo_row(
         active_order_kind: order_kind,
     };
     let result = solve_trade_with_shift_prevalidated(&input, table, 24.0).ok()?;
+    let trade_mechanism_signature = trade_room_mechanism_signature(&input.operators);
     let names: Vec<String> = input.operators.iter().map(|op| op.name.clone()).collect();
     let (operator_indices, operator_mask) =
         operator_index_and_mask(&names, operator_index, mask_words);
@@ -834,6 +943,7 @@ fn trade_combo_row(
         sort_efficiency: result.efficiency.final_efficiency,
         order_kind: Some(order_kind),
         recipe: None,
+        trade_mechanism_signature,
         trade_base_efficiency: Some(result.efficiency.paper.base_efficiency),
         trade_occupancy_efficiency: Some(result.efficiency.paper.occupancy_efficiency),
         trade_skill_efficiency: Some(result.efficiency.paper.skill_efficiency),
@@ -978,6 +1088,7 @@ fn manufacture_combo_row(
         sort_efficiency: result.final_efficiency,
         order_kind: None,
         recipe: Some(recipe),
+        trade_mechanism_signature: None,
         trade_base_efficiency: None,
         trade_occupancy_efficiency: None,
         trade_skill_efficiency: None,
@@ -1060,7 +1171,15 @@ pub fn validate_baked_catalog(out_dir: &Path, generator: &BakeGeneratorFingerpri
         .map_err(|e| Error::msg(format!("read {}: {e}", combo_path.display())))?;
     let disk: BakedComboTableDisk = bincode::deserialize(&raw)
         .map_err(|e| Error::msg(format!("read {}: {e}", combo_path.display())))?;
-    validate_baked_combo_table(&disk, generator, &manifest.options)
+    validate_baked_combo_table(&disk, generator, &manifest.options)?;
+    if manifest.options.include_trade {
+        let instances = OperatorInstances::load(&default_instances_path()?)?;
+        let table = SkillTable::load(&default_skill_table_path()?)?;
+        let roster = bake_roster(&instances);
+        let trade_pool = build_trade_pool(&roster, &instances, &table)?;
+        validate_trade_mechanism_signatures(&disk, &trade_pool)?;
+    }
+    Ok(())
 }
 
 pub fn verify_baked_catalog_responses(
@@ -1152,6 +1271,27 @@ pub fn verify_baked_catalog_responses(
         }
     }
     Ok(verified)
+}
+
+fn validate_trade_mechanism_signatures(
+    disk: &BakedComboTableDisk,
+    trade_pool: &TradePool,
+) -> Result<()> {
+    for actual in disk.rows.iter().filter(|row| row.order_kind.is_some()) {
+        let names: Vec<_> = actual
+            .operator_indices
+            .iter()
+            .map(|operator| disk.operator_names[*operator].as_str())
+            .collect();
+        let combo = pool_indices_for_names(trade_pool, &names)?;
+        let operators = build_trade_combo_operators_vec(trade_pool, &combo, None, None);
+        if trade_room_mechanism_signature(&operators) != actual.trade_mechanism_signature {
+            return Err(Error::msg(format!(
+                "baked trade mechanism signature mismatch for {names:?}"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn pool_indices_for_names<T: HasName>(pool: &PoolCore<T>, names: &[&str]) -> Result<Vec<usize>> {
@@ -1316,6 +1456,23 @@ fn validate_baked_row_for_signature(row: &BakedComboRowDisk, key: &str) -> Resul
     if row.operator_capacity != station_operator_capacity(row.room_level) {
         return Err(Error::msg(format!("invalid room capacity in {key:?}")));
     }
+    if let Some(signature) = &row.trade_mechanism_signature {
+        let count_is_valid = |count: Option<u8>| {
+            count.is_none_or(|value| usize::from(value) <= row.operator_capacity)
+        };
+        if signature
+            .peer_count
+            .is_some_and(|value| usize::from(value) >= row.operator_capacity)
+            || !count_is_valid(signature.glasgow_count)
+            || !count_is_valid(signature.snhunt_count)
+            || !count_is_valid(signature.laterano_count)
+            || signature.is_empty()
+        {
+            return Err(Error::msg(format!(
+                "invalid trade mechanism signature in {key:?}"
+            )));
+        }
+    }
     let expected_key = if let Some(order) = row.order_kind {
         if row.recipe.is_some()
             || !trade_response_fields_present(row)
@@ -1331,6 +1488,7 @@ fn validate_baked_row_for_signature(row: &BakedComboRowDisk, key: &str) -> Resul
         )
     } else if let Some(recipe) = row.recipe {
         if row.order_kind.is_some()
+            || row.trade_mechanism_signature.is_some()
             || !manufacture_response_fields_present(row)
             || any_trade_response_field_present(row)
         {
@@ -2127,6 +2285,164 @@ fn write_binary(path: PathBuf, value: &impl Serialize) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn trade_ops(names: &[&str]) -> Vec<TradeOperator> {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster =
+            Roster::from_elite_map(names.iter().map(|name| ((*name).to_string(), 2)).collect());
+        let pool = build_trade_pool(&roster, &instances, &table).unwrap();
+        names
+            .iter()
+            .map(|name| pool.entry(name).unwrap().to_trade_operator())
+            .collect()
+    }
+
+    fn glasgow_peer(name: &str) -> TradeOperator {
+        TradeOperator {
+            name: name.to_string(),
+            tags: vec!["cc.g.glasgow".to_string()],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn trade_mechanism_signature_extracts_only_observed_room_state() {
+        let vina_alone = trade_room_mechanism_signature(&trade_ops(&["维娜·维多利亚"]));
+        assert_eq!(
+            vina_alone,
+            Some(TradeRoomMechanismSignature {
+                glasgow_peer_present: Some(false),
+                ..Default::default()
+            })
+        );
+        let mut vina_one_peer_ops = trade_ops(&["维娜·维多利亚"]);
+        vina_one_peer_ops.push(glasgow_peer("glasgow_peer_a"));
+        let vina_one_peer = trade_room_mechanism_signature(&vina_one_peer_ops);
+        let mut vina_two_peer_ops = vina_one_peer_ops;
+        vina_two_peer_ops.push(glasgow_peer("glasgow_peer_b"));
+        let vina_two_peers = trade_room_mechanism_signature(&vina_two_peer_ops);
+        assert_eq!(
+            vina_one_peer,
+            Some(TradeRoomMechanismSignature {
+                glasgow_peer_present: Some(true),
+                ..Default::default()
+            })
+        );
+        assert_eq!(vina_two_peers, vina_one_peer);
+
+        let morgan_alone = trade_room_mechanism_signature(&trade_ops(&["摩根"]));
+        assert_eq!(
+            morgan_alone,
+            Some(TradeRoomMechanismSignature {
+                glasgow_count: Some(1),
+                king_of_victoria_present: Some(false),
+                ..Default::default()
+            })
+        );
+        let mut morgan_two_ops = trade_ops(&["摩根"]);
+        morgan_two_ops.push(glasgow_peer("glasgow_peer"));
+        let morgan_two = trade_room_mechanism_signature(&morgan_two_ops);
+        assert_eq!(
+            morgan_two,
+            Some(TradeRoomMechanismSignature {
+                glasgow_count: Some(2),
+                king_of_victoria_present: Some(false),
+                ..Default::default()
+            })
+        );
+        let mut morgan_three_ops = trade_ops(&["摩根"]);
+        morgan_three_ops.push(glasgow_peer("推进之王"));
+        morgan_three_ops.push(glasgow_peer("glasgow_peer"));
+        let morgan_three = trade_room_mechanism_signature(&morgan_three_ops);
+        assert_eq!(
+            morgan_three,
+            Some(TradeRoomMechanismSignature {
+                glasgow_count: Some(3),
+                king_of_victoria_present: Some(true),
+                ..Default::default()
+            })
+        );
+
+        let firewhistle = trade_room_mechanism_signature(&trade_ops(&["火哨", "古米", "夜刀"]));
+        assert_eq!(
+            firewhistle,
+            Some(TradeRoomMechanismSignature {
+                peer_count: Some(2),
+                ..Default::default()
+            })
+        );
+
+        let zilan = trade_room_mechanism_signature(&trade_ops(&["焰狐龙梓兰", "古米"]));
+        assert_eq!(
+            zilan,
+            Some(TradeRoomMechanismSignature {
+                snhunt_count: Some(1),
+                ..Default::default()
+            })
+        );
+
+        let exusiai = trade_room_mechanism_signature(&trade_ops(&["新约能天使", "古米"]));
+        assert_eq!(
+            exusiai,
+            Some(TradeRoomMechanismSignature {
+                laterano_count: Some(1),
+                ..Default::default()
+            })
+        );
+
+        assert_eq!(trade_room_mechanism_signature(&trade_ops(&["古米"])), None);
+    }
+
+    #[test]
+    fn catalog_validation_rejects_semantically_wrong_trade_mechanism_signature() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            [("维娜·维多利亚".to_string(), 2), ("古米".to_string(), 2)]
+                .into_iter()
+                .collect(),
+        );
+        let pool = build_trade_pool(&roster, &instances, &table).unwrap();
+        let names = ["维娜·维多利亚", "古米"];
+        let combo = pool_indices_for_names(&pool, &names).unwrap();
+        let operator_names = names
+            .iter()
+            .map(|name| (*name).to_string())
+            .collect::<Vec<_>>();
+        let operator_index = operator_names
+            .iter()
+            .enumerate()
+            .map(|(index, name)| (name.as_str(), index))
+            .collect::<HashMap<_, _>>();
+        let layout = Arc::new(LayoutContext::search_baseline());
+        let key = trade_lookup_key(2, 2, TradeOrderKind::Gold, layout.gold_manu_line_count);
+        let row = trade_combo_row(
+            &pool,
+            &table,
+            2,
+            2,
+            TradeOrderKind::Gold,
+            layout.gold_manu_line_count,
+            &layout,
+            &combo,
+            &key,
+            &operator_index,
+            1,
+        )
+        .unwrap();
+        let table = build_combo_table_from_rows(operator_names, 1, vec![row], None);
+        let mut disk = BakedComboTableDisk::from(&table);
+        disk.rows[0].trade_mechanism_signature = Some(TradeRoomMechanismSignature {
+            glasgow_peer_present: Some(true),
+            ..Default::default()
+        });
+
+        let err = validate_trade_mechanism_signatures(&disk, &pool).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("baked trade mechanism signature mismatch"));
+    }
 
     #[test]
     fn required_bake_rejects_incompatible_trade_query() {

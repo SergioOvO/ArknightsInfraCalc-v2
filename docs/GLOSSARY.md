@@ -130,7 +130,7 @@
 | 术语 | 含义 |
 |------|------|
 | Bake / 烘焙 | 预先生成 3/2/1 人单房候选索引，减少兼容上下文中的实时组合求值。 |
-| baked catalog | `combo_table.bin`、`operators.json`、`manifest.json` 等本地 Bake 产物。当前代码要求 schema v10；仓库内旧 catalog 仍可能是更早 schema，门禁拒绝后会走实时搜索。 |
+| baked catalog | `combo_table.bin`、`operators.json`、`manifest.json` 等本地 Bake 产物。当前代码要求 schema v11；仓库内旧 catalog 仍可能是更早 schema，门禁拒绝后会走实时搜索。 |
 | compatibility gate | 读取 Bake 前对输入指纹、生成器、练度、布局和动态上下文做的安全检查。不兼容就实时搜索。 |
 | effect signature | 能决定某个候选结算结果的上下文摘要。当前 Bake 只覆盖严格受控的签名；更完整的 A+ 设计仍是计划。 |
 | A+ Bake | 完整单房 tuple 目录 + 运行时安全连接的未来设计，见 [动态 producer / Bake TODO](TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)；当前尚未实现。 |

@@ -64,7 +64,7 @@ crates/infra-cli/src/
 
 | 模块 | 职责 | 不负责 |
 |------|------|--------|
-| `bake.rs` | `bake`：并行生成 schema v10 的整数效率 `combo_table.bin`、`operators.json`、`manifest.json`；`bake validate` 校验当前 CLI 指纹 | 贸易/制造效率公式；手写搜索排序 |
+| `bake.rs` | `bake`：并行生成 schema v11 的整数效率 `combo_table.bin`、`operators.json`、`manifest.json`；贸易行显式保存首批 room-local 机制签名；`bake validate` 校验当前 CLI 指纹 | 贸易/制造效率公式；手写搜索排序 |
 | `plan.rs` | **`plan`**：box profile JSON + `schedule_team_rotation` + MAA；`--operbox` 支持 JSON/xlsx；布局默认 243 | 画像算法（`box_profile/`）；排班逻辑（`schedule/`） |
 | `serve.rs` | `serve`：常驻读取 stdin JSON line，复用加载好的机制数据，按请求写出前端指定路径 | 新业务公式；替代 core 求解 API |
 | `layout.rs` | `layout test` / `team-rotation` / `analyze` / `eval`：蓝图 JSON + operbox → `assign_shift` 宏观落位（或自定义 `--assignment`）→ `resolve_base` → 搜索/效率结算 | 蓝图格式定义（`infra-core::layout::blueprint`）；求解公式（在 `infra-core`） |
