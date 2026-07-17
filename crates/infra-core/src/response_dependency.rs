@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use serde::Serialize;
 
 use crate::global_resource::CONVERSIONS;
+use crate::layout::BaseBlueprint;
 use crate::skill_table::SkillTable;
 use crate::types::{Action, AtomScope, Condition, Selector};
 
@@ -134,9 +135,70 @@ pub struct UnresolvedDelegatedDependency {
     pub reason: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DomainInputSource {
+    Blueprint,
+    GlobalResource,
+    LayoutStatistic,
+    CandidateRow,
+    RoomContext,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct DomainDependencyInputDecl {
+    pub name: &'static str,
+    pub source: DomainInputSource,
+    pub external_signature: bool,
+    pub note: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DomainDependencyInput {
+    pub name: String,
+    pub source: DomainInputSource,
+    pub external_signature: bool,
+    pub scenario_values: Option<Vec<u32>>,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DomainDependencyContributor {
+    pub mechanism: String,
+    pub target_facility: String,
+    pub response_field: ResponseField,
+    pub inputs: Vec<DomainDependencyInput>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ResourceReachableRange {
+    pub resource: String,
+    pub min: f64,
+    pub max: Option<f64>,
+    pub integer_valued: bool,
+    pub scope: String,
+    pub unresolved_reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ResourceEquivalenceClass {
+    pub resource: String,
+    pub min_inclusive: u32,
+    pub max_inclusive: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DependencyScenario {
+    pub template: Option<String>,
+    pub room_count: usize,
+    pub gold_manu_line_count: u32,
+    pub initial_virtual_gold_lines: u32,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ResponseDependencyReport {
     pub coverage: String,
+    pub scenario: Option<DependencyScenario>,
     pub skill_count: usize,
     pub atom_count: usize,
     pub external_atom_count: usize,
@@ -148,10 +210,27 @@ pub struct ResponseDependencyReport {
     pub resource_reverse_closures: Vec<ResourceReverseClosure>,
     pub resource_value_domains: Vec<ResourceValueDomainFact>,
     pub unresolved_delegated_dependencies: Vec<UnresolvedDelegatedDependency>,
+    pub domain_dependency_contributors: Vec<DomainDependencyContributor>,
+    pub resource_reachable_ranges: Vec<ResourceReachableRange>,
+    pub resource_equivalence_classes: Vec<ResourceEquivalenceClass>,
     pub rows: Vec<ResponseDependencyRow>,
 }
 
 pub fn build_response_dependency_report(table: &SkillTable) -> ResponseDependencyReport {
+    build_response_dependency_report_inner(table, None)
+}
+
+pub fn build_response_dependency_report_for_blueprint(
+    table: &SkillTable,
+    blueprint: &BaseBlueprint,
+) -> ResponseDependencyReport {
+    build_response_dependency_report_inner(table, Some(blueprint))
+}
+
+fn build_response_dependency_report_inner(
+    table: &SkillTable,
+    blueprint: Option<&BaseBlueprint>,
+) -> ResponseDependencyReport {
     let mut rows = Vec::new();
     for skill in table.skills() {
         for (atom_index, atom) in skill.atoms.iter().enumerate() {
@@ -228,9 +307,31 @@ pub fn build_response_dependency_report(table: &SkillTable) -> ResponseDependenc
         .collect();
     let resource_value_domains = build_resource_value_domains(table);
     let resource_reverse_closures = build_resource_reverse_closures(&rows, &resource_conversions);
+    let domain_dependency_contributors = build_domain_dependency_contributors(blueprint);
+    let resource_reachable_ranges = build_resource_reachable_ranges(
+        table,
+        blueprint,
+        &resource_reverse_closures,
+        &resource_conversions,
+    );
+    let resource_equivalence_classes =
+        build_resource_equivalence_classes(&resource_reachable_ranges, &resource_value_domains);
 
     ResponseDependencyReport {
         coverage: "effect_atom_plus_global_conversion_registry".to_string(),
+        scenario: blueprint.map(|blueprint| DependencyScenario {
+            template: blueprint.template.clone(),
+            room_count: blueprint.rooms.len(),
+            gold_manu_line_count: blueprint.gold_manu_line_count(),
+            initial_virtual_gold_lines: blueprint
+                .scenario
+                .initial_global
+                .get(&crate::global_resource::GlobalResourceKey::VirtualGoldLines)
+                .copied()
+                .unwrap_or(0.0)
+                .max(0.0)
+                .min(u32::MAX as f64) as u32,
+        }),
         skill_count: table.skills().len(),
         atom_count: rows.len(),
         external_atom_count: rows
@@ -244,22 +345,154 @@ pub fn build_response_dependency_report(table: &SkillTable) -> ResponseDependenc
         resource_conversions,
         resource_reverse_closures,
         resource_value_domains,
-        unresolved_delegated_dependencies: [
-            "real_gold_lines",
-            "virtual_gold_lines",
-            "durin_virtual_lines",
-        ]
-        .into_iter()
-        .map(|resource| UnresolvedDelegatedDependency {
-            facility: "trade".to_string(),
-            mechanism: "gold_flow".to_string(),
-            resource: resource.to_string(),
-            reason: "L2 delegated mechanism is not represented by EffectAtom resource edges"
-                .to_string(),
-        })
-        .collect(),
+        unresolved_delegated_dependencies: domain_dependency_contributors
+            .iter()
+            .flat_map(|contributor| {
+                contributor
+                    .inputs
+                    .iter()
+                    .filter(|input| input.external_signature && input.scenario_values.is_none())
+                    .map(|input| UnresolvedDelegatedDependency {
+                        facility: contributor.target_facility.clone(),
+                        mechanism: contributor.mechanism.clone(),
+                        resource: input.name.clone(),
+                        reason: "domain contributor has no finite scenario domain".to_string(),
+                    })
+            })
+            .collect(),
+        domain_dependency_contributors,
+        resource_reachable_ranges,
+        resource_equivalence_classes,
         rows,
     }
+}
+
+fn build_domain_dependency_contributors(
+    blueprint: Option<&BaseBlueprint>,
+) -> Vec<DomainDependencyContributor> {
+    let inputs = crate::trade::gold_flow::dependency_inputs()
+        .iter()
+        .map(|decl| {
+            let scenario_values = blueprint.and_then(|blueprint| match decl.name {
+                "real_gold_lines" => Some(vec![blueprint.gold_manu_line_count()]),
+                "virtual_gold_lines" => Some(vec![blueprint
+                    .scenario
+                    .initial_global
+                    .get(&crate::global_resource::GlobalResourceKey::VirtualGoldLines)
+                    .copied()
+                    .unwrap_or(0.0)
+                    .max(0.0)
+                    .min(u32::MAX as f64)
+                    as u32]),
+                "durin_virtual_lines" => Some((0..=4).collect()),
+                _ => None,
+            });
+            DomainDependencyInput {
+                name: decl.name.to_string(),
+                source: decl.source,
+                external_signature: decl.external_signature,
+                scenario_values,
+                note: decl.note.to_string(),
+            }
+        })
+        .collect();
+    vec![DomainDependencyContributor {
+        mechanism: "gold_flow".to_string(),
+        target_facility: "trade".to_string(),
+        response_field: ResponseField::Efficiency,
+        inputs,
+    }]
+}
+
+fn build_resource_reachable_ranges(
+    _table: &SkillTable,
+    blueprint: Option<&BaseBlueprint>,
+    closures: &[ResourceReverseClosure],
+    _conversions: &[ResourceConversionDependency],
+) -> Vec<ResourceReachableRange> {
+    let mut resources: BTreeSet<String> = closures
+        .iter()
+        .flat_map(|closure| closure.resources.iter().cloned())
+        .collect();
+    resources.extend([
+        "real_gold_lines".to_string(),
+        "virtual_gold_lines".to_string(),
+        "durin_virtual_lines".to_string(),
+    ]);
+
+    resources
+        .into_iter()
+        .map(|resource| {
+            let scenario_bound = blueprint.and_then(|blueprint| match resource.as_str() {
+                "real_gold_lines" => {
+                    let value = blueprint.gold_manu_line_count() as f64;
+                    Some((value, value, true))
+                }
+                "virtual_gold_lines" => {
+                    let value = blueprint
+                        .scenario
+                        .initial_global
+                        .get(&crate::global_resource::GlobalResourceKey::VirtualGoldLines)
+                        .copied()
+                        .unwrap_or(0.0)
+                        .max(0.0);
+                    Some((value, value, true))
+                }
+                "durin_virtual_lines" => Some((0.0, 4.0, true)),
+                _ => None,
+            });
+            match scenario_bound {
+                Some((min, max, integer_valued)) => ResourceReachableRange {
+                    resource,
+                    min,
+                    max: Some(max),
+                    integer_valued,
+                    scope: "scenario_external_input".to_string(),
+                    unresolved_reasons: Vec::new(),
+                },
+                None => ResourceReachableRange {
+                    resource,
+                    min: 0.0,
+                    max: None,
+                    integer_valued: false,
+                    scope: if blueprint.is_some() {
+                        "scenario_effect_resource".to_string()
+                    } else {
+                        "unbound_model".to_string()
+                    },
+                    unresolved_reasons: vec![
+                        "operator owner cardinality and all producer paths are not yet compiled"
+                            .to_string(),
+                    ],
+                },
+            }
+        })
+        .collect()
+}
+
+fn build_resource_equivalence_classes(
+    ranges: &[ResourceReachableRange],
+    _facts: &[ResourceValueDomainFact],
+) -> Vec<ResourceEquivalenceClass> {
+    let mut classes = Vec::new();
+    for range in ranges {
+        let Some(max) = range.max else {
+            continue;
+        };
+        if !range.integer_valued || range.min < 0.0 || max > u32::MAX as f64 {
+            continue;
+        }
+        let min = range.min as u32;
+        let max = max as u32;
+        for value in min..=max {
+            classes.push(ResourceEquivalenceClass {
+                resource: range.resource.clone(),
+                min_inclusive: value,
+                max_inclusive: value,
+            });
+        }
+    }
+    classes
 }
 
 fn build_resource_reverse_closures(
@@ -801,6 +1034,53 @@ mod tests {
                 .iter()
                 .any(|item| { item.mechanism == "gold_flow" && item.resource == resource }));
         }
+    }
+
+    #[test]
+    fn standard_243_compiles_finite_gold_flow_external_domains() {
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let report = build_response_dependency_report_for_blueprint(&table, &blueprint);
+        let scenario = report.scenario.as_ref().expect("scenario metadata");
+        assert_eq!(scenario.gold_manu_line_count, 2);
+        assert_eq!(scenario.initial_virtual_gold_lines, 0);
+
+        let gold_flow = report
+            .domain_dependency_contributors
+            .iter()
+            .find(|contributor| contributor.mechanism == "gold_flow")
+            .expect("gold flow contributor");
+        let values = |name: &str| {
+            gold_flow
+                .inputs
+                .iter()
+                .find(|input| input.name == name)
+                .and_then(|input| input.scenario_values.clone())
+                .expect("finite scenario input")
+        };
+        assert_eq!(values("real_gold_lines"), vec![2]);
+        assert_eq!(values("virtual_gold_lines"), vec![0]);
+        assert_eq!(values("durin_virtual_lines"), vec![0, 1, 2, 3, 4]);
+        assert!(report.unresolved_delegated_dependencies.is_empty());
+
+        let class_count = |resource: &str| {
+            report
+                .resource_equivalence_classes
+                .iter()
+                .filter(|class| class.resource == resource)
+                .count()
+        };
+        assert_eq!(class_count("real_gold_lines"), 1);
+        assert_eq!(class_count("virtual_gold_lines"), 1);
+        assert_eq!(class_count("durin_virtual_lines"), 5);
+        assert!(report
+            .resource_reachable_ranges
+            .iter()
+            .filter(|range| !matches!(
+                range.resource.as_str(),
+                "real_gold_lines" | "virtual_gold_lines" | "durin_virtual_lines"
+            ))
+            .all(|range| range.max.is_none()));
     }
 
     #[test]

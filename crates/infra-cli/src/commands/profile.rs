@@ -55,7 +55,7 @@ pub fn profile_cmd(args: &[String]) -> Result<(), Error> {
         Some("bake-dependencies") => profile_bake_dependencies_cmd(&args[1..]),
         _ => {
             eprintln!(
-                "usage:\n  infra-cli profile layout-full [--layout <path>] [--operbox <path>] [--top <n>] [--runs <n>]\n  infra-cli profile analyze-compare [--layout <path>] [--operbox <path>] [--schedule <path>] [--runs <n>]\n  infra-cli profile bake-dependencies [-o <report.json>]"
+                "usage:\n  infra-cli profile layout-full [--layout <path>] [--operbox <path>] [--top <n>] [--runs <n>]\n  infra-cli profile analyze-compare [--layout <path>] [--operbox <path>] [--schedule <path>] [--runs <n>]\n  infra-cli profile bake-dependencies [--layout <path>] [-o <report.json>]"
             );
             Ok(())
         }
@@ -64,6 +64,7 @@ pub fn profile_cmd(args: &[String]) -> Result<(), Error> {
 
 fn profile_bake_dependencies_cmd(args: &[String]) -> Result<(), Error> {
     let mut output = None;
+    let mut layout_path = None;
     let mut index = 0usize;
     while index < args.len() {
         match args[index].as_str() {
@@ -74,6 +75,15 @@ fn profile_bake_dependencies_cmd(args: &[String]) -> Result<(), Error> {
                 output = Some(PathBuf::from(path));
                 index += 2;
             }
+            "--layout" => {
+                let Some(path) = args.get(index + 1) else {
+                    return Err(Error::msg(
+                        "profile bake-dependencies --layout requires a path",
+                    ));
+                };
+                layout_path = Some(PathBuf::from(path));
+                index += 2;
+            }
             other => {
                 return Err(Error::msg(format!(
                     "unknown profile bake-dependencies argument {other:?}"
@@ -82,7 +92,12 @@ fn profile_bake_dependencies_cmd(args: &[String]) -> Result<(), Error> {
         }
     }
     let table = SkillTable::load(&default_skill_table_path()?)?;
-    let report = build_response_dependency_report(&table);
+    let report = if let Some(path) = layout_path {
+        let blueprint = BaseBlueprint::load(&path)?;
+        infra_core::build_response_dependency_report_for_blueprint(&table, &blueprint)
+    } else {
+        build_response_dependency_report(&table)
+    };
     let json = serde_json::to_string_pretty(&report)?;
     if let Some(path) = output {
         std::fs::write(&path, format!("{json}\n"))?;

@@ -9,6 +9,45 @@
 use crate::skill_table::SkillTable;
 use crate::trade::interpreter::TradeContext;
 
+use crate::response_dependency::{DomainDependencyInputDecl, DomainInputSource};
+
+const DEPENDENCY_INPUTS: &[DomainDependencyInputDecl] = &[
+    DomainDependencyInputDecl {
+        name: "real_gold_lines",
+        source: DomainInputSource::Blueprint,
+        external_signature: true,
+        note: "physical gold factory count",
+    },
+    DomainDependencyInputDecl {
+        name: "virtual_gold_lines",
+        source: DomainInputSource::GlobalResource,
+        external_signature: true,
+        note: "initial global virtual gold lines before room-local transitions",
+    },
+    DomainDependencyInputDecl {
+        name: "durin_virtual_lines",
+        source: DomainInputSource::LayoutStatistic,
+        external_signature: true,
+        note: "Durin operators in base, capped at four",
+    },
+    DomainDependencyInputDecl {
+        name: "ordered_gold_flow_roles",
+        source: DomainInputSource::CandidateRow,
+        external_signature: false,
+        note: "ordered L2 buff roles carried by the room candidate",
+    },
+    DomainDependencyInputDecl {
+        name: "active_order_kind",
+        source: DomainInputSource::RoomContext,
+        external_signature: false,
+        note: "gold-flow executes only for gold orders",
+    },
+];
+
+pub fn dependency_inputs() -> &'static [DomainDependencyInputDecl] {
+    DEPENDENCY_INPUTS
+}
+
 /// 在 `PeerAbsorb` 之前执行：按干员进驻顺序结算赤金链效率。
 pub fn apply_gold_flow_chain(ctx: &mut TradeContext, table: &SkillTable) {
     let real = ctx.real_gold_lines;

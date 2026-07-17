@@ -133,7 +133,7 @@ crates/infra-cli/src/
 | **`layout eval`** | `commands/layout.rs` | stderr 文本 / JSON | 必选 `--layout` + `--operbox` + `--assignment`；评估指定编制 |
 | `profile layout-full` | `commands/profile.rs` | stderr 性能报告 | 开发辅助；默认路径为历史性能夹具，用户模拟不要用 |
 | `profile analyze-compare` | `commands/profile.rs` | stderr 对比报告 | 开发辅助；对比 hybrid profile 与旧 probe 链路耗时 |
-| `profile bake-dependencies` | `commands/profile.rs` | JSON 依赖报告 | 只读扫描 skill table，穷举分类房内、同设施、跨设施、全局布局和运行时依赖；为条件化 Bake 规模设计提供输入 |
+| `profile bake-dependencies` | `commands/profile.rs` | JSON 依赖报告 | 只读扫描 skill table，穷举分类房内、同设施、跨设施、全局布局和运行时依赖；可选 `--layout <path>` 编译该蓝图的 L2 外部场景域；为条件化 Bake 规模设计提供输入 |
 | `trade yield` | `main.rs` | `output::emit_trade_yield` | `verify::unit_fixture` |
 
 开发和正式发布 catalog 时使用 `scripts/bake_and_verify.sh [--out <dir>]`。它构建 release CLI、

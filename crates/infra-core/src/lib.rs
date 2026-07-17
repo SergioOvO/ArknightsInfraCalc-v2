@@ -82,9 +82,11 @@ pub use power::{
     PowerRoomInput,
 };
 pub use response_dependency::{
-    build_response_dependency_report, DependencyScope, ResourceClosureEdge,
-    ResourceClosureEdgeKind, ResourceConversionDependency, ResourceReadFormula,
-    ResourceReverseClosure, ResourceValueDomainFact, ResponseDependencyReport,
+    build_response_dependency_report, build_response_dependency_report_for_blueprint,
+    DependencyScenario, DependencyScope, DomainDependencyContributor, DomainDependencyInput,
+    DomainDependencyInputDecl, DomainInputSource, ResourceClosureEdge, ResourceClosureEdgeKind,
+    ResourceConversionDependency, ResourceEquivalenceClass, ResourceReachableRange,
+    ResourceReadFormula, ResourceReverseClosure, ResourceValueDomainFact, ResponseDependencyReport,
     ResponseDependencyRow, ResponseField, UnresolvedDelegatedDependency,
 };
 pub use roster::{OperatorProgress, Roster};
