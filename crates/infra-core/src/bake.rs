@@ -213,6 +213,7 @@ pub struct CompleteBakedTradeRows {
 pub struct CompleteBakedTradeCatalog {
     disk: BakedComboTableDisk,
     trade_pool: TradePool,
+    skill_table: SkillTable,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1178,6 +1179,7 @@ pub fn validate_baked_catalog(out_dir: &Path, generator: &BakeGeneratorFingerpri
 struct ValidatedBakedCatalog {
     disk: BakedComboTableDisk,
     trade_pool: Option<TradePool>,
+    trade_skill_table: Option<SkillTable>,
 }
 
 fn load_validated_baked_catalog(
@@ -1242,18 +1244,22 @@ fn load_validated_baked_catalog(
     if rows_by_signature != manifest.combo_table.rows_by_signature {
         return Err(Error::msg("baked combo table row counts mismatch"));
     }
-    let trade_pool = if manifest.options.include_trade {
+    let (trade_pool, trade_skill_table) = if manifest.options.include_trade {
         let instances = OperatorInstances::load(&default_instances_path()?)?;
         let table = SkillTable::load(&default_skill_table_path()?)?;
         let roster = bake_roster(&instances);
         let trade_pool = build_trade_pool(&roster, &instances, &table)?;
         validate_trade_mechanism_signatures(&disk, &trade_pool)?;
         validate_complete_trade_row_universe(&disk, &trade_pool, &table)?;
-        Some(trade_pool)
+        (Some(trade_pool), Some(table))
     } else {
-        None
+        (None, None)
     };
-    Ok(ValidatedBakedCatalog { disk, trade_pool })
+    Ok(ValidatedBakedCatalog {
+        disk,
+        trade_pool,
+        trade_skill_table,
+    })
 }
 
 pub fn verify_baked_catalog_responses(
@@ -1353,9 +1359,13 @@ pub fn load_complete_baked_trade_catalog(
     let trade_pool = validated
         .trade_pool
         .ok_or_else(|| Error::msg("baked catalog does not include trade"))?;
+    let skill_table = validated
+        .trade_skill_table
+        .ok_or_else(|| Error::msg("baked catalog does not include trade"))?;
     Ok(CompleteBakedTradeCatalog {
         disk: validated.disk,
         trade_pool,
+        skill_table,
     })
 }
 
@@ -1430,6 +1440,94 @@ impl CompleteBakedTradeCatalog {
         Ok(CompleteBakedTradeRows {
             signature_key,
             rows,
+        })
+    }
+
+    pub fn resolve_row_live(
+        &self,
+        row_id: &BakedTradeRowId,
+        room_level: u8,
+        order_kind: TradeOrderKind,
+        layout: Arc<LayoutContext>,
+        mood: f64,
+        shift_hours: f64,
+    ) -> Result<TradeSearchHit> {
+        let expected_key = trade_lookup_key(
+            room_level,
+            station_operator_capacity(room_level),
+            order_kind,
+            baked_search_baseline().gold_manu_line_count,
+        );
+        if row_id.signature_key != expected_key {
+            return Err(Error::msg(format!(
+                "baked trade row signature mismatch: row={:?}, query={expected_key:?}",
+                row_id.signature_key
+            )));
+        }
+        let index = self
+            .disk
+            .indexes
+            .iter()
+            .find(|index| index.signature_key == row_id.signature_key)
+            .ok_or_else(|| Error::msg("baked trade row signature is absent"))?;
+        if row_id.offset >= index.len {
+            return Err(Error::msg("baked trade row offset is out of range"));
+        }
+        let disk_row = &self.disk.rows[index.start + row_id.offset];
+        let operators = disk_row
+            .operator_indices
+            .iter()
+            .map(|operator| {
+                let name = &self.disk.operator_names[*operator];
+                self.trade_pool
+                    .entry(name)
+                    .map(|entry| entry.to_trade_operator())
+                    .ok_or_else(|| Error::msg(format!("baked trade row operator {name:?} missing")))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let input = TradeRoomInput {
+            level: room_level,
+            operators,
+            order_count: None,
+            mood,
+            gold_production_lines: Some(layout.gold_manu_line_count),
+            durin_virtual_lines: None,
+            human_fireworks: None,
+            layout,
+            active_order_kind: order_kind,
+        };
+        let result = solve_trade_with_shift_prevalidated(&input, &self.skill_table, shift_hours)?;
+        let efficiency = &result.efficiency;
+        Ok(TradeSearchHit {
+            names: input
+                .operators
+                .iter()
+                .map(|operator| operator.name.clone())
+                .collect(),
+            gold_names: vec![],
+            originium_names: vec![],
+            final_efficiency: efficiency.final_efficiency,
+            mechanic_equivalent_efficiency: result.order_mechanic.mechanic_equivalent_efficiency,
+            rule_id: result.rule_id.clone(),
+            unit_trade_per_day: result.production.unit.unit_trade_per_day,
+            unit_gold_per_day: result.production.unit.unit_gold_per_day,
+            unit_originium_per_day: result.production.unit.unit_originium_per_day,
+            breakdown: Some(TradeEfficiencyBreakdown {
+                base_efficiency: efficiency.paper.base_efficiency,
+                occupancy_efficiency: efficiency.paper.occupancy_efficiency,
+                skill_efficiency: efficiency.paper.skill_efficiency,
+                control_efficiency: efficiency.paper.control_efficiency,
+                paper_efficiency: efficiency.paper.paper_efficiency,
+                mechanic_equivalent_efficiency: result
+                    .order_mechanic
+                    .mechanic_equivalent_efficiency,
+                unit_output_multiplier: efficiency.production_basis.unit_output_multiplier,
+                final_efficiency: efficiency.final_efficiency,
+                equivalent_skill_efficiency: efficiency.equivalent_skill_efficiency,
+                unit_trade_per_day: result.production.unit.unit_trade_per_day,
+                unit_gold_per_day: result.production.unit.unit_gold_per_day,
+                rule_id: result.rule_id,
+            }),
         })
     }
 }
@@ -2492,6 +2590,83 @@ fn write_json(path: PathBuf, value: &impl Serialize) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::control::{solve_control, ControlOperator, ControlRoomInput};
+    use crate::instances::resolve_buff_ids;
+    use crate::tier::PromotionTier;
+
+    fn complete_trade_catalog() -> &'static CompleteBakedTradeCatalog {
+        static CATALOG: OnceLock<CompleteBakedTradeCatalog> = OnceLock::new();
+        CATALOG.get_or_init(|| {
+            let out_dir = std::env::temp_dir().join(format!(
+                "infra-bake-complete-trade-rows-{}",
+                std::process::id()
+            ));
+            let _ = fs::remove_dir_all(&out_dir);
+            let generator = BakeGeneratorFingerprint {
+                kind: "test".to_string(),
+                path: "test".to_string(),
+                bytes: 1,
+                hash64: "complete-trade-rows".to_string(),
+            };
+            bake_catalogs(&BakeOptions {
+                out_dir: out_dir.clone(),
+                include_trade: true,
+                include_manufacture: false,
+                generator: Some(generator.clone()),
+                ..Default::default()
+            })
+            .unwrap();
+            let catalog = load_complete_baked_trade_catalog(&out_dir, &generator).unwrap();
+            fs::remove_dir_all(out_dir).unwrap();
+            catalog
+        })
+    }
+
+    fn control_op(name: &str) -> ControlOperator {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let tier = PromotionTier::TierUp;
+        let binding = instances
+            .get(name, tier)
+            .and_then(|instance| instance.facilities.get("control"));
+        let tier0 = instances
+            .get(name, PromotionTier::Tier0)
+            .and_then(|instance| instance.facilities.get("control"));
+        let buff_ids = binding
+            .map(|binding| resolve_buff_ids(tier, binding, tier0))
+            .unwrap_or_default();
+        let tags = instances
+            .get(name, tier)
+            .map(|instance| instance.tags.clone())
+            .unwrap_or_default();
+        ControlOperator {
+            name: name.to_string(),
+            elite: 2,
+            buff_ids,
+            tags,
+        }
+    }
+
+    fn layout_with_control_producer(
+        catalog: &CompleteBakedTradeCatalog,
+        name: &str,
+        mut layout: LayoutContext,
+    ) -> Arc<LayoutContext> {
+        let result = solve_control(
+            &ControlRoomInput {
+                operators: vec![control_op(name)],
+                mood: 24.0,
+                layout: layout.clone(),
+            },
+            &catalog.skill_table,
+        );
+        layout.global = result.global;
+        layout.global_inject = result.inject;
+        Arc::new(layout)
+    }
+
+    fn control_efficiency(hit: &TradeSearchHit) -> Efficiency {
+        hit.breakdown.as_ref().unwrap().control_efficiency
+    }
 
     fn trade_ops(names: &[&str]) -> Vec<TradeOperator> {
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
@@ -2653,27 +2828,7 @@ mod tests {
 
     #[test]
     fn complete_trade_row_adapter_returns_untruncated_rows_and_faction_counts() {
-        let out_dir = std::env::temp_dir().join(format!(
-            "infra-bake-complete-trade-rows-{}",
-            std::process::id()
-        ));
-        let _ = fs::remove_dir_all(&out_dir);
-        let generator = BakeGeneratorFingerprint {
-            kind: "test".to_string(),
-            path: "test".to_string(),
-            bytes: 1,
-            hash64: "complete-trade-rows".to_string(),
-        };
-        bake_catalogs(&BakeOptions {
-            out_dir: out_dir.clone(),
-            include_trade: true,
-            include_manufacture: false,
-            generator: Some(generator.clone()),
-            ..Default::default()
-        })
-        .unwrap();
-
-        let catalog = load_complete_baked_trade_catalog(&out_dir, &generator).unwrap();
+        let catalog = complete_trade_catalog();
         let rows = catalog.rows_for(3, TradeOrderKind::Gold).unwrap();
         assert!(
             rows.rows.len() > 20,
@@ -2687,8 +2842,138 @@ mod tests {
                 && !row.logical_mask.is_empty()
                 && row.baseline_response.names == row.names
         }));
+    }
 
-        fs::remove_dir_all(out_dir).unwrap();
+    #[test]
+    fn complete_trade_row_live_resolve_matches_baked_baseline_response() {
+        let catalog = complete_trade_catalog();
+        let rows = catalog.rows_for(3, TradeOrderKind::Gold).unwrap();
+        let row = rows.rows.iter().find(|row| row.glasgow_count == 2).unwrap();
+
+        let resolved = catalog
+            .resolve_row_live(
+                &row.row_id,
+                3,
+                TradeOrderKind::Gold,
+                Arc::new(LayoutContext::search_baseline()),
+                24.0,
+                24.0,
+            )
+            .unwrap();
+
+        assert_eq!(
+            serde_json::to_value(resolved).unwrap(),
+            serde_json::to_value(&row.baseline_response).unwrap()
+        );
+    }
+
+    #[test]
+    fn complete_trade_row_live_resolve_observes_dynamic_producer_scopes() {
+        let catalog = complete_trade_catalog();
+        let rows = catalog.rows_for(3, TradeOrderKind::Gold).unwrap();
+        let plain_row = rows
+            .rows
+            .iter()
+            .find(|row| row.siracusa_count == 0 && row.glasgow_count == 0)
+            .unwrap();
+        let glasgow_row = rows.rows.iter().find(|row| row.glasgow_count == 2).unwrap();
+
+        let baseline_plain = catalog
+            .resolve_row_live(
+                &plain_row.row_id,
+                3,
+                TradeOrderKind::Gold,
+                Arc::new(LayoutContext::search_baseline()),
+                24.0,
+                24.0,
+            )
+            .unwrap();
+        let baseline_glasgow = catalog
+            .resolve_row_live(
+                &glasgow_row.row_id,
+                3,
+                TradeOrderKind::Gold,
+                Arc::new(LayoutContext::search_baseline()),
+                24.0,
+                24.0,
+            )
+            .unwrap();
+
+        let mut haru_layout = LayoutContext::search_baseline();
+        haru_layout
+            .trade_tagged_count_sum
+            .insert("cc.g.siracusa".to_string(), 2);
+        let haru = catalog
+            .resolve_row_live(
+                &plain_row.row_id,
+                3,
+                TradeOrderKind::Gold,
+                layout_with_control_producer(catalog, "八幡海铃", haru_layout),
+                24.0,
+                24.0,
+            )
+            .unwrap();
+        assert_eq!(
+            control_efficiency(&haru) - control_efficiency(&baseline_plain),
+            Efficiency::from_decimal(0.10),
+            "Haru must consume the all-trade Siracusa total"
+        );
+
+        let mut daifeen_plain_layout = LayoutContext::search_baseline();
+        daifeen_plain_layout
+            .trade_tagged_count_sum
+            .insert("cc.g.glasgow".to_string(), 3);
+        let daifeen_plain = catalog
+            .resolve_row_live(
+                &plain_row.row_id,
+                3,
+                TradeOrderKind::Gold,
+                layout_with_control_producer(catalog, "戴菲恩", daifeen_plain_layout),
+                24.0,
+                24.0,
+            )
+            .unwrap();
+        assert_eq!(
+            control_efficiency(&daifeen_plain),
+            control_efficiency(&baseline_plain),
+            "Daifeen must ignore Glasgow operators in other trade rooms"
+        );
+        let daifeen_glasgow = catalog
+            .resolve_row_live(
+                &glasgow_row.row_id,
+                3,
+                TradeOrderKind::Gold,
+                layout_with_control_producer(catalog, "戴菲恩", LayoutContext::search_baseline()),
+                24.0,
+                24.0,
+            )
+            .unwrap();
+        assert_eq!(
+            control_efficiency(&daifeen_glasgow) - control_efficiency(&baseline_glasgow),
+            Efficiency::from_decimal(0.20),
+            "Daifeen must count Glasgow operators in the resolved room"
+        );
+
+        let mut silverash_layout = LayoutContext::search_baseline();
+        silverash_layout.trade_stations_tagged_gte.insert(
+            crate::layout::trade_station_tagged_gte_key("cc.g.karlan", 3),
+            2,
+        );
+        let silverash = catalog
+            .resolve_row_live(
+                &plain_row.row_id,
+                3,
+                TradeOrderKind::Gold,
+                layout_with_control_producer(catalog, "凛御银灰", silverash_layout),
+                24.0,
+                24.0,
+            )
+            .unwrap();
+        assert_eq!(
+            control_efficiency(&silverash) - control_efficiency(&baseline_plain),
+            Efficiency::from_decimal(0.20),
+            "SilverAsh must consume the number of qualifying Karlan stations"
+        );
     }
 
     #[test]
