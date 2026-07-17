@@ -391,7 +391,7 @@ catalog row/response 精确命中
 
 | 生命周期 | 当前位置 | 为什么违反不变量 |
 |----------|----------|------------------|
-| data / selector | `data/skill_table.json` 的戴菲恩 atom | `TaggedCountInTradeSum` 把逐房 Glasgow 错写成跨站总数 |
+| data / selector | `data/skill_table.json` 的戴菲恩 atom | 2026-07-17 已按用户裁决改为 current-room deferred selector；已确定编制的逐房效果结算已修复，普通 control comparator 仍按 0 看待无 room tuple 的该规则，联合选型与 bind 仍按下列条目待实施 |
 | select / plan | `data/base_systems.json::vina_lungmen`、生成脚本、registry 选型 | 可选 producer 被升级为 fixed System + 固定 trade role |
 | control candidate | `search/control.rs::control_entry_optional_dynamic_trade_tags` | 只对白名单 buff 建 Haru 类主动分支，三 producer 没有统一 rule extractor |
 | prefix | `layout/assign/pipeline.rs::dynamic_trade_producer_candidates`、`run_peak_prefix_candidate` | 普通路径后再按 producer 逐个重跑完整前缀；producer 增加时线性膨胀 |

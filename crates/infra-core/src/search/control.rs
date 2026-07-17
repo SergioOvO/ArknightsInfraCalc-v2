@@ -205,8 +205,14 @@ pub fn control_entry_dynamic_trade_tags(
             {
                 continue;
             }
-            if let Some(Selector::TaggedCountInTradeSum { tag }) = atom.selector.as_ref() {
-                tags.insert(tag.clone());
+            match atom.selector.as_ref() {
+                Some(
+                    Selector::TaggedCountInTradeSum { tag }
+                    | Selector::TaggedCountInCurrentTradeRoom { tag },
+                ) => {
+                    tags.insert(tag.clone());
+                }
+                _ => {}
             }
         }
     }

@@ -117,8 +117,12 @@ pub enum Selector {
     /// 训练室最高等级（维伊·手艺人；cap 通常 30%）。
     TrainingRoomLevel,
     Mood,
-    /// 各贸易站同房 `tag` 干员数之和（戴菲恩/八幡海铃等中枢跨设施注入）。
+    /// 各贸易站同房 `tag` 干员数之和（八幡海铃等中枢跨设施注入）。
     TaggedCountInTradeSum {
+        tag: String,
+    },
+    /// 当前被结算贸易站内携带 `tag` 的干员数（戴菲恩·运筹好手）。
+    TaggedCountInCurrentTradeRoom {
         tag: String,
     },
     /// 至少 `min` 名 `tag` 干员进驻的贸易站数量（凛御银灰·商业版图）。

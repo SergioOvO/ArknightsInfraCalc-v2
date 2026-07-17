@@ -871,6 +871,9 @@ fn selector_dependency(selector: &Selector) -> (&'static str, DependencyScope) {
         Selector::TrainingRoomLevel => ("training_room_level", CrossFacility),
         Selector::Mood => ("mood", RuntimeState),
         Selector::TaggedCountInTradeSum { .. } => ("tagged_count_in_trade_sum", SameFacility),
+        Selector::TaggedCountInCurrentTradeRoom { .. } => {
+            ("tagged_count_in_current_trade_room", RoomLocal)
+        }
         Selector::TradeStationsWithTaggedGte { .. } => {
             ("trade_stations_with_tagged_gte", SameFacility)
         }

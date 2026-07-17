@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use crate::control::input::ControlRoomInput;
 use crate::global_resource::GlobalResourcePool;
 use crate::global_resource::{
-    GlobalInjectManifest, INJECT_FAMILY_MANU_GLOBAL_ALL, INJECT_FAMILY_TRADE_GLOBAL_FLAT,
+    GlobalInjectManifest, TradeTaggedCountScope, INJECT_FAMILY_MANU_GLOBAL_ALL,
+    INJECT_FAMILY_TRADE_GLOBAL_FLAT,
 };
 use crate::layout::trade_station_tagged_gte_key;
 use crate::skill_table::SkillTable;
@@ -232,15 +233,30 @@ fn apply_global_inject(ctx: &mut ControlContext, atom: &EffectAtom, source_buff_
     });
     match &atom.action {
         Action::GlobalInjectTradeEff { value } => {
-            if let Some(Selector::TaggedCountInTradeSum { tag }) = atom.selector.as_ref() {
-                let resolved_count = ctx
-                    .layout
-                    .trade_tagged_count_sum
-                    .get(tag)
-                    .copied()
-                    .unwrap_or(0);
-                ctx.inject
-                    .record_trade_tagged(source_buff_id, family, tag, *value, resolved_count);
+            let tagged_rule = match atom.selector.as_ref() {
+                Some(Selector::TaggedCountInTradeSum { tag }) => Some((
+                    tag,
+                    ctx.layout
+                        .trade_tagged_count_sum
+                        .get(tag)
+                        .copied()
+                        .unwrap_or(0),
+                    TradeTaggedCountScope::AllTradeRooms,
+                )),
+                Some(Selector::TaggedCountInCurrentTradeRoom { tag }) => {
+                    Some((tag, 0, TradeTaggedCountScope::CurrentTradeRoom))
+                }
+                _ => None,
+            };
+            if let Some((tag, resolved_count, count_scope)) = tagged_rule {
+                ctx.inject.record_trade_tagged(
+                    source_buff_id,
+                    family,
+                    tag,
+                    *value,
+                    resolved_count,
+                    count_scope,
+                );
             } else {
                 let v = scaled_inject_value(ctx, atom, *value);
                 if v != 0.0 {
@@ -294,6 +310,7 @@ fn resolve_selector_value(ctx: &ControlContext, selector: Option<&Selector>) -> 
         Some(Selector::TaggedCountInTradeSum { tag }) => {
             f64::from(*ctx.layout.trade_tagged_count_sum.get(tag).unwrap_or(&0))
         }
+        Some(Selector::TaggedCountInCurrentTradeRoom { .. }) => 0.0,
         Some(Selector::TradeStationsWithTaggedGte { tag, min }) => f64::from(
             *ctx.layout
                 .trade_stations_tagged_gte
@@ -417,6 +434,30 @@ mod tests {
             .trade_tagged_count_sum
             .insert("cc.g.siracusa".to_string(), 2);
         assert_eq!(solve(layout).inject.trade_eff_pct(), 10.0);
+    }
+
+    #[test]
+    fn daifeen_trade_inject_is_delayed_to_the_current_trade_room() {
+        let mut layout = LayoutContext::default();
+        layout
+            .trade_tagged_count_sum
+            .insert("cc.g.glasgow".to_string(), 3);
+        let result = solve_control(
+            &ControlRoomInput {
+                operators: vec![control_op("戴菲恩", 2)],
+                mood: 24.0,
+                layout,
+            },
+            &table(),
+        );
+
+        assert!(result.inject.has_dynamic_trade_inject());
+        assert_eq!(result.inject.trade_eff_pct(), 0.0);
+        assert_eq!(result.inject.trade_tagged().len(), 1);
+        assert_eq!(
+            result.inject.trade_tagged()[0].count_scope,
+            TradeTaggedCountScope::CurrentTradeRoom
+        );
     }
 
     #[test]

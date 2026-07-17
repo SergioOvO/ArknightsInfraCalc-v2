@@ -157,12 +157,21 @@ impl TradeContext {
     }
 
     pub fn order_eff_total(&self) -> f64 {
+        let mut current_room_tag_counts = HashMap::new();
+        for operator in &self.operators {
+            for tag in &operator.tags {
+                *current_room_tag_counts.entry(tag.clone()).or_insert(0) += 1;
+            }
+        }
         self.order_eff_base()
             + self.order_eff_skill()
             + self
                 .layout
                 .global_inject
-                .trade_eff_pct_with_tag_counts(&self.layout.trade_tagged_count_sum)
+                .trade_eff_pct_with_scoped_tag_counts(
+                    &self.layout.trade_tagged_count_sum,
+                    &current_room_tag_counts,
+                )
     }
 
     pub fn mechanic_caps(&self) -> MechanicCaps {
@@ -711,6 +720,11 @@ fn resolve_selector_value(ctx: &TradeContext, selector: Option<&Selector>, owner
         Some(Selector::TaggedCountInTradeSum { tag }) => {
             f64::from(*ctx.layout.trade_tagged_count_sum.get(tag).unwrap_or(&0))
         }
+        Some(Selector::TaggedCountInCurrentTradeRoom { tag }) => ctx
+            .operators
+            .iter()
+            .filter(|operator| operator.tags.iter().any(|candidate| candidate == tag))
+            .count() as f64,
         Some(Selector::TradeStationsWithTaggedGte { tag, min }) => f64::from(
             *ctx.layout
                 .trade_stations_tagged_gte
@@ -783,6 +797,41 @@ mod tests {
     /// 同房挂件：仅提供 peer 计数，干员名与机制无关。
     fn trade_peer(name: &str, buff_id: &str) -> TradeOperator {
         TradeOperator::new(name, 0, vec![buff_id.into()])
+    }
+
+    #[test]
+    fn daifeen_inject_counts_glasgow_in_each_trade_room_independently() {
+        let mut layout = LayoutContext::default();
+        layout
+            .trade_tagged_count_sum
+            .insert("cc.g.glasgow".to_string(), 3);
+        layout.global_inject.record_trade_tagged(
+            "control_tra_limit&spd[010]",
+            "trade_glasgow_scaling",
+            "cc.g.glasgow",
+            10.0,
+            0,
+            crate::global_resource::TradeTaggedCountScope::CurrentTradeRoom,
+        );
+
+        let resolve = |glasgow_count: usize| {
+            let operators = (0..glasgow_count)
+                .map(|index| TradeOperator {
+                    name: format!("glasgow_{index}"),
+                    tags: vec!["cc.g.glasgow".to_string()],
+                    ..Default::default()
+                })
+                .collect::<Vec<_>>();
+            let mut input = TradeRoomInput::with_operators(3, operators);
+            input.layout = Arc::new(layout.clone());
+            let ctx = TradeContext::from_room(&input);
+            ctx.order_eff_total() - ctx.order_eff_base()
+        };
+
+        assert_eq!(resolve(3), 30.0);
+        assert_eq!(resolve(0), 0.0);
+        assert_eq!(resolve(2), 20.0);
+        assert_eq!(resolve(1), 10.0);
     }
 
     #[test]

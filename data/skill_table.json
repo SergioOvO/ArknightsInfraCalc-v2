@@ -5184,7 +5184,7 @@
       "atoms": [
         {
           "selector": {
-            "tagged_count_in_trade_sum": {
+            "tagged_count_in_current_trade_room": {
               "tag": "cc.g.glasgow"
             }
           },

@@ -10,7 +10,7 @@ mod pool;
 mod registry;
 
 pub use inject::{
-    GlobalInjectManifest, KarlanPrecision, INJECT_FAMILY_MANU_GLOBAL_ALL,
+    GlobalInjectManifest, KarlanPrecision, TradeTaggedCountScope, INJECT_FAMILY_MANU_GLOBAL_ALL,
     INJECT_FAMILY_TRADE_GLOBAL_FLAT,
 };
 pub use key::GlobalResourceKey;

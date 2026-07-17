@@ -2259,6 +2259,7 @@ mod tests {
             "cc.g.siracusa",
             5.0,
             0,
+            crate::global_resource::TradeTaggedCountScope::AllTradeRooms,
         );
         let trade_pool = TradePool {
             entries: vec![],
