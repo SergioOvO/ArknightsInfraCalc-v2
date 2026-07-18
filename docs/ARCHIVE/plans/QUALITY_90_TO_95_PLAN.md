@@ -1,12 +1,21 @@
 # 90 → 95 质量提升计划：候选架构、机制分析与体系烘焙
 
-> 状态：paused
+> 文档角色：archive
+> 生命周期状态：historical
+> 替代项：docs/TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md；docs/TODO/CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md；docs/QUALITY_AND_AUDIT.md
+> 历史原因：暂停的综合质量方案已拆给具名 active change 和 current quality owner
+> 快照日期：2026-07-18
+> 转换自：docs/TODO/QUALITY_90_TO_95_PLAN.md
+> 转换处置：archive-historical
+> 摘要：保存 90 到 95 质量提升候选方案的历史背景
+
+> 历史原状态：paused
 > 启动日期：2026-06-30
 > 暂停日期：2026-07-03
 > 执行对象：GPT-5.5 / 后续实现 agent
 > 目标：在不引入 CP-SAT / MILP / 张量引擎等重型求解器的前提下，把当前约 90 分的推荐质量稳定提升到 95 分。
 
-> 2026-07-03 决策：本计划暂停作为默认主线。项目已进入正常维护期；[TRUST_RECOVERY_PLAN.md](TRUST_RECOVERY_PLAN.md) 仅作为已修复反馈的关闭审计、防回归矩阵和新反馈处理参考。本计划保留为历史方案和可借鉴材料，但不要默认继续推进统一候选架构、全局 selector、SystemRule registry 或 baking materialized view。
+> 2026-07-03 决策：本计划暂停作为默认主线。项目已进入正常维护期；[TRUST_RECOVERY_PLAN.md](../done/TRUST_RECOVERY_PLAN.md) 仅作为已修复反馈的关闭审计、防回归矩阵和新反馈处理参考。本计划保留为历史方案和可借鉴材料，但不要默认继续推进统一候选架构、全局 selector、SystemRule registry 或 baking materialized view。
 
 ## 0. 背景与判断
 

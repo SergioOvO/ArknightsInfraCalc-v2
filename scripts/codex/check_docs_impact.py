@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Check changed paths against docs-impact declarations and deterministic docs facts."""
+"""Check changed paths against file-owned documentation review triggers."""
 
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import json
 import re
 import subprocess
@@ -13,6 +12,8 @@ import tomllib
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
+
+import docs_inventory
 
 
 VAGUE_REASONS = {"", "none", "n/a", "na", "no impact", "无影响", "不需要", "not needed"}
@@ -38,14 +39,14 @@ def load_config(path: Path) -> dict[str, Any]:
             value = tomllib.load(handle)
     except (OSError, tomllib.TOMLDecodeError) as error:
         raise CheckError(f"cannot read config {path}: {error}") from error
-    if value.get("schema_version") != 1 or not isinstance(value.get("rules"), list):
-        raise CheckError("docs impact config must have schema_version=1 and [[rules]]")
+    if value.get("schema_version") != 2 or not isinstance(value.get("ignore_globs"), list):
+        raise CheckError("docs impact config must have schema_version=2 and ignore_globs")
     return value
 
 
 def _git_paths(repo: Path, arguments: list[str]) -> set[str]:
     result = subprocess.run(
-        ["git", "-C", str(repo), *arguments],
+        ["git", "-c", "core.quotepath=false", "-C", str(repo), *arguments],
         check=True,
         text=True,
         stdout=subprocess.PIPE,
@@ -64,8 +65,10 @@ def discover_changed_paths(repo: Path, base_sha: str) -> set[str]:
     return paths
 
 
-def matches(path: str, patterns: list[str]) -> bool:
-    return any(fnmatch.fnmatchcase(path, pattern) for pattern in patterns)
+def discover_committed_paths(repo: Path, base_sha: str) -> set[str]:
+    if not base_sha:
+        raise CheckError("--committed-only requires --base-sha")
+    return _git_paths(repo, ["diff", "--name-only", "--diff-filter=ACMRD", f"{base_sha}..HEAD"])
 
 
 def _specific_reason(reason: object) -> bool:
@@ -99,14 +102,15 @@ def check_markdown_links(repo: Path, documents: list[str]) -> list[str]:
 
 
 def check_doc_status(repo: Path, documents: list[str]) -> list[str]:
-    errors = []
+    errors: list[str] = []
     for document in documents:
         path = repo / document
         if path.suffix.lower() != ".md" or not path.is_file():
             continue
-        header = "\n".join(path.read_text(encoding="utf-8").splitlines()[:15])
-        if "状态" not in header:
-            errors.append(f"updated document lacks a status field near the top: {document}")
+        try:
+            docs_inventory.parse_document(repo, path)
+        except docs_inventory.InventoryError as error:
+            errors.append(str(error))
     return errors
 
 
@@ -149,12 +153,9 @@ def check_cli_help_map(repo: Path) -> list[str]:
                 break
         if column_end is None:
             continue
-        first_column = line[1:column_end]
-        for value in re.findall(r"`([^`]+)`", first_column):
+        for value in re.findall(r"`([^`]+)`", line[1:column_end]):
             words = value.split()
-            if not words:
-                continue
-            if words[0].startswith("-"):
+            if not words or words[0].startswith("-"):
                 continue
             doc_commands.add(words[0])
             if words[0] == "layout" and len(words) > 1:
@@ -182,14 +183,29 @@ def check_cli_help_map(repo: Path) -> list[str]:
     return errors
 
 
-def _declared_routes(value: object) -> dict[str, str]:
-    routes: dict[str, str] = {}
+def _entry_map(value: object, errors: list[str]) -> dict[str, dict[str, Any]]:
     if not isinstance(value, list):
-        return routes
-    for item in value:
-        if isinstance(item, dict) and isinstance(item.get("rule"), str) and isinstance(item.get("note"), str):
-            routes[item["rule"]] = item["note"].strip()
-    return routes
+        errors.append("docs_impact.entries must be an array")
+        return {}
+    entries: dict[str, dict[str, Any]] = {}
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            errors.append(f"docs_impact.entries[{index}] must be an object")
+            continue
+        path = item.get("path")
+        if not isinstance(path, str) or not path:
+            errors.append(f"docs_impact.entries[{index}].path is required")
+            continue
+        if path in entries:
+            errors.append(f"duplicate docs impact entry: {path}")
+        entries[path] = item
+        if item.get("disposition") not in {"updated", "unchanged"}:
+            errors.append(f"invalid docs impact disposition: {path}")
+        for field in ("stable_facts", "evidence"):
+            values = item.get(field)
+            if not isinstance(values, list) or not values or not all(isinstance(value, str) and value for value in values):
+                errors.append(f"docs impact {field} must be a non-empty string array: {path}")
+    return entries
 
 
 def run_checks(
@@ -204,79 +220,74 @@ def run_checks(
     if not isinstance(impact, dict):
         return ["manifest.docs_impact must be an object"]
     status = impact.get("status")
-    checked = impact.get("checked")
-    updated = impact.get("updated")
-    reason = impact.get("reason")
     if status not in {"updated", "not-needed", "blocked"}:
         errors.append("docs_impact.status must be updated, not-needed, or blocked")
-    if not isinstance(checked, list) or not all(isinstance(item, str) for item in checked):
-        errors.append("docs_impact.checked must be an array of paths")
-        checked = []
-    if not isinstance(updated, list) or not all(isinstance(item, str) for item in updated):
-        errors.append("docs_impact.updated must be an array of paths")
-        updated = []
-    if not _specific_reason(reason):
-        errors.append("docs_impact.reason must be specific and at least 12 characters")
     if status == "blocked":
         errors.append("docs_impact is blocked; completion is not allowed")
-    if status == "updated" and not updated:
-        errors.append("docs_impact.status=updated requires at least one updated document")
-    if status == "not-needed" and updated:
-        errors.append("docs_impact.status=not-needed requires an empty updated list")
+    if not _specific_reason(impact.get("reason")):
+        errors.append("docs_impact.reason must be specific and at least 12 characters")
+    entries = _entry_map(impact.get("entries"), errors)
+    if status == "updated" and not entries:
+        errors.append("docs_impact.status=updated requires entries")
+    if status == "not-needed" and entries:
+        errors.append("docs_impact.status=not-needed requires no entries")
 
-    rules = config["rules"]
-    matched_rules: dict[str, dict[str, Any]] = {}
-    ignore_globs = config.get("ignore_globs", [])
-    uncovered: list[str] = []
-    for path in sorted(changed_paths):
-        matched = [rule for rule in rules if matches(path, rule.get("globs", []))]
-        if not matched and not matches(path, ignore_globs):
-            uncovered.append(path)
-        for rule in matched:
-            matched_rules[str(rule["id"])] = rule
-    if uncovered:
-        errors.append(f"changed paths are not covered by docs_impact.toml: {uncovered}")
+    documents, inventory_errors = docs_inventory.load_inventory(repo)
+    errors.extend(inventory_errors)
+    by_path = {document.path: document for document in documents}
+    ignore_globs = [str(value) for value in config.get("ignore_globs", [])]
+    errors.extend(docs_inventory.source_coverage_errors(changed_paths, documents, ignore_globs))
 
-    required = {
-        document
-        for rule in matched_rules.values()
-        for document in rule.get("required_check", [])
+    triggered = {
+        document.path
+        for document in documents
+        if any(
+            fnmatch_path(path, trigger)
+            for path in changed_paths
+            if not path.endswith(".md")
+            for trigger in document.triggers
+        )
     }
-    missing_checked = required - set(checked)
-    if missing_checked:
-        errors.append(f"docs_impact.checked is missing required documents: {sorted(missing_checked)}")
+    missing = triggered - set(entries)
+    if missing:
+        errors.append(f"docs impact entries missing triggered documents: {sorted(missing)}")
 
-    routes = _declared_routes(impact.get("routes"))
-    for rule_id, rule in matched_rules.items():
-        if rule.get("domain_route") and not routes.get(rule_id):
-            errors.append(
-                f"docs_impact.routes requires a non-empty note for {rule_id}: {rule['domain_route']}"
-            )
+    for path, entry in entries.items():
+        document = by_path.get(path)
+        if document is None:
+            errors.append(f"docs impact entry is not a governed current document: {path}")
+            continue
+        if path not in changed_paths:
+            errors.append(f"docs review record was not updated in this change: {path}")
+        expected_facts = docs_inventory.split_values(document.metadata.get("稳定事实", ""))
+        expected_evidence = docs_inventory.split_values(document.metadata.get("证据引用", ""))
+        if entry.get("disposition") != document.metadata.get("复核结论"):
+            errors.append(f"docs impact disposition disagrees with file review record: {path}")
+        if entry.get("stable_facts") != expected_facts:
+            errors.append(f"docs impact stable facts disagree with file review record: {path}")
+        if entry.get("evidence") != expected_evidence:
+            errors.append(f"docs impact evidence disagrees with file review record: {path}")
 
-    for document in checked:
-        if not (repo / document).is_file():
-            errors.append(f"checked document does not exist: {document}")
-    for document in updated:
-        if document not in checked:
-            errors.append(f"updated document was not listed in checked: {document}")
-        if document not in changed_paths:
-            errors.append(f"docs_impact falsely claims an unchanged document was updated: {document}")
-
+    updated_docs = [path for path in entries if (repo / path).is_file()]
     generated = set(extra_generated)
-    for rule in matched_rules.values():
-        generated.update(rule.get("generated_check", []))
-    if updated:
-        generated.add("markdown-links")
+    if updated_docs:
+        generated.update({"markdown-links", "doc-status"})
     for check in sorted(generated):
         if check == "markdown-links":
-            errors.extend(check_markdown_links(repo, updated))
+            errors.extend(check_markdown_links(repo, updated_docs))
         elif check == "doc-status":
-            errors.extend(check_doc_status(repo, updated))
+            errors.extend(check_doc_status(repo, updated_docs))
         elif check == "cli-help-map":
             errors.extend(check_cli_help_map(repo))
         else:
             errors.append(f"unknown generated check: {check}")
     return errors
+
+
+def fnmatch_path(path: str, pattern: str) -> bool:
+    import fnmatch
+
+    return fnmatch.fnmatchcase(path, pattern)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -288,6 +299,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-sha")
     parser.add_argument("--changed-path", action="append", default=[])
     parser.add_argument("--generated-check", action="append", default=[])
+    parser.add_argument("--committed-only", action="store_true")
     return parser
 
 
@@ -299,6 +311,9 @@ def main() -> int:
         config = load_config(args.config)
         if args.changed_path:
             changed_paths = set(args.changed_path)
+        elif args.committed_only:
+            base_sha = args.base_sha or str(manifest.get("task", {}).get("base_sha", ""))
+            changed_paths = discover_committed_paths(repo, base_sha)
         else:
             base_sha = args.base_sha
             if base_sha is None:

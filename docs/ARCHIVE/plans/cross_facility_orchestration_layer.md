@@ -1,5 +1,14 @@
 # 跨设施编排层设计报告
 
+> 文档角色：archive
+> 生命周期状态：historical
+> 替代项：docs/ORCHESTRATION_LAYER.md；docs/INTERNAL/CROSS_FACILITY.md
+> 历史原因：跨设施编排层早期设计，当前责任边界已进入 current owner
+> 快照日期：2026-07-18
+> 转换自：plans/cross_facility_orchestration_layer.md
+> 转换处置：archive-historical
+> 摘要：保存跨设施编排层的历史设计分析
+
 > 设计目标：为 `ArknightsInfraCalc-v2` 引入正式的跨设施编排层，消除 AI 遇到跨房 buff 时打补丁的现状。
 
 ---

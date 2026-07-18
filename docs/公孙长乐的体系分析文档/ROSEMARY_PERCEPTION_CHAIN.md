@@ -1,5 +1,18 @@
 # 迷迭香感知链体系论证（公孙长乐 × InfraCalc）
 
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：system.rosemary-perception
+> 当前真源：self
+> 复核触发：crates/infra-core/src/layout/orchestrate/**；crates/infra-core/src/global_resource/**；data/orchestration_rules.json；data/skill_table.json；data/operator_instances.json
+> 摘要：裁决迷迭香感知体系的激活、成员和编排
+> 源摘要：5a84053162102e02cde70fe2ea98f5a3335058746f4fa8339ffc62d00e5d149a
+> 文档摘要：53099cd9916066811054d0f4644e96210154a4141ed199d374f6fa1118cf5b42
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决迷迭香感知体系的激活、成员和编排
+> 证据引用：tracked:docs/公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md
+
 > 理论状态：**业务口径、50 感知启动门槛、路径选择与数值取整已确认**
 > 实现状态：**已迁入通用 Rule → resolved AssignmentPlan；已知边界见 §12**
 > 对齐布局：243 / 153 / 333（三发电）；342 / 252（二发电）；零电和一电不是合法输入

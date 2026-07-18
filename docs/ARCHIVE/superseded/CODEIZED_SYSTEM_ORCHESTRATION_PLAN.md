@@ -1,8 +1,17 @@
 # 代码化体系编排层设计 plan
 
-> 状态：ready
-> 来源：[ADR 0001](../ADR/0001-layout-assignment-decomposition.md)（决策 B–D）、用户体系级架构诊断报告（2026-06-26）
-> 关联：[SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md](SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md)、[SYSTEM_REGISTRY_NORMALIZATION_REPORT.md](SYSTEM_REGISTRY_NORMALIZATION_REPORT.md)、[../公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md](../公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md)
+> 文档角色：archive
+> 生命周期状态：superseded
+> 替代项：docs/ORCHESTRATION_LAYER.md；docs/ADR/0001-layout-assignment-decomposition.md
+> 历史原因：代码化体系分派方案已被声明式通用编排层替代
+> 快照日期：2026-07-18
+> 转换自：docs/TODO/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md
+> 转换处置：archive-superseded
+> 摘要：保存代码化体系编排层的被替代方案
+
+> 历史原状态：ready
+> 来源：[ADR 0001](../../ADR/0001-layout-assignment-decomposition.md)（决策 B–D）、用户体系级架构诊断报告（2026-06-26）
+> 关联：[SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md](SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md)、[SYSTEM_REGISTRY_NORMALIZATION_REPORT.md](../plans/SYSTEM_REGISTRY_NORMALIZATION_REPORT.md)、[../公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md](../../公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md)
 > 性质：接口与阶段设计文档，**不下沉到最终代码**。文中 Rust 片段为目标接口意图与现状陈述，标注来源 file:line；具体实现属另一轮。
 
 ## 与现有 plan 的分工（先读这段，避免重复）
@@ -199,7 +208,7 @@ seed/pinned
 
 完成后移动到 `docs/ARCHIVE/done/`，并更新：
 
-- [ORCHESTRATION_LAYER.md](../ORCHESTRATION_LAYER.md)：System schema 与两路径汇合事实。
-- [BASE_ASSIGNMENT.md](../BASE_ASSIGNMENT.md)：anchor 三态落位顺序与职责边界。
-- [SCHEDULE_ROTATION.md](../SCHEDULE_ROTATION.md)：shift_bind 与 anchor 在轮换中的关系。
-- [SYSTEM_CHAINS.md](../SYSTEM_CHAINS.md)：代码化体系层覆盖的体系清单。
+- [ORCHESTRATION_LAYER.md](../../ORCHESTRATION_LAYER.md)：System schema 与两路径汇合事实。
+- [BASE_ASSIGNMENT.md](../../BASE_ASSIGNMENT.md)：anchor 三态落位顺序与职责边界。
+- [SCHEDULE_ROTATION.md](../../SCHEDULE_ROTATION.md)：shift_bind 与 anchor 在轮换中的关系。
+- [SYSTEM_CHAINS.md](../../SYSTEM_CHAINS.md)：代码化体系层覆盖的体系清单。

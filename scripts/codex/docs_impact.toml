@@ -1,104 +1,13 @@
-schema_version = 1
+schema_version = 2
+
+# Only generated, local-only, editor, and raw-evidence paths may be excluded.
+# Source-to-document ownership lives exclusively in Markdown lifecycle metadata.
 ignore_globs = [
-  ".github/**",
-  "docs/**",
+  ".git/**",
+  ".vscode/**",
   "target/**",
   "out/**",
-  ".gitignore",
+  "feedback/*/**",
+  "data.zip",
+  "从公孙长乐电脑里搜集到的资料/**",
 ]
-
-[[rules]]
-id = "orchestration"
-globs = ["crates/infra-core/src/layout/orchestrate/**", "data/orchestration_rules.json"]
-required_check = ["docs/ORCHESTRATION_LAYER.md", "docs/BASE_ASSIGNMENT.md"]
-generated_check = ["markdown-links"]
-domain_route = "对应体系的当前领域 Markdown"
-
-[[rules]]
-id = "layout-assignment"
-globs = ["crates/infra-core/src/layout/assign*", "crates/infra-core/src/layout/resolve.rs", "crates/infra-core/src/layout/blueprint.rs"]
-required_check = ["docs/BASE_ASSIGNMENT.md", "docs/QUALITY_AND_AUDIT.md"]
-generated_check = ["markdown-links"]
-
-[[rules]]
-id = "schedule"
-globs = ["crates/infra-core/src/schedule/**"]
-required_check = ["docs/SCHEDULE_ROTATION.md", "docs/BASE_ASSIGNMENT.md"]
-generated_check = ["markdown-links"]
-
-[[rules]]
-id = "maa-export"
-globs = ["crates/infra-core/src/export/maa.rs"]
-required_check = ["docs/SCHEDULE_ROTATION.md", "docs/FRONTEND_CLI.md"]
-generated_check = ["markdown-links"]
-
-[[rules]]
-id = "cli-commands"
-globs = ["crates/infra-cli/src/commands/**", "crates/infra-cli/src/main.rs"]
-required_check = ["docs/INFRA_CLI.md", "docs/FRONTEND_CLI.md", "docs/PROJECT_MAP.md"]
-generated_check = ["cli-help-map", "markdown-links"]
-
-[[rules]]
-id = "cli-output"
-globs = ["crates/infra-cli/src/output.rs"]
-required_check = ["docs/INFRA_CLI.md"]
-generated_check = ["markdown-links"]
-domain_route = "受影响输出对应的当前示例文档"
-
-[[rules]]
-id = "search-scoring"
-globs = ["crates/infra-core/src/search/**", "crates/infra-core/src/scoring/**"]
-required_check = ["docs/SCORING_MODEL.md", "docs/EFFICIENCY_MODEL.md"]
-generated_check = ["markdown-links"]
-domain_route = "受影响搜索域对应的当前领域 Markdown"
-
-[[rules]]
-id = "trade"
-globs = ["crates/infra-core/src/trade/**"]
-required_check = ["docs/EFFECT_ATOM_DESIGN.md", "docs/INTERNAL/TRADE_INTERPRETER.md", "docs/INTERNAL/SHORTCUT_MATCHING.md"]
-generated_check = ["markdown-links"]
-
-[[rules]]
-id = "manufacture"
-globs = ["crates/infra-core/src/manufacture/**"]
-required_check = ["docs/MANUFACTURE_STATUS.md", "docs/EFFECT_ATOM_DESIGN.md"]
-generated_check = ["markdown-links"]
-
-[[rules]]
-id = "control-global"
-globs = ["crates/infra-core/src/control/**", "crates/infra-core/src/global_resource/**", "crates/infra-core/src/cross_facility/**"]
-required_check = ["docs/CONTROL_CENTER_ASSIGNMENT.md", "docs/INTERNAL/CROSS_FACILITY.md", "docs/SCORING_MODEL.md"]
-generated_check = ["markdown-links"]
-
-[[rules]]
-id = "operator-data"
-globs = ["data/skill_table.json", "data/operator_instances.json", "data/tags/**"]
-required_check = ["docs/EFFECT_ATOM_DESIGN.md", "docs/MODELLED_OPERATORS.md"]
-generated_check = ["markdown-links"]
-domain_route = "受影响干员或机制对应的当前领域 Markdown"
-
-[[rules]]
-id = "layout-data"
-globs = ["data/layout/**", "data/fixtures/**"]
-required_check = ["docs/BASE_ASSIGNMENT.md", "docs/PROJECT_MAP.md"]
-generated_check = ["markdown-links"]
-domain_route = "布局蓝图与标准 fixture 的当前事实文档"
-
-[[rules]]
-id = "system-data"
-globs = ["data/base_systems.json", "data/trade_shortcuts.json", "data/trade_segments.json"]
-required_check = ["docs/ORCHESTRATION_LAYER.md", "docs/INTERNAL/SHORTCUT_MATCHING.md"]
-generated_check = ["markdown-links"]
-domain_route = "受影响体系对应的当前领域 Markdown"
-
-[[rules]]
-id = "scripts-release"
-globs = ["scripts/**", "release/**"]
-required_check = ["docs/PROJECT_MAP.md"]
-generated_check = ["markdown-links"]
-
-[[rules]]
-id = "agent-workflow"
-globs = ["AGENTS.md", ".agents/skills/**", ".codex/agents/**", ".opencode/agents/**", "scripts/codex/**"]
-required_check = ["docs/MAINTENANCE_MODE.md", "docs/QUALITY_AND_AUDIT.md", "docs/SYSTEM_AUDIT_WORKFLOW.md"]
-generated_check = ["markdown-links"]

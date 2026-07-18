@@ -1,6 +1,18 @@
 # 性能工程：候选池、组合搜索与 Bake 安全边界
 
-> 状态：当前实现与本地数据快照，核对日期 2026-07-14。本文解释性能事实，不改变搜索语义；未来设计只在文末单独标明。
+> 文档角色：current-reference
+> 生命周期状态：current
+> 当前真源：docs/QUALITY_AND_AUDIT.md；docs/SCORING_MODEL.md
+> 复核触发：crates/infra-core/src/search/**；crates/infra-core/src/bake.rs；crates/infra-core/benches/**；scripts/**
+> 摘要：记录当前性能事实、测量入口和风险边界
+> 源摘要：17cb10006780871d0582c21f11ea3da5c45ad70eb3786ba18b3aebb46edb4fbe
+> 文档摘要：8b3f9ad0262c941015b8ce7a13f0a67d598fbde16686d4a01f541959b0c18d09
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：记录当前性能事实、测量入口和风险边界
+> 证据引用：tracked:docs/PERFORMANCE_ENGINEERING.md
+
+> 实现快照：当前实现与本地数据快照，核对日期 2026-07-14。本文解释性能事实，不改变搜索语义；未来设计只在文末单独标明。
 
 本项目房间少、每房人数少，但候选池大。主要成本不是生成一个 `Vec`，而是对大量 `C(n,k)` 组合执行真实 solver，并在动态全基建上下文中重复这些搜索。
 

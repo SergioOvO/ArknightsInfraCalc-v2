@@ -1,5 +1,18 @@
 # infra-cli 模块职责
 
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：architecture.cli
+> 当前真源：self
+> 复核触发：crates/infra-cli/src/**
+> 摘要：裁决 infra-cli 分层职责和命令边界
+> 源摘要：0e507fc60b7665fa231db86b86b369f474f7ed4e4779990cf0b72328d5ab61b9
+> 文档摘要：dc3878fbf9b429385d5e1411de51d1c9f91556ed594516fc4d094ae0df1dc9f7
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决 infra-cli 分层职责和命令边界
+> 证据引用：tracked:docs/INFRA_CLI.md
+
 > **定位**：`infra-cli` 是薄命令行外壳——解析参数、加载 `data/`，调用 `infra-core` 求解，再把结果格式化为 CSV / 文本 / JSON。**不在此 crate 实现游戏机制或效率公式**；机制真相在 `infra-core`，数据真相在 `data/`。
 
 协作总览仍见 [PROJECT_MAP.md](PROJECT_MAP.md)；机制设计见 [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md)。

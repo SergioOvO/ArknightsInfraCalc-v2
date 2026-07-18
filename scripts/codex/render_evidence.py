@@ -31,8 +31,8 @@ def load_manifest(path: Path) -> dict[str, Any]:
             value = json.load(handle)
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise ManifestError(f"cannot read manifest {path}: {error}") from error
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
-        raise ManifestError("manifest must be a schema_version=1 JSON object")
+    if not isinstance(value, dict) or value.get("schema_version") != 2:
+        raise ManifestError("manifest must be a schema_version=2 JSON object")
     if not isinstance(value.get("runs"), list) or not isinstance(value.get("artifacts"), list):
         raise ManifestError("manifest runs and artifacts must be arrays")
     return value
@@ -178,6 +178,16 @@ def render(manifest: dict[str, Any]) -> str:
         f"- 文档影响：{docs_impact.get('status', '未声明')} — "
         f"{docs_impact.get('reason', '未提供理由')}"
     )
+    entries = docs_impact.get("entries", [])
+    if entries:
+        lines.append(
+            "- 文档复核："
+            + "；".join(
+                f"{item.get('path', 'unknown')}={item.get('disposition', 'unknown')}"
+                for item in entries
+                if isinstance(item, dict)
+            )
+        )
     return "\n".join(lines) + "\n"
 
 

@@ -1,5 +1,14 @@
 # αβγ 三队轮换 — 实现计划（可执行）
 
+> 文档角色：archive
+> 生命周期状态：historical
+> 替代项：docs/排班模式.md；docs/定时换班.md；docs/SCHEDULE_ROTATION.md
+> 历史原因：ABC 三队轮换实施计划快照，当前规则与实现入口已迁入 current owner
+> 快照日期：2026-07-18
+> 转换自：plans/team_rotation_impl_plan.md
+> 转换处置：archive-historical
+> 摘要：保存 ABC 三队轮换早期实施工序和历史决策
+
 > 前置：`plans/team_rotation_design.md`（方案）、`plans/feasibility_analysis.md`（可行性）。
 > 本文是落地工序，已锁定两项决策，并修正了可行性文档里被高估/低估/自相矛盾的点。
 

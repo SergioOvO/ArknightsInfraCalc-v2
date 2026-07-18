@@ -1,6 +1,13 @@
 # 前端双 JSON 输出契约
 
-> 状态：done
+> 文档角色：archive
+> 生命周期状态：completed
+> 替代项：docs/FRONTEND_CLI.md
+> 历史原因：接口能力已完成并吸收到前端 CLI current owner
+> 快照日期：2026-07-18
+> 摘要：保存前端双 JSON 输出实施完成记录
+
+> 历史原状态：done
 > 来源：用户需求：后端输出账户画像和 MAA 排班表两个 JSON，前端单独仓库读取，不改成本项目 monorepo
 
 ## 目标

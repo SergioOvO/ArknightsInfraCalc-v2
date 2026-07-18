@@ -17,16 +17,20 @@
   "scope_expansions": [],
   "side_findings": [],
   "docs_impact": {
-    "status": "not-needed",
-    "checked": [
-      "docs/PROJECT_MAP.md",
-      "docs/MAINTENANCE_MODE.md",
-      "docs/QUALITY_AND_AUDIT.md",
-      "docs/SYSTEM_AUDIT_WORKFLOW.md"
+    "status": "updated",
+    "entries": [
+      {
+        "path": "docs/PROJECT_MAP.md",
+        "disposition": "unchanged",
+        "stable_facts": [
+          "本次 source 变更没有改变 PROJECT_MAP 中记录的 owner 和入口"
+        ],
+        "evidence": [
+          "tracked:docs/PROJECT_MAP.md"
+        ]
+      }
     ],
-    "updated": [],
-    "routes": [],
-    "reason": "示例仅展示 manifest 字段，不改变当前文档或产品行为"
+    "reason": "示例展示逐文档 review record，真实值必须与文件头一致"
   },
   "reviewer": {
     "status": "pending",

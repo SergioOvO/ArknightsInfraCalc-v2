@@ -16,6 +16,7 @@ sys.path.insert(0, str(CODEX_DIR))
 import check_docs_impact  # noqa: E402
 import check_task_scope  # noqa: E402
 import compare_test_failures  # noqa: E402
+import docs_inventory  # noqa: E402
 import render_evidence  # noqa: E402
 
 
@@ -249,32 +250,44 @@ class DocsImpactTests(unittest.TestCase):
         self.repo = Path(self.temporary.name)
         (self.repo / "docs").mkdir()
         (self.repo / "src").mkdir()
-        (self.repo / "docs/A.md").write_text("# A\n\n> 状态：Current\n", encoding="utf-8")
+        (self.repo / "docs/A.md").write_text(
+            "# A\n\n"
+            "> 文档角色：canonical\n"
+            "> 生命周期状态：current\n"
+            "> 领域键：test.a\n"
+            "> 当前真源：self\n"
+            "> 复核触发：src/**\n"
+            "> 摘要：documents the stable application fixture\n\n"
+            "Current application behavior.\n",
+            encoding="utf-8",
+        )
         (self.repo / "src/app.py").write_text("print('ok')\n", encoding="utf-8")
+        document = docs_inventory.parse_document(self.repo, self.repo / "docs/A.md")
+        docs_inventory.write_review_record(self.repo, document, cause="lifecycle-migration")
         self.config = {
-            "schema_version": 1,
-            "ignore_globs": ["docs/**"],
-            "rules": [
-                {
-                    "id": "app",
-                    "globs": ["src/**"],
-                    "required_check": ["docs/A.md"],
-                    "generated_check": ["markdown-links"],
-                }
-            ],
+            "schema_version": 2,
+            "ignore_globs": [],
         }
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def manifest(self, status: str = "not-needed") -> dict[str, object]:
-        updated = ["docs/A.md"] if status == "updated" else []
+    def manifest(self, status: str = "updated") -> dict[str, object]:
+        document = docs_inventory.parse_document(self.repo, self.repo / "docs/A.md")
+        entries = []
+        if status == "updated":
+            entries = [
+                {
+                    "path": "docs/A.md",
+                    "disposition": document.metadata["复核结论"],
+                    "stable_facts": docs_inventory.split_values(document.metadata["稳定事实"]),
+                    "evidence": docs_inventory.split_values(document.metadata["证据引用"]),
+                }
+            ]
         return {
             "docs_impact": {
                 "status": status,
-                "checked": ["docs/A.md"],
-                "updated": updated,
-                "routes": [],
+                "entries": entries,
                 "reason": "checked the current behavior and documentation contract",
             }
         }
@@ -288,36 +301,40 @@ class DocsImpactTests(unittest.TestCase):
         )
         self.assertEqual(
             check_docs_impact.run_checks(
-                self.repo, self.config, self.manifest("not-needed"), {"src/app.py"}, []
+                self.repo, self.config, self.manifest("not-needed"), set(), []
             ),
             [],
         )
 
     def test_blocked_uncovered_missing_and_false_updated_fail(self) -> None:
+        valid_manifest = self.manifest()
         blocked = check_docs_impact.run_checks(
-            self.repo, self.config, self.manifest("blocked"), {"src/app.py"}, []
+            self.repo, self.config, self.manifest("blocked"), {"src/app.py", "docs/A.md"}, []
         )
         self.assertTrue(any("blocked" in error for error in blocked))
 
         uncovered = check_docs_impact.run_checks(
-            self.repo, self.config, self.manifest(), {"other/file.rs"}, []
+            self.repo, self.config, valid_manifest, {"other/file.rs"}, []
         )
-        self.assertTrue(any("not covered" in error for error in uncovered))
+        self.assertTrue(any("no document owner" in error for error in uncovered))
 
         (self.repo / "docs/A.md").unlink()
         missing = check_docs_impact.run_checks(
-            self.repo, self.config, self.manifest(), {"src/app.py"}, []
+            self.repo, self.config, valid_manifest, {"src/app.py"}, []
         )
-        self.assertTrue(any("does not exist" in error for error in missing))
+        self.assertTrue(any("governed current document" in error or "metadata" in error for error in missing))
 
         (self.repo / "docs/A.md").write_text("# A\n", encoding="utf-8")
         false_updated = check_docs_impact.run_checks(
-            self.repo, self.config, self.manifest("updated"), {"src/app.py"}, []
+            self.repo, self.config, valid_manifest, {"src/app.py"}, []
         )
-        self.assertTrue(any("falsely claims" in error for error in false_updated))
+        self.assertTrue(any("not updated" in error or "lifecycle metadata" in error for error in false_updated))
 
     def test_generated_link_and_status_checks(self) -> None:
-        (self.repo / "docs/A.md").write_text("# A\n\n[missing](missing.md)\n", encoding="utf-8")
+        original = (self.repo / "docs/A.md").read_text(encoding="utf-8")
+        (self.repo / "docs/A.md").write_text(original + "\n[missing](missing.md)\n", encoding="utf-8")
+        document = docs_inventory.parse_document(self.repo, self.repo / "docs/A.md")
+        docs_inventory.write_review_record(self.repo, document, cause="document-change")
         errors = check_docs_impact.run_checks(
             self.repo,
             self.config,
@@ -326,13 +343,11 @@ class DocsImpactTests(unittest.TestCase):
             ["doc-status"],
         )
         self.assertTrue(any("broken Markdown link" in error for error in errors))
-        self.assertTrue(any("lacks a status" in error for error in errors))
 
     def test_markdown_link_with_spaces(self) -> None:
         (self.repo / "docs/target file.md").write_text("# Target\n", encoding="utf-8")
-        (self.repo / "docs/A.md").write_text(
-            "# A\n\n> 状态：Current\n\n[target](<target file.md>)\n", encoding="utf-8"
-        )
+        original = (self.repo / "docs/A.md").read_text(encoding="utf-8")
+        (self.repo / "docs/A.md").write_text(original + "\n[target](<target file.md>)\n", encoding="utf-8")
         self.assertEqual(check_docs_impact.check_markdown_links(self.repo, ["docs/A.md"]), [])
 
     def test_repository_cli_map_matches_dispatch(self) -> None:
@@ -354,7 +369,7 @@ class TaskScopeTests(unittest.TestCase):
             },
             "scope_expansions": [],
             "side_findings": [],
-            "docs_impact": {"updated": []},
+            "docs_impact": {"entries": []},
             "reviewer": {
                 "status": "reviewed",
                 "scope_invariant": invariant,

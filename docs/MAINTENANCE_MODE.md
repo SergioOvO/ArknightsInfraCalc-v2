@@ -1,6 +1,19 @@
 # Debug 与一致性修复指南
 
-> 状态：Current（仅适用于 bug、结果不对和既有行为一致性修复）。
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：workflow.maintenance
+> 当前真源：self
+> 复核触发：AGENTS.md；.agents/skills/arknights-maintenance/**；scripts/codex/**
+> 摘要：裁决 bug 和既有行为修复工作流
+> 源摘要：2d09c48894df6c6abd2a1168812d0efc1751c1aa7c194d84acd0ffd9c97402b7
+> 文档摘要：a26bbddd87b70db746f20f908f2efabb6fadc949b3a44a5a7d38966783ac5077
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决 bug 和既有行为修复工作流
+> 证据引用：tracked:docs/MAINTENANCE_MODE.md
+
+> 实现快照：Current（仅适用于 bug、结果不对和既有行为一致性修复）。
 
 > 本文不是项目生命周期声明。新能力使用 `arknights-feature`，独立质量建设使用 `arknights-quality`，体系 / Plan 一致性使用 `arknights-system-audit`。
 

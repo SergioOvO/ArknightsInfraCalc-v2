@@ -1,6 +1,19 @@
 # 公孙长乐体系逐项审计与修复工作流
 
-> 状态：Current（仅适用于 `formal-audit`）
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：workflow.system-audit
+> 当前真源：self
+> 复核触发：AGENTS.md；.agents/skills/arknights-system-audit/**；scripts/codex/**
+> 摘要：裁决 formal system audit 工作流
+> 源摘要：22279bb12c263f40f52c9926d5fd7101eb433bf67d9d791dad658070c5005a48
+> 文档摘要：b28d0e70fbff65fd47995db63213329c4b29a9635cbd0c05b2af6714c8d1a80f
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决 formal system audit 工作流
+> 证据引用：tracked:docs/SYSTEM_AUDIT_WORKFLOW.md
+
+> 实现快照：Current（仅适用于 `formal-audit`）
 > 用途：用户明确要求逐项严格审计，或当前领域 Markdown 互相冲突时，逐个检查 `docs/公孙长乐的体系分析文档/` 中的体系是否被代码完整、严格地实现。
 > 不适用：领域 Markdown 已清楚的普通 system conformance；此类任务完成四项修改前审计后可直接实施，不要求本文的两个等待点。
 > 工作方式：一次只处理一个体系；先出详细审计报告，用户裁决后再出修改计划，用户批准计划后由一个写入者实施，并按风险使用只读 reviewer。

@@ -1,6 +1,18 @@
 # 术语表
 
-> 状态：Current
+> 文档角色：current-reference
+> 生命周期状态：current
+> 当前真源：docs/EFFECT_ATOM_DESIGN.md；docs/EFFICIENCY_MODEL.md；docs/ORCHESTRATION_LAYER.md；docs/排班模式.md
+> 复核触发：crates/infra-core/src/types.rs；crates/infra-core/src/layout/**；crates/infra-core/src/schedule/**
+> 摘要：路由项目术语到各 canonical owner
+> 源摘要：0230f57a930ab42f1ebf44409234203e0e9304f2ca35256f3b13677c9da03abe
+> 文档摘要：77f66f042906b3a5d6f7168f594198305b86b880099b52d09b17a54380dc8f06
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：路由项目术语到各 canonical owner
+> 证据引用：tracked:docs/GLOSSARY.md
+
+> 实现快照：Current
 > 读者：所有文档读者与协作者
 > 本文负责：统一术语；不裁决具体体系业务规则
 

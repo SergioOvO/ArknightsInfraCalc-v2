@@ -1,6 +1,19 @@
 # 直接效率与整数结算架构
 
-> 状态：implemented（2026-07-11）  
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：scoring.efficiency
+> 当前真源：self
+> 复核触发：crates/infra-core/src/scoring/**；crates/infra-core/src/trade/**；crates/infra-core/src/manufacture/**
+> 摘要：裁决效率量纲、结构和输出边界
+> 源摘要：876cb37a827b0356cf8899451392d118d970647385dcab756425c7ea12f44f12
+> 文档摘要：cad37676371130c7431cf46a3b8ae6f7c56ceb58f7ea54ccdf8aec3e731924d1
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决效率量纲、结构和输出边界
+> 证据引用：tracked:docs/EFFICIENCY_MODEL.md
+
+> 实现快照：implemented（2026-07-11）
 > 范围：贸易、制造、发电、搜索、bake、排班快照、CLI / CSV / JSON
 
 ## 1. 唯一口径

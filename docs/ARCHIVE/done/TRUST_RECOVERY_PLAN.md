@@ -1,6 +1,15 @@
 # Feedback Maintenance Reference: Closure Audit, Repro, Trace, Regression
 
-> 状态：maintenance-reference
+> 文档角色：archive
+> 生命周期状态：completed
+> 替代项：feedback/TRACKING.md；docs/MAINTENANCE_MODE.md
+> 历史原因：生产反馈批次已关闭，维护入口已由 feedback ledger 和维护文档接管
+> 快照日期：2026-07-18
+> 转换自：docs/TODO/TRUST_RECOVERY_PLAN.md
+> 转换处置：archive-completed
+> 摘要：保存生产反馈信任恢复和关闭审计的完成记录
+
+> 历史原状态：maintenance-reference
 > 启动日期：2026-07-03
 > 替代范围：暂停 `QUALITY_90_TO_95_PLAN.md` 的大架构推进，先恢复结果可信度与排错速度。
 > 收口修正：2026-07-03 用户确认 `feedback/` 中本批 bug 已修复；当前任务从“继续修反馈”切换为“固化关闭证据与防回归矩阵”。
@@ -31,10 +40,10 @@
 
 | 资产 | 用途 |
 |------|------|
-| [../../feedback/](../../feedback/) | 生产反馈原始证据 |
-| [../../feedback/TRACKING.md](../../feedback/TRACKING.md) | 反馈 ledger，记录状态、疑似层、下一步 |
-| [../MAINTENANCE_MODE.md](../MAINTENANCE_MODE.md) | 单个 bug 的复现、定位、修复流程 |
-| [../PROJECT_MAP.md](../PROJECT_MAP.md) | 代码边界与入口 |
+| [../../feedback/](../../../feedback/) | 生产反馈原始证据 |
+| [../../feedback/TRACKING.md](../../../feedback/TRACKING.md) | 反馈 ledger，记录状态、疑似层、下一步 |
+| [../MAINTENANCE_MODE.md](../../MAINTENANCE_MODE.md) | 单个 bug 的复现、定位、修复流程 |
+| [../PROJECT_MAP.md](../../PROJECT_MAP.md) | 代码边界与入口 |
 
 ## 3. 工作流
 

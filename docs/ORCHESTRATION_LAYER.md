@@ -1,9 +1,22 @@
 # 编排层重构路线图（Orchestration Layer）
 
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：architecture.orchestration
+> 当前真源：self
+> 复核触发：crates/infra-core/src/layout/orchestrate/**；crates/infra-core/src/layout/assign.rs；data/orchestration_rules.json；data/base_systems.json
+> 摘要：裁决 System 到 Plan 到 Execute 的编排契约
+> 源摘要：8f78307624666226da667debb09b66736b712c5c01a81cbc59a74b656597a3f8
+> 文档摘要：d84271d8451a3e93b8a1c0e71f04f2fb82d6436e8f10c4ab7582c7ea0a818c21
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决 System 到 Plan 到 Execute 的编排契约
+> 证据引用：tracked:docs/ORCHESTRATION_LAYER.md
+
 > **状态**：**2026-07-15 通用规则编译器主路径已落地**；旧专用 evaluator 已删除，不再扩展“一体系一个函数”
 > **目标**：把业务体系写成角色、备选方案、关系和资源门槛，由同一个规则编译器产出完全解析的 **Rule → Candidate → Plan → Execute**；普通制造软同房仍由全合法候选池 + L1 solver 按实际效率发现。
-> **背景讨论**：同房组合、跨房体系、global effect 三套入口搅在 `assign_shift` 里是乱源，不是机制太多。  
-> **旧稿参考**：[plans/orchestration_engine_design.md](../plans/orchestration_engine_design.md)。本轮只枚举每条规则声明的有限 alternatives，并用显式同域 objective 或 policy 顺序裁决；仍不采用全编制笛卡尔积或匿名跨域总分。
+> **背景讨论**：同房组合、跨房体系、global effect 三套入口搅在 `assign_shift` 里是乱源，不是机制太多。
+> **历史旧稿**：[orchestration_engine_design.md](ARCHIVE/plans/orchestration_engine_design.md)。当前规则只枚举每条声明的有限 alternatives，并用显式同域 objective 或 policy 顺序裁决；仍不采用全编制笛卡尔积或匿名跨域总分。
 
 ---
 

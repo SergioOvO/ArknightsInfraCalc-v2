@@ -1,6 +1,19 @@
 # infra-cli + Layout 生成器 — 前端对接说明
 
-> 面向前端 / 排班 UI。**Layout 蓝图**用静态页 `layout-gen` 编辑；**排班求解 + MAA JSON** 用 `infra-cli`（子进程或后续 WASM）。  
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：interface.frontend-cli
+> 当前真源：self
+> 复核触发：crates/infra-cli/src/**；crates/infra-core/src/export/**；release/**
+> 摘要：裁决前端调用 CLI 和导出数据的接口契约
+> 源摘要：e520281504ee2b502845a960d35c49555b5b4922abe937f3b96062016f66c9ed
+> 文档摘要：6ba6403e8a829c5070da525b4ed4bf26239a416679ec51b37845e0e17ba9b364
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决前端调用 CLI 和导出数据的接口契约
+> 证据引用：tracked:docs/FRONTEND_CLI.md
+
+> 面向前端 / 排班 UI。**Layout 蓝图**用静态页 `layout-gen` 编辑；**排班求解 + MAA JSON** 用 `infra-cli`（子进程或后续 WASM）。
 > **Beta Release 构建**：2026-06-25 · backend commit `9e52de9` · frontend beta source `3259eaa` · 见 `release/VERSION.txt`
 
 ---

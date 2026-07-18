@@ -1,6 +1,18 @@
 # trade/interpreter 内部地图
 
-> 文件：`crates/infra-core/src/trade/interpreter.rs`（~1100 行，后半为 `mod tests`）。  
+> 文档角色：current-reference
+> 生命周期状态：current
+> 当前真源：docs/EFFECT_ATOM_DESIGN.md
+> 复核触发：crates/infra-core/src/trade/interpreter.rs；crates/infra-core/src/types.rs
+> 摘要：定位贸易解释器内部阶段和函数
+> 源摘要：2a793aa908dae28adaf6e6a4fc3465a0ca1ffa6f045297de47f7b65d2833f764
+> 文档摘要：973ccd5e4262fc559319558ec0c62fa05fabd0c0622104ed60e10fd42d3b4acf
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：定位贸易解释器内部阶段和函数
+> 证据引用：tracked:docs/INTERNAL/TRADE_INTERPRETER.md
+
+> 文件：`crates/infra-core/src/trade/interpreter.rs`（~1100 行，后半为 `mod tests`）。
 > 对外 API：`apply_trade_phases`、`TradeContext`、`OperatorRuntime`。
 
 ## 主循环 `apply_trade_phases`

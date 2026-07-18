@@ -44,6 +44,7 @@ scripts/codex/compare_test_failures.py \
 ## 完成检查
 
 ```bash
+python3 scripts/codex/docs_inventory.py --check --base <base-sha>
 scripts/codex/check_docs_impact.py --manifest target/codex-runs/<task>/manifest.json
 scripts/codex/check_task_scope.py --manifest target/codex-runs/<task>/manifest.json
 scripts/codex/render_evidence.py \
@@ -51,7 +52,9 @@ scripts/codex/render_evidence.py \
   --output target/codex-runs/<task>/reports/evidence.md
 ```
 
-`check_docs_impact.py` 使用 `docs_impact.toml` 将 changed paths 路由到必须检查的文档。它验证 `updated`、`not-needed`、`blocked`、领域路由说明、文件存在性、虚假更新声明、局部 Markdown 链接和 CLI 命令地图，但不判断文字语义是否正确。
+`docs_inventory.py` 统一解析 [文档生命周期](../../docs/文档生命周期.md) 元数据，检查角色/状态/路径矩阵、唯一领域 owner、生成索引、source/document digest、review record 和 changed source coverage。CI hard check 必须提供可验证 base；无 base 的 `--report` 只能盘点，不能证明连续性或完成。
+
+`check_docs_impact.py` 从 Markdown 文件头读取 source-to-document trigger；`docs_impact.toml` 只保留 local/generated 排除。manifest schema v2 的 `docs_impact.entries` 必须逐文档匹配文件头 review record，不能用任务级 `not-needed` 理由代替。工具验证机械一致性，不判断自然语言业务语义是否正确。
 
 `check_task_scope.py` 检查实际 changed paths 是否属于 `change_scope`、带理由的 scope expansion、证明路径或已声明文档更新；显式 deferred 路径和 deferred side finding 被修改时硬失败。完成检查还要求 reviewer 登记最终不变量、精确 changed paths 和全部 expansion id。
 

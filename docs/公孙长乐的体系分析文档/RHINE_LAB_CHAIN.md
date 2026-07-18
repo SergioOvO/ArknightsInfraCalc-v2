@@ -1,5 +1,18 @@
 # 莱茵生命体系论证（公孙长乐 × InfraCalc）
 
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：system.rhine-lab
+> 当前真源：self
+> 复核触发：crates/infra-core/src/layout/orchestrate/**；crates/infra-core/src/manufacture/**；crates/infra-core/src/power/**；data/orchestration_rules.json
+> 摘要：裁决莱茵体系的候选、挂件和编排
+> 源摘要：26daf1bb8c57d1faeecbc28effc01f36e8759d8594656b919de194d64594a53a
+> 文档摘要：cbbde855aef9fd5ded93e89cbc80bac22b40d1fb145031f71a1c61af94ebb179
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决莱茵体系的候选、挂件和编排
+> 证据引用：tracked:docs/公孙长乐的体系分析文档/RHINE_LAB_CHAIN.md
+
 > 理论状态：业务口径、数值锚点与 priority 已确认
 > 实现状态：已迁入通用 late competitive Rule → resolved AssignmentPlan；第一版边界见 §10
 > 对齐布局：任何具有合法制造房、电站及足够基建空位的布局

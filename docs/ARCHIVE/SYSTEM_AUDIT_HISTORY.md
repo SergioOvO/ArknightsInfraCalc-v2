@@ -1,6 +1,13 @@
 # 体系审计历史摘记
 
-> 状态：Archived
+> 文档角色：archive
+> 生命周期状态：historical
+> 替代项：docs/SYSTEM_AUDIT_WORKFLOW.md
+> 历史原因：formal audit 工作流已由 current owner 接管
+> 快照日期：2026-07-18
+> 摘要：保存系统审计方法和历史阶段记录
+
+> 历史原状态：Archived
 > 用途：保留 2026-07-15 前逐项体系审计的阶段性结论与通用案例；不作为当前业务或流程真源。
 > 当前规则：业务语义回到对应领域 Markdown，formal audit 流程见 [SYSTEM_AUDIT_WORKFLOW.md](../SYSTEM_AUDIT_WORKFLOW.md)。
 

@@ -1,5 +1,17 @@
 # Feedback Tracking
 
+> 文档角色：current-reference
+> 生命周期状态：current
+> 当前真源：docs/MAINTENANCE_MODE.md；docs/文档生命周期.md
+> 复核触发：scripts/sync_feedback.py
+> 摘要：说明本地生产反馈 bundle 和 evidence ledger 边界
+> 源摘要：f66d4ab81852bd4f9dca9ac2a29c05fbdace309a898edfc8e006e0c809c9809c
+> 文档摘要：7644bf13e89e91800eba333aea40b0f191775f51ce91fb7f28cb01acfc03e623
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：说明本地生产反馈 bundle 和 evidence ledger 边界
+> 证据引用：tracked:feedback/README.md
+
 This directory stores production feedback bundles copied from the deployed beta/test service.
 
 Treat each feedback folder as raw evidence. Do not edit `issue.json`, `meta.json`, `debug-bundle.json`, or `operbox.json` while triaging. Add investigation state in [TRACKING.md](TRACKING.md) instead.

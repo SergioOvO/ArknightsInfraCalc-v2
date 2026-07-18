@@ -56,10 +56,9 @@ debug / feature / quality Skill 是任务意图的 primary owner；`arknights-sy
 - 所有用于结论的验证必须通过统一 evidence 工具留痕；未跑类别明确写“未跑”。
 - 修改 Rust 后运行 `cargo fmt --all`；格式、测试和 CLI 同样通过 evidence 工具记录。
 - Agent memory 只能记录可丢弃的检索提示与协作偏好；领域语义、当前实现、架构决策和活动任务必须落在版本化 canonical、ADR 或 change 文档中，memory 不得成为真源。
-- 当前任务拥有 TODO、计划或 change 时，按 `.agents/skills/_shared/CHANGE_LIFECYCLE.md` 完成 current 更新、开放项拆分、归档、索引与引用闭合；不能在只完成代码或勾选清单后停止。
-- 文档治理任务的最小正确单元是生命周期边界闭合，不是最少修改文件数；在唯一 current owner 成立前，允许移动、合并、归档或删除全部冲突路径。
+- 当前任务拥有 TODO、计划、change 或文档治理迁移时，生命周期语义唯一以 `docs/文档生命周期.md` 为准；`.agents/skills/_shared/CHANGE_LIFECYCLE.md` 只提供执行入口。必须完成 current facts、开放项、归档、索引、引用和 transition 闭合，不能在只完成代码或勾选清单后停止。
 - 新增面向人类阅读的文档时优先使用清晰的中文文件名；协议固定名、工具约定、代码生成物或外部兼容路径可保留英文。不要仅为改名批量移动现有文档。
-- 新建或恢复 `docs/TODO/` 任务时遵循其 `README.md` 生命周期；实施中同步状态、裁决和范围，完成或废弃后更新 current 文档与索引，并移动到对应 `docs/ARCHIVE/` 子目录，不把已结束 TODO 留在活动目录。
+- 新建或恢复 `docs/TODO/` 任务时遵循 `docs/文档生命周期.md`；`docs/TODO/README.md` 只是生成的活动入口，不另行裁决状态。
 
 ## 4. 核心分层边界
 

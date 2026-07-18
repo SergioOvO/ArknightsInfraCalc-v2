@@ -1,6 +1,15 @@
 # 组合体系规范化审计报告
 
-> 状态：doing
+> 文档角色：archive
+> 生命周期状态：historical
+> 替代项：docs/ORCHESTRATION_LAYER.md；docs/TODO/体系注册表后续缺口.md
+> 历史原因：Phase 0-1 已落地，仍有效开放项已拆到合法 active change
+> 快照日期：2026-07-18
+> 转换自：docs/TODO/SYSTEM_REGISTRY_NORMALIZATION_REPORT.md
+> 转换处置：archive-historical
+> 摘要：保存组合体系规范化审计和历史迁移阶段
+
+> 历史原状态：doing
 > 来源：用户要求；`data/MECHANICS_REGISTRY.csv` 是全干员基建技能原文真源
 > 目标：把“中间产物 / 跨站 meta / 同站组合 / 核心优先 / 散件工具人”重新分层，避免继续把不同语义塞进同一张组合表。
 > 进度：Phase 0/1 已落地；Phase 2 起的跨站 / 全局资源拆清仍待做。

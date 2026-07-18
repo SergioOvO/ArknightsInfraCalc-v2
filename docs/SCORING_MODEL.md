@@ -1,6 +1,19 @@
 # 评分口径审计
 
-> 状态：直接效率硬切版（2026-07-11）
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：scoring.policy
+> 当前真源：self
+> 复核触发：crates/infra-core/src/scoring/**；crates/infra-core/src/search/**
+> 摘要：裁决各域排序 policy 和评分分量
+> 源摘要：37950fcdc98c429da40e042a17c52344a45fa46eb68b6e037728e0bb8296c35b
+> 文档摘要：541dcc38ac48247c50805e6d9c6a3e83baa66319180063bbddaf07c33d1ba7af
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决各域排序 policy 和评分分量
+> 证据引用：tracked:docs/SCORING_MODEL.md
+
+> 实现快照：直接效率硬切版（2026-07-11）
 > 完整数值架构见 [EFFICIENCY_MODEL.md](EFFICIENCY_MODEL.md)。
 
 ## 1. 生产域排序

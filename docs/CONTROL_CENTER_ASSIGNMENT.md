@@ -1,5 +1,18 @@
 # 控制中枢排班规则
 
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：facility.control-assignment
+> 当前真源：self
+> 复核触发：crates/infra-core/src/control/**；crates/infra-core/src/search/control.rs；crates/infra-core/src/global_resource/**；crates/infra-core/src/layout/**
+> 摘要：裁决中枢候选、注入和全局资源编制
+> 源摘要：2eaf554f27900aed95478d06b780f0522d58ba2587bed72ba250dfa057b6ce92
+> 文档摘要：613eed78b2926ff63d7468d09f8a9621914b97bad2080fb284eee377d5e8ae0f
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决中枢候选、注入和全局资源编制
+> 证据引用：tracked:docs/CONTROL_CENTER_ASSIGNMENT.md
+
 > 本文为控制中枢体系审计的仓库内真源。完整规则以用户提供的
 > `CONTROL_CENTER_ASSIGNMENT.md` 为基础；用户裁决内容优先于旧实现。
 

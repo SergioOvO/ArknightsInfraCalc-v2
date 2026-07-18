@@ -28,7 +28,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
 
 def _git_paths(repo: Path, arguments: list[str]) -> set[str]:
     result = subprocess.run(
-        ["git", "-C", str(repo), *arguments],
+        ["git", "-c", "core.quotepath=false", "-C", str(repo), *arguments],
         check=True,
         text=True,
         stdout=subprocess.PIPE,
@@ -45,6 +45,12 @@ def discover_changed_paths(repo: Path, base_sha: str) -> set[str]:
     paths |= _git_paths(repo, ["diff", "--cached", "--name-only", "--diff-filter=ACMRD"])
     paths |= _git_paths(repo, ["ls-files", "--others", "--exclude-standard"])
     return paths
+
+
+def discover_committed_paths(repo: Path, base_sha: str) -> set[str]:
+    if not base_sha:
+        raise ScopeError("--committed-only requires --base-sha")
+    return _git_paths(repo, ["diff", "--name-only", "--diff-filter=ACMRD", f"{base_sha}..HEAD"])
 
 
 def _matches(path: str, patterns: list[str]) -> bool:
@@ -108,7 +114,17 @@ def run_checks(manifest: dict[str, Any], changed_paths: set[str]) -> list[str]:
         errors.append("docs_impact must be an object")
         updated_docs: list[str] = []
     else:
-        updated_docs = _path_list(impact.get("updated"), "docs_impact.updated", errors)
+        entries = impact.get("entries")
+        if not isinstance(entries, list):
+            errors.append("docs_impact.entries must be an array")
+            entries = []
+        updated_docs = [
+            str(item.get("path"))
+            for item in entries
+            if isinstance(item, dict)
+            and item.get("disposition") in {"updated", "unchanged"}
+            and isinstance(item.get("path"), str)
+        ]
 
     side_findings = manifest.get("side_findings")
     if not isinstance(side_findings, list):
@@ -156,6 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--base-sha")
     parser.add_argument("--changed-path", action="append", default=[])
+    parser.add_argument("--committed-only", action="store_true")
     return parser
 
 
@@ -165,6 +182,9 @@ def main() -> int:
         manifest = load_manifest(args.manifest)
         if args.changed_path:
             changed_paths = set(args.changed_path)
+        elif args.committed_only:
+            base_sha = args.base_sha or str(manifest.get("task", {}).get("base_sha", ""))
+            changed_paths = discover_committed_paths(args.repo_root.resolve(), base_sha)
         else:
             base_sha = args.base_sha
             if base_sha is None:

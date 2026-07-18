@@ -1,6 +1,18 @@
 # 设施无关条件化响应 Bake 实施计划
 
-> 状态：in-progress，2026-07-17 用户授权实施。
+> 文档角色：active-change
+> 生命周期状态：ready-on-request
+> 当前真源：docs/QUALITY_AND_AUDIT.md；docs/ORCHESTRATION_LAYER.md
+> 复核触发：crates/infra-core/src/bake.rs；crates/infra-core/src/search/**；crates/infra-core/src/layout/**
+> 摘要：设施无关条件化响应 Bake 的后续实施任务
+> 源摘要：9ed4426fa597846dd858227fa5cef78d342f64685e317550f8b4d233f743aa95
+> 文档摘要：9d047abba0ec10f45087d588b2be74cfdb1603c8321d028f3c2a762b8905c0e3
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：设施无关条件化响应 Bake 的后续实施任务
+> 证据引用：tracked:docs/TODO/CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md
+
+> 历史进度：2026-07-17 曾获用户授权并推进；本次治理时没有活跃 writer，当前等待恢复。
 > 目标：允许离线花费数分钟到数十分钟，按机制依赖完整预计算“设施候选组合在相关外部
 > 状态和跨设施摘要下的真实 solver 响应”，将标准全精二 243 warm `team-rotation` 压到
 > 200ms 量级，同时保持 cache miss 只变慢、不换答案。

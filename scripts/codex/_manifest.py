@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def _absolute(path: str, cwd: Path) -> str:
@@ -44,9 +44,7 @@ def _empty_manifest(task: str, base_sha: str, cwd: Path, created_at: str) -> dic
         "side_findings": [],
         "docs_impact": {
             "status": "blocked",
-            "checked": [],
-            "updated": [],
-            "routes": [],
+            "entries": [],
             "reason": "docs impact has not been declared",
         },
         "reviewer": {

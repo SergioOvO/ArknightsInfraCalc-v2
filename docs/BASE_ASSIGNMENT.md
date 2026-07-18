@@ -1,5 +1,18 @@
 # 全基建进驻编制（宏观排班）
 
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：layout.assignment
+> 当前真源：self
+> 复核触发：crates/infra-core/src/layout/**；data/orchestration_rules.json；data/base_systems.json
+> 摘要：裁决全基建单班进驻编制规则
+> 源摘要：a1d8a2848788ad4cc1cdde08b7b4d60638577b3ff339bec98e0b650131e1767d
+> 文档摘要：2215335a08341627b88a6531fa1b9bd384c831d9bcc702c4cfc2fb82b642867b
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决全基建单班进驻编制规则
+> 证据引用：tracked:docs/BASE_ASSIGNMENT.md
+
 > **状态**：**已落地**（`assign_base_greedy`、`assign_shift`、`layout/orchestrate::{build_plan, execute_plan}`、`search_control_combos`、`assign_dorm_producers`、`assign_manufacture_lines`、`assign_power_stations`、`assign_trade_remainder`；`layout test` 默认调用宏观落位）。
 > 多班轮换见 **[SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md)**（αβγ ABC 唯一现行路径；A-B-A 已移除）。本文管**单班全蓝图各房间谁上岗**。
 > 心情 / 宿管 / 跨班连班仍属非目标，见 [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) §8.12。

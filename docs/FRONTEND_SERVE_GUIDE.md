@@ -1,5 +1,17 @@
 # Frontend Serve Guide
 
+> 文档角色：current-reference
+> 生命周期状态：current
+> 当前真源：docs/FRONTEND_CLI.md；docs/INFRA_CLI.md
+> 复核触发：crates/infra-cli/src/commands/serve.rs；crates/infra-cli/src/output.rs
+> 摘要：说明前端 serve worker 的当前使用方式
+> 源摘要：4a2e48cf038e5f4fd362c52e3ab362f1a23d8127ddbc3b0164193da38689d059
+> 文档摘要：a38461d4239faf5f4f7324cf67286e647c1ea4c6cf309080001fcbe7925a029e
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：说明前端 serve worker 的当前使用方式
+> 证据引用：tracked:docs/FRONTEND_SERVE_GUIDE.md
+
 Use `infra-cli serve` instead of spawning one CLI process per layout.
 
 ## Protocol

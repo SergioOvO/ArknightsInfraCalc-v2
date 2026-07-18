@@ -29,11 +29,9 @@ If the quality migration changes System/Rule/Plan admission, cross-facility scop
 
 For Agent/workflow changes, preserve progressive disclosure: root rules route, Skills execute, canonical docs define semantics, deterministic scripts enforce mechanical facts. Avoid adding new memory or roles without a demonstrated missing owner.
 
-For documentation governance, use `../_shared/CHANGE_LIFECYCLE.md` and
-treat current truth, active changes, decisions, generated facts, and archives as
-separate roles. The minimal correct migration is the full lifecycle boundary:
-leave one current owner, absorb valid facts, split open work, and archive or
-delete every conflicting path. Do not optimize for the fewest touched files.
+For documentation governance, use `../_shared/CHANGE_LIFECYCLE.md`; the role,
+state, ownership, transition, and closure semantics are owned only by
+`docs/文档生命周期.md`. Do not restate or weaken that lifecycle in this Skill.
 
 ## Complete
 

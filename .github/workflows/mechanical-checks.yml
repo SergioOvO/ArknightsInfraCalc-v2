@@ -13,6 +13,29 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve lifecycle base
+        id: lifecycle-base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE"
+          else
+            base="$PUSH_BEFORE"
+          fi
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            git fetch origin "$DEFAULT_BRANCH"
+            base="$(git merge-base HEAD "origin/$DEFAULT_BRANCH")"
+          fi
+          test -n "$base"
+          git cat-file -e "$base^{commit}"
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
 
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
@@ -33,3 +56,6 @@ jobs:
 
       - name: Check stable Markdown and CLI facts
         run: python3 scripts/codex/check_repository_facts.py
+
+      - name: Check documentation lifecycle continuity
+        run: python3 scripts/codex/docs_inventory.py --check --base "${{ steps.lifecycle-base.outputs.sha }}"

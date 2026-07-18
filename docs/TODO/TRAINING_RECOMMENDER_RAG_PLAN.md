@@ -1,7 +1,19 @@
 # 练度比对与练卡推荐 RAG 企划
 
-> 状态：proposal / waiting-for-review  
-> 日期：2026-07-10  
+> 文档角色：active-change
+> 生命周期状态：proposal
+> 当前真源：docs/OVERVIEW.md；docs/MODELLED_OPERATORS.md
+> 复核触发：crates/infra-core/src/box_profile/**；crates/infra-cli/src/commands/advice.rs；data/advice_rules.json
+> 摘要：练度比对、练卡推荐和 RAG 解释层提案
+> 源摘要：ed925a7a35cc78f6e5b7602c226b3ce2f22cfe7c6285d09282ffe9375828fc83
+> 文档摘要：796c8a52c4d8a751fe5ed056e1b0358aa7ec064fc547f2ef4d8739afa1a93f2f
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：练度比对、练卡推荐和 RAG 解释层提案
+> 证据引用：tracked:docs/TODO/TRAINING_RECOMMENDER_RAG_PLAN.md
+
+> 历史进度：最初记录为等待评审的 proposal；当前仍未获得实施授权。
+> 日期：2026-07-10
 > 来源：QQ 讨论：基于玩家 box 识别当前练度，对照基建组合与散件工具人，输出“哪些组能用、完成度如何、哪些已拥有但没练、哪些缺关键搭档所以暂缓”的建议。
 
 ## 0. 结论

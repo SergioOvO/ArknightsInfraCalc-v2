@@ -1,6 +1,18 @@
 # 项目总览：从技能语义到 MAA 排班
 
-> 状态：Current
+> 文档角色：current-reference
+> 生命周期状态：current
+> 当前真源：docs/EFFECT_ATOM_DESIGN.md；docs/BASE_ASSIGNMENT.md；docs/ORCHESTRATION_LAYER.md；docs/排班模式.md
+> 复核触发：crates/infra-core/src/**；crates/infra-cli/src/**；data/orchestration_rules.json
+> 摘要：提供项目当前范围和能力总览
+> 源摘要：4ad8c5e75485c56da9cfa8ee6728cac533c2e37f7933daa8d3044bc1d2524bc1
+> 文档摘要：f41c8aa86e45c92012aef618b147630d49bffa19d8e082cfb0b4c66bd345ddce
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：提供项目当前范围和能力总览
+> 证据引用：tracked:docs/OVERVIEW.md
+
+> 实现快照：Current
 > 读者：策略作者、开发者、维护者、AI 协作者
 > 本文负责：解释当前端到端运行模型；不新增领域公式
 > 业务真源：用户当前裁决与对应领域 Markdown

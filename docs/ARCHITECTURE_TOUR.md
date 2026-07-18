@@ -1,6 +1,18 @@
 # 架构导览：从 `plan` 到 MAA 排班
 
-> 状态：当前实现导览，事实快照为 2026-07-15。本文只解释已经存在的调用链；历史计划和未来候选架构不属于当前运行时。
+> 文档角色：current-reference
+> 生命周期状态：current
+> 当前真源：docs/ORCHESTRATION_LAYER.md；docs/BASE_ASSIGNMENT.md
+> 复核触发：crates/infra-core/src/**；crates/infra-cli/src/**
+> 摘要：解释当前核心调用链和模块边界
+> 源摘要：84228ad55cfea1aa9f8daaf312f1519a5bff4c64d5403ada93a31538b50c5542
+> 文档摘要：0dbf26e16469952507202dadc13dca4c99a99f91097a9c99ea1ec9a32851e3e6
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：解释当前核心调用链和模块边界
+> 证据引用：tracked:docs/ARCHITECTURE_TOUR.md
+
+> 实现快照：当前实现导览，事实快照为 2026-07-15。本文只解释已经存在的调用链；历史计划和未来候选架构不属于当前运行时。
 
 本文适合第一次追踪完整排班结果的开发者。维护或修 bug 前仍应先读 [AGENTS.md](../AGENTS.md)、[MAINTENANCE_MODE.md](MAINTENANCE_MODE.md) 和 [PROJECT_MAP.md](PROJECT_MAP.md)。如果只想理解基建业务过程而不关心代码入口，读 [GONGSUN_RUNTIME_OVERVIEW.md](GONGSUN_RUNTIME_OVERVIEW.md)。
 

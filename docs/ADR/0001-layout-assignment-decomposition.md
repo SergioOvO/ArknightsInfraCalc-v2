@@ -1,16 +1,26 @@
 # ADR 0001: layout 体系编排与 assignment 拆分
 
-> 决策状态：accepted
-> 实现状态：Phase 1–3 完成；Phase 5–7 完成；Phase 4 部分完成（迷迭香经 system_integrity 汇入统一 plan，execute 三态尚未泛化，待第二个 registry anchor-search 体系出现再做）
+> 文档角色：decision
+> 生命周期状态：accepted
+> 当前真源：docs/ORCHESTRATION_LAYER.md；docs/BASE_ASSIGNMENT.md
+> 摘要：保存布局编制分解为 System、Plan、Execute 的架构决策
+> 源摘要：91f1e1a8c63a2073c8f1ee6c702ca1fbf623f02c5c77b0a3d4d9887d2d59befc
+> 文档摘要：c04c7bef13c373818b3acc559f00fe6b87d5eb99afb4cb970cc2102e65dcf157
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：保存布局编制分解为 System、Plan、Execute 的架构决策
+> 证据引用：tracked:docs/ADR/0001-layout-assignment-decomposition.md
+
+> 历史决策状态：accepted
 > 日期：2026-06-26（初稿）／2026-06-26（融合代码化体系编排层）
-> 关联文档：[../ORCHESTRATION_LAYER.md](../ORCHESTRATION_LAYER.md)、[../BASE_ASSIGNMENT.md](../BASE_ASSIGNMENT.md)、[../TODO/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md](../TODO/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md)、[../TODO/SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md](../TODO/SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md)、[../TODO/SYSTEM_REGISTRY_NORMALIZATION_REPORT.md](../TODO/SYSTEM_REGISTRY_NORMALIZATION_REPORT.md)、[../公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md](../公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md)
+> 关联文档：[../ORCHESTRATION_LAYER.md](../ORCHESTRATION_LAYER.md)、[../BASE_ASSIGNMENT.md](../BASE_ASSIGNMENT.md)、[代码化体系历史方案](../ARCHIVE/superseded/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md)、[Anchor 历史方案](../ARCHIVE/superseded/SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md)、[注册表历史审计](../ARCHIVE/plans/SYSTEM_REGISTRY_NORMALIZATION_REPORT.md)、[../公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md](../公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md)
 
 本 ADR 覆盖两个相互咬合的结构性决策：
 
 - **A. assignment facade 拆分**：把 `layout/assign.rs` 收敛为薄 facade + 按职责命名的子模块。
 - **B. 代码化体系编排层**：把体系启动后的 anchor / producer / constraint / degradation 升级为一等公民，让“数据驱动 registry”和“代码化体系层”两条入口汇合到统一 `AssignmentPlan`，由统一的 execute + fill 阶段消费。
 
-`accepted` 表示这两个边界决策已接受，**不表示已实现**。具体接口与分阶段执行清单放在 `docs/TODO/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md` 与 `docs/TODO/SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md`；本文只记录为什么这样拆、拆完后边界如何保持。
+`accepted` 表示这两个边界决策已接受。决策时的具体接口与阶段清单现已归档；当前实现状态只看 `ORCHESTRATION_LAYER.md` 与 `BASE_ASSIGNMENT.md`。本文只记录为什么这样拆、拆完后边界如何保持。
 
 ## 背景
 
@@ -217,17 +227,6 @@ pub(crate) struct AssignmentRun<'a> {
 7. **轮换接入**：`team_rotation` 消费 plan 的 anchor / producer / degradation / shift_bind，不再从房间名反推（plan 语义稳定后做）。
 
 原 0001 的“不要在同一轮同时处理 `skip_trade_core_registry_systems` 删除 / `pick_trade_meta_then_plain` role 迁移 / 公孙金线语义化 / 感知 producer 迁移”不再是非完成条件，而是上列 Phase 3–6 分轮承载。机械拆分（Phase 1）期间仍不改变这些策略语义。
-
-### 实现进度（2026-06-26）
-
-- **Phase 1–2 完成**：`assign/{run,pipeline,commit,*_fill}` 子模块拆分行为等价；`orchestrate/plan.rs` 语义类型就位。
-- **Phase 3 完成**：迷迭香退出 registry（`base_systems.json` 删 `rosemary_perception`），改由 `system_integrity::evaluate_systems` 四档降级判定。
-- **Phase 4 部分完成 / 路线微调**：迷迭香不走 registry fixed 三人组，而由 `system_integrity` 原子声明**迷迭香制造 anchor + 黑键贸易 anchor**两名硬核心；缺任一核心体系关闭。`shift_bind` 只负责两者上2休1，不代替进编保证。`build_plan` 把产出翻译为 `AssignmentPlan.anchors/producers/constraints/degradations/shift_binds`，`pipeline` 经 `place_system_anchors` / `place_system_producers` 消费——**两路径已在统一 plan 汇合**（决策 B 落地）。
-  - 尚未泛化：`execute_plan` 的 reserved/required/committed 三态分支仍未抽象为通用机制（迷迭香用的是 anchor-then-search 的等效路径 + WIP 的 `must_include` 候选池修复）。**触发条件**：出现第二个「在 registry 数据驱动声明、且需要 anchor + 搜索半固定」的体系时再泛化三态。
-- **Phase 5 完成**：`SystemConstraint::ForbidSameRoom` 激活——`build_plan` 产出「迷迭香 ≠ 清流/温蒂同制造站」（`AUTOMATION_GROUP_CHAIN.md §2.4`「各占一条赤金线」），`manufacture_fill` 的 anchor 房搜索经 `forbidden_teammates` 把禁配干员当「已占用」排除出候选池（复用 `filter_manufacture_pool`，无新搜索机制）。
-- **Phase 6 完成**：`producer_fill` 手写感知 producer 收敛为统一 `place_system_producers(plan.producers)`，消费 `ProducerSlot`（夕中枢 / 絮雨办公室 / 爱丽丝·车尔尼宿舍）；落位用真实 progress 保持效率不变，ownership/elite gate 由体系层 `evaluate_rosemary` 前置。
-- **Phase 7 完成**：`schedule/shift_bind.rs` 改为消费 `plan.shift_binds`（经 `shift_binds_from_plan` → `RuntimeShiftBind`），删除硬编码 `ROSEMARY_BLACKKEY_BIND` / `ALL_BINDS`；`team_rotation` 的 `align_shift_binds_in_halves` / `verify_shift_binds` 从统一 plan 取上2休1 绑定。
-- **唯一待办**：上述 Phase 4 的 execute 三态泛化（条件触发，非阻塞）。
 
 ## 非目标
 

@@ -1,5 +1,18 @@
 # 人间烟火排班规则
 
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：system.fireworks
+> 当前真源：self
+> 复核触发：crates/infra-core/src/global_resource/**；crates/infra-core/src/control/**；data/skill_table.json；data/operator_instances.json
+> 摘要：裁决人间烟火全局资源链的激活与结算边界
+> 源摘要：cbd93eab34d3b93d34483a057f2d3ec76ba2fb4e898cea8b57c999c21fc9c004
+> 文档摘要：e8f775095c78b9d5a9f62792ecdcccb19f37d9a853f68f54787a612508291e2d
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决人间烟火全局资源链的激活与结算边界
+> 证据引用：tracked:docs/FIREWORKS.md
+
 > 本文为人间烟火体系审计的仓库内真源。完整机制以用户提供的
 > `FIREWORKS.md` 为基础；用户裁决内容优先于旧实现。
 

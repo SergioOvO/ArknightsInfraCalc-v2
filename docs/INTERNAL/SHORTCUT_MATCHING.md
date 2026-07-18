@@ -1,7 +1,19 @@
 # trade/shortcut L3 匹配地图
 
-> 文件：`crates/infra-core/src/trade/shortcut.rs`  
-> 数据：`data/trade_shortcuts.json`  
+> 文档角色：current-reference
+> 生命周期状态：current
+> 当前真源：docs/EFFECT_ATOM_DESIGN.md；docs/EFFICIENCY_MODEL.md
+> 复核触发：crates/infra-core/src/trade/shortcut.rs；data/trade_shortcuts.json；data/trade_segments.json
+> 摘要：定位贸易 shortcut 匹配和互斥实现
+> 源摘要：a36c8567c14a8ebf26254d6aaae42c3581d0c8bdd7cec11528717c4120281051
+> 文档摘要：d7f60ed63aef1381f7f8bd26426b74f620b253b35dd50d9d8cb5ac3da1185b75
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：定位贸易 shortcut 匹配和互斥实现
+> 证据引用：tracked:docs/INTERNAL/SHORTCUT_MATCHING.md
+
+> 文件：`crates/infra-core/src/trade/shortcut.rs`
+> 数据：`data/trade_shortcuts.json`
 > 设计背景：`EFFECT_ATOM_DESIGN.md` §8.7
 
 社区单位产出及视觉表解析来源见 [TRADE_COMMUNITY_UNIT_OUTPUT.md](TRADE_COMMUNITY_UNIT_OUTPUT.md)。特殊订单 shortcut 必须携带带来源和精度标记的 `unit_output`；加载失败时直接报错，不再静默使用旧等效百分比。

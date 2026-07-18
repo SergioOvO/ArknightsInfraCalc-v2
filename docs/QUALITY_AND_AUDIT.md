@@ -1,6 +1,19 @@
 # 质量、求解保证与验证证据总则
 
-> 状态：Current。
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：workflow.quality
+> 当前真源：self
+> 复核触发：AGENTS.md；.agents/skills/arknights-quality/**；.agents/skills/arknights-evidence/**；scripts/codex/**
+> 摘要：裁决质量、求解保证和交付证据要求
+> 源摘要：a4642eedff88af074d440bed14c25f5bd9a52443d32068e729e16a0b19765c5d
+> 文档摘要：21163483916a9db6e151742ddc4d8e328afc6f3ee4544872ab2f36421add1d1b
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决质量、求解保证和交付证据要求
+> 证据引用：tracked:docs/QUALITY_AND_AUDIT.md
+
+> 实现快照：Current。
 > 责任：本文件是风险分层验证、求解保证、完成证明、失败基线和 Bake 安全的唯一文字真源。
 > 边界：不裁决领域业务语义；业务规则以用户裁决和对应领域 Markdown 为准。
 

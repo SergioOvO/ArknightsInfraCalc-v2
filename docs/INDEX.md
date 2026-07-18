@@ -1,6 +1,18 @@
 # 文档入口
 
-> 状态：Current
+> 文档角色：current-reference
+> 生命周期状态：current
+> 当前真源：docs/文档生命周期.md
+> 复核触发：scripts/codex/docs_inventory.py；AGENTS.md；.agents/skills/**
+> 摘要：提供文档路由和生成的 canonical 入口
+> 源摘要：21861c21c5d48db295593dcc3fe72d8b24ad9c918414e5a2184276a8644db111
+> 文档摘要：c99c36a8cb70179d54ecd0adf7b8cc126f0e1a0abaafb4a47fcae425a23f5ae3
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：提供文档路由和生成的 canonical 入口
+> 证据引用：tracked:docs/INDEX.md
+
+> 实现快照：Current
 > 读者：玩家、策略作者、开发者、维护者、AI Agent
 > 本文负责：在文档位置未知时提供路由；不定义业务公式，也不是每个任务的无条件首读
 > 业务真源：用户当前裁决与对应领域 canonical Markdown
@@ -53,26 +65,33 @@ system / conformance / formal audit -> arknights-system-audit
 
 ## 当前 canonical 参考
 
-| 领域 | 权威入口 |
+<!-- BEGIN GENERATED CANONICAL -->
+| 领域键 | 权威入口 |
 |---|---|
-| 单班完整编制 | [BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md) |
-| 中枢候选与注入 | [CONTROL_CENTER_ASSIGNMENT.md](CONTROL_CENTER_ASSIGNMENT.md) |
-| Team ABC 与当前 Shift 轮换 | [SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md) |
-| 排班模式改版评审 | [排班改版逻辑设计](TODO/排班改版逻辑设计_公孙长乐评审.md) |
-| 菲亚梅塔 | [Fiammetta.md](Fiammetta.md) |
-| 体系总览 / 入口 | [SYSTEM_CHAINS.md](SYSTEM_CHAINS.md)、[体系分析目录](公孙长乐的体系分析文档/) |
-| 迷迭香感知体系 | [ROSEMARY_PERCEPTION_CHAIN.md](公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md) |
-| 自动化组 | [AUTOMATION_GROUP_CHAIN.md](公孙长乐的体系分析文档/AUTOMATION_GROUP_CHAIN.md) |
-| 红松林 | [RED_PINE_FOREST_CHAIN.md](公孙长乐的体系分析文档/RED_PINE_FOREST_CHAIN.md) |
-| 莱茵科技 | [RHINE_LAB_CHAIN.md](公孙长乐的体系分析文档/RHINE_LAB_CHAIN.md) |
-| 人间烟火 | [FIREWORKS.md](FIREWORKS.md) |
-| EffectAtom / Phase / Selector / Action | [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) |
-| 效率值结构 | [EFFICIENCY_MODEL.md](EFFICIENCY_MODEL.md) |
-| 排序 policy | [SCORING_MODEL.md](SCORING_MODEL.md) |
-| System → Plan → Execute | [ORCHESTRATION_LAYER.md](ORCHESTRATION_LAYER.md)、[ADR 0001](ADR/0001-layout-assignment-decomposition.md) |
-| 制造站 | [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md) |
-| CLI 与前端 | [INFRA_CLI.md](INFRA_CLI.md)、[FRONTEND_CLI.md](FRONTEND_CLI.md)、[FRONTEND_SERVE_GUIDE.md](FRONTEND_SERVE_GUIDE.md) |
-| 干员建模覆盖 | [MODELLED_OPERATORS.md](MODELLED_OPERATORS.md)、[需要完成的干员建模](需要完成的干员建模.md) |
+| `architecture.cli` | [infra-cli 模块职责](INFRA_CLI.md) |
+| `architecture.orchestration` | [编排层重构路线图（Orchestration Layer）](ORCHESTRATION_LAYER.md) |
+| `docs.lifecycle` | [文档生命周期](文档生命周期.md) |
+| `facility.control-assignment` | [控制中枢排班规则](CONTROL_CENTER_ASSIGNMENT.md) |
+| `facility.manufacture` | [制造站域状态](MANUFACTURE_STATUS.md) |
+| `interface.frontend-cli` | [infra-cli + Layout 生成器 — 前端对接说明](FRONTEND_CLI.md) |
+| `layout.assignment` | [全基建进驻编制（宏观排班）](BASE_ASSIGNMENT.md) |
+| `mechanics.effect-atom` | [EffectAtom 设计文档](EFFECT_ATOM_DESIGN.md) |
+| `schedule.fiammetta` | [菲亚梅塔换心情规则](Fiammetta.md) |
+| `schedule.mode` | [排班模式](排班模式.md) |
+| `schedule.timed` | [定时换班（公孙长乐 × InfraCalc）](定时换班.md) |
+| `scoring.efficiency` | [直接效率与整数结算架构](EFFICIENCY_MODEL.md) |
+| `scoring.policy` | [评分口径审计](SCORING_MODEL.md) |
+| `system.automation-group` | [自动化组体系论证（公孙长乐 × InfraCalc）](公孙长乐的体系分析文档/AUTOMATION_GROUP_CHAIN.md) |
+| `system.fireworks` | [人间烟火排班规则](FIREWORKS.md) |
+| `system.red-pine-forest` | [红松林体系论证（公孙长乐 × InfraCalc）](公孙长乐的体系分析文档/RED_PINE_FOREST_CHAIN.md) |
+| `system.rhine-lab` | [莱茵生命体系论证（公孙长乐 × InfraCalc）](公孙长乐的体系分析文档/RHINE_LAB_CHAIN.md) |
+| `system.rosemary-perception` | [迷迭香感知链体系论证（公孙长乐 × InfraCalc）](公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md) |
+| `workflow.maintenance` | [Debug 与一致性修复指南](MAINTENANCE_MODE.md) |
+| `workflow.quality` | [质量、求解保证与验证证据总则](QUALITY_AND_AUDIT.md) |
+| `workflow.system-audit` | [公孙长乐体系逐项审计与修复工作流](SYSTEM_AUDIT_WORKFLOW.md) |
+<!-- END GENERATED CANONICAL -->
+
+实现地图、汇总和示例不在 canonical 表重复登记。当前 ABC 实现见 [SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md)，体系导航见 [SYSTEM_CHAINS.md](SYSTEM_CHAINS.md)，干员建模覆盖见 [MODELLED_OPERATORS.md](MODELLED_OPERATORS.md)。
 
 业务裁决顺序为：用户当前明确裁决 → canonical 领域 Markdown → 实现数据和代码。CSV、JSON、注释、测试、fixture 和历史输出不能推翻 Markdown。
 
@@ -95,10 +114,10 @@ system / conformance / formal audit -> arknights-system-audit
 - `docs/ADR/`：已接受架构决策及其原因。
 - `docs/TODO/`：未实施提案或未来工作；只有当前 feature/quality 任务明确恢复后才执行。
 - `docs/ARCHIVE/`：完成、废弃或仅供追溯的材料。
-- `plans/`：历史设计记录，不是当前行为说明。
+- 根 `plans/`：不再承载 Markdown；历史设计统一迁入 `docs/ARCHIVE/plans/`。
 
 未来计划必须标注尚未实现并链接 current facts；实施完成后更新当前文档，并归档或更新计划状态，不能让 TODO 冒充运行时能力。
-TODO 的创建、恢复、实施同步和自动归档遵循 [TODO 任务生命周期](TODO/README.md)。新增人类可读文档优先采用清晰的中文文件名；协议固定名、工具约定和外部兼容路径除外。
+TODO 的创建、恢复、实施同步和自动归档遵循 [文档生命周期](文档生命周期.md)；[TODO/README.md](TODO/README.md) 只承载生成的活动入口。新增人类可读文档优先采用清晰的中文文件名；协议固定名、工具约定和外部兼容路径除外。
 
 ## 文档维护
 

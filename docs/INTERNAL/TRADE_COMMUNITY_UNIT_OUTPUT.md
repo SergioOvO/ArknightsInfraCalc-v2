@@ -1,5 +1,17 @@
 # 贸易社区单位产出锚点
 
+> 文档角色：current-reference
+> 生命周期状态：current
+> 当前真源：docs/EFFICIENCY_MODEL.md；docs/EFFECT_ATOM_DESIGN.md
+> 复核触发：crates/infra-core/src/trade/unit_output.rs；data/UNIT_OUTPUT_ANCHORS.csv；data/trade_shortcuts.json
+> 摘要：说明社区单位产出与贸易解释值边界
+> 源摘要：984ae74e6e61578049631b21def4d0b2c2b31981b393c3fe4f84908a8f733308
+> 文档摘要：483a883fa5a36d4560160e11fb344b7daccce07b4184dd813af95078ae29d3eb
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：说明社区单位产出与贸易解释值边界
+> 证据引用：tracked:docs/INTERNAL/TRADE_COMMUNITY_UNIT_OUTPUT.md
+
 > 真源：`工具人表26.5 (2).xlsx`（公孙长乐，2026 年 5 月）与 `排班表图片生成器.md`「三、需求模块二」。
 
 工具人表是截图式视觉排版，不是逐行数据表。解析时只读取明确标注的视觉卡片，不根据相邻行列自动推断组合关系。运行时规范化数据位于 `data/trade_shortcuts.json`。

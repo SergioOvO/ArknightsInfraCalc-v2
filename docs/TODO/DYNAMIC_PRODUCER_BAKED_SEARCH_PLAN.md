@@ -1,6 +1,18 @@
 # 动态 Producer A+：设施无关候选列 + 精确索引 Join
 
-> 状态：**in-progress，2026-07-17 用户授权实施**。
+> 文档角色：active-change
+> 生命周期状态：ready-on-request
+> 当前真源：docs/CONTROL_CENTER_ASSIGNMENT.md；docs/ORCHESTRATION_LAYER.md；docs/QUALITY_AND_AUDIT.md
+> 复核触发：crates/infra-core/src/search/control.rs；crates/infra-core/src/layout/**；crates/infra-core/src/bake.rs；data/orchestration_rules.json
+> 摘要：动态 producer 候选列、精确索引 Join 和 winner dependency 任务
+> 源摘要：68970079743819b62877005e1c177e3bae979361badea3c2f61b6be92872d931
+> 文档摘要：6b0052789b8c942ef741c6f5632c6165dd3c69aa02ffa97fb6845b0dcdf4ba86
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：动态 producer 候选列、精确索引 Join 和 winner dependency 任务
+> 证据引用：tracked:docs/TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md
+
+> 历史进度：2026-07-17 曾获用户授权并推进；本次治理时没有活跃 writer，当前等待恢复。
 > 用户确认方向：凛御银灰、戴菲恩、八幡海铃进入同一套可选中枢 producer 生命周期。
 > 算法偏好：问题规模小，优先“多烘焙、按完全等价签名做小型精确 Join”的模型；不扫描原始全笛卡尔积，DP、Pareto 与 branch-and-bound 不作为首版前提。
 > 本文用途：实施 TODO；不能用来描述当前 `HEAD` 已有能力。当前先由设施无关条件化 Bake

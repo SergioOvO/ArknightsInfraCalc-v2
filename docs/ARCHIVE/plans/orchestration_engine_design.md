@@ -1,6 +1,15 @@
 # 编排引擎（Orchestration Engine）设计文档
 
-> 状态：初稿
+> 文档角色：archive
+> 生命周期状态：historical
+> 替代项：docs/ORCHESTRATION_LAYER.md；docs/BASE_ASSIGNMENT.md
+> 历史原因：编排引擎初稿，当前 System-Plan-Execute 契约已由 current owner 接管
+> 快照日期：2026-07-18
+> 转换自：plans/orchestration_engine_design.md
+> 转换处置：archive-historical
+> 摘要：保存编排引擎早期设计和候选接口
+
+> 历史原状态：初稿
 > 作者：Agent Architect
 > 日期：2026-06-15
 
@@ -20,7 +29,7 @@ L3 shortcut:       这个组合的已知最优解？             单房
 
 一旦出现需要跨房权衡的干员（黑键感知+贸易、森蚺中枢+制造、清流跨设施20%/贸），Agent 只能打硬编码补丁：
 
-- [`try_colocate_blackkey_with_meta`](crates/infra-core/src/layout/assign.rs:865)（85 行手写两房评分）
+- [`try_colocate_blackkey_with_meta`](../../../crates/infra-core/src/layout/assign.rs#L865)（85 行手写两房评分）
 - `try_assign_gongsun_gold_manu_team`（固定组合硬编码）
 - `assign_trade_meta` 中的硬编码 `[("witch", ...), ("closure", ...)]`
 
@@ -576,13 +585,13 @@ impl ScoringPolicy for DefaultScoringPolicy {
 
 ### 6.3 简化 `assign_trade_meta`
 
-当前 `assign_trade_meta` 在 Rust 代码里写了 [`("witch", hit_witch_shortcut), ("closure", hit_closure_shortcut)`](crates/infra-core/src/layout/assign.rs:580) 的硬编码 fallback 链。
+当前 `assign_trade_meta` 在 Rust 代码里写了 [`("witch", hit_witch_shortcut), ("closure", hit_closure_shortcut)`](../../../crates/infra-core/src/layout/assign.rs#L580) 的硬编码 fallback 链。
 
 迁移后：System 候选枚举 + `fill_mode=core` 锚点自动处理「巫恋站、可露希尔站」的认领优先级。`assign_trade_meta` 简化为通用贪心（或删除，由 `assign_trade_remainder` 统一处理）。
 
 ### 6.4 简化 `claim_base_systems`
 
-当前 [`claim_base_systems`](crates/infra-core/src/layout/system.rs:226) 是单 pass 的 "全有全无" 贪心认领。需要改为：
+当前 [`claim_base_systems`](../../../crates/infra-core/src/layout/system.rs#L226) 是单 pass 的 "全有全无" 贪心认领。需要改为：
 
 1. **第一阶段**：system 枚举 + 降级判断 + 互斥裁决 → 生成 `Vec<ResolvedSystem>`
 2. **第二阶段**：锚点落位 + 候选方案展开
@@ -693,24 +702,24 @@ L4 orchestrate                   跨房方案枚举+评分裁决    新增
 
 | 接口 | 当前代码 | 对接方式 |
 |------|---------|---------|
-| 评分函数 | [`score_base_assignment`](crates/infra-core/src/schedule/base_rotation.rs:84) 已完整实现 resolve→逐房 solve→`ShiftScores` | 编排引擎阶段三直接调用，`ScoringPolicy` trait 包装 |
-| `DailyTotals` | [`team_rotation.rs:58`](crates/infra-core/src/schedule/team_rotation.rs:58) 已有 `{ trade, manu, power }` | 不变，编排引擎输出同结构 |
-| `BaseAssignment` | [`assignment.rs:38`](crates/infra-core/src/layout/assignment.rs:38) 已有 rooms/set_room/operators_in | 编排引擎输入输出都用它，不变 |
-| `resolve_base` | [`resolve.rs:67`](crates/infra-core/src/layout/resolve.rs:67) 已接受 blueprint+assignment+instances+table+mood | 编排引擎对每个候选方案调它，签名一致 |
+| 评分函数 | [`score_base_assignment`](../../../crates/infra-core/src/schedule/base_rotation.rs#L84) 已完整实现 resolve→逐房 solve→`ShiftScores` | 编排引擎阶段三直接调用，`ScoringPolicy` trait 包装 |
+| `DailyTotals` | [`team_rotation.rs:58`](../../../crates/infra-core/src/schedule/team_rotation.rs#L58) 已有 `{ trade, manu, power }` | 不变，编排引擎输出同结构 |
+| `BaseAssignment` | [`assignment.rs:38`](../../../crates/infra-core/src/layout/assignment.rs#L38) 已有 rooms/set_room/operators_in | 编排引擎输入输出都用它，不变 |
+| `resolve_base` | [`resolve.rs:67`](../../../crates/infra-core/src/layout/resolve.rs#L67) 已接受 blueprint+assignment+instances+table+mood | 编排引擎对每个候选方案调它，签名一致 |
 
 #### 需适配的（3/9）
 
 | 接口 | 当前代码 | 适配方式 |
 |------|---------|---------|
-| `claim_base_systems` | [`system.rs:226`](crates/infra-core/src/layout/system.rs:226) 全有全无贪心认领 | 改为两步：① 编排引擎选 tier ② system.rs 只做实体的 set_room + used.insert。核心逻辑 `slot_resolvable`/`resolve_slot_operators` 可复用 |
-| `assign_shift` | [`assign.rs:72`](crates/infra-core/src/layout/assign.rs:72) ~180 行流水线 | 编排引擎接管前半（claim_system→锚点落位），后半（assign_power/manu_remainder）复用现有函数。`assign_shift` 变为编排引擎的薄 wrapper |
-| `prerequisite 推导` | [`context.rs:26`](crates/infra-core/src/layout/context.rs:26) 有 `power_station_count`，`global` 池有 `VirtualPower` | 新增 `effective_power_stations()` 辅助函数给 `PrerequisiteDef` 的 `source: "layout"` 分支 |
+| `claim_base_systems` | [`system.rs:226`](../../../crates/infra-core/src/layout/system.rs#L226) 全有全无贪心认领 | 改为两步：① 编排引擎选 tier ② system.rs 只做实体的 set_room + used.insert。核心逻辑 `slot_resolvable`/`resolve_slot_operators` 可复用 |
+| `assign_shift` | [`assign.rs:72`](../../../crates/infra-core/src/layout/assign.rs#L72) ~180 行流水线 | 编排引擎接管前半（claim_system→锚点落位），后半（assign_power/manu_remainder）复用现有函数。`assign_shift` 变为编排引擎的薄 wrapper |
+| `prerequisite 推导` | [`context.rs:26`](../../../crates/infra-core/src/layout/context.rs#L26) 有 `power_station_count`，`global` 池有 `VirtualPower` | 新增 `effective_power_stations()` 辅助函数给 `PrerequisiteDef` 的 `source: "layout"` 分支 |
 
 #### 有隐形摩擦的（2/9）
 
 **摩擦点 A：resolve.rs 的感知 producer 注入是硬编码的**
 
-[`resolve.rs:281`](crates/infra-core/src/layout/resolve.rs:281)：
+[`resolve.rs:281`](../../../crates/infra-core/src/layout/resolve.rs#L281)：
 
 ```rust
 const DORM_PERCEPTION_PRODUCERS: &[&str] = &["爱丽丝", "车尔尼"];
@@ -741,7 +750,7 @@ TOTAL:  7/9 对接良好（78%）
 
 ### 8.6 对 team_rotation 的影响
 
-当前 [`team_rotation.rs`](crates/infra-core/src/schedule/team_rotation.rs) 已经有一个 αβγ 三队轮换实现，它直接调用 `assign_shift` 获取高峰班，然后切半。
+当前 [`team_rotation.rs`](../../../crates/infra-core/src/schedule/team_rotation.rs) 已经有一个 αβγ 三队轮换实现，它直接调用 `assign_shift` 获取高峰班，然后切半。
 
 **编排引擎替换 `assign_shift` 后**：
 

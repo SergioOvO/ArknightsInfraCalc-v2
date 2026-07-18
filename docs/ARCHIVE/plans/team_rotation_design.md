@@ -1,6 +1,15 @@
 # αβγ 三队均衡轮休排班方案
 
-> 设计状态：v2 修订中（根据公孙长乐审批反馈修正）
+> 文档角色：archive
+> 生命周期状态：historical
+> 替代项：docs/排班模式.md；docs/定时换班.md；docs/SCHEDULE_ROTATION.md
+> 历史原因：ABC 三队轮换早期设计快照，当前排班规则由 current owner 负责
+> 快照日期：2026-07-18
+> 转换自：plans/team_rotation_design.md
+> 转换处置：archive-historical
+> 摘要：保存 ABC 三队均衡轮休设计的历史背景
+
+> 历史设计状态：v2 修订中（根据公孙长乐审批反馈修正）
 >
 > 审批来源：公孙长乐（`schedule_export.json` 原设计者）
 

@@ -1,6 +1,13 @@
 # Agent 工作流优化实施计划
 
-> 状态：completed
+> 文档角色：archive
+> 生命周期状态：completed
+> 替代项：docs/文档生命周期.md；AGENTS.md；.agents/skills/
+> 历史原因：工作流优化批次已完成并由 current owner 接管
+> 快照日期：2026-07-18
+> 摘要：保存 Agent 工作流优化计划完成记录
+
+> 历史原状态：completed
 > 完成批次：A 文档事实、B 证据工具、C 文档与 Skills、D 默认失败债务、E 最小 CI
 > 归档日期：2026-07-15
 > 归档说明：以下审计快照、阶段性清单和失败基线只保留为历史上下文，不是当前工作流规则。

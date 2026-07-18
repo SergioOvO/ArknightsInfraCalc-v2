@@ -1,5 +1,18 @@
 # 自动化组体系论证（公孙长乐 × InfraCalc）
 
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：system.automation-group
+> 当前真源：self
+> 复核触发：crates/infra-core/src/layout/orchestrate/**；crates/infra-core/src/manufacture/**；crates/infra-core/src/power/**；data/orchestration_rules.json
+> 摘要：裁决自动化组的候选、效率和编排
+> 源摘要：26daf1bb8c57d1faeecbc28effc01f36e8759d8594656b919de194d64594a53a
+> 文档摘要：0fecbcfbbb5801ec7f4a97b192a84222b5c146c145a16ca457c2499ddb9cc3cc
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决自动化组的候选、效率和编排
+> 证据引用：tracked:docs/公孙长乐的体系分析文档/AUTOMATION_GROUP_CHAIN.md
+
 > 理论状态：**领域口径与数值锚点已确认完成**
 > 实现状态：**已迁入通用 Rule → resolved AssignmentPlan 主路径；已知边界见 §10**
 > 对齐布局：243 / 153 / 333 / 252 / 342

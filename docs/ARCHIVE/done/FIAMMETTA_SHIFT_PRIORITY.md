@@ -1,6 +1,13 @@
 # TODO: 接入公孙长乐菲亚梅塔换心情优先级清单
 
-> 状态：completed（2026-07-11）
+> 文档角色：archive
+> 生命周期状态：completed
+> 替代项：docs/Fiammetta.md；docs/SCHEDULE_ROTATION.md
+> 历史原因：规则和实现状态已吸收到 current owner
+> 快照日期：2026-07-18
+> 摘要：保存菲亚梅塔班次优先级实施完成记录
+
+> 历史原状态：completed（2026-07-11）
 > 来源：2026-07-10 用户需求
 > 优先级来源：`C:\Users\KnightCode\Downloads\Fiammetta.md`
 

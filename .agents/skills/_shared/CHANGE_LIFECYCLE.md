@@ -1,64 +1,16 @@
-# Change Lifecycle Protocol
+# Change Lifecycle Adapter
 
-Use this protocol when a task owns an active TODO, plan, change package, or an
-explicit documentation-governance migration. It supplements the task's primary
-Skill; it does not replace maintenance, feature, or quality ownership.
+文档角色、状态、唯一 owner、复核触发、transition 和关闭事务唯一以 [`docs/文档生命周期.md`](../../../docs/文档生命周期.md) 为准。本文只说明项目 Skill 如何调用该协议，不定义第二套生命周期。
 
-## Document Roles
+## 何时调用
 
-- Current canonical documents describe behavior that is true now.
-- Active change documents describe proposed deltas, design, tasks, and evidence.
-- ADRs preserve accepted or superseded decisions and their rationale.
-- Generated references carry facts reproducible from code, schemas, or commands.
-- Archived documents preserve closed context and never act as current truth.
-- Agent memory may point to these sources but must not define domain semantics,
-  implementation status, architecture decisions, or active work.
+任务拥有 active change、计划、ADR 变更、文档迁移或关闭动作时，在 primary maintenance / feature / quality Skill 之外调用本适配器。它不改变用户授权或任务 scope。
 
-## Close as a Transaction
+## 执行入口
 
-A tracked change is not complete when only its implementation or checklist is
-complete. Before reporting completion:
+1. 开始时确认 active change、current owner、base SHA 和一个 writer。
+2. 实施中把用户裁决先写入 canonical；change 只记录 delta、证据和开放项。
+3. 结束时按 canonical 完成事实吸收、开放项拆分、transition、移动/删除、生成索引和引用闭合。
+4. 通过 `scripts/codex/docs_inventory.py --check` 和 Evidence Skill 对最终树留痕；`in-progress`、report-only 或 continuity 未验证不能作为完成状态。
 
-1. Verify the real entry and risk-matched regressions through the evidence
-   protocol.
-2. Merge confirmed behavior and limits into the unique current canonical owner.
-3. Record durable architectural decisions in an ADR when the rationale must
-   survive the change package.
-4. Split every still-valid open item into a new, independently owned change;
-   do not archive unresolved work as completed.
-5. Remove the closed item from active indexes and move it to the appropriate
-   completed, superseded, or historical-design archive.
-6. Update indexes and repository references, then prove links, lifecycle state,
-   docs impact, and task scope.
-
-Treat these steps as one closure transaction. Do not stop after adding an
-"obsolete" or "completed" banner to a document that belongs in the archive.
-
-## Autonomous Closure
-
-Archive or remove an old path without another approval wait when all of the
-following are true:
-
-- the implementation or replacement is verified;
-- the unique current owner contains every still-valid semantic fact;
-- open work is empty or has been split into a new change;
-- no current canonical documents conflict;
-- indexes and references can be updated in the same change.
-
-Pause only when closing the change would choose between conflicting domain
-rules, discard an unabsorbed user decision, change product scope, or cross an
-otherwise irreversible user boundary. File count and migration size alone are
-not reasons to stop.
-
-## Documentation-Governance Unit
-
-For a documentation-governance task, the smallest correct unit is a closed
-lifecycle boundary, not the fewest edited files. It may include moving,
-merging, archiving, or deleting every conflicting path required to leave one
-current owner. Avoid unrelated prose rewrites once that boundary is closed.
-
-## Required Report
-
-Report the current owner, absorbed facts, archived or deleted paths, split open
-work, index/reference updates, structure evidence, unverified semantics, and
-remaining active changes.
+遇到业务语义冲突、产品范围变化或未吸收用户裁决时暂停询问。文件数、移动数和 diff 大小不是暂停理由。

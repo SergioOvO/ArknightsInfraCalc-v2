@@ -1,5 +1,18 @@
 # EffectAtom 设计文档
 
+> 文档角色：canonical
+> 生命周期状态：current
+> 领域键：mechanics.effect-atom
+> 当前真源：self
+> 复核触发：crates/infra-core/src/types.rs；crates/infra-core/src/trade/**；crates/infra-core/src/global_resource/**；data/skill_table.json；data/operator_instances.json
+> 摘要：裁决 EffectAtom 词汇和机制解释分层
+> 源摘要：d71e96d080b8c1292c62b46bb1ebf98da9244ad0f330ad2f2381dbe345203a2a
+> 文档摘要：1a88ad7e9778844ca3e037f836cf496fb9bd036f8d45af52834a39e40f79e6a8
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：裁决 EffectAtom 词汇和机制解释分层
+> 证据引用：tracked:docs/EFFECT_ATOM_DESIGN.md
+
 > 本文档记录 ArknightsInfraCalc 重建模的核心设计。
 > **已建模干员详情**见 [`MODELLED_OPERATORS.md`](MODELLED_OPERATORS.md)。
 > **体系链**见 [`SYSTEM_CHAINS.md`](SYSTEM_CHAINS.md)。

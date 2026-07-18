@@ -1,5 +1,17 @@
 # 项目地图（Agent / 开发者入门）
 
+> 文档角色：current-reference
+> 生命周期状态：current
+> 当前真源：docs/文档生命周期.md；docs/ORCHESTRATION_LAYER.md；docs/INFRA_CLI.md
+> 复核触发：crates/**；data/**；scripts/**；Cargo.toml；README.md
+> 摘要：提供当前代码、数据和命令 owner 地图
+> 源摘要：c4952d912010a676e23be20d86b421c9fe66dc634230c8ccbc373a748775cd26
+> 文档摘要：57ba4f3e156dc692d20694c88b5ca071f5059e959a977357e2ad9754162dba5c
+> 复核原因：lifecycle-migration
+> 复核结论：updated
+> 稳定事实：提供当前代码、数据和命令 owner 地图
+> 证据引用：tracked:docs/PROJECT_MAP.md
+
 > 本文是当前代码、数据和命令地图，不是每个 Agent 任务的无条件首读。先由 [AGENTS.md](../AGENTS.md) 选择 Skill；只有 owner、入口或调用链不明时才定向读取本文。领域语义见对应 canonical Markdown，文档位置未知时查 [INDEX.md](INDEX.md)。
 
 如果读者懂基建体系但不关心代码入口，先看 [GONGSUN_RUNTIME_OVERVIEW.md](GONGSUN_RUNTIME_OVERVIEW.md)。
@@ -29,10 +41,10 @@
 | **发电站** | ✅ | — | — | ✅ `search_power_assignment` | ✅ 宏观排班内 | — | 充能 + 虚拟发电折算（晨曦等） |
 | **全局资源** | 注册表 ✅ | 池 ✅ | — | — | — | — | P0：木天蓼 / 人间烟火（简化）/ 魔物料理（基准注入） |
 
-域详情：**制造** → [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)；**全局资源** → [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) §8.13；**评分口径/分量化策略** → [SCORING_MODEL.md](SCORING_MODEL.md)、[SCORING_REFACTOR_PLAN.md](SCORING_REFACTOR_PLAN.md)。
+域详情：**制造** → [MANUFACTURE_STATUS.md](MANUFACTURE_STATUS.md)；**全局资源** → [EFFECT_ATOM_DESIGN.md](EFFECT_ATOM_DESIGN.md) §8.13；**评分口径/分量化策略** → [SCORING_MODEL.md](SCORING_MODEL.md)。历史迁移计划见 [ARCHIVE/plans/SCORING_REFACTOR_PLAN.md](ARCHIVE/plans/SCORING_REFACTOR_PLAN.md)。
 
 **当前边界**：mood 内核与 peak 主力最长工作时间已接入；宿管分配、按 ETA 改写短班、
-全基建连续心情最优化仍由后续上层规划器负责。见 [mood_eta_design.md](../plans/mood_eta_design.md)。
+全基建连续心情最优化仍由后续上层规划器负责。历史设计见 [mood_eta_design.md](ARCHIVE/plans/mood_eta_design.md)，不得作为当前实现说明。
 
 **全基建单班进驻编制**（`assign_shift` → `build_plan` / `execute_plan`、并行搜 + `used` 顺序落位）：现行见 **[BASE_ASSIGNMENT.md](BASE_ASSIGNMENT.md)**；声明式规则由 `layout/orchestrate/rules.rs` 把 `data/orchestration_rules.json` 编译成完全解析的 `AssignmentPlan`，兼容 registry 在主规则与 late competitive rule 之间执行。
 
@@ -89,7 +101,7 @@ ArknightsInfraCalc-v2/
 │   └── infra-cli/          命令行：plan / advice / verify / pool / search / trade / bench / bake / serve / layout / profile
 ├── data/                   机制注册表、干员实例、规则与回归用例（运行时实现载体）
 ├── scripts/                数据工具与 Codex 证据 / 范围检查器
-├── plans/                  设计文档/提案
+├── docs/ARCHIVE/plans/     历史设计；开放工作位于 docs/TODO/
 └── release/                发布产物（layout-gen、fixtures）
 ```
 
