@@ -4,14 +4,7 @@
 > 生命周期状态：current
 > 领域键：interface.frontend-cli
 > 当前真源：self
-> 复核触发：crates/infra-cli/src/**；crates/infra-core/src/export/**；release/**
 > 摘要：裁决前端调用 CLI 和导出数据的接口契约
-> 源摘要：cff3eff28730ed7e758729fcbef4b52ffdd9e7fc9cdc4cebc1df93e76144df00
-> 文档摘要：0aeac74b3651c2417f55093cca089300b799abed8963ba0ec935c8917fb6f42b
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：裁决前端调用 CLI 和导出数据的接口契约
-> 证据引用：tracked:docs/FRONTEND_CLI.md
 
 > 面向前端 / 排班 UI。**Layout 蓝图**用静态页 `layout-gen` 编辑；**排班求解 + MAA JSON** 用 `infra-cli`（子进程或后续 WASM）。
 > **Beta Release 构建**：2026-06-25 · backend commit `9e52de9` · frontend beta source `3259eaa` · 见 `release/VERSION.txt`

@@ -5,8 +5,6 @@
 > 替代项：docs/EFFICIENCY_MODEL.md；docs/SCORING_MODEL.md
 > 历史原因：兼容量纲方案已被无兼容直接效率硬切替代
 > 快照日期：2026-07-18
-> 转换自：docs/TODO/TRADE_EQUIVALENT_EFFICIENCY_ARCHITECTURE.md
-> 转换处置：archive-superseded
 > 摘要：保存贸易站社区等效效率架构的被替代设计
 
 > 历史原状态：历史设计稿；当前已完成无兼容硬切。现行架构以

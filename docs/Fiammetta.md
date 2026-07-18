@@ -4,14 +4,7 @@
 > 生命周期状态：current
 > 领域键：schedule.fiammetta
 > 当前真源：self
-> 复核触发：crates/infra-core/src/schedule/**；crates/infra-core/src/layout/**；crates/infra-core/src/export/**
 > 摘要：裁决菲亚梅塔在当前排班中的目标和边界
-> 源摘要：78d4c2dfca5dea1f27caa879e083704158b1e8d6136d3a1e202f5880c5e70666
-> 文档摘要：72db7921f8ce8db89fda6ba4a2ecee43823251511d097f31361d632b9f94e39a
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：裁决菲亚梅塔在当前排班中的目标和边界
-> 证据引用：tracked:docs/Fiammetta.md
 
 > 实现快照：ABC 排班主路径已接入单次主力回岗覆盖；布局动态排序与完整心情排班尚未实现。
 > 规则来源：公孙长乐 2026-07-11 评审稿。

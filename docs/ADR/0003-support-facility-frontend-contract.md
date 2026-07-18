@@ -2,14 +2,8 @@
 
 > 文档角色：decision
 > 生命周期状态：accepted
-> 当前真源：self
+> 当前真源：docs/FRONTEND_CLI.md
 > 摘要：规定办公室与会客室静态求值如何通过 serve plan 增量提供给 beta 前端
-> 源摘要：545f18ff68a6061a7f846bc1f1c69e99afbc235ecb9f6a9fbcde44e90b78bae2
-> 文档摘要：b974743bedbf514b60a9138bdd1d150b6a12c46d3aa633ec644eb930ea423055
-> 复核原因：user-ruling
-> 复核结论：updated
-> 稳定事实：规定办公室与会客室静态求值如何通过 serve plan 增量提供给 beta 前端
-> 证据引用：tracked:docs/ADR/0003-support-facility-frontend-contract.md
 
 > 历史决策状态：accepted
 > 日期：2026-07-19

@@ -3,14 +3,7 @@
 > 文档角色：current-reference
 > 生命周期状态：current
 > 当前真源：docs/QUALITY_AND_AUDIT.md；docs/SCORING_MODEL.md
-> 复核触发：crates/infra-core/src/search/**；crates/infra-core/src/bake.rs；crates/infra-core/benches/**；scripts/**
 > 摘要：记录当前性能事实、测量入口和风险边界
-> 源摘要：fb01c8b0d0a193ad5af09628715d4ed103c7fbed05de685fa16682c812cc6175
-> 文档摘要：8b3f9ad0262c941015b8ce7a13f0a67d598fbde16686d4a01f541959b0c18d09
-> 复核原因：source-change
-> 复核结论：updated
-> 稳定事实：记录当前性能事实、测量入口和风险边界
-> 证据引用：tracked:docs/PERFORMANCE_ENGINEERING.md
 
 > 实现快照：当前实现与本地数据快照，核对日期 2026-07-14。本文解释性能事实，不改变搜索语义；未来设计只在文末单独标明。
 

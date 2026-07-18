@@ -3,14 +3,7 @@
 > 文档角色：current-reference
 > 生命周期状态：current
 > 当前真源：docs/文档生命周期.md
-> 复核触发：scripts/codex/docs_inventory.py；AGENTS.md；.agents/skills/**
 > 摘要：提供文档路由和生成的 canonical 入口
-> 源摘要：981f5a744d0679db91bd551eacac55c5b1af4e1f20ebf0ffc72859899946dd8c
-> 文档摘要：c99c36a8cb70179d54ecd0adf7b8cc126f0e1a0abaafb4a47fcae425a23f5ae3
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：提供文档路由和生成的 canonical 入口
-> 证据引用：tracked:docs/INDEX.md
 
 > 实现快照：Current
 > 读者：玩家、策略作者、开发者、维护者、AI Agent

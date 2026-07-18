@@ -3,14 +3,7 @@
 > 文档角色：active-change
 > 生命周期状态：ready-on-request
 > 当前真源：docs/QUALITY_AND_AUDIT.md；docs/ORCHESTRATION_LAYER.md
-> 复核触发：crates/infra-core/src/bake.rs；crates/infra-core/src/search/**；crates/infra-core/src/layout/**
 > 摘要：设施无关条件化响应 Bake 的后续实施任务
-> 源摘要：5b01d934e18a986a9226177e55bc717d2df288ab7f7be7887527fa701988e777
-> 文档摘要：9d047abba0ec10f45087d588b2be74cfdb1603c8321d028f3c2a762b8905c0e3
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：设施无关条件化响应 Bake 的后续实施任务
-> 证据引用：tracked:docs/TODO/CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md
 
 > 历史进度：2026-07-17 曾获用户授权并推进；本次治理时没有活跃 writer，当前等待恢复。
 > 目标：允许离线花费数分钟到数十分钟，按机制依赖完整预计算“设施候选组合在相关外部

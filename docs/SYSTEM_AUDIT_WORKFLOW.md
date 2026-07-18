@@ -4,14 +4,7 @@
 > 生命周期状态：current
 > 领域键：workflow.system-audit
 > 当前真源：self
-> 复核触发：AGENTS.md；.agents/skills/arknights-system-audit/**；scripts/codex/**
 > 摘要：裁决 formal system audit 工作流
-> 源摘要：6002cea435ca3a0743ba5e129489c661e272e394775807786f5ca4dc2fdc7ff7
-> 文档摘要：b28d0e70fbff65fd47995db63213329c4b29a9635cbd0c05b2af6714c8d1a80f
-> 复核原因：source-change
-> 复核结论：updated
-> 稳定事实：裁决 formal system audit 工作流
-> 证据引用：tracked:docs/SYSTEM_AUDIT_WORKFLOW.md
 
 > 实现快照：Current（仅适用于 `formal-audit`）
 > 用途：用户明确要求逐项严格审计，或当前领域 Markdown 互相冲突时，逐个检查 `docs/公孙长乐的体系分析文档/` 中的体系是否被代码完整、严格地实现。

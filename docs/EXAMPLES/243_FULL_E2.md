@@ -3,14 +3,7 @@
 > 文档角色：current-reference
 > 生命周期状态：current
 > 当前真源：docs/BASE_ASSIGNMENT.md；docs/SCHEDULE_ROTATION.md
-> 复核触发：data/fixtures/243/**；crates/infra-cli/src/commands/plan.rs；crates/infra-core/src/schedule/**
 > 摘要：记录 243 全精二当前示例和可复现入口
-> 源摘要：e19b9b939270bc6b2b8b5f6c4776105bd2be26cd972c90003ca2947e68b3bcde
-> 文档摘要：5aecb8e9749ca50d36513e12dce188a5d79a98d556ae1fb3217b75e85b32910d
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：记录 243 全精二当前示例和可复现入口
-> 证据引用：tracked:docs/EXAMPLES/243_FULL_E2.md
 
 > 用途：给维护者和 Agent 一个可重复的默认 `plan` 入口，并说明如何阅读输出。
 > 本页描述当前 CLI 能力和 fixture，不定义任何体系的业务不变量。

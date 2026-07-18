@@ -5,8 +5,6 @@
 > 替代项：docs/ORCHESTRATION_LAYER.md；docs/ADR/0001-layout-assignment-decomposition.md
 > 历史原因：代码化体系分派方案已被声明式通用编排层替代
 > 快照日期：2026-07-18
-> 转换自：docs/TODO/CODEIZED_SYSTEM_ORCHESTRATION_PLAN.md
-> 转换处置：archive-superseded
 > 摘要：保存代码化体系编排层的被替代方案
 
 > 历史原状态：ready

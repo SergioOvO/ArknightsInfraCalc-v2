@@ -4,14 +4,7 @@
 > 生命周期状态：current
 > 领域键：layout.assignment
 > 当前真源：self
-> 复核触发：crates/infra-core/src/layout/**；data/orchestration_rules.json；data/base_systems.json
 > 摘要：裁决全基建单班进驻编制规则
-> 源摘要：28b0517a28fe92ec663e411e004ee5665ca7055039c10bc062aaaab0f015b4c4
-> 文档摘要：2215335a08341627b88a6531fa1b9bd384c831d9bcc702c4cfc2fb82b642867b
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：裁决全基建单班进驻编制规则
-> 证据引用：tracked:docs/BASE_ASSIGNMENT.md
 
 > **状态**：**已落地**（`assign_base_greedy`、`assign_shift`、`layout/orchestrate::{build_plan, execute_plan}`、`search_control_combos`、`assign_dorm_producers`、`assign_manufacture_lines`、`assign_power_stations`、`assign_trade_remainder`；`layout test` 默认调用宏观落位）。
 > 多班轮换见 **[SCHEDULE_ROTATION.md](SCHEDULE_ROTATION.md)**（αβγ ABC 唯一现行路径；A-B-A 已移除）。本文管**单班全蓝图各房间谁上岗**。

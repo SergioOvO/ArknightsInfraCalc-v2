@@ -4,14 +4,7 @@
 > 生命周期状态：current
 > 领域键：facility.manufacture
 > 当前真源：self
-> 复核触发：crates/infra-core/src/manufacture/**；crates/infra-core/src/search/manufacture.rs；data/skill_table.json；data/operator_instances.json
 > 摘要：裁决制造站机制和实现范围
-> 源摘要：710dc80275bb3cf426e6b0aa65cc973e36a6f81b1608fc9e1afd47c9d1810afa
-> 文档摘要：79f1ee7ca5270709b137d8c6fa4ab0b205c120d62f4d237fa4d0b98fc15f814a
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：裁决制造站机制和实现范围
-> 证据引用：tracked:docs/MANUFACTURE_STATUS.md
 
 > **勿按贸易站 L2/L3 假设改制造站。** 制造站无 `gold_flow` / `order_mechanic` / `trade_shortcuts`；求解为 L1 直通 `solve_manufacture`。
 > **搜索刻意对候选池做 `C(n,3)` 穷举**：制造站无贸易式「金标组合」L3，穷举后按 `final_efficiency` 排序是定稿设计，不是待补缺口。排班使用 `full_pool=true` 的全部合法普通制造候选；standalone 缩池仅服务 `full_pool=false` 的 bench / 独立探索。

@@ -3,14 +3,7 @@
 > 文档角色：current-reference
 > 生命周期状态：current
 > 当前真源：docs/文档生命周期.md
-> 复核触发：scripts/codex/docs_inventory.py
 > 摘要：说明 TODO 目录并承载生成的活动变更表
-> 源摘要：327f6c544e35afb38569076ed48dd729d5afd5fe2afa3cd0f71a7e3e565c0e63
-> 文档摘要：7992d506db5b6b505e5a48f13dda133512f4d3803cf4b1a9b7fc3da2bcff5157
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：说明 TODO 目录并承载生成的活动变更表
-> 证据引用：tracked:docs/TODO/README.md
 
 本目录只容纳 `active-change`。它不是默认工作队列；只有用户当前指令明确选择某项任务时，Agent 才获得实施授权。状态、恢复、交接、关闭和自动归档规则统一见 [文档生命周期](../文档生命周期.md)。
 
@@ -30,4 +23,4 @@
 | [近期已知缺口修复清单](近期已知缺口修复清单.md) | `ready-on-request` | 按独立授权逐项恢复的近期已知缺口清单 |
 <!-- END GENERATED ACTIVE CHANGES -->
 
-新建任务时优先使用清晰中文名，并声明 current owner、目标、非目标、复核触发和成功标准。完成后先吸收 current facts、拆开放项，再移动到对应归档目录。
+新建任务时优先使用清晰中文名，并声明 current owner、目标、非目标和成功标准。完成后先吸收 current facts、拆开放项，再移动到对应归档目录。

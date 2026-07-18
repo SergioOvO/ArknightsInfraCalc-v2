@@ -5,8 +5,6 @@
 > 替代项：docs/ORCHESTRATION_LAYER.md；docs/BASE_ASSIGNMENT.md
 > 历史原因：anchor 语义已由通用 Rule 到 AssignmentPlan 主路径接管
 > 快照日期：2026-07-18
-> 转换自：docs/TODO/SYSTEM_ANCHOR_ORCHESTRATION_PLAN.md
-> 转换处置：archive-superseded
 > 摘要：保存体系 anchor 编排方案的被替代设计
 
 > 历史原状态：ready

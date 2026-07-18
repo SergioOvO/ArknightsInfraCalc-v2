@@ -3,14 +3,7 @@
 > 文档角色：current-reference
 > 生命周期状态：current
 > 当前真源：docs/EFFICIENCY_MODEL.md；docs/EFFECT_ATOM_DESIGN.md
-> 复核触发：crates/infra-core/src/trade/unit_output.rs；data/UNIT_OUTPUT_ANCHORS.csv；data/trade_shortcuts.json
 > 摘要：说明社区单位产出与贸易解释值边界
-> 源摘要：7ea3bed8ec9fcdfcde9a68fbdf2f4e4b498220f9ce10448ddbb5a696868ef92d
-> 文档摘要：483a883fa5a36d4560160e11fb344b7daccce07b4184dd813af95078ae29d3eb
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：说明社区单位产出与贸易解释值边界
-> 证据引用：tracked:docs/INTERNAL/TRADE_COMMUNITY_UNIT_OUTPUT.md
 
 > 真源：`工具人表26.5 (2).xlsx`（公孙长乐，2026 年 5 月）与 `排班表图片生成器.md`「三、需求模块二」。
 

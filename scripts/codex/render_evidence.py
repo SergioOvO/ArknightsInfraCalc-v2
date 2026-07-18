@@ -31,8 +31,8 @@ def load_manifest(path: Path) -> dict[str, Any]:
             value = json.load(handle)
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise ManifestError(f"cannot read manifest {path}: {error}") from error
-    if not isinstance(value, dict) or value.get("schema_version") != 2:
-        raise ManifestError("manifest must be a schema_version=2 JSON object")
+    if not isinstance(value, dict) or value.get("schema_version") != 3:
+        raise ManifestError("manifest must be a schema_version=3 JSON object")
     if not isinstance(value.get("runs"), list) or not isinstance(value.get("artifacts"), list):
         raise ManifestError("manifest runs and artifacts must be arrays")
     return value
@@ -57,6 +57,10 @@ def _last_metadata(text: str, key: str) -> str | None:
 
 
 def validate_manifest(manifest: dict[str, Any]) -> None:
+    if manifest.get("schema_version") != 3:
+        raise ManifestError("manifest must use schema_version=3")
+    if "docs_impact" in manifest:
+        raise ManifestError("manifest schema v3 does not allow docs_impact")
     seen_ids: set[str] = set()
     for index, run in enumerate(manifest["runs"]):
         if not isinstance(run, dict):
@@ -154,7 +158,6 @@ def render(manifest: dict[str, Any]) -> str:
     expansions = manifest.get("scope_expansions", [])
     side_findings = manifest.get("side_findings", [])
     reviewer = manifest.get("reviewer", {})
-    docs_impact = manifest.get("docs_impact", {})
     lines.extend(["", "### 任务范围", ""])
     lines.append(f"- 不变量：{scope.get('invariant') or '未声明'}")
     changed_paths = reviewer.get("changed_paths") or []
@@ -174,20 +177,6 @@ def render(manifest: dict[str, Any]) -> str:
         if isinstance(item, dict) and item.get("disposition") == "deferred"
     ]
     lines.append(f"- 未处理旁支发现：{'；'.join(deferred) if deferred else '无'}")
-    lines.append(
-        f"- 文档影响：{docs_impact.get('status', '未声明')} — "
-        f"{docs_impact.get('reason', '未提供理由')}"
-    )
-    entries = docs_impact.get("entries", [])
-    if entries:
-        lines.append(
-            "- 文档复核："
-            + "；".join(
-                f"{item.get('path', 'unknown')}={item.get('disposition', 'unknown')}"
-                for item in entries
-                if isinstance(item, dict)
-            )
-        )
     return "\n".join(lines) + "\n"
 
 

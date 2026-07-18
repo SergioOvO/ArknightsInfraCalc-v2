@@ -3,14 +3,7 @@
 > 文档角色：current-reference
 > 生命周期状态：current
 > 当前真源：docs/ORCHESTRATION_LAYER.md；docs/CONTROL_CENTER_ASSIGNMENT.md
-> 复核触发：crates/infra-core/src/cross_facility/**；crates/infra-core/src/global_resource/**；crates/infra-core/src/layout/resolve.rs
 > 摘要：定位跨设施作用域的当前实现 owner
-> 源摘要：d095463227648d627a42e1af10b9d26bb9637cfbb866994db80a3270263395c5
-> 文档摘要：dfec220dcb0f09e190ab02383e979f051d4430380c21482ff5bbc7527b36771b
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：定位跨设施作用域的当前实现 owner
-> 证据引用：tracked:docs/INTERNAL/CROSS_FACILITY.md
 
 > 文件：`crates/infra-core/src/cross_facility/`
 > 对外 API：`orchestrate_global_atoms`、`collect_global_atoms`、`GlobalAtomEntry`

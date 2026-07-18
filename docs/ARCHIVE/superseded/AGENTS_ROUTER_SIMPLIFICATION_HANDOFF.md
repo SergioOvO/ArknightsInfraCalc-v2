@@ -5,8 +5,6 @@
 > 替代项：docs/文档生命周期.md；AGENTS.md；.agents/skills/
 > 历史原因：Phase A 已实施，剩余工作流建议由本次生命周期重建和 current Skills 接管
 > 快照日期：2026-07-18
-> 转换自：docs/TODO/AGENTS_ROUTER_SIMPLIFICATION_HANDOFF.md
-> 转换处置：archive-superseded
 > 摘要：保存 Agent 路由简化与求解器准则的历史交接
 
 > 历史原状态：Phase A 已实施；Phase B–D 仍为后续建议

@@ -56,7 +56,8 @@ debug / feature / quality Skill 是任务意图的 primary owner；`arknights-sy
 - 所有用于结论的验证必须通过统一 evidence 工具留痕；未跑类别明确写“未跑”。
 - 修改 Rust 后运行 `cargo fmt --all`；格式、测试和 CLI 同样通过 evidence 工具记录。
 - Agent memory 只能记录可丢弃的检索提示与协作偏好；领域语义、当前实现、架构决策和活动任务必须落在版本化 canonical、ADR 或 change 文档中，memory 不得成为真源。
-- 当前任务拥有 TODO、计划、change 或文档治理迁移时，生命周期语义唯一以 `docs/文档生命周期.md` 为准；`.agents/skills/_shared/CHANGE_LIFECYCLE.md` 只提供执行入口。必须完成 current facts、开放项、归档、索引、引用和 transition 闭合，不能在只完成代码或勾选清单后停止。
+- 当前任务拥有 TODO、计划、change 或文档治理迁移时，生命周期语义唯一以 `docs/文档生命周期.md` 为准；`.agents/skills/_shared/CHANGE_LIFECYCLE.md` 只提供执行入口。完成时吸收 current facts、拆分开放项、自动归档并更新索引和引用。
+- 代码变化不自动要求文档变化；只在行为语义、接口、持久决策或活动任务状态改变时更新最近的 owner。不得维护摘要复核传播或全仓 docs-impact 声明。
 - 新增面向人类阅读的文档时优先使用清晰的中文文件名；协议固定名、工具约定、代码生成物或外部兼容路径可保留英文。不要仅为改名批量移动现有文档。
 - 新建或恢复 `docs/TODO/` 任务时遵循 `docs/文档生命周期.md`；`docs/TODO/README.md` 只是生成的活动入口，不另行裁决状态。
 

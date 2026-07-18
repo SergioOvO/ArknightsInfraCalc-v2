@@ -5,8 +5,6 @@
 > 替代项：docs/ORCHESTRATION_LAYER.md；docs/TODO/体系注册表后续缺口.md
 > 历史原因：Phase 0-1 已落地，仍有效开放项已拆到合法 active change
 > 快照日期：2026-07-18
-> 转换自：docs/TODO/SYSTEM_REGISTRY_NORMALIZATION_REPORT.md
-> 转换处置：archive-historical
 > 摘要：保存组合体系规范化审计和历史迁移阶段
 
 > 历史原状态：doing

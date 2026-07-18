@@ -5,8 +5,6 @@
 > 替代项：feedback/TRACKING.md；docs/MAINTENANCE_MODE.md
 > 历史原因：生产反馈批次已关闭，维护入口已由 feedback ledger 和维护文档接管
 > 快照日期：2026-07-18
-> 转换自：docs/TODO/TRUST_RECOVERY_PLAN.md
-> 转换处置：archive-completed
 > 摘要：保存生产反馈信任恢复和关闭审计的完成记录
 
 > 历史原状态：maintenance-reference

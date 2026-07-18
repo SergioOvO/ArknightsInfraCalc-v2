@@ -5,8 +5,6 @@
 > 替代项：docs/公孙长乐的体系分析文档/RHINE_LAB_CHAIN.md
 > 历史原因：2026-07-12 至 2026-07-14 的只读实现审计快照，后续实现状态已更新
 > 快照日期：2026-07-14
-> 转换自：docs/公孙长乐的体系分析文档/new/RHINE_LAB_CHAIN (1).md
-> 转换处置：archive-audit
 > 摘要：保存莱茵体系迁入 late competitive rule 前的历史审计
 
 > 历史理论状态：业务口径、数值锚点与 priority 已确认

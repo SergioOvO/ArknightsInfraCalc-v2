@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,9 +23,6 @@ class DocsInventoryTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def canonical(self, path: str = "docs/A.md", domain: str = "a") -> docs_inventory.Document:
-        source = self.repo / "src/a.rs"
-        source.parent.mkdir(parents=True, exist_ok=True)
-        source.write_text("a\n", encoding="utf-8")
         target = write_doc(
             self.repo,
             path,
@@ -34,11 +30,8 @@ class DocsInventoryTests(unittest.TestCase):
             "> 生命周期状态：current\n"
             f"> 领域键：{domain}\n"
             "> 当前真源：self\n"
-            "> 复核触发：src/**\n"
             "> 摘要：canonical fixture",
         )
-        subprocess.run(["git", "init", "-q"], cwd=self.repo, check=True)
-        subprocess.run(["git", "add", "src/a.rs", path], cwd=self.repo, check=True)
         return docs_inventory.parse_document(self.repo, target)
 
     def test_parses_and_validates_canonical(self) -> None:
@@ -56,7 +49,6 @@ class DocsInventoryTests(unittest.TestCase):
             "> 文档角色：active-change\n"
             "> 生命周期状态：paused\n"
             "> 当前真源：docs/A.md\n"
-            "> 复核触发：src/**\n"
             "> 摘要：invalid fixture",
         )
         errors = docs_inventory.validate_inventory(
@@ -73,7 +65,6 @@ class DocsInventoryTests(unittest.TestCase):
             "> 文档角色：active-change\n"
             "> 生命周期状态：in-progress\n"
             "> 当前真源：docs/A.md\n"
-            "> 复核触发：src/**\n"
             "> 摘要：work fixture",
         )
         errors = docs_inventory.validate_inventory(
@@ -81,107 +72,63 @@ class DocsInventoryTests(unittest.TestCase):
         )
         self.assertTrue(any("cannot pass final check" in error for error in errors))
 
-    def test_document_digest_excludes_review_record(self) -> None:
-        document = self.canonical()
-        first = docs_inventory.document_digest(document)
-        changed = document.text.replace("> 摘要：", "> 复核原因：migration\n> 摘要：")
-        reparsed = docs_inventory.parse_document(self.repo, self.repo / document.path, changed)
-        self.assertEqual(first, docs_inventory.document_digest(reparsed))
-
-    def test_source_digest_is_stable_and_changes_with_source(self) -> None:
-        document = self.canonical()
-        first = docs_inventory.source_digest(self.repo, document)
-        (self.repo / "src/a.rs").write_text("b\n", encoding="utf-8")
-        self.assertEqual(first, docs_inventory.source_digest(self.repo, document))
-        subprocess.run(["git", "add", "src/a.rs"], cwd=self.repo, check=True)
-        self.assertNotEqual(first, docs_inventory.source_digest(self.repo, document))
-
-    def test_source_digest_ignores_untracked_files_in_git_repo(self) -> None:
-        document = self.canonical()
-        first = docs_inventory.source_digest(self.repo, document)
-        (self.repo / "src/untracked.pyc").write_bytes(b"generated")
-        self.assertEqual(first, docs_inventory.source_digest(self.repo, document))
-
-    def test_source_digest_tracks_symlink_blob(self) -> None:
-        document = self.canonical()
-        link = self.repo / "src/current"
-        link.symlink_to("a.rs")
-        subprocess.run(["git", "add", "src/current"], cwd=self.repo, check=True)
-        first = docs_inventory.source_digest(self.repo, document)
-        link.unlink()
-        link.symlink_to("other.rs")
-        subprocess.run(["git", "add", "src/current"], cwd=self.repo, check=True)
-        self.assertNotEqual(first, docs_inventory.source_digest(self.repo, document))
-
-    def test_source_digest_fails_closed_without_git_index(self) -> None:
+    def test_removed_review_metadata_is_rejected(self) -> None:
         target = write_doc(
             self.repo,
-            "docs/B.md",
+            "docs/A.md",
             "> 文档角色：canonical\n"
             "> 生命周期状态：current\n"
-            "> 领域键：b\n"
+            "> 领域键：a\n"
             "> 当前真源：self\n"
-            "> 复核触发：src\n"
-            "> 摘要：canonical fixture",
+            "> 复核触发：src/**\n"
+            "> 摘要：legacy fixture",
         )
-        document = docs_inventory.parse_document(self.repo, target)
         with self.assertRaises(docs_inventory.InventoryError):
-            docs_inventory.source_digest(self.repo, document)
+            docs_inventory.parse_document(self.repo, target)
 
-    def test_concrete_directory_trigger_covers_tracked_descendants(self) -> None:
-        document = self.canonical()
-        text = document.text.replace("> 复核触发：src/**", "> 复核触发：src")
-        document = docs_inventory.parse_document(self.repo, self.repo / document.path, text)
-        first = docs_inventory.source_digest(self.repo, document)
-        (self.repo / "src/a.rs").write_text("directory trigger\n", encoding="utf-8")
-        subprocess.run(["git", "add", "src/a.rs"], cwd=self.repo, check=True)
-        self.assertNotEqual(first, docs_inventory.source_digest(self.repo, document))
-
-    def test_generator_must_be_concrete_and_resolve_to_tracked_blob(self) -> None:
-        document = self.canonical()
-        invalid_text = document.text.replace("> 摘要：", "> 生成器：../gen.py\n> 摘要：")
-        invalid = docs_inventory.parse_document(self.repo, self.repo / document.path, invalid_text)
-        self.assertTrue(
-            any(
-                "generator must be a concrete" in error
-                for error in docs_inventory.validate_document(invalid, final=False)
-            )
+    def test_only_canonical_documents_may_own_themselves(self) -> None:
+        target = write_doc(
+            self.repo,
+            "docs/ADR/0001-test.md",
+            "> 文档角色：decision\n"
+            "> 生命周期状态：accepted\n"
+            "> 当前真源：self\n"
+            "> 摘要：invalid self-owned decision",
         )
-
-        missing_text = document.text.replace("> 摘要：", "> 生成器：scripts/missing.py\n> 摘要：")
-        missing = docs_inventory.parse_document(self.repo, self.repo / document.path, missing_text)
-        with self.assertRaises(docs_inventory.InventoryError):
-            docs_inventory.source_digest(self.repo, missing)
-
-    def test_source_coverage_requires_owner(self) -> None:
-        document = self.canonical()
-        self.assertEqual(
-            docs_inventory.source_coverage_errors(["src/a.rs"], [document], []), []
+        errors = docs_inventory.validate_document(
+            docs_inventory.parse_document(self.repo, target), final=False
         )
-        self.assertTrue(
-            docs_inventory.source_coverage_errors(["other/new.rs"], [document], [])
+        self.assertTrue(any("only canonical documents" in error for error in errors))
+
+    def test_generated_reference_requires_concrete_generator(self) -> None:
+        canonical = self.canonical()
+        target = write_doc(
+            self.repo,
+            "docs/GENERATED.md",
+            "> 文档角色：generated-reference\n"
+            "> 生命周期状态：generated\n"
+            "> 当前真源：docs/A.md\n"
+            "> 生成器：scripts/*.py\n"
+            "> 摘要：generated fixture",
         )
+        generated = docs_inventory.parse_document(self.repo, target)
+        errors = docs_inventory.validate_inventory(self.repo, [canonical, generated], final=False)
+        self.assertTrue(any("one concrete repository path" in error for error in errors))
 
-    def test_review_record_is_bound_to_current_digests(self) -> None:
-        document = self.canonical()
-        docs_inventory.write_review_record(self.repo, document, cause="lifecycle-migration")
-        refreshed = docs_inventory.parse_document(self.repo, self.repo / document.path)
-        self.assertEqual(docs_inventory.review_errors(self.repo, refreshed), [])
-        (self.repo / "src/a.rs").write_text("changed\n", encoding="utf-8")
-        subprocess.run(["git", "add", "src/a.rs"], cwd=self.repo, check=True)
-        self.assertTrue(any("source digest drift" in error for error in docs_inventory.review_errors(self.repo, refreshed)))
-        entry = docs_inventory.docs_impact_entry(refreshed)
-        self.assertEqual(entry["path"], "docs/A.md")
-        self.assertEqual(entry["source_digest"], refreshed.metadata["源摘要"])
-        self.assertEqual(entry["disposition"], "updated")
-
-    def test_refresh_records_a_new_explicit_cause(self) -> None:
-        document = self.canonical()
-        docs_inventory.write_review_record(self.repo, document, cause="lifecycle-migration")
-        refreshed = docs_inventory.parse_document(self.repo, self.repo / document.path)
-        docs_inventory.write_review_record(self.repo, refreshed, cause="user-ruling")
-        final = docs_inventory.parse_document(self.repo, self.repo / document.path)
-        self.assertEqual(final.metadata["复核原因"], "user-ruling")
+    def test_generated_reference_requires_existing_generator(self) -> None:
+        canonical = self.canonical()
+        target = write_doc(
+            self.repo,
+            "docs/GENERATED.md",
+            "> 文档角色：generated-reference\n"
+            "> 生命周期状态：generated\n"
+            "> 当前真源：docs/A.md\n"
+            "> 生成器：scripts/missing.py\n"
+            "> 摘要：generated fixture",
+        )
+        generated = docs_inventory.parse_document(self.repo, target)
+        errors = docs_inventory.validate_inventory(self.repo, [canonical, generated], final=False)
+        self.assertTrue(any("generator path does not exist" in error for error in errors))
 
     def test_generated_tables_are_deterministic(self) -> None:
         first = self.canonical("docs/B.md", "z")
@@ -189,22 +136,14 @@ class DocsInventoryTests(unittest.TestCase):
         table = docs_inventory.render_canonical_table([first, second])
         self.assertLess(table.index("`a`"), table.index("`z`"))
 
-    def test_transition_fields_are_paired(self) -> None:
-        document = self.canonical()
-        text = document.text.replace("> 摘要：", "> 转换自：docs/OLD.md\n> 摘要：")
-        reparsed = docs_inventory.parse_document(self.repo, self.repo / document.path, text)
-        self.assertTrue(any("must appear together" in error for error in docs_inventory.validate_document(reparsed, final=False)))
-
     def test_owner_must_be_governed_current_document(self) -> None:
         canonical = self.canonical()
-        (self.repo / "plain.txt").write_text("not a document\n", encoding="utf-8")
         reference = write_doc(
             self.repo,
             "docs/R.md",
             "> 文档角色：current-reference\n"
             "> 生命周期状态：current\n"
             "> 当前真源：plain.txt\n"
-            "> 复核触发：src/**\n"
             "> 摘要：reference with an invalid non-document owner",
         )
         errors = docs_inventory.validate_inventory(
@@ -226,6 +165,34 @@ class DocsInventoryTests(unittest.TestCase):
         )
         self.assertTrue(any("only allowed under docs/ADR" in error for error in errors))
 
+    def test_archive_requires_local_reason_or_replacement(self) -> None:
+        target = write_doc(
+            self.repo,
+            "docs/ARCHIVE/X.md",
+            "> 文档角色：archive\n"
+            "> 生命周期状态：historical\n"
+            "> 摘要：archive fixture",
+        )
+        errors = docs_inventory.validate_document(
+            docs_inventory.parse_document(self.repo, target), final=False
+        )
+        self.assertTrue(any("replacement or historical reason" in error for error in errors))
+
+    def test_archive_cannot_own_itself(self) -> None:
+        target = write_doc(
+            self.repo,
+            "docs/ARCHIVE/X.md",
+            "> 文档角色：archive\n"
+            "> 生命周期状态：historical\n"
+            "> 当前真源：self\n"
+            "> 历史原因：historical fixture\n"
+            "> 摘要：archive fixture",
+        )
+        errors = docs_inventory.validate_document(
+            docs_inventory.parse_document(self.repo, target), final=False
+        )
+        self.assertTrue(any("only canonical documents" in error for error in errors))
+
     def test_invalid_blockquote_inside_metadata_fails(self) -> None:
         target = self.repo / "docs/BAD.md"
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -235,9 +202,6 @@ class DocsInventoryTests(unittest.TestCase):
         )
         with self.assertRaises(docs_inventory.InventoryError):
             docs_inventory.parse_document(self.repo, target)
-
-    def test_markdown_anchor_validation_preserves_chinese(self) -> None:
-        self.assertIn("6-目录规则", docs_inventory.markdown_anchors("## 6. 目录规则\n"))
 
 
 if __name__ == "__main__":

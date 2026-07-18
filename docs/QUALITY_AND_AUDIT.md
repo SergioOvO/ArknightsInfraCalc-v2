@@ -4,14 +4,7 @@
 > 生命周期状态：current
 > 领域键：workflow.quality
 > 当前真源：self
-> 复核触发：AGENTS.md；.agents/skills/arknights-quality/**；.agents/skills/arknights-evidence/**；scripts/codex/**
 > 摘要：裁决质量、求解保证和交付证据要求
-> 源摘要：349f00ae40e1a36098d397e8061ff37f4a2055bfc20cd6dfb13cde574d3ded26
-> 文档摘要：21163483916a9db6e151742ddc4d8e328afc6f3ee4544872ab2f36421add1d1b
-> 复核原因：source-change
-> 复核结论：updated
-> 稳定事实：裁决质量、求解保证和交付证据要求
-> 证据引用：tracked:docs/QUALITY_AND_AUDIT.md
 
 > 实现快照：Current。
 > 责任：本文件是风险分层验证、求解保证、完成证明、失败基线和 Bake 安全的唯一文字真源。
@@ -132,11 +125,10 @@
 
 - `change_scope`：唯一不变量、根因层、required paths、allowed consumers、proof paths 和 explicitly deferred；
 - `scope_expansions` 与 `side_findings`；
-- `docs_impact.status`、`checked`、`updated`、`routes` 和具体 `reason`；
 - reviewer 最终核对的 invariant、实际 changed paths 和 expansion id；
 - runs、artifacts、输入和 exit code。
 
-完成前运行 `check_docs_impact.py`、`check_task_scope.py` 和 `render_evidence.py`。检查器只验证声明与文件事实，不能替代 reviewer 的语义判断。
+完成前运行 `check_task_scope.py` 和 `render_evidence.py`。文档影响按 [文档生命周期](文档生命周期.md) 由 Agent 直接判断；检查器不根据源码 diff 强制传播文档更新。
 
 证据至少保留到任务交付完成。交付后可按任务目录归档或清理；具有长期审计价值的结论应保存稳定摘要或 artifact，不能假设 `target/` 永远不会被 `cargo clean` 删除。本次工作流不要求迁移或批量删除旧日志。
 

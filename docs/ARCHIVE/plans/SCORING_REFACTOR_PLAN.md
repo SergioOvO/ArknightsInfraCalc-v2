@@ -5,8 +5,6 @@
 > 替代项：docs/EFFICIENCY_MODEL.md；docs/SCORING_MODEL.md
 > 历史原因：百分比兼容方案已被直接效率硬切替代，剩余开放项由 current owner 记录
 > 快照日期：2026-07-18
-> 转换自：docs/SCORING_REFACTOR_PLAN.md
-> 转换处置：archive-historical
 > 摘要：保存评分口径收敛与分量化的历史实施计划
 
 > 历史原状态：历史计划；百分比与兼容字段已被 2026-07-11 的直接效率硬切取代。当前实现见

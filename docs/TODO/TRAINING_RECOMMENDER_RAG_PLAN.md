@@ -3,14 +3,7 @@
 > 文档角色：active-change
 > 生命周期状态：proposal
 > 当前真源：docs/练卡推荐规则.md；docs/OVERVIEW.md；docs/MODELLED_OPERATORS.md
-> 复核触发：crates/infra-core/src/training_advice/**；crates/infra-cli/src/commands/advice.rs；data/training_recommendations.json
 > 摘要：练度比对后续集成、完整组合规则和 RAG 解释层提案
-> 源摘要：298879e743afe038d8779c198fcdf7638424d388f9e91fbe0f91ecc8b2c14881
-> 文档摘要：82f3ef1d87cd34253604fa6312138e6b971982dac2d580f5dc6b978831784cc0
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：练度比对后续集成、完整组合规则和 RAG 解释层提案
-> 证据引用：tracked:docs/TODO/TRAINING_RECOMMENDER_RAG_PLAN.md
 
 > 历史进度：确定性 `training_advice`、`advice` CLI 和首批基础散件规则已经实现；完整组合分级、条件推荐、前端集成和 RAG 尚未授权实施。
 > 日期：2026-07-10

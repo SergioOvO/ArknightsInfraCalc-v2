@@ -5,8 +5,6 @@
 > 替代项：docs/TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md；docs/TODO/CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md；docs/QUALITY_AND_AUDIT.md
 > 历史原因：暂停的综合质量方案已拆给具名 active change 和 current quality owner
 > 快照日期：2026-07-18
-> 转换自：docs/TODO/QUALITY_90_TO_95_PLAN.md
-> 转换处置：archive-historical
 > 摘要：保存 90 到 95 质量提升候选方案的历史背景
 
 > 历史原状态：paused

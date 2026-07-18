@@ -13,7 +13,7 @@ CODEX_DIR = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 sys.path.insert(0, str(CODEX_DIR))
 
-import check_docs_impact  # noqa: E402
+import check_repository_facts  # noqa: E402
 import check_task_scope  # noqa: E402
 import compare_test_failures  # noqa: E402
 import docs_inventory  # noqa: E402
@@ -156,6 +156,29 @@ class EvidenceRunnerTests(unittest.TestCase):
         self.assertEqual(run["inputs"], inputs)
         self.assertEqual(run["command"][-2:], [argument, argument])
 
+    def test_manifest_schema_three_has_no_docs_impact(self) -> None:
+        result = self.run_evidence("schema-three", [sys.executable, "-c", "pass"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        manifest = self.manifest("schema-three")
+        self.assertEqual(manifest["schema_version"], 3)
+        self.assertNotIn("docs_impact", manifest)
+
+        legacy = copy.deepcopy(manifest)
+        legacy["docs_impact"] = {"status": "not-needed"}
+        with self.assertRaises(render_evidence.ManifestError):
+            render_evidence.validate_manifest(legacy)
+
+    def test_docs_impact_metadata_is_rejected(self) -> None:
+        metadata = self.root / "legacy-metadata.json"
+        metadata.write_text('{"docs_impact": {"status": "not-needed"}}\n', encoding="utf-8")
+        result = self.run_evidence(
+            "legacy-docs-impact",
+            [sys.executable, "-c", "pass"],
+            metadata=metadata,
+        )
+        self.assertEqual(result.returncode, 70)
+        self.assertIn("unsupported task metadata keys: docs_impact", result.stderr)
+
     def test_command_arguments_after_double_dash_are_preserved(self) -> None:
         command = [
             sys.executable,
@@ -244,150 +267,47 @@ class EvidenceRunnerTests(unittest.TestCase):
         self.assertIn(f"(<{path.resolve()}>)", render_evidence._link("evidence", str(path)))
 
 
-class DocsImpactTests(unittest.TestCase):
+class RepositoryFactsTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.repo = Path(self.temporary.name)
         (self.repo / "docs").mkdir()
-        (self.repo / "src").mkdir()
         (self.repo / "docs/A.md").write_text(
             "# A\n\n"
             "> 文档角色：canonical\n"
             "> 生命周期状态：current\n"
             "> 领域键：test.a\n"
             "> 当前真源：self\n"
-            "> 复核触发：src/**\n"
             "> 摘要：documents the stable application fixture\n\n"
             "Current application behavior.\n",
             encoding="utf-8",
         )
-        (self.repo / "src/app.py").write_text("print('ok')\n", encoding="utf-8")
-        subprocess.run(["git", "init", "-q"], cwd=self.repo, check=True)
-        subprocess.run(["git", "add", "docs/A.md", "src/app.py"], cwd=self.repo, check=True)
-        document = docs_inventory.parse_document(self.repo, self.repo / "docs/A.md")
-        docs_inventory.write_review_record(self.repo, document, cause="lifecycle-migration")
-        self.config = {
-            "schema_version": 2,
-            "ignore_globs": [],
-        }
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def manifest(self, status: str = "updated") -> dict[str, object]:
-        document = docs_inventory.parse_document(self.repo, self.repo / "docs/A.md")
-        entries = []
-        if status == "updated":
-            entries = [docs_inventory.docs_impact_entry(document)]
-        return {
-            "docs_impact": {
-                "status": status,
-                "entries": entries,
-                "reason": "checked the current behavior and documentation contract",
-            }
-        }
-
-    def test_updated_and_not_needed(self) -> None:
-        self.assertEqual(
-            check_docs_impact.run_checks(
-                self.repo, self.config, self.manifest("updated"), {"src/app.py", "docs/A.md"}, []
-            ),
-            [],
-        )
-        self.assertEqual(
-            check_docs_impact.run_checks(
-                self.repo, self.config, self.manifest("not-needed"), set(), []
-            ),
-            [],
-        )
-
-    def test_changed_markdown_requires_exact_review_entry(self) -> None:
-        manifest = self.manifest("updated")
-        manifest["docs_impact"]["entries"] = []
-        errors = check_docs_impact.run_checks(
-            self.repo, self.config, manifest, {"docs/A.md"}, []
-        )
-        self.assertTrue(any("missing changed or triggered documents" in error for error in errors))
-
-    def test_generator_change_requires_review_entry(self) -> None:
-        generator = self.repo / "scripts/gen.py"
-        generator.parent.mkdir()
-        generator.write_text("print('generate')\n", encoding="utf-8")
-        generated = self.repo / "docs/GENERATED.md"
-        generated.write_text(
-            "# Generated\n\n"
-            "> 文档角色：generated-reference\n"
-            "> 生命周期状态：generated\n"
-            "> 当前真源：docs/A.md\n"
-            "> 生成器：scripts/gen.py\n"
-            "> 摘要：generated fixture for dependency coverage\n\n"
-            "Generated output.\n",
-            encoding="utf-8",
-        )
-        subprocess.run(["git", "add", "scripts/gen.py", "docs/GENERATED.md"], cwd=self.repo, check=True)
-        document = docs_inventory.parse_document(self.repo, generated)
-        docs_inventory.write_review_record(self.repo, document, cause="source-change")
-        document = docs_inventory.parse_document(self.repo, generated)
-        manifest = self.manifest("updated")
-        manifest["docs_impact"]["entries"] = []
-        errors = check_docs_impact.run_checks(
-            self.repo, self.config, manifest, {"scripts/gen.py"}, []
-        )
-        self.assertTrue(any("missing changed or triggered documents" in error for error in errors))
-
-    def test_blocked_uncovered_missing_and_false_updated_fail(self) -> None:
-        valid_manifest = self.manifest()
-        blocked = check_docs_impact.run_checks(
-            self.repo, self.config, self.manifest("blocked"), {"src/app.py", "docs/A.md"}, []
-        )
-        self.assertTrue(any("blocked" in error for error in blocked))
-
-        uncovered = check_docs_impact.run_checks(
-            self.repo, self.config, valid_manifest, {"other/file.rs"}, []
-        )
-        self.assertTrue(any("no document owner" in error for error in uncovered))
-
-        (self.repo / "docs/A.md").unlink()
-        missing = check_docs_impact.run_checks(
-            self.repo, self.config, valid_manifest, {"src/app.py"}, []
-        )
-        self.assertTrue(any("governed current document" in error or "metadata" in error for error in missing))
-
-        (self.repo / "docs/A.md").write_text("# A\n", encoding="utf-8")
-        false_updated = check_docs_impact.run_checks(
-            self.repo, self.config, valid_manifest, {"src/app.py"}, []
-        )
-        self.assertTrue(any("not updated" in error or "lifecycle metadata" in error for error in false_updated))
-
-    def test_generated_link_and_status_checks(self) -> None:
+    def test_broken_markdown_link_is_reported(self) -> None:
         original = (self.repo / "docs/A.md").read_text(encoding="utf-8")
         (self.repo / "docs/A.md").write_text(original + "\n[missing](missing.md)\n", encoding="utf-8")
-        document = docs_inventory.parse_document(self.repo, self.repo / "docs/A.md")
-        docs_inventory.write_review_record(self.repo, document, cause="document-change")
-        errors = check_docs_impact.run_checks(
-            self.repo,
-            self.config,
-            self.manifest("updated"),
-            {"src/app.py", "docs/A.md"},
-            ["doc-status"],
-        )
+        errors = check_repository_facts.check_markdown_links(self.repo, ["docs/A.md"])
         self.assertTrue(any("broken Markdown link" in error for error in errors))
 
     def test_markdown_link_with_spaces(self) -> None:
         (self.repo / "docs/target file.md").write_text("# Target\n", encoding="utf-8")
         original = (self.repo / "docs/A.md").read_text(encoding="utf-8")
         (self.repo / "docs/A.md").write_text(original + "\n[target](<target file.md>)\n", encoding="utf-8")
-        self.assertEqual(check_docs_impact.check_markdown_links(self.repo, ["docs/A.md"]), [])
+        self.assertEqual(check_repository_facts.check_markdown_links(self.repo, ["docs/A.md"]), [])
 
     def test_repository_cli_map_matches_dispatch(self) -> None:
         repo = CODEX_DIR.parents[1]
-        self.assertEqual(check_docs_impact.check_cli_help_map(repo), [])
+        self.assertEqual(check_repository_facts.check_cli_help_map(repo), [])
 
 
 class TaskScopeTests(unittest.TestCase):
     def manifest(self) -> dict[str, object]:
         invariant = "all evidence commands remain inside the declared task boundary"
         return {
+            "schema_version": 3,
             "change_scope": {
                 "invariant": invariant,
                 "root_cause_layer": "scripts/codex",
@@ -398,7 +318,6 @@ class TaskScopeTests(unittest.TestCase):
             },
             "scope_expansions": [],
             "side_findings": [],
-            "docs_impact": {"entries": []},
             "reviewer": {
                 "status": "reviewed",
                 "scope_invariant": invariant,
@@ -409,6 +328,19 @@ class TaskScopeTests(unittest.TestCase):
 
     def test_valid_scope(self) -> None:
         self.assertEqual(check_task_scope.run_checks(self.manifest(), {"src/app.py"}), [])
+
+    def test_legacy_or_unversioned_manifest_is_rejected(self) -> None:
+        manifest = self.manifest()
+        del manifest["schema_version"]
+        self.assertTrue(
+            any("schema_version=3" in error for error in check_task_scope.run_checks(manifest, {"src/app.py"}))
+        )
+
+        manifest = self.manifest()
+        manifest["docs_impact"] = {"status": "not-needed"}
+        self.assertTrue(
+            any("does not allow docs_impact" in error for error in check_task_scope.run_checks(manifest, {"src/app.py"}))
+        )
 
     def test_undeclared_and_deferred_paths_fail(self) -> None:
         manifest = self.manifest()

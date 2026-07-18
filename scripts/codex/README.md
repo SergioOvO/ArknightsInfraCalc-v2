@@ -13,7 +13,7 @@ scripts/codex/run_evidence.sh \
   -- cargo test -p infra-core test_name -- --exact
 ```
 
-支持重复 `--artifact kind=path` 登记命令产物，支持 `--metadata task.json` 写入任务范围、文档影响、旁支发现和 reviewer 声明。metadata 结构见 `task_metadata.example.json`。
+支持重复 `--artifact kind=path` 登记命令产物，支持 `--metadata task.json` 写入任务范围、旁支发现和 reviewer 声明。metadata 结构见 `task_metadata.example.json`。
 
 证据默认写入：
 
@@ -44,19 +44,17 @@ scripts/codex/compare_test_failures.py \
 ## 完成检查
 
 ```bash
-python3 scripts/codex/docs_inventory.py --check --base <base-sha>
-scripts/codex/check_docs_impact.py --manifest target/codex-runs/<task>/manifest.json
+python3 scripts/codex/docs_inventory.py --check
+python3 scripts/codex/check_repository_facts.py
 scripts/codex/check_task_scope.py --manifest target/codex-runs/<task>/manifest.json
 scripts/codex/render_evidence.py \
   --manifest target/codex-runs/<task>/manifest.json \
   --output target/codex-runs/<task>/reports/evidence.md
 ```
 
-`docs_inventory.py` 统一解析 [文档生命周期](../../docs/文档生命周期.md) 元数据，检查角色/状态/路径矩阵、唯一领域 owner、生成索引、source/document digest、review record 和 changed source coverage。CI hard check 必须提供可验证 base；无 base 的 `--report` 只能盘点，不能证明连续性或完成。
+`docs_inventory.py` 统一解析 [文档生命周期](../../docs/文档生命周期.md) 元数据，检查角色/状态/路径矩阵、唯一领域 owner 和生成索引。`check_repository_facts.py` 检查稳定 Markdown 链接、feedback ledger 和 CLI 命令地图。两者都不根据源码 diff 推导文档影响。
 
-`check_docs_impact.py` 从 Markdown 文件头读取 source-to-document trigger；`docs_impact.toml` 只保留 local/generated 排除。manifest schema v2 的 `docs_impact.entries` 必须逐文档匹配文件头 review record，不能用任务级 `not-needed` 理由代替。工具验证机械一致性，不判断自然语言业务语义是否正确。
-
-`check_task_scope.py` 检查实际 changed paths 是否属于 `change_scope`、带理由的 scope expansion、证明路径或已声明文档更新；显式 deferred 路径和 deferred side finding 被修改时硬失败。完成检查还要求 reviewer 登记最终不变量、精确 changed paths 和全部 expansion id。
+`check_task_scope.py` 检查实际 changed paths 是否属于 `change_scope`、带理由的 scope expansion 或证明路径；文档路径和其他消费者一样显式声明。显式 deferred 路径和 deferred side finding 被修改时硬失败。完成检查还要求 reviewer 登记最终不变量、精确 changed paths 和全部 expansion id。
 
 `render_evidence.py` 会交叉核对 manifest、status、log 内的 exit code / PASS / FAIL，并检查所有登记产物存在。缺少的 build、定向测试、full suite、CLI、性能或 JSON 类别会明确渲染为“未跑”。
 

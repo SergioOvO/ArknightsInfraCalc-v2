@@ -3,14 +3,7 @@
 > 文档角色：current-reference
 > 生命周期状态：current
 > 当前真源：docs/文档生命周期.md；docs/ORCHESTRATION_LAYER.md；docs/INFRA_CLI.md
-> 复核触发：crates/**；data/**；scripts/**；Cargo.toml；README.md
 > 摘要：提供当前代码、数据和命令 owner 地图
-> 源摘要：ea5af6e3fabeda2eed53de2c7a8d53064509e7abce39acc07a6a290ee83f2832
-> 文档摘要：6cb31bb10b1f7fdf140da11418ed1139009e14f140330618e4bd12a0abb37763
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：提供当前代码、数据和命令 owner 地图
-> 证据引用：tracked:docs/PROJECT_MAP.md
 
 > 本文是当前代码、数据和命令地图，不是每个 Agent 任务的无条件首读。先由 [AGENTS.md](../AGENTS.md) 选择 Skill；只有 owner、入口或调用链不明时才定向读取本文。领域语义见对应 canonical Markdown，文档位置未知时查 [INDEX.md](INDEX.md)。
 
@@ -279,7 +272,6 @@ ArknightsInfraCalc-v2/
 | `codex/run_evidence.sh` | 统一执行验证命令并原子追加任务 manifest |
 | `codex/compare_test_failures.py` | 比较 Cargo full-suite 失败名称集合 |
 | `codex/render_evidence.py` | 校验 manifest / status / 日志 / 产物并生成证据 Markdown |
-| `codex/check_docs_impact.py` | 根据 changed paths 和责任映射检查文档影响声明 |
 | `codex/check_task_scope.py` | 检查实际 diff、范围扩展和 deferred side findings |
 | `codex/check_repository_facts.py` | CI 检查稳定 Markdown 链接、状态字段和 CLI 命令地图 |
 

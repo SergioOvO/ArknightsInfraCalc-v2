@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def _absolute(path: str, cwd: Path) -> str:
@@ -42,11 +42,6 @@ def _empty_manifest(task: str, base_sha: str, cwd: Path, created_at: str) -> dic
         },
         "scope_expansions": [],
         "side_findings": [],
-        "docs_impact": {
-            "status": "blocked",
-            "entries": [],
-            "reason": "docs impact has not been declared",
-        },
         "reviewer": {
             "status": "pending",
             "scope_invariant": "",
@@ -73,7 +68,6 @@ def _merge_metadata(manifest: dict[str, Any], metadata: dict[str, Any]) -> None:
         "change_scope",
         "scope_expansions",
         "side_findings",
-        "docs_impact",
         "reviewer",
     }
     unknown = sorted(set(metadata) - allowed)

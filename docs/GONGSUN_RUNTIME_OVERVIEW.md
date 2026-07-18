@@ -3,14 +3,7 @@
 > 文档角色：current-reference
 > 生命周期状态：current
 > 当前真源：docs/BASE_ASSIGNMENT.md；docs/ORCHESTRATION_LAYER.md；docs/SCHEDULE_ROTATION.md
-> 复核触发：crates/infra-core/src/layout/**；crates/infra-core/src/schedule/**；crates/infra-cli/src/commands/plan.rs
 > 摘要：面向策略作者解释当前求解运行流程
-> 源摘要：d98558b15d397bd6f76e8a3cb245df0019a1ba2e7301737255799f479bd2f776
-> 文档摘要：f13b56bb610660b6d6c2e72c433ffcf10c4bb7a2ebcc9e2d1329cdce0021092e
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：面向策略作者解释当前求解运行流程
-> 证据引用：tracked:docs/GONGSUN_RUNTIME_OVERVIEW.md
 
 > 面向：懂明日方舟基建体系、但不需要懂代码的人。
 > 目标：解释本项目如何从“练度表 + 布局 + 体系策略”得到排班，以及为什么后续要把组合规范化。

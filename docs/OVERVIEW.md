@@ -3,14 +3,7 @@
 > 文档角色：current-reference
 > 生命周期状态：current
 > 当前真源：docs/EFFECT_ATOM_DESIGN.md；docs/BASE_ASSIGNMENT.md；docs/ORCHESTRATION_LAYER.md；docs/排班模式.md
-> 复核触发：crates/infra-core/src/**；crates/infra-cli/src/**；data/orchestration_rules.json
 > 摘要：提供项目当前范围和能力总览
-> 源摘要：edea27534c15ba9276c90640959f6ab7187e9ae0d283b5c55e70e9a673cf410c
-> 文档摘要：f41c8aa86e45c92012aef618b147630d49bffa19d8e082cfb0b4c66bd345ddce
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：提供项目当前范围和能力总览
-> 证据引用：tracked:docs/OVERVIEW.md
 
 > 实现快照：Current
 > 读者：策略作者、开发者、维护者、AI 协作者

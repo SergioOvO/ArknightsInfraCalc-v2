@@ -4,14 +4,7 @@
 > 生命周期状态：current
 > 领域键：architecture.cli
 > 当前真源：self
-> 复核触发：crates/infra-cli/src/**
 > 摘要：裁决 infra-cli 分层职责和命令边界
-> 源摘要：79d5f14bbe0242bd4b6f5411f0b93cf59d6cc15b83dc867f826e2cac08e475f5
-> 文档摘要：dc3878fbf9b429385d5e1411de51d1c9f91556ed594516fc4d094ae0df1dc9f7
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：裁决 infra-cli 分层职责和命令边界
-> 证据引用：tracked:docs/INFRA_CLI.md
 
 > **定位**：`infra-cli` 是薄命令行外壳——解析参数、加载 `data/`，调用 `infra-core` 求解，再把结果格式化为 CSV / 文本 / JSON。**不在此 crate 实现游戏机制或效率公式**；机制真相在 `infra-core`，数据真相在 `data/`。
 

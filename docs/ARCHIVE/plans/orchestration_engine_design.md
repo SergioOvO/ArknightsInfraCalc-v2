@@ -5,8 +5,6 @@
 > 替代项：docs/ORCHESTRATION_LAYER.md；docs/BASE_ASSIGNMENT.md
 > 历史原因：编排引擎初稿，当前 System-Plan-Execute 契约已由 current owner 接管
 > 快照日期：2026-07-18
-> 转换自：plans/orchestration_engine_design.md
-> 转换处置：archive-historical
 > 摘要：保存编排引擎早期设计和候选接口
 
 > 历史原状态：初稿

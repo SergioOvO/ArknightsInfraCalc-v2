@@ -70,6 +70,10 @@ def _specific(value: object, minimum: int = 12) -> bool:
 
 def run_checks(manifest: dict[str, Any], changed_paths: set[str]) -> list[str]:
     errors: list[str] = []
+    if manifest.get("schema_version") != 3:
+        errors.append("manifest must use schema_version=3")
+    if "docs_impact" in manifest:
+        errors.append("manifest schema v3 does not allow docs_impact")
     scope = manifest.get("change_scope")
     if not isinstance(scope, dict):
         return ["manifest.change_scope must be an object"]
@@ -109,23 +113,6 @@ def run_checks(manifest: dict[str, Any], changed_paths: set[str]) -> list[str]:
             errors.append(f"scope_expansions[{index}].evidence is required")
         expansion_patterns.extend(paths)
 
-    impact = manifest.get("docs_impact")
-    if not isinstance(impact, dict):
-        errors.append("docs_impact must be an object")
-        updated_docs: list[str] = []
-    else:
-        entries = impact.get("entries")
-        if not isinstance(entries, list):
-            errors.append("docs_impact.entries must be an array")
-            entries = []
-        updated_docs = [
-            str(item.get("path"))
-            for item in entries
-            if isinstance(item, dict)
-            and item.get("disposition") in {"updated", "unchanged"}
-            and isinstance(item.get("path"), str)
-        ]
-
     side_findings = manifest.get("side_findings")
     if not isinstance(side_findings, list):
         errors.append("side_findings must be an array")
@@ -142,7 +129,7 @@ def run_checks(manifest: dict[str, Any], changed_paths: set[str]) -> list[str]:
             else:
                 deferred_finding_paths.extend(paths)
 
-    allowed = required + consumers + proofs + updated_docs + expansion_patterns
+    allowed = required + consumers + proofs + expansion_patterns
     for path in sorted(changed_paths):
         if _matches(path, deferred):
             errors.append(f"explicitly deferred path was modified: {path}")

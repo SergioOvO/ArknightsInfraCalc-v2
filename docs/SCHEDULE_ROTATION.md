@@ -3,14 +3,7 @@
 > 文档角色：current-reference
 > 生命周期状态：current
 > 当前真源：docs/排班模式.md；docs/定时换班.md；docs/Fiammetta.md
-> 复核触发：crates/infra-core/src/schedule/**；crates/infra-core/src/export/**；crates/infra-cli/src/commands/plan.rs；crates/infra-cli/src/commands/layout.rs
 > 摘要：记录当前 ABC 三队轮换实现事实和入口
-> 源摘要：18b9596f5a12cd2f2e6bafe0b951e0807d1c259b70c9edae3295eefe940396ca
-> 文档摘要：d21840ee8c72f9b97aab4e8bb1fe67ed10fe28ee56cbe64cf784c2ea05e4aedf
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：记录当前 ABC 三队轮换实现事实和入口
-> 证据引用：tracked:docs/SCHEDULE_ROTATION.md
 
 > **当前实现参考**：αβγ **ABC 三队轮换**（Agent 默认经 `plan` 触发；仅排班入口为 `layout team-rotation`；核心 API 为 `schedule_team_rotation`）。模式边界由 [排班模式](排班模式.md) 裁决，定时换班规则由 [定时换班](定时换班.md) 裁决。A-B-A 的 CLI、core API 与 MAA 导出已移除。
 

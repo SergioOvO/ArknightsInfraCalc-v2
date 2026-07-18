@@ -5,8 +5,6 @@
 > 替代项：docs/公孙长乐的体系分析文档/RED_PINE_FOREST_CHAIN.md；docs/公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md
 > 历史原因：红松林历史实现审计；附录 A 与当前迷迭香规则冲突并经用户裁决不再采用
 > 快照日期：2026-07-14
-> 转换自：docs/公孙长乐的体系分析文档/new/RED_PINE_FOREST_CHAIN (1).md
-> 转换处置：archive-audit
 > 摘要：保存红松林旧实现审计及已被替代的迷迭香附录
 
 > 历史原状态：**严格实现审计与修复完成**（2026-07-12） | 业务口径已由公孙逐项确认

@@ -4,14 +4,7 @@
 > 生命周期状态：current
 > 领域键：architecture.orchestration
 > 当前真源：self
-> 复核触发：crates/infra-core/src/layout/orchestrate/**；crates/infra-core/src/layout/assign.rs；data/orchestration_rules.json；data/base_systems.json
 > 摘要：裁决 System 到 Plan 到 Execute 的编排契约
-> 源摘要：54d66a95636c72f5e23e32dc32b8c64ed83685eebacc059a495648562e9040f6
-> 文档摘要：d84271d8451a3e93b8a1c0e71f04f2fb82d6436e8f10c4ab7582c7ea0a818c21
-> 复核原因：document-change
-> 复核结论：updated
-> 稳定事实：裁决 System 到 Plan 到 Execute 的编排契约
-> 证据引用：tracked:docs/ORCHESTRATION_LAYER.md
 
 > **状态**：**2026-07-15 通用规则编译器主路径已落地**；旧专用 evaluator 已删除，不再扩展“一体系一个函数”
 > **目标**：把业务体系写成角色、备选方案、关系和资源门槛，由同一个规则编译器产出完全解析的 **Rule → Candidate → Plan → Execute**；普通制造软同房仍由全合法候选池 + L1 solver 按实际效率发现。

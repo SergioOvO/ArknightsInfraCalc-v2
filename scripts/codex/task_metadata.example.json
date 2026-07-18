@@ -16,25 +16,6 @@
   },
   "scope_expansions": [],
   "side_findings": [],
-  "docs_impact": {
-    "status": "updated",
-    "entries": [
-      {
-        "path": "docs/PROJECT_MAP.md",
-        "source_digest": "sha256-from-file-header",
-        "document_digest": "sha256-from-file-header",
-        "cause": "source-change",
-        "disposition": "unchanged",
-        "stable_facts": [
-          "本次 source 变更没有改变 PROJECT_MAP 中记录的 owner 和入口"
-        ],
-        "evidence": [
-          "tracked:docs/PROJECT_MAP.md"
-        ]
-      }
-    ],
-    "reason": "示例展示逐文档 review record，真实值必须与文件头一致"
-  },
   "reviewer": {
     "status": "pending",
     "scope_invariant": "",
