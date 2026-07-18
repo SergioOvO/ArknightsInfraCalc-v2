@@ -6,9 +6,9 @@
 > 当前真源：self
 > 复核触发：crates/infra-cli/src/**
 > 摘要：裁决 infra-cli 分层职责和命令边界
-> 源摘要：4ec35f03be462af9391d2457377baa4e9917d2262db645908d6c2c09726b6a70
+> 源摘要：79d5f14bbe0242bd4b6f5411f0b93cf59d6cc15b83dc867f826e2cac08e475f5
 > 文档摘要：dc3878fbf9b429385d5e1411de51d1c9f91556ed594516fc4d094ae0df1dc9f7
-> 复核原因：user-ruling
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决 infra-cli 分层职责和命令边界
 > 证据引用：tracked:docs/INFRA_CLI.md

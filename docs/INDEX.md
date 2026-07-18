@@ -7,7 +7,7 @@
 > 摘要：提供文档路由和生成的 canonical 入口
 > 源摘要：981f5a744d0679db91bd551eacac55c5b1af4e1f20ebf0ffc72859899946dd8c
 > 文档摘要：c99c36a8cb70179d54ecd0adf7b8cc126f0e1a0abaafb4a47fcae425a23f5ae3
-> 复核原因：user-ruling
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：提供文档路由和生成的 canonical 入口
 > 证据引用：tracked:docs/INDEX.md
@@ -68,6 +68,7 @@ system / conformance / formal audit -> arknights-system-audit
 <!-- BEGIN GENERATED CANONICAL -->
 | 领域键 | 权威入口 |
 |---|---|
+| `advice.training` | [基建练卡推荐规则](练卡推荐规则.md) |
 | `architecture.cli` | [infra-cli 模块职责](INFRA_CLI.md) |
 | `architecture.orchestration` | [编排层重构路线图（Orchestration Layer）](ORCHESTRATION_LAYER.md) |
 | `docs.lifecycle` | [文档生命周期](文档生命周期.md) |

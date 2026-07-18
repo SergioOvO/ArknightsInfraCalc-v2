@@ -5,9 +5,9 @@
 > 当前真源：docs/CONTROL_CENTER_ASSIGNMENT.md；docs/ORCHESTRATION_LAYER.md；docs/QUALITY_AND_AUDIT.md
 > 复核触发：crates/infra-core/src/search/control.rs；crates/infra-core/src/layout/**；crates/infra-core/src/bake.rs；data/orchestration_rules.json
 > 摘要：动态 producer 候选列、精确索引 Join 和 winner dependency 任务
-> 源摘要：f02e87faa3cae4be1b0a1356b31d52a848240cd48e52f9ebbb6e607f78a5bef4
+> 源摘要：ec515a117ad2bfc40b72536dab002bc40414f56b1d640956d162d982d334f501
 > 文档摘要：6b0052789b8c942ef741c6f5632c6165dd3c69aa02ffa97fb6845b0dcdf4ba86
-> 复核原因：user-ruling
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：动态 producer 候选列、精确索引 Join 和 winner dependency 任务
 > 证据引用：tracked:docs/TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md

@@ -5,9 +5,9 @@
 > 当前真源：docs/BASE_ASSIGNMENT.md；docs/ORCHESTRATION_LAYER.md；docs/SCHEDULE_ROTATION.md
 > 复核触发：crates/infra-core/src/layout/**；crates/infra-core/src/schedule/**；crates/infra-cli/src/commands/plan.rs
 > 摘要：面向策略作者解释当前求解运行流程
-> 源摘要：6fe741f19c9b3e5e909e271a77163813b44585b9976f7690ee5ae5c094e451c6
+> 源摘要：d98558b15d397bd6f76e8a3cb245df0019a1ba2e7301737255799f479bd2f776
 > 文档摘要：f13b56bb610660b6d6c2e72c433ffcf10c4bb7a2ebcc9e2d1329cdce0021092e
-> 复核原因：user-ruling
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：面向策略作者解释当前求解运行流程
 > 证据引用：tracked:docs/GONGSUN_RUNTIME_OVERVIEW.md

@@ -5,9 +5,9 @@
 > 当前真源：docs/ORCHESTRATION_LAYER.md；docs/CONTROL_CENTER_ASSIGNMENT.md
 > 复核触发：crates/infra-core/src/cross_facility/**；crates/infra-core/src/global_resource/**；crates/infra-core/src/layout/resolve.rs
 > 摘要：定位跨设施作用域的当前实现 owner
-> 源摘要：c068d4a9fc47d8c3e99f22c27bee3d13d96293568bf90bf83ae1f3bf2eb88875
+> 源摘要：d095463227648d627a42e1af10b9d26bb9637cfbb866994db80a3270263395c5
 > 文档摘要：dfec220dcb0f09e190ab02383e979f051d4430380c21482ff5bbc7527b36771b
-> 复核原因：user-ruling
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：定位跨设施作用域的当前实现 owner
 > 证据引用：tracked:docs/INTERNAL/CROSS_FACILITY.md

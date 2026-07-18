@@ -6,10 +6,10 @@
 > 摘要：记录已关闭生产反馈批次的证据和回归矩阵
 > 源摘要：545f18ff68a6061a7f846bc1f1c69e99afbc235ecb9f6a9fbcde44e90b78bae2
 > 文档摘要：61052cb8b46c014b6517c62b34451494415410fd38044a41fd337e78c726c1e1
-> 复核原因：user-ruling
+> 复核原因：source-change
 > 复核结论：unchanged
-> 稳定事实：本次支持设施静态求值不改变既有反馈闭环矩阵
-> 证据引用：tracked:feedback/TRACKING.md
+> 稳定事实：新增确定性散件练卡规则不改变既有反馈闭环矩阵
+> 证据引用：tracked:feedback/TRACKING.md；tracked:docs/练卡推荐规则.md
 
 > Scope: production beta/test feedback after launch.
 > Tracking started: 2026-07-03.

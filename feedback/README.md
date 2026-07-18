@@ -7,7 +7,7 @@
 > 摘要：说明本地生产反馈 bundle 和 evidence ledger 边界
 > 源摘要：b5704c4f9534b41799501f898e65e5731e05fd5ba6b1991801b6357b5e0580b0
 > 文档摘要：7644bf13e89e91800eba333aea40b0f191775f51ce91fb7f28cb01acfc03e623
-> 复核原因：user-ruling
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：说明本地生产反馈 bundle 和 evidence ledger 边界
 > 证据引用：tracked:feedback/README.md

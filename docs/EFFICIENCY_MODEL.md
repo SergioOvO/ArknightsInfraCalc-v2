@@ -8,7 +8,7 @@
 > 摘要：裁决效率量纲、结构和输出边界
 > 源摘要：5aedb83052374df2ffd83717414a19c72c0c9c5c9c67cc11878aac72f9ece3aa
 > 文档摘要：cad37676371130c7431cf46a3b8ae6f7c56ceb58f7ea54ccdf8aec3e731924d1
-> 复核原因：user-ruling
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决效率量纲、结构和输出边界
 > 证据引用：tracked:docs/EFFICIENCY_MODEL.md

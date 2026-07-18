@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "source_repo": "/mnt/c/Users/KnightCode/projects/arknights-base-vault",
+  "source_repo": "ArknightsInfraCalc-v2",
   "system_rules": [
     {
       "id": "witch_long_beta",
@@ -59,37 +59,143 @@
   ],
   "standalone_rules": [
     {
-      "id": "e1_four_star_must_train",
-      "label": "常用精一四星样例",
+      "id": "standalone_high_value_trade",
+      "label": "高价值贸易站散件",
+      "priority": "P0",
+      "targets": [
+        { "name": "石英", "elite": 1 }
+      ],
+      "reason_code": "standalone_high_value_trade",
+      "message": "低成本培养即可启用高价值贸易站技能。",
+      "source_paths": [
+        "docs/练卡推荐规则.md",
+        "data/standalone_roster.json",
+        "data/operator_instances.json",
+        "data/skill_table.json"
+      ],
+      "source_notes": "从搜索剪枝散件池人工筛选；只收录不依赖缺失具名组合核心且值得达到技能门槛的条目。",
+      "needs_review": false,
+      "conflicts": []
+    },
+    {
+      "id": "standalone_high_value_gold",
+      "label": "高价值赤金散件",
       "priority": "P0",
       "targets": [
         { "name": "清流", "elite": 1 },
         { "name": "砾", "elite": 1 }
       ],
-      "reason_code": "standalone_e1_four_star",
-      "message": "四星或低成本基建干员已拥有，精一即可启用常用基建技能。",
+      "reason_code": "standalone_high_value_gold",
+      "message": "低成本培养即可启用高价值赤金制造技能。",
       "source_paths": [
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/0-规则/干员练度与技能.md",
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/4-散件工具人/散件干员速查.md"
+        "docs/练卡推荐规则.md",
+        "data/standalone_roster.json",
+        "data/operator_instances.json",
+        "data/skill_table.json"
       ],
-      "source_notes": "第一版只放少量样例，后续再扩展完整散件表。",
+      "source_notes": "清流收益随实际贸易站数量结算；砾提供独立赤金效率。二者都不依赖具名组合核心。",
       "needs_review": false,
       "conflicts": []
     },
     {
-      "id": "high_efficiency_standalone_samples",
-      "label": "40% 效率散件样例",
+      "id": "standalone_high_value_battle_record",
+      "label": "高价值经验书散件",
+      "priority": "P0",
+      "targets": [
+        { "name": "断罪者", "elite": 1 },
+        { "name": "Castle-3", "elite": 0, "level": 30 }
+      ],
+      "reason_code": "standalone_high_value_battle_record",
+      "message": "低成本培养即可启用高价值经验书制造技能。",
+      "source_paths": [
+        "docs/练卡推荐规则.md",
+        "data/standalone_roster.json",
+        "data/operator_instances.json",
+        "data/skill_table.json"
+      ],
+      "source_notes": "从搜索剪枝散件池人工筛选；只收录不依赖缺失具名组合核心且值得达到技能门槛的条目。",
+      "needs_review": false,
+      "conflicts": []
+    },
+    {
+      "id": "standalone_low_cost_trade_fillers",
+      "label": "常用低成本贸易站补位",
+      "priority": "P1",
+      "targets": [
+        { "name": "慕斯", "elite": 1 },
+        { "name": "缠丸", "elite": 1 },
+        { "name": "安比尔", "elite": 1 }
+      ],
+      "reason_code": "standalone_low_cost_trade_filler",
+      "message": "低成本培养后可作为常用贸易站补位。",
+      "source_paths": [
+        "docs/练卡推荐规则.md",
+        "data/standalone_roster.json",
+        "data/operator_instances.json",
+        "data/skill_table.json"
+      ],
+      "source_notes": "低星精一贸易补位档；优先级低于高价值低成本散件。",
+      "needs_review": false,
+      "conflicts": []
+    },
+    {
+      "id": "standalone_low_cost_gold_filler",
+      "label": "常用低成本赤金补位",
+      "priority": "P1",
+      "targets": [
+        { "name": "斑点", "elite": 1 }
+      ],
+      "reason_code": "standalone_low_cost_gold_filler",
+      "message": "低成本培养后可作为常用赤金制造补位。",
+      "source_paths": [
+        "docs/练卡推荐规则.md",
+        "data/standalone_roster.json",
+        "data/operator_instances.json",
+        "data/skill_table.json"
+      ],
+      "source_notes": "低星精一赤金补位档；优先级低于高价值低成本散件。",
+      "needs_review": false,
+      "conflicts": []
+    },
+    {
+      "id": "standalone_low_cost_battle_record_fillers",
+      "label": "常用低成本经验书补位",
+      "priority": "P1",
+      "targets": [
+        { "name": "霜叶", "elite": 1 },
+        { "name": "白雪", "elite": 1 },
+        { "name": "红豆", "elite": 1 }
+      ],
+      "reason_code": "standalone_low_cost_battle_record_filler",
+      "message": "低成本培养后可作为常用经验书制造补位。",
+      "source_paths": [
+        "docs/练卡推荐规则.md",
+        "data/standalone_roster.json",
+        "data/operator_instances.json",
+        "data/skill_table.json"
+      ],
+      "source_notes": "低星精一经验书补位档；优先级低于高价值低成本散件。",
+      "needs_review": false,
+      "conflicts": []
+    },
+    {
+      "id": "standalone_high_efficiency_e2",
+      "label": "高效率精二散件",
       "priority": "P2",
       "targets": [
         { "name": "空弦", "elite": 2 },
+        { "name": "吉星", "elite": 2 },
         { "name": "槐琥", "elite": 2 }
       ],
       "reason_code": "standalone_40pct_efficiency",
-      "message": "高效率散件已拥有但未达到推荐练度，可作为核心体系之外的补位培养。",
+      "message": "精二后可获得有辨识度的高效率独立基建能力。",
       "source_paths": [
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/4-散件工具人/散件干员速查.md"
+        "docs/练卡推荐规则.md",
+        "data/standalone_roster.json",
+        "data/operator_instances.json",
+        "data/skill_table.json"
       ],
-      "source_notes": "散件效率依赖设施与同站条件；MVP 只做已拥有未达标提示。",
+      "source_notes": "只在已拥有但未达标时生成 P2；不表示基建收益优先于战斗培养。",
       "needs_review": false,
       "conflicts": []
     }

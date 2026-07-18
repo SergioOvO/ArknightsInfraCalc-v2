@@ -2,19 +2,21 @@
 
 > 文档角色：active-change
 > 生命周期状态：proposal
-> 当前真源：docs/OVERVIEW.md；docs/MODELLED_OPERATORS.md
-> 复核触发：crates/infra-core/src/box_profile/**；crates/infra-cli/src/commands/advice.rs；data/advice_rules.json
-> 摘要：练度比对、练卡推荐和 RAG 解释层提案
-> 源摘要：afbc7b301170b9b6649de741db72474ecaae131ff9eaee6f851d00fbeae52c02
-> 文档摘要：796c8a52c4d8a751fe5ed056e1b0358aa7ec064fc547f2ef4d8739afa1a93f2f
-> 复核原因：user-ruling
+> 当前真源：docs/练卡推荐规则.md；docs/OVERVIEW.md；docs/MODELLED_OPERATORS.md
+> 复核触发：crates/infra-core/src/training_advice/**；crates/infra-cli/src/commands/advice.rs；data/training_recommendations.json
+> 摘要：练度比对后续集成、完整组合规则和 RAG 解释层提案
+> 源摘要：298879e743afe038d8779c198fcdf7638424d388f9e91fbe0f91ecc8b2c14881
+> 文档摘要：82f3ef1d87cd34253604fa6312138e6b971982dac2d580f5dc6b978831784cc0
+> 复核原因：source-change
 > 复核结论：updated
-> 稳定事实：练度比对、练卡推荐和 RAG 解释层提案
+> 稳定事实：练度比对后续集成、完整组合规则和 RAG 解释层提案
 > 证据引用：tracked:docs/TODO/TRAINING_RECOMMENDER_RAG_PLAN.md
 
-> 历史进度：最初记录为等待评审的 proposal；当前仍未获得实施授权。
+> 历史进度：确定性 `training_advice`、`advice` CLI 和首批基础散件规则已经实现；完整组合分级、条件推荐、前端集成和 RAG 尚未授权实施。
 > 日期：2026-07-10
 > 来源：QQ 讨论：基于玩家 box 识别当前练度，对照基建组合与散件工具人，输出“哪些组能用、完成度如何、哪些已拥有但没练、哪些缺关键搭档所以暂缓”的建议。
+
+> 当前规则口径与已实现事实统一由 [基建练卡推荐规则](../练卡推荐规则.md) 维护。本文后续章节保留原始方案和开放项，不得用其中的历史示意覆盖当前规则数据与代码。
 
 ## 0. 结论
 

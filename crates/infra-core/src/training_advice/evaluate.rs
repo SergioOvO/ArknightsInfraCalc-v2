@@ -638,4 +638,72 @@ mod tests {
         let report = report(operbox(vec![entry("清流", 0, true)]), rules());
         assert_eq!(report.schema_version, 1);
     }
+
+    #[test]
+    fn default_rules_emit_the_filtered_standalone_training_list() {
+        let box_ = OperBox::from_json(include_str!(
+            "../../../../data/fixtures/training_advice/standalone_e1_four_star.json"
+        ))
+        .unwrap();
+        let rules = crate::training_advice::load_training_recommendation_rules(
+            &crate::training_advice::default_training_recommendations_path().unwrap(),
+        )
+        .unwrap();
+        let report = report(box_, rules);
+
+        let actual: HashMap<_, _> = report
+            .recommendations
+            .iter()
+            .map(|rec| (rec.operator.as_str(), rec.priority))
+            .collect();
+        let expected = [
+            ("石英", RecommendationPriority::P0),
+            ("清流", RecommendationPriority::P0),
+            ("砾", RecommendationPriority::P0),
+            ("断罪者", RecommendationPriority::P0),
+            ("Castle-3", RecommendationPriority::P0),
+            ("慕斯", RecommendationPriority::P1),
+            ("缠丸", RecommendationPriority::P1),
+            ("安比尔", RecommendationPriority::P1),
+            ("斑点", RecommendationPriority::P1),
+            ("霜叶", RecommendationPriority::P1),
+            ("白雪", RecommendationPriority::P1),
+            ("红豆", RecommendationPriority::P1),
+            ("空弦", RecommendationPriority::P2),
+            ("吉星", RecommendationPriority::P2),
+            ("槐琥", RecommendationPriority::P2),
+        ];
+
+        assert_eq!(actual.len(), expected.len());
+        for (name, priority) in expected {
+            assert_eq!(actual.get(name), Some(&priority), "{name}");
+        }
+        let castle = report
+            .recommendations
+            .iter()
+            .find(|rec| rec.operator == "Castle-3")
+            .unwrap();
+        assert_eq!(castle.target.elite, 0);
+        assert_eq!(castle.target.level, Some(30));
+    }
+
+    #[test]
+    fn castle_three_level_thirty_meets_the_default_target() {
+        let mut castle = entry("Castle-3", 0, true);
+        castle.level = 30;
+        castle.rarity = 1;
+        let rules = crate::training_advice::load_training_recommendation_rules(
+            &crate::training_advice::default_training_recommendations_path().unwrap(),
+        )
+        .unwrap();
+        let report = report(operbox(vec![castle]), rules);
+
+        assert!(report
+            .recommendations
+            .iter()
+            .all(|rec| rec.operator != "Castle-3"));
+        assert!(report.systems.iter().any(|system| {
+            system.id == "standalone:Castle-3" && system.status == SystemStatus::StandaloneReady
+        }));
+    }
 }

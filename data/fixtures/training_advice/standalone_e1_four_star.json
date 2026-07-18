@@ -16,5 +16,122 @@
     "own": true,
     "potential": 1,
     "rarity": 4
+  },
+  {
+    "id": "fixture_quartz",
+    "name": "石英",
+    "elite": 0,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 4
+  },
+  {
+    "id": "fixture_conviction",
+    "name": "断罪者",
+    "elite": 0,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 4
+  },
+  {
+    "id": "fixture_castle3",
+    "name": "Castle-3",
+    "elite": 0,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 1
+  },
+  {
+    "id": "fixture_mousse",
+    "name": "慕斯",
+    "elite": 0,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 4
+  },
+  {
+    "id": "fixture_matoimaru",
+    "name": "缠丸",
+    "elite": 0,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 4
+  },
+  {
+    "id": "fixture_ambriel",
+    "name": "安比尔",
+    "elite": 0,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 4
+  },
+  {
+    "id": "fixture_spot",
+    "name": "斑点",
+    "elite": 0,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 3
+  },
+  {
+    "id": "fixture_frostleaf",
+    "name": "霜叶",
+    "elite": 0,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 4
+  },
+  {
+    "id": "fixture_shirayuki",
+    "name": "白雪",
+    "elite": 0,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 4
+  },
+  {
+    "id": "fixture_vigna",
+    "name": "红豆",
+    "elite": 0,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 4
+  },
+  {
+    "id": "fixture_archetto",
+    "name": "空弦",
+    "elite": 0,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 6
+  },
+  {
+    "id": "fixture_kichisei",
+    "name": "吉星",
+    "elite": 0,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 5
+  },
+  {
+    "id": "fixture_waaifu",
+    "name": "槐琥",
+    "elite": 0,
+    "level": 1,
+    "own": true,
+    "potential": 1,
+    "rarity": 5
   }
 ]

@@ -8,10 +8,10 @@
 > 摘要：裁决 EffectAtom 词汇和机制解释分层
 > 源摘要：543c53f7f4e8c0e5e3389d968c5295148ad97226fddbae2d3db09909bb801406
 > 文档摘要：5ecacdb84e95ce53127379c8898f195355bb6d4db33d17499e4ee88aa4a715f4
-> 复核原因：source-change
+> 复核原因：user-ruling
 > 复核结论：updated
 > 稳定事实：裁决 EffectAtom 词汇和机制解释分层
-> 证据引用：tracked:docs/EFFECT_ATOM_DESIGN.md
+> 证据引用：tracked:docs/EFFECT_ATOM_DESIGN.md；tracked:docs/练卡推荐规则.md
 
 > 本文档记录 ArknightsInfraCalc 重建模的核心设计。
 > **已建模干员详情**见 [`MODELLED_OPERATORS.md`](MODELLED_OPERATORS.md)。
