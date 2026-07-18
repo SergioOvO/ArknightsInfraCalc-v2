@@ -6,7 +6,7 @@
 > 摘要：保存排班按执行模式分层的架构决策
 > 源摘要：545f18ff68a6061a7f846bc1f1c69e99afbc235ecb9f6a9fbcde44e90b78bae2
 > 文档摘要：e4a68190ebd159a2b8f9e8a0d29a338f7aa8ea9f62821d44840b219aade8a2f8
-> 复核原因：source-change
+> 复核原因：document-change
 > 复核结论：updated
 > 稳定事实：保存排班按执行模式分层的架构决策
 > 证据引用：tracked:docs/ADR/0002-schedule-rotation-mode-split.md

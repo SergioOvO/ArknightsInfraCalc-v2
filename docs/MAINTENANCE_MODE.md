@@ -8,7 +8,7 @@
 > 摘要：裁决 bug 和既有行为修复工作流
 > 源摘要：e8881194675ce9d6990ddaa70a03c951be23389ab1a9bc9cd92c1d99fbe69b56
 > 文档摘要：a26bbddd87b70db746f20f908f2efabb6fadc949b3a44a5a7d38966783ac5077
-> 复核原因：source-change
+> 复核原因：document-change
 > 复核结论：updated
 > 稳定事实：裁决 bug 和既有行为修复工作流
 > 证据引用：tracked:docs/MAINTENANCE_MODE.md

@@ -7,7 +7,7 @@
 > 摘要：列出已建模干员和机制摘要
 > 源摘要：f191d2ede3ad4d06c87c30d97ad116e9a21f21fc068bb942e41ed2693de0ed87
 > 文档摘要：2e6dfff96e641abd53cd89c0cfef39574328799ab227a12e078b92eb920c7080
-> 复核原因：source-change
+> 复核原因：document-change
 > 复核结论：updated
 > 稳定事实：列出已建模干员和机制摘要
 > 证据引用：tracked:docs/MODELLED_OPERATORS.md

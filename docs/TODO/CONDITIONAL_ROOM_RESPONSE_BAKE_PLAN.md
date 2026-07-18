@@ -7,7 +7,7 @@
 > 摘要：设施无关条件化响应 Bake 的后续实施任务
 > 源摘要：5b01d934e18a986a9226177e55bc717d2df288ab7f7be7887527fa701988e777
 > 文档摘要：9d047abba0ec10f45087d588b2be74cfdb1603c8321d028f3c2a762b8905c0e3
-> 复核原因：source-change
+> 复核原因：document-change
 > 复核结论：updated
 > 稳定事实：设施无关条件化响应 Bake 的后续实施任务
 > 证据引用：tracked:docs/TODO/CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md

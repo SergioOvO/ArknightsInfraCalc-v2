@@ -8,7 +8,7 @@
 > 摘要：裁决前端调用 CLI 和导出数据的接口契约
 > 源摘要：cff3eff28730ed7e758729fcbef4b52ffdd9e7fc9cdc4cebc1df93e76144df00
 > 文档摘要：0aeac74b3651c2417f55093cca089300b799abed8963ba0ec935c8917fb6f42b
-> 复核原因：source-change
+> 复核原因：document-change
 > 复核结论：updated
 > 稳定事实：裁决前端调用 CLI 和导出数据的接口契约
 > 证据引用：tracked:docs/FRONTEND_CLI.md

@@ -8,7 +8,7 @@
 > 摘要：裁决 System 到 Plan 到 Execute 的编排契约
 > 源摘要：54d66a95636c72f5e23e32dc32b8c64ed83685eebacc059a495648562e9040f6
 > 文档摘要：d84271d8451a3e93b8a1c0e71f04f2fb82d6436e8f10c4ab7582c7ea0a818c21
-> 复核原因：source-change
+> 复核原因：document-change
 > 复核结论：updated
 > 稳定事实：裁决 System 到 Plan 到 Execute 的编排契约
 > 证据引用：tracked:docs/ORCHESTRATION_LAYER.md

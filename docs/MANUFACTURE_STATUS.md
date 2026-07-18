@@ -8,7 +8,7 @@
 > 摘要：裁决制造站机制和实现范围
 > 源摘要：710dc80275bb3cf426e6b0aa65cc973e36a6f81b1608fc9e1afd47c9d1810afa
 > 文档摘要：79f1ee7ca5270709b137d8c6fa4ab0b205c120d62f4d237fa4d0b98fc15f814a
-> 复核原因：source-change
+> 复核原因：document-change
 > 复核结论：updated
 > 稳定事实：裁决制造站机制和实现范围
 > 证据引用：tracked:docs/MANUFACTURE_STATUS.md

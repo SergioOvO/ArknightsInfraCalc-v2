@@ -7,7 +7,7 @@
 > 摘要：提供项目当前范围和能力总览
 > 源摘要：edea27534c15ba9276c90640959f6ab7187e9ae0d283b5c55e70e9a673cf410c
 > 文档摘要：f41c8aa86e45c92012aef618b147630d49bffa19d8e082cfb0b4c66bd345ddce
-> 复核原因：source-change
+> 复核原因：document-change
 > 复核结论：updated
 > 稳定事实：提供项目当前范围和能力总览
 > 证据引用：tracked:docs/OVERVIEW.md

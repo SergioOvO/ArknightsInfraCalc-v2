@@ -7,7 +7,7 @@
 > 摘要：提供当前代码、数据和命令 owner 地图
 > 源摘要：ea5af6e3fabeda2eed53de2c7a8d53064509e7abce39acc07a6a290ee83f2832
 > 文档摘要：6cb31bb10b1f7fdf140da11418ed1139009e14f140330618e4bd12a0abb37763
-> 复核原因：source-change
+> 复核原因：document-change
 > 复核结论：updated
 > 稳定事实：提供当前代码、数据和命令 owner 地图
 > 证据引用：tracked:docs/PROJECT_MAP.md

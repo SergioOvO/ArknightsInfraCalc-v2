@@ -7,7 +7,7 @@
 > 摘要：练度比对后续集成、完整组合规则和 RAG 解释层提案
 > 源摘要：298879e743afe038d8779c198fcdf7638424d388f9e91fbe0f91ecc8b2c14881
 > 文档摘要：82f3ef1d87cd34253604fa6312138e6b971982dac2d580f5dc6b978831784cc0
-> 复核原因：source-change
+> 复核原因：document-change
 > 复核结论：updated
 > 稳定事实：练度比对后续集成、完整组合规则和 RAG 解释层提案
 > 证据引用：tracked:docs/TODO/TRAINING_RECOMMENDER_RAG_PLAN.md

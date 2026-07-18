@@ -7,7 +7,7 @@
 > 摘要：解释当前核心调用链和模块边界
 > 源摘要：d7584beb4162c0777f8207bddea87b37da831255061557e10ca38cda6a8a91af
 > 文档摘要：0dbf26e16469952507202dadc13dca4c99a99f91097a9c99ea1ec9a32851e3e6
-> 复核原因：source-change
+> 复核原因：document-change
 > 复核结论：updated
 > 稳定事实：解释当前核心调用链和模块边界
 > 证据引用：tracked:docs/ARCHITECTURE_TOUR.md

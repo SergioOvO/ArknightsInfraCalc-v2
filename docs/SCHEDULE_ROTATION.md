@@ -7,7 +7,7 @@
 > 摘要：记录当前 ABC 三队轮换实现事实和入口
 > 源摘要：18b9596f5a12cd2f2e6bafe0b951e0807d1c259b70c9edae3295eefe940396ca
 > 文档摘要：d21840ee8c72f9b97aab4e8bb1fe67ed10fe28ee56cbe64cf784c2ea05e4aedf
-> 复核原因：source-change
+> 复核原因：document-change
 > 复核结论：updated
 > 稳定事实：记录当前 ABC 三队轮换实现事实和入口
 > 证据引用：tracked:docs/SCHEDULE_ROTATION.md

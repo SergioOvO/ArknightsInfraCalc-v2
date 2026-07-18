@@ -7,7 +7,7 @@
 > 摘要：定位贸易解释器内部阶段和函数
 > 源摘要：b672c0ab167d8395f99298f1279c17e8fb105675f5888f3fadc1aef007d4b3ea
 > 文档摘要：973ccd5e4262fc559319558ec0c62fa05fabd0c0622104ed60e10fd42d3b4acf
-> 复核原因：source-change
+> 复核原因：document-change
 > 复核结论：updated
 > 稳定事实：定位贸易解释器内部阶段和函数
 > 证据引用：tracked:docs/INTERNAL/TRADE_INTERPRETER.md

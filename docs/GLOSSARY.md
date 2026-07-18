@@ -7,7 +7,7 @@
 > 摘要：路由项目术语到各 canonical owner
 > 源摘要：9d416c567060561c931d5b6d4ff0c0b840da32148c3b8218d894d52a76136cb9
 > 文档摘要：77f66f042906b3a5d6f7168f594198305b86b880099b52d09b17a54380dc8f06
-> 复核原因：source-change
+> 复核原因：document-change
 > 复核结论：updated
 > 稳定事实：路由项目术语到各 canonical owner
 > 证据引用：tracked:docs/GLOSSARY.md
