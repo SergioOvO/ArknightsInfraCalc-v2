@@ -7,7 +7,7 @@
 > 摘要：说明 TODO 目录并承载生成的活动变更表
 > 源摘要：327f6c544e35afb38569076ed48dd729d5afd5fe2afa3cd0f71a7e3e565c0e63
 > 文档摘要：7992d506db5b6b505e5a48f13dda133512f4d3803cf4b1a9b7fc3da2bcff5157
-> 复核原因：source-change
+> 复核原因：user-ruling
 > 复核结论：updated
 > 稳定事实：说明 TODO 目录并承载生成的活动变更表
 > 证据引用：tracked:docs/TODO/README.md

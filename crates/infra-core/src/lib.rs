@@ -17,6 +17,7 @@ pub mod schedule;
 pub mod scoring;
 pub mod search;
 pub mod skill_table;
+pub mod support_facility;
 pub mod tier;
 pub mod training_advice;
 pub mod types;
@@ -25,6 +26,7 @@ pub mod control;
 pub mod export;
 pub mod layout;
 pub mod manufacture;
+pub mod meeting;
 pub mod office;
 pub mod power;
 pub mod trade;
@@ -57,18 +59,20 @@ pub use layout::{
     assign_base_greedy, assign_shift, assignment_operator_names, pinned_assignment,
     resolve_automation_group_1_layout, resolve_base, resolve_search_baseline_layout,
     rotating_workers, AssignBaseOptions, AssignShiftMode, AssignedOperator, BaseAssignment,
-    BaseBlueprint, FacilityKind, LayoutContext, OperatorTier, ResolvedBase, RoomId, RoomProduct,
-    SharedLayout, DEFAULT_DORM_OCCUPANT_COUNT,
+    BaseBlueprint, FacilityKind, LayoutContext, OperatorTier, ResolvedBase, ResolvedSupportRoom,
+    RoomId, RoomProduct, SharedLayout, DEFAULT_DORM_OCCUPANT_COUNT,
 };
 pub use manufacture::{
     evaluate_manufacture_lines, solve_manufacture, ManuLineEfficiency, ManuLineScenario,
     ManuOperator, ManuProdBreakdown, ManuResult, ManuRoomInput, ManuSearchRecipeMode,
     ManuStorageBreakdown,
 };
+pub use meeting::evaluate_meeting;
 pub use mood::{
     dorm_recovery_rates, facility_key as mood_facility_key, operator_net_drain, shift_eta,
     workable_hours, DormOccupant, DrainInputs, MoodModel, OperatorEta, ShiftEta,
 };
+pub use office::evaluate_office;
 pub use operbox::{
     default_layout_243_path, default_operbox_full_e2_path, default_operbox_gongsun_path,
     from_xlsx_path, OperBox,
@@ -109,6 +113,10 @@ pub use search::{
     TradeSearchReport,
 };
 pub use skill_table::SkillTable;
+pub use support_facility::{
+    OperatorMoodDelta, SupportContribution, SupportFacility, SupportNotice, SupportOperator,
+    SupportRegistry, SupportRoomInput, SupportRoomResult,
+};
 pub use tier::PromotionTier;
 pub use training_advice::{
     build_training_advice, default_training_recommendations_path,

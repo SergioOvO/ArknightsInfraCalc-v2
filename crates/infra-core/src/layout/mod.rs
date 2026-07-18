@@ -35,7 +35,7 @@ pub use resolve::{
     resolve_automation_group_1_layout, resolve_base, resolve_search_baseline_layout,
     resolve_snhunt_baseline_layout, resolve_snhunt_elite2_baseline_layout,
     snhunt_control_assignment, snhunt_default_assignment, ResolvedBase, ResolvedManuRoom,
-    ResolvedPowerRoom, ResolvedTradeRoom,
+    ResolvedPowerRoom, ResolvedSupportRoom, ResolvedTradeRoom,
 };
 pub use shift::AssignShiftMode;
 pub use system::{

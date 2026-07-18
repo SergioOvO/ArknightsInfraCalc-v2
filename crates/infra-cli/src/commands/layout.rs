@@ -549,6 +549,24 @@ fn layout_eval_cmd(args: &[String]) -> Result<(), Error> {
     }
 
     if text {
+        for room in resolved.office_rooms.iter().chain(&resolved.meeting_rooms) {
+            if let Some(result) = &room.result {
+                eprintln!(
+                    "  support {} {:?} skill_speed={} external_speed={} total_speed={} unsupported={}",
+                    room.id.0,
+                    result.facility,
+                    result.skill_speed_bonus_pct,
+                    result.external_speed_bonus_pct,
+                    result.total_speed_bonus_pct,
+                    result.unsupported.len()
+                );
+            } else {
+                eprintln!("  support {} autofill=true", room.id.0);
+            }
+        }
+    }
+
+    if text {
         eprintln!(
             "  total trade_efficiency={} manufacture_efficiency={}",
             trade_total, manu_total
@@ -560,6 +578,16 @@ fn layout_eval_cmd(args: &[String]) -> Result<(), Error> {
                 "trade_efficiency": trade_total,
                 "manufacture_efficiency": manu_total,
                 "durin_in_base": resolved.layout.durin_in_base,
+                "office": resolved.office_rooms.iter().map(|room| serde_json::json!({
+                    "room_id": room.id.0.clone(),
+                    "result": &room.result,
+                    "autofill": room.autofill,
+                })).collect::<Vec<_>>(),
+                "meeting": resolved.meeting_rooms.iter().map(|room| serde_json::json!({
+                    "room_id": room.id.0.clone(),
+                    "result": &room.result,
+                    "autofill": room.autofill,
+                })).collect::<Vec<_>>(),
             })
         );
     }

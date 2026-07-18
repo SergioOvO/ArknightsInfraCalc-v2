@@ -7,7 +7,7 @@
 > 复核触发：crates/infra-cli/src/**；crates/infra-core/src/export/**；release/**
 > 摘要：裁决前端调用 CLI 和导出数据的接口契约
 > 源摘要：a339d53098d6b81417d41d5cf7e1d1258c41f6500fa933e5f3164506854d8993
-> 文档摘要：6ba6403e8a829c5070da525b4ed4bf26239a416679ec51b37845e0e17ba9b364
+> 文档摘要：0aeac74b3651c2417f55093cca089300b799abed8963ba0ec935c8917fb6f42b
 > 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决前端调用 CLI 和导出数据的接口契约
@@ -483,6 +483,7 @@ async function runTeamRotation({ cliPath, repoRoot, layout, operbox, maaOut, tit
 - 干员名必须为**客户端语言**（国服中文）。
 - 不建模完整心情曲线和宿管恢复。当前每个 ABC 周期只安排一次菲亚主力回岗；被换下者的具体宿舍操作由 MAA 自动处理，本项目不保证写入某个宿舍槽位。基础龙巫 reserve 已由 rotation 构造，但菲亚可改写最终房间成员。布局动态排序和跨周期就绪模拟尚未实现，详见 [Fiammetta.md](Fiammetta.md)。
 - 会客室若 solver 未分配人，导出为 `autofill: true`。
+- `layout eval --assignment ...` 会在 JSON 的 `office` / `meeting` 字段返回显式编制的静态技能速度、心情修正、贡献明细以及 `ignored` / `unsupported`。该结果不代表自动选人或线索概率模拟。
 - 首次 243 全精2 operbox 排班约 **5–15 秒**（CPU 搜索）；前端应加 loading。
 
 ---

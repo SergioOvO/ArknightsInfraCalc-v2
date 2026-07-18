@@ -7,7 +7,7 @@
 > 摘要：说明社区单位产出与贸易解释值边界
 > 源摘要：7ea3bed8ec9fcdfcde9a68fbdf2f4e4b498220f9ce10448ddbb5a696868ef92d
 > 文档摘要：483a883fa5a36d4560160e11fb344b7daccce07b4184dd813af95078ae29d3eb
-> 复核原因：source-change
+> 复核原因：user-ruling
 > 复核结论：updated
 > 稳定事实：说明社区单位产出与贸易解释值边界
 > 证据引用：tracked:docs/INTERNAL/TRADE_COMMUNITY_UNIT_OUTPUT.md

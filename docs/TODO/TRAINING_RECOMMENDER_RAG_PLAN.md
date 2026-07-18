@@ -7,7 +7,7 @@
 > 摘要：练度比对、练卡推荐和 RAG 解释层提案
 > 源摘要：afbc7b301170b9b6649de741db72474ecaae131ff9eaee6f851d00fbeae52c02
 > 文档摘要：796c8a52c4d8a751fe5ed056e1b0358aa7ec064fc547f2ef4d8739afa1a93f2f
-> 复核原因：source-change
+> 复核原因：user-ruling
 > 复核结论：updated
 > 稳定事实：练度比对、练卡推荐和 RAG 解释层提案
 > 证据引用：tracked:docs/TODO/TRAINING_RECOMMENDER_RAG_PLAN.md

@@ -41,6 +41,13 @@ pub struct ResolvedPowerRoom {
 }
 
 #[derive(Debug, Clone)]
+pub struct ResolvedSupportRoom {
+    pub id: RoomId,
+    pub result: Option<crate::support_facility::SupportRoomResult>,
+    pub autofill: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct ResolvedBase {
     pub blueprint: BaseBlueprint,
     pub assignment: BaseAssignment,
@@ -48,6 +55,8 @@ pub struct ResolvedBase {
     pub trade_rooms: Vec<ResolvedTradeRoom>,
     pub manu_rooms: Vec<ResolvedManuRoom>,
     pub power_rooms: Vec<ResolvedPowerRoom>,
+    pub office_rooms: Vec<ResolvedSupportRoom>,
+    pub meeting_rooms: Vec<ResolvedSupportRoom>,
 }
 
 impl ResolvedBase {
@@ -173,6 +182,8 @@ pub fn resolve_base(
 
     layout.global.run_conversions(&active_global_buffs);
 
+    let (office_rooms, meeting_rooms) = build_support_rooms(blueprint, assignment, &layout)?;
+
     let trade_rooms = build_trade_rooms(blueprint, assignment, instances, table, &layout);
     let manu_rooms = build_manu_rooms(blueprint, assignment, instances, table, &layout);
     let power_rooms = build_power_rooms(&workforce, instances, &layout);
@@ -184,7 +195,109 @@ pub fn resolve_base(
         trade_rooms,
         manu_rooms,
         power_rooms,
+        office_rooms,
+        meeting_rooms,
     })
+}
+
+fn build_support_rooms(
+    blueprint: &BaseBlueprint,
+    assignment: &BaseAssignment,
+    layout: &LayoutContext,
+) -> Result<(Vec<ResolvedSupportRoom>, Vec<ResolvedSupportRoom>)> {
+    use crate::support_facility::{SupportFacility, SupportRegistry, SupportRoomInput};
+
+    let registry = SupportRegistry::load_default()?;
+    let extra_recruit_slots = blueprint
+        .rooms
+        .iter()
+        .filter(|room| room.kind == FacilityKind::Office)
+        .map(|room| room.level.saturating_sub(1))
+        .max()
+        .unwrap_or(0);
+    let mut office_rooms = Vec::new();
+    let mut meeting_inject = 0.0;
+    for room in blueprint
+        .rooms
+        .iter()
+        .filter(|room| room.kind == FacilityKind::Office)
+    {
+        let operators = support_operators(assignment.operators_in(&room.id));
+        if operators.is_empty() {
+            office_rooms.push(ResolvedSupportRoom {
+                id: room.id.clone(),
+                result: None,
+                autofill: true,
+            });
+            continue;
+        }
+        let result = crate::office::evaluate_office(
+            &SupportRoomInput {
+                facility: SupportFacility::Office,
+                operators,
+                capacity: room.operator_capacity(),
+                extra_recruit_slots,
+                elapsed_hours: 24.0,
+                external_speed_bonus_pct: 0.0,
+                layout: layout.clone(),
+            },
+            &registry,
+        )?;
+        meeting_inject += result.meeting_speed_inject_pct;
+        office_rooms.push(ResolvedSupportRoom {
+            id: room.id.clone(),
+            result: Some(result),
+            autofill: false,
+        });
+    }
+
+    let mut meeting_rooms = Vec::new();
+    for room in blueprint
+        .rooms
+        .iter()
+        .filter(|room| room.kind == FacilityKind::MeetingRoom)
+    {
+        let operators = support_operators(assignment.operators_in(&room.id));
+        if operators.is_empty() {
+            meeting_rooms.push(ResolvedSupportRoom {
+                id: room.id.clone(),
+                result: None,
+                autofill: true,
+            });
+            continue;
+        }
+        let result = crate::meeting::evaluate_meeting(
+            &SupportRoomInput {
+                facility: SupportFacility::Meeting,
+                operators,
+                capacity: room.operator_capacity(),
+                extra_recruit_slots,
+                elapsed_hours: 24.0,
+                external_speed_bonus_pct: meeting_inject,
+                layout: layout.clone(),
+            },
+            &registry,
+        )?;
+        meeting_rooms.push(ResolvedSupportRoom {
+            id: room.id.clone(),
+            result: Some(result),
+            autofill: false,
+        });
+    }
+    Ok((office_rooms, meeting_rooms))
+}
+
+fn support_operators(
+    operators: &[AssignedOperator],
+) -> Vec<crate::support_facility::SupportOperator> {
+    operators
+        .iter()
+        .map(|operator| crate::support_facility::SupportOperator {
+            name: operator.name.clone(),
+            elite: operator.elite,
+            level: operator.level,
+        })
+        .collect()
 }
 
 pub fn resolve_search_baseline_layout() -> Result<LayoutContext> {

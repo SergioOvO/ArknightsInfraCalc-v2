@@ -8,7 +8,7 @@
 > 摘要：裁决中枢候选、注入和全局资源编制
 > 源摘要：d3978849d84ef049a8755147689771996737e024f961450d38c2f35e4374f1f9
 > 文档摘要：613eed78b2926ff63d7468d09f8a9621914b97bad2080fb284eee377d5e8ae0f
-> 复核原因：source-change
+> 复核原因：user-ruling
 > 复核结论：updated
 > 稳定事实：裁决中枢候选、注入和全局资源编制
 > 证据引用：tracked:docs/CONTROL_CENTER_ASSIGNMENT.md

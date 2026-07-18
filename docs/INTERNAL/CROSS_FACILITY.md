@@ -7,7 +7,7 @@
 > 摘要：定位跨设施作用域的当前实现 owner
 > 源摘要：c068d4a9fc47d8c3e99f22c27bee3d13d96293568bf90bf83ae1f3bf2eb88875
 > 文档摘要：dfec220dcb0f09e190ab02383e979f051d4430380c21482ff5bbc7527b36771b
-> 复核原因：source-change
+> 复核原因：user-ruling
 > 复核结论：updated
 > 稳定事实：定位跨设施作用域的当前实现 owner
 > 证据引用：tracked:docs/INTERNAL/CROSS_FACILITY.md

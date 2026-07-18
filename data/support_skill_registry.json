@@ -1,0 +1,2465 @@
+{
+  "version": 1,
+  "scope": {
+    "office_rows": [
+      172,
+      214
+    ],
+    "meeting_rows": [
+      324,
+      390
+    ]
+  },
+  "entries": [
+    {
+      "row_id": 172,
+      "facility": "office",
+      "operator": "山",
+      "skill": "内幕",
+      "buff_id": "hire_spd&clue2[230]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 173,
+      "facility": "office",
+      "operator": "早露",
+      "skill": "人望",
+      "buff_id": "hire_spd&clue2[250]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 174,
+      "facility": "office",
+      "operator": "戴菲恩",
+      "skill": "旧识新交",
+      "buff_id": "hire_spd&clue2[260]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 175,
+      "facility": "office",
+      "operator": "月禾",
+      "skill": "天灾信使·α",
+      "buff_id": "hire_spd&clue[010]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 30.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 176,
+      "facility": "office",
+      "operator": "月禾",
+      "skill": "洞悉人心",
+      "buff_id": "hire_spd&clue[100]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 35.0
+        },
+        {
+          "kind": "meeting_speed_per_extra_recruit_slot",
+          "value": 5.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 177,
+      "facility": "office",
+      "operator": "乌有",
+      "skill": "好事之徒",
+      "buff_id": "hire_spd&clue[101]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 35.0
+        },
+        {
+          "kind": "meeting_speed_per_extra_recruit_slot",
+          "value": 5.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 178,
+      "facility": "office",
+      "operator": "隐现",
+      "skill": "交游广阔",
+      "buff_id": "hire_spd&clue[110]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 30.0
+        },
+        {
+          "kind": "meeting_speed_per_extra_recruit_slot",
+          "value": 5.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 179,
+      "facility": "office",
+      "operator": "乌啾",
+      "skill": "“号外！”",
+      "buff_id": "hire_spd&clue[120]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 30.0
+        },
+        {
+          "kind": "meeting_speed_per_extra_recruit_slot",
+          "value": 5.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 180,
+      "facility": "office",
+      "operator": "乌啾",
+      "skill": "街头法则",
+      "buff_id": "hire_spd&clue[121]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 35.0
+        },
+        {
+          "kind": "meeting_speed_per_extra_recruit_slot",
+          "value": 5.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 181,
+      "facility": "office",
+      "operator": "巡林者",
+      "skill": "人事管理·α",
+      "buff_id": "hire_spd[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 182,
+      "facility": "office",
+      "operator": "伊内丝",
+      "skill": "人事管理·β",
+      "buff_id": "hire_spd[001]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 35.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 183,
+      "facility": "office",
+      "operator": "普罗旺斯",
+      "skill": "天灾信使·α",
+      "buff_id": "hire_spd[010]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 30.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 184,
+      "facility": "office",
+      "operator": "普罗旺斯",
+      "skill": "天灾信使·β",
+      "buff_id": "hire_spd[011]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 45.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 184,
+      "facility": "office",
+      "operator": "艾雅法拉",
+      "skill": "天灾信使·β",
+      "buff_id": "hire_spd[011]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 45.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 185,
+      "facility": "office",
+      "operator": "遥",
+      "skill": "节目邀约",
+      "buff_id": "hire_spd[012]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 45.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 186,
+      "facility": "office",
+      "operator": "夜魔",
+      "skill": "心理学",
+      "buff_id": "hire_spd[020]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 40.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 186,
+      "facility": "office",
+      "operator": "宴",
+      "skill": "心理学",
+      "buff_id": "hire_spd[020]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 40.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 186,
+      "facility": "office",
+      "operator": "梓兰",
+      "skill": "心理学",
+      "buff_id": "hire_spd[020]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 40.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 187,
+      "facility": "office",
+      "operator": "伊桑",
+      "skill": "WRITER",
+      "buff_id": "hire_spd[030]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 40.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 188,
+      "facility": "office",
+      "operator": "酸糖",
+      "skill": "B-girl",
+      "buff_id": "hire_spd[031]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 40.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 189,
+      "facility": "office",
+      "operator": "淬羽赫默",
+      "skill": "不停歇的电话",
+      "buff_id": "hire_spd[032]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 40.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 190,
+      "facility": "office",
+      "operator": "絮雨",
+      "skill": "追忆",
+      "buff_id": "hire_spd_bd_n1[000]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": null,
+      "unsupported": "mood-exhaustion resource lifecycle"
+    },
+    {
+      "row_id": 191,
+      "facility": "office",
+      "operator": "絮雨",
+      "skill": "巡游",
+      "buff_id": "hire_spd_bd_n1_n1[100]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": "memory-fragment production remains in the global-resource owner"
+    },
+    {
+      "row_id": 192,
+      "facility": "office",
+      "operator": "桑葚",
+      "skill": "救援队·灾后普查",
+      "buff_id": "hire_spd_bd_n1_n1[200]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": null,
+      "unsupported": "human-fireworks production remains in the global-resource owner"
+    },
+    {
+      "row_id": 193,
+      "facility": "office",
+      "operator": "深律",
+      "skill": "心声图绘",
+      "buff_id": "hire_spd_bd_n1_n1[300]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": null,
+      "unsupported": "silent-echo production is not represented by the current global owner"
+    },
+    {
+      "row_id": 194,
+      "facility": "office",
+      "operator": "闪击",
+      "skill": "语言学",
+      "buff_id": "hire_spd_blitz[000]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        },
+        {
+          "kind": "speed_per_state",
+          "state": "IntelligenceReserve",
+          "step": 1.0,
+          "value": 5.0
+        },
+        {
+          "kind": "speed_per_state",
+          "state": "UsautDrink",
+          "step": 1.0,
+          "value": 5.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 195,
+      "facility": "office",
+      "operator": "圣聆初雪",
+      "skill": "圣女声望",
+      "buff_id": "hire_spd_cost&char[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": -0.25
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 196,
+      "facility": "office",
+      "operator": "圣聆初雪",
+      "skill": "雪境归心",
+      "buff_id": "hire_spd_cost&char[001]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 35.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": -0.25
+        }
+      ],
+      "ignored": null,
+      "unsupported": "operator-in-control-center condition"
+    },
+    {
+      "row_id": 197,
+      "facility": "office",
+      "operator": "雪绒",
+      "skill": "救援队·保证体力",
+      "buff_id": "hire_spd_cost&clue[000]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 35.0
+        },
+        {
+          "kind": "mood_per_extra_recruit_slot",
+          "value": -0.1
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 198,
+      "facility": "office",
+      "operator": "雪绒",
+      "skill": "救援队·外界联络",
+      "buff_id": "hire_spd_cost&clue[001]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 30.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 199,
+      "facility": "office",
+      "operator": "林",
+      "skill": "用人唯才",
+      "buff_id": "hire_spd_cost&extra[000]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_per_extra_recruit_slot",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 200,
+      "facility": "office",
+      "operator": "地灵",
+      "skill": "天灾信使·α",
+      "buff_id": "hire_spd_cost[010]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 30.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 201,
+      "facility": "office",
+      "operator": "桑葚",
+      "skill": "救援队·珠算",
+      "buff_id": "hire_spd_cost[100]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": -0.25
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 202,
+      "facility": "office",
+      "operator": "深律",
+      "skill": "宫廷礼仪",
+      "buff_id": "hire_spd_cost[101]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": -0.25
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 203,
+      "facility": "office",
+      "operator": "桑葚",
+      "skill": "救援队·资源清点",
+      "buff_id": "hire_spd_cost[110]",
+      "slot": 0,
+      "min_elite": 1,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": -0.25
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 204,
+      "facility": "office",
+      "operator": "林",
+      "skill": "特殊渠道",
+      "buff_id": "hire_spd_cost[111]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": -0.25
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 205,
+      "facility": "office",
+      "operator": "行箸",
+      "skill": "踏坊寻味·α",
+      "buff_id": "hire_spd_cost[112]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": -0.25
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 206,
+      "facility": "office",
+      "operator": "深律",
+      "skill": "威权谕使",
+      "buff_id": "hire_spd_cost[120]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 30.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": -0.25
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 207,
+      "facility": "office",
+      "operator": "行箸",
+      "skill": "踏坊寻味·β",
+      "buff_id": "hire_spd_cost[121]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 30.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": -0.25
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 208,
+      "facility": "office",
+      "operator": "地灵",
+      "skill": "准时下班",
+      "buff_id": "hire_spd_cost[200]",
+      "slot": 0,
+      "min_elite": 1,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 45.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 2.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 209,
+      "facility": "office",
+      "operator": "斥罪",
+      "skill": "法为正典",
+      "buff_id": "hire_spd_cost[210]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 50.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 0.5
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 210,
+      "facility": "office",
+      "operator": "水灯心",
+      "skill": "永不停歇·α",
+      "buff_id": "hire_spd_cost[220]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 30.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 1.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 211,
+      "facility": "office",
+      "operator": "水灯心",
+      "skill": "永不停歇·β",
+      "buff_id": "hire_spd_cost[230]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 45.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 1.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 212,
+      "facility": "office",
+      "operator": "锡人",
+      "skill": "梅兰德侦探·α",
+      "buff_id": "hire_spd_dorm&lv[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 5.0
+        },
+        {
+          "kind": "speed_per_dorm_level",
+          "value": 1.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 213,
+      "facility": "office",
+      "operator": "锡人",
+      "skill": "梅兰德侦探·β",
+      "buff_id": "hire_spd_dorm&lv[010]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 5.0
+        },
+        {
+          "kind": "speed_per_dorm_level",
+          "value": 2.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 214,
+      "facility": "office",
+      "operator": "凯尔希·思衡托",
+      "skill": "“泰拉的方舟”",
+      "buff_id": "hire_spd_tag[000]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 30.0
+        },
+        {
+          "kind": "speed_per_elite_facility",
+          "value": 4.0,
+          "cap": 5
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 324,
+      "facility": "meeting",
+      "operator": "山",
+      "skill": "哥伦比亚史",
+      "buff_id": "meet_flag[010]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 325,
+      "facility": "meeting",
+      "operator": "耶拉",
+      "skill": "耶拉冈德",
+      "buff_id": "meet_flag[040]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 326,
+      "facility": "meeting",
+      "operator": "苦艾",
+      "skill": "甄别",
+      "buff_id": "meet_flag[050]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 327,
+      "facility": "meeting",
+      "operator": "极境",
+      "skill": "插旗",
+      "buff_id": "meet_flag[060]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 328,
+      "facility": "meeting",
+      "operator": "夏栎",
+      "skill": "情报整理",
+      "buff_id": "meet_flag[070]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 329,
+      "facility": "meeting",
+      "operator": "凛视",
+      "skill": "远见",
+      "buff_id": "meet_spd&bd[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        },
+        {
+          "kind": "speed_if_partner",
+          "operator": "提丰",
+          "value": 15.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 0.5
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 330,
+      "facility": "meeting",
+      "operator": "凛视",
+      "skill": "未来之途",
+      "buff_id": "meet_spd&bd[010]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        },
+        {
+          "kind": "speed_if_partner",
+          "operator": "提丰",
+          "value": 15.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 0.5
+        }
+      ],
+      "ignored": "unknown missing-clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 331,
+      "facility": "meeting",
+      "operator": "忍冬",
+      "skill": "杀手的假期",
+      "buff_id": "meet_spd&bd[100]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_if_partner",
+          "operator": "铃兰",
+          "value": 30.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 332,
+      "facility": "meeting",
+      "operator": "骋风",
+      "skill": "广交义友",
+      "buff_id": "meet_spd&clue[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_per_extra_recruit_slot",
+          "value": 5.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 333,
+      "facility": "meeting",
+      "operator": "霍尔海雅",
+      "skill": "文献学顾问",
+      "buff_id": "meet_spd&condChar_mustget[000]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "next-clue event history",
+      "unsupported": null
+    },
+    {
+      "row_id": 334,
+      "facility": "meeting",
+      "operator": "奥达",
+      "skill": "暗线",
+      "buff_id": "meet_spd&condChar_mustget[100]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "next-clue event history",
+      "unsupported": null
+    },
+    {
+      "row_id": 335,
+      "facility": "meeting",
+      "operator": "见行者",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd&cost[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 336,
+      "facility": "meeting",
+      "operator": "见行者",
+      "skill": "逻辑推理",
+      "buff_id": "meet_spd&cost[100]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 35.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 2.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 337,
+      "facility": "meeting",
+      "operator": "和弦",
+      "skill": "双面间谍",
+      "buff_id": "meet_spd&cost_condChar[000]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_if_solo",
+          "value": 50.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 2.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 338,
+      "facility": "meeting",
+      "operator": "奥达",
+      "skill": "“职业操守”·α",
+      "buff_id": "meet_spd&cost_condChar[001]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_if_solo",
+          "value": 15.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 1.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 338,
+      "facility": "meeting",
+      "operator": "霍尔海雅",
+      "skill": "“职业操守”·α",
+      "buff_id": "meet_spd&cost_condChar[001]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_if_solo",
+          "value": 15.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 1.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 339,
+      "facility": "meeting",
+      "operator": "奥达",
+      "skill": "“职业操守”·β",
+      "buff_id": "meet_spd&cost_condChar[011]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_if_solo",
+          "value": 35.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 1.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 339,
+      "facility": "meeting",
+      "operator": "霍尔海雅",
+      "skill": "“职业操守”·β",
+      "buff_id": "meet_spd&cost_condChar[011]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_if_solo",
+          "value": 35.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 1.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 340,
+      "facility": "meeting",
+      "operator": "复奏",
+      "skill": "专业经理·α",
+      "buff_id": "meet_spd&cost_condChar[020]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_if_solo",
+          "value": 15.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 1.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 341,
+      "facility": "meeting",
+      "operator": "复奏",
+      "skill": "专业经理·β",
+      "buff_id": "meet_spd&cost_condChar[021]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_if_solo",
+          "value": 35.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 1.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 342,
+      "facility": "meeting",
+      "operator": "跃跃",
+      "skill": "无辜笑脸",
+      "buff_id": "meet_spd&exchange[000]",
+      "slot": 1,
+      "min_elite": 1,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "clue exchange mode",
+      "unsupported": null
+    },
+    {
+      "row_id": 343,
+      "facility": "meeting",
+      "operator": "响石",
+      "skill": "特殊渠道顾问",
+      "buff_id": "meet_spd&exchange[001]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "clue exchange mode",
+      "unsupported": null
+    },
+    {
+      "row_id": 344,
+      "facility": "meeting",
+      "operator": "提丰",
+      "skill": "冰原游弋",
+      "buff_id": "meet_spd&sami[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 0.5
+        }
+      ],
+      "ignored": null,
+      "unsupported": "peer faction condition"
+    },
+    {
+      "row_id": 345,
+      "facility": "meeting",
+      "operator": "寻澜",
+      "skill": "人情练达",
+      "buff_id": "meet_spd&sami[100]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        },
+        {
+          "kind": "mood_delta",
+          "value": 0.5
+        }
+      ],
+      "ignored": null,
+      "unsupported": "peer faction condition"
+    },
+    {
+      "row_id": 346,
+      "facility": "meeting",
+      "operator": "寻澜",
+      "skill": "情报探查",
+      "buff_id": "meet_spd&sami[110]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": "peer faction condition"
+    },
+    {
+      "row_id": 347,
+      "facility": "meeting",
+      "operator": "因陀罗",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd&team[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 347,
+      "facility": "meeting",
+      "operator": "塞雷娅",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd&team[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 347,
+      "facility": "meeting",
+      "operator": "安洁莉娜",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd&team[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 347,
+      "facility": "meeting",
+      "operator": "微风",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd&team[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 347,
+      "facility": "meeting",
+      "operator": "星极",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd&team[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 347,
+      "facility": "meeting",
+      "operator": "耶拉",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd&team[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 347,
+      "facility": "meeting",
+      "operator": "芙兰卡",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd&team[000]",
+      "slot": 1,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 347,
+      "facility": "meeting",
+      "operator": "莫斯提马",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd&team[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 347,
+      "facility": "meeting",
+      "operator": "谜图",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd&team[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 347,
+      "facility": "meeting",
+      "operator": "跃跃",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd&team[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 348,
+      "facility": "meeting",
+      "operator": "塞雷娅",
+      "skill": "守望者",
+      "buff_id": "meet_spd&team[010]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 349,
+      "facility": "meeting",
+      "operator": "莫斯提马",
+      "skill": "信使·企鹅物流",
+      "buff_id": "meet_spd&team[020]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 350,
+      "facility": "meeting",
+      "operator": "杰西卡",
+      "skill": "联络员",
+      "buff_id": "meet_spd&team[030]",
+      "slot": 1,
+      "min_elite": 1,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 351,
+      "facility": "meeting",
+      "operator": "芙兰卡",
+      "skill": "B.P.R.S.",
+      "buff_id": "meet_spd&team[031]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 352,
+      "facility": "meeting",
+      "operator": "讯使",
+      "skill": "讯使",
+      "buff_id": "meet_spd&team[040]",
+      "slot": 1,
+      "min_elite": 1,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 353,
+      "facility": "meeting",
+      "operator": "耶拉",
+      "skill": "雪境守望",
+      "buff_id": "meet_spd&team[041]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 354,
+      "facility": "meeting",
+      "operator": "真理",
+      "skill": "军师",
+      "buff_id": "meet_spd&team[050]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 355,
+      "facility": "meeting",
+      "operator": "安洁莉娜",
+      "skill": "信使·罗德岛制药",
+      "buff_id": "meet_spd&team[060]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 356,
+      "facility": "meeting",
+      "operator": "因陀罗",
+      "skill": "传讯者",
+      "buff_id": "meet_spd&team[070]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 357,
+      "facility": "meeting",
+      "operator": "微风",
+      "skill": "没落贵族",
+      "buff_id": "meet_spd&team[071]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 358,
+      "facility": "meeting",
+      "operator": "陈",
+      "skill": "警司",
+      "buff_id": "meet_spd&team[100]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 25.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 359,
+      "facility": "meeting",
+      "operator": "星极",
+      "skill": "星象学",
+      "buff_id": "meet_spd&team[110]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 25.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 360,
+      "facility": "meeting",
+      "operator": "哈洛德",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 360,
+      "facility": "meeting",
+      "operator": "守林人",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 360,
+      "facility": "meeting",
+      "operator": "断崖",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 361,
+      "facility": "meeting",
+      "operator": "杰克",
+      "skill": "线索搜集·β",
+      "buff_id": "meet_spd[0020]",
+      "slot": 1,
+      "min_elite": 1,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 361,
+      "facility": "meeting",
+      "operator": "梅",
+      "skill": "线索搜集·β",
+      "buff_id": "meet_spd[0020]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 362,
+      "facility": "meeting",
+      "operator": "风丸",
+      "skill": "化影",
+      "buff_id": "meet_spd[010]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 15.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 363,
+      "facility": "meeting",
+      "operator": "信仰搅拌机",
+      "skill": "泡茶高手",
+      "buff_id": "meet_spd[011]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 15.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 364,
+      "facility": "meeting",
+      "operator": "12F",
+      "skill": "线索搜集·β",
+      "buff_id": "meet_spd[020]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 364,
+      "facility": "meeting",
+      "operator": "守林人",
+      "skill": "线索搜集·β",
+      "buff_id": "meet_spd[020]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 364,
+      "facility": "meeting",
+      "operator": "宴",
+      "skill": "线索搜集·β",
+      "buff_id": "meet_spd[020]",
+      "slot": 1,
+      "min_elite": 1,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 364,
+      "facility": "meeting",
+      "operator": "断崖",
+      "skill": "线索搜集·β",
+      "buff_id": "meet_spd[020]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 364,
+      "facility": "meeting",
+      "operator": "暗索",
+      "skill": "线索搜集·β",
+      "buff_id": "meet_spd[020]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 364,
+      "facility": "meeting",
+      "operator": "白雪",
+      "skill": "线索搜集·β",
+      "buff_id": "meet_spd[020]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 365,
+      "facility": "meeting",
+      "operator": "莱欧斯",
+      "skill": "好奇心",
+      "buff_id": "meet_spd[021]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 366,
+      "facility": "meeting",
+      "operator": "信仰搅拌机",
+      "skill": "社交达人",
+      "buff_id": "meet_spd[022]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 367,
+      "facility": "meeting",
+      "operator": "远山",
+      "skill": "占卜",
+      "buff_id": "meet_spd[030]",
+      "slot": 1,
+      "min_elite": 1,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 25.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 368,
+      "facility": "meeting",
+      "operator": "红",
+      "skill": "追踪者",
+      "buff_id": "meet_spd[031]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 25.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 369,
+      "facility": "meeting",
+      "operator": "伺夜",
+      "skill": "领袖外交",
+      "buff_id": "meet_spd[032]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 25.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 370,
+      "facility": "meeting",
+      "operator": "忍冬",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd[1000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 370,
+      "facility": "meeting",
+      "operator": "松桐",
+      "skill": "线索搜集·α",
+      "buff_id": "meet_spd[1000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 371,
+      "facility": "meeting",
+      "operator": "忍冬",
+      "skill": "线索搜集·β",
+      "buff_id": "meet_spd[1010]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 372,
+      "facility": "meeting",
+      "operator": "行箸",
+      "skill": "线索搜集·β",
+      "buff_id": "meet_spd[1020]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 373,
+      "facility": "meeting",
+      "operator": "U-Official",
+      "skill": "显眼的调查者",
+      "buff_id": "meet_spd_Owned[000]",
+      "slot": 1,
+      "min_elite": 0,
+      "min_level": 30,
+      "effects": [],
+      "ignored": "unknown owned-clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 374,
+      "facility": "meeting",
+      "operator": "双月",
+      "skill": "情报专家",
+      "buff_id": "meet_spd_bd[000]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 5.0
+        },
+        {
+          "kind": "speed_per_state",
+          "state": "IntelligenceReserve",
+          "step": 1.0,
+          "value": 5.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 375,
+      "facility": "meeting",
+      "operator": "莱欧斯",
+      "skill": "饱餐的干劲",
+      "buff_id": "meet_spd_bd[001]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_per_state",
+          "state": "MonsterCuisine",
+          "step": 1.0,
+          "value": 2.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 376,
+      "facility": "meeting",
+      "operator": "赤刃明霄陈",
+      "skill": "扶危行侠",
+      "buff_id": "meet_spd_bd[002]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 20.0
+        },
+        {
+          "kind": "speed_per_state",
+          "state": "HumanFireworks",
+          "step": 10.0,
+          "value": 1.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 377,
+      "facility": "meeting",
+      "operator": "风丸",
+      "skill": "得心应手",
+      "buff_id": "meet_spd_condChar[000]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_if_solo",
+          "value": 35.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 378,
+      "facility": "meeting",
+      "operator": "信仰搅拌机",
+      "skill": "不泯童心",
+      "buff_id": "meet_spd_ext&P[000]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": null,
+      "unsupported": "operator-in-dormitory condition"
+    },
+    {
+      "row_id": 379,
+      "facility": "meeting",
+      "operator": "伊内丝",
+      "skill": "聚影",
+      "buff_id": "meet_spd_hast[000]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_ramp_average",
+          "initial": 20.0,
+          "per_hour": 2.0,
+          "cap": 30.0
+        }
+      ],
+      "ignored": null,
+      "unsupported": null
+    },
+    {
+      "row_id": 380,
+      "facility": "meeting",
+      "operator": "骋风",
+      "skill": "眼观六路",
+      "buff_id": "meet_spd_notOwned&exchange[000]",
+      "slot": 1,
+      "min_elite": 1,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "clue exchange mode",
+      "unsupported": null
+    },
+    {
+      "row_id": 381,
+      "facility": "meeting",
+      "operator": "晓歌",
+      "skill": "不容遗漏·α",
+      "buff_id": "meet_spd_notOwned[000]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "unknown missing-clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 382,
+      "facility": "meeting",
+      "operator": "谜图",
+      "skill": "情报分析",
+      "buff_id": "meet_spd_notOwned[001]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "unknown missing-clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 383,
+      "facility": "meeting",
+      "operator": "松桐",
+      "skill": "见微知著",
+      "buff_id": "meet_spd_notOwned[002]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "unknown missing-clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 384,
+      "facility": "meeting",
+      "operator": "赤刃明霄陈",
+      "skill": "萍踪浪迹",
+      "buff_id": "meet_spd_notOwned[003]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "unknown missing-clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 385,
+      "facility": "meeting",
+      "operator": "晓歌",
+      "skill": "不容遗漏·β",
+      "buff_id": "meet_spd_notOwned[010]",
+      "slot": 0,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [
+        {
+          "kind": "speed_flat",
+          "value": 10.0
+        }
+      ],
+      "ignored": "unknown missing-clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 386,
+      "facility": "meeting",
+      "operator": "哈洛德",
+      "skill": "交个朋友",
+      "buff_id": "meet_team&char[000]",
+      "slot": 1,
+      "min_elite": 2,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "unknown faction-clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 387,
+      "facility": "meeting",
+      "operator": "梅",
+      "skill": "皇家探员（自称）",
+      "buff_id": "meet_team[020]",
+      "slot": 1,
+      "min_elite": 1,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 388,
+      "facility": "meeting",
+      "operator": "苦艾",
+      "skill": "秘密搜查",
+      "buff_id": "meet_team[050]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 389,
+      "facility": "meeting",
+      "operator": "极境",
+      "skill": "通讯员",
+      "buff_id": "meet_team[060]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    },
+    {
+      "row_id": 390,
+      "facility": "meeting",
+      "operator": "夏栎",
+      "skill": "风声",
+      "buff_id": "meet_team[070]",
+      "slot": 0,
+      "min_elite": 0,
+      "min_level": 1,
+      "effects": [],
+      "ignored": "unknown clue probability",
+      "unsupported": null
+    }
+  ]
+}

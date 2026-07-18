@@ -8,7 +8,7 @@
 > 摘要：裁决菲亚梅塔在当前排班中的目标和边界
 > 源摘要：3d1075ac1197f3cb64bbaaab787b5bc8c6c0bde9355bc7ce659418e35848ab99
 > 文档摘要：72db7921f8ce8db89fda6ba4a2ecee43823251511d097f31361d632b9f94e39a
-> 复核原因：source-change
+> 复核原因：user-ruling
 > 复核结论：updated
 > 稳定事实：裁决菲亚梅塔在当前排班中的目标和边界
 > 证据引用：tracked:docs/Fiammetta.md

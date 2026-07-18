@@ -7,7 +7,7 @@
 > 复核触发：crates/infra-core/src/types.rs；crates/infra-core/src/trade/**；crates/infra-core/src/global_resource/**；data/skill_table.json；data/operator_instances.json
 > 摘要：裁决 EffectAtom 词汇和机制解释分层
 > 源摘要：543c53f7f4e8c0e5e3389d968c5295148ad97226fddbae2d3db09909bb801406
-> 文档摘要：1a88ad7e9778844ca3e037f836cf496fb9bd036f8d45af52834a39e40f79e6a8
+> 文档摘要：5ecacdb84e95ce53127379c8898f195355bb6d4db33d17499e4ee88aa4a715f4
 > 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决 EffectAtom 词汇和机制解释分层
@@ -263,3 +263,19 @@ resolve_base 执行顺序（新增阶段 5）:
 | **P3** | 删除 resolve.rs 旧硬编码函数 + room_layout 扣回 | ⬜ 待做 |
 
 P2 迁移示例：在 `skill_table.json` 中乌有的 `trade_ord_spd_bd_n2[000]` 的 `state_write` atom 加 `"scope": "global"` 后，`cross_facility` 自动执行该 atom 写入全局池，然后从 `resolve.rs` 删除 `apply_wuyou_human_fireworks_baseline` 函数即可。
+
+---
+
+## 十、办公室与会客室静态求值
+
+办公室和会客室已开放一个有界的 L2 静态求值入口，消费显式 `BaseAssignment`，不参与自动选人：
+
+- 覆盖 `MECHANICS_REGISTRY.csv` 办公室序号 172–214、会客室序号 324–390；绑定和解锁阶段落在 `support_skill_registry.json`。
+- 只结算确定性的技能速度、招募位/宿舍等级/全局资源读数、同房人数或指定搭档、时间爬升平均值和技能自身心情修正。
+- 未知线索概率、下一条线索事件和线索交流状态不算分；结果通过 `ignored` 明确列出。
+- 当前框架不能安全表达的跨中枢、跨宿舍、同房派系条件和心情耗尽资源生命周期不算分；结果通过 `unsupported` 明确列出。
+- 办公室按一人、会客室按两人容量校验；无设施技能的合法进驻者仍可参与房间人数和搭档条件。
+- `resolve_base` 当前按 24 小时计算时间爬升平均值；直接 `evaluate_office` / `evaluate_meeting` 可传入其他正数时长。
+- 输出是技能速度加成，不包含尚未 canonical 化的设施基础速度和线索概率收益。
+
+该入口是显式编制的忠实求值，不修改候选集合、目标函数或剪枝，也不声称求得办公室或会客室最优编制。

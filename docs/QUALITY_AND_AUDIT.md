@@ -8,7 +8,7 @@
 > 摘要：裁决质量、求解保证和交付证据要求
 > 源摘要：349f00ae40e1a36098d397e8061ff37f4a2055bfc20cd6dfb13cde574d3ded26
 > 文档摘要：21163483916a9db6e151742ddc4d8e328afc6f3ee4544872ab2f36421add1d1b
-> 复核原因：source-change
+> 复核原因：user-ruling
 > 复核结论：updated
 > 稳定事实：裁决质量、求解保证和交付证据要求
 > 证据引用：tracked:docs/QUALITY_AND_AUDIT.md

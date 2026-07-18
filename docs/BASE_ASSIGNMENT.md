@@ -8,7 +8,7 @@
 > 摘要：裁决全基建单班进驻编制规则
 > 源摘要：efd59b3fc20427b59763ef7a280cb111712ef698c927ed5e023a9cb63db295b9
 > 文档摘要：2215335a08341627b88a6531fa1b9bd384c831d9bcc702c4cfc2fb82b642867b
-> 复核原因：source-change
+> 复核原因：user-ruling
 > 复核结论：updated
 > 稳定事实：裁决全基建单班进驻编制规则
 > 证据引用：tracked:docs/BASE_ASSIGNMENT.md

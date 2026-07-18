@@ -79,6 +79,7 @@ impl RoomBlueprint {
             FacilityKind::PowerPlant => 1,
             FacilityKind::ControlCenter => 5,
             FacilityKind::Office => 1,
+            FacilityKind::MeetingRoom => 2,
             _ => usize::MAX,
         }
     }
@@ -316,6 +317,17 @@ impl BaseBlueprint {
                     };
                 }
                 _ => {}
+            }
+        }
+        for (kind, label) in [
+            (FacilityKind::Office, "office"),
+            (FacilityKind::MeetingRoom, "meeting room"),
+        ] {
+            let count = self.rooms.iter().filter(|room| room.kind == kind).count();
+            if count > 1 {
+                return Err(Error::msg(format!(
+                    "base blueprint supports at most one {label}, got {count}"
+                )));
             }
         }
         Ok(())

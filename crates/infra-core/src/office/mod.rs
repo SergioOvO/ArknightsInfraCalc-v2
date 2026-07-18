@@ -6,6 +6,22 @@ mod interpreter;
 pub use input::{OfficeOperator, OfficeRoomInput};
 pub use interpreter::{solve_office, OfficeResult};
 
+use crate::support_facility::{
+    evaluate_support_room, SupportFacility, SupportRegistry, SupportRoomInput, SupportRoomResult,
+};
+
+pub fn evaluate_office(
+    input: &SupportRoomInput,
+    registry: &SupportRegistry,
+) -> Result<SupportRoomResult> {
+    if input.facility != SupportFacility::Office {
+        return Err(crate::error::Error::msg(
+            "office evaluator requires office input",
+        ));
+    }
+    evaluate_support_room(input, registry)
+}
+
 use crate::error::Result;
 use crate::instances::OperatorInstances;
 use crate::layout::{AssignedOperator, BaseAssignment, BaseBlueprint, FacilityKind, LayoutContext};

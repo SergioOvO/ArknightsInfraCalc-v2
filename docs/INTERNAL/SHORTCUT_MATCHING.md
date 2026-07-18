@@ -7,7 +7,7 @@
 > 摘要：定位贸易 shortcut 匹配和互斥实现
 > 源摘要：fe76f7e5309646272ccda58cdb8d8611ad6800bc63435e6fa25a7b234f0b7344
 > 文档摘要：d7f60ed63aef1381f7f8bd26426b74f620b253b35dd50d9d8cb5ac3da1185b75
-> 复核原因：source-change
+> 复核原因：user-ruling
 > 复核结论：updated
 > 稳定事实：定位贸易 shortcut 匹配和互斥实现
 > 证据引用：tracked:docs/INTERNAL/SHORTCUT_MATCHING.md

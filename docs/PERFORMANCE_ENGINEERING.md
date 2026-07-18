@@ -7,7 +7,7 @@
 > 摘要：记录当前性能事实、测量入口和风险边界
 > 源摘要：7748b4596d557be48eeb46567b7205f974ee27317635d572e793d4d8f5ae61c0
 > 文档摘要：8b3f9ad0262c941015b8ce7a13f0a67d598fbde16686d4a01f541959b0c18d09
-> 复核原因：source-change
+> 复核原因：user-ruling
 > 复核结论：updated
 > 稳定事实：记录当前性能事实、测量入口和风险边界
 > 证据引用：tracked:docs/PERFORMANCE_ENGINEERING.md

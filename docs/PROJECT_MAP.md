@@ -6,7 +6,7 @@
 > 复核触发：crates/**；data/**；scripts/**；Cargo.toml；README.md
 > 摘要：提供当前代码、数据和命令 owner 地图
 > 源摘要：0e09d4d88c224b54b73a1467910835661cd677bc5521467e961de7bf03cde9aa
-> 文档摘要：57ba4f3e156dc692d20694c88b5ca071f5059e959a977357e2ad9754162dba5c
+> 文档摘要：6cb31bb10b1f7fdf140da11418ed1139009e14f140330618e4bd12a0abb37763
 > 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：提供当前代码、数据和命令 owner 地图
@@ -130,7 +130,8 @@ ArknightsInfraCalc-v2/
 | **cross_facility** | `src/cross_facility/` | 跨设施编排；收集并执行 scope=Global atom，统一注入全局资源池 |
 | **box_profile** | `src/box_profile/` | 练度概况分析（`layout analyze` 子命令） |
 | **export** | `src/export/` | MAA 排班 JSON 导出 |
-| **office** | `src/office/` | 办公室感知 producer（如絮雨） |
+| **office** | `src/office/`、`src/support_facility.rs` | 办公室显式编制静态求值；既有感知 producer 路径保持独立 |
+| **meeting** | `src/meeting/`、`src/support_facility.rs` | 会客室显式编制静态求值；概率、线索事件和交流状态不算分 |
 | **power** | `src/power/` | 发电站求解 `solve_power` + `apply_power_to_layout` |
 | **eff_ramp** | `src/eff_ramp.rs` | 时间爬升效率（芬/克洛丝等） |
 
