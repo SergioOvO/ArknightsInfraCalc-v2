@@ -6,9 +6,9 @@
 > 当前真源：self
 > 复核触发：crates/infra-cli/src/**；crates/infra-core/src/export/**；release/**
 > 摘要：裁决前端调用 CLI 和导出数据的接口契约
-> 源摘要：e520281504ee2b502845a960d35c49555b5b4922abe937f3b96062016f66c9ed
+> 源摘要：a339d53098d6b81417d41d5cf7e1d1258c41f6500fa933e5f3164506854d8993
 > 文档摘要：6ba6403e8a829c5070da525b4ed4bf26239a416679ec51b37845e0e17ba9b364
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决前端调用 CLI 和导出数据的接口契约
 > 证据引用：tracked:docs/FRONTEND_CLI.md

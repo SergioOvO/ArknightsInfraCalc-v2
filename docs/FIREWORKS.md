@@ -6,9 +6,9 @@
 > 当前真源：self
 > 复核触发：crates/infra-core/src/global_resource/**；crates/infra-core/src/control/**；data/skill_table.json；data/operator_instances.json
 > 摘要：裁决人间烟火全局资源链的激活与结算边界
-> 源摘要：cbd93eab34d3b93d34483a057f2d3ec76ba2fb4e898cea8b57c999c21fc9c004
+> 源摘要：b5f413712528e73c5e2ba8ee3c2b2899e36381c4f4c9a1e7b4ff1bb60bc80783
 > 文档摘要：e8f775095c78b9d5a9f62792ecdcccb19f37d9a853f68f54787a612508291e2d
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决人间烟火全局资源链的激活与结算边界
 > 证据引用：tracked:docs/FIREWORKS.md

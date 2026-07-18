@@ -5,9 +5,9 @@
 > 当前真源：docs/EFFECT_ATOM_DESIGN.md；docs/QUALITY_AND_AUDIT.md
 > 生成器：scripts/audit_mechanics_registry.py
 > 摘要：保存机制注册表的确定性只读审计报告
-> 源摘要：057567a5e234dc14843731d5d0fb95f104dfeb1185cb83d3a518eb6c46897abf
+> 源摘要：0850057649301a598411e1037d65eef76e30a2c57371aee81eba8c8aa628d156
 > 文档摘要：b813789acdc4dcdc68d2b1bb68e7cf6832c10e509f6a7f92093a1d9cb199857a
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：保存机制注册表的确定性只读审计报告
 > 证据引用：tracked:docs/INTERNAL/MECHANICS_REGISTRY_AUDIT.md

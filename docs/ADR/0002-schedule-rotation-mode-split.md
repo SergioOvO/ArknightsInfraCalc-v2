@@ -4,9 +4,9 @@
 > 生命周期状态：accepted
 > 当前真源：docs/排班模式.md；docs/定时换班.md
 > 摘要：保存排班按执行模式分层的架构决策
-> 源摘要：91f1e1a8c63a2073c8f1ee6c702ca1fbf623f02c5c77b0a3d4d9887d2d59befc
+> 源摘要：545f18ff68a6061a7f846bc1f1c69e99afbc235ecb9f6a9fbcde44e90b78bae2
 > 文档摘要：e4a68190ebd159a2b8f9e8a0d29a338f7aa8ea9f62821d44840b219aade8a2f8
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：保存排班按执行模式分层的架构决策
 > 证据引用：tracked:docs/ADR/0002-schedule-rotation-mode-split.md

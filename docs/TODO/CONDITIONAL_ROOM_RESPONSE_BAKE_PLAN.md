@@ -5,9 +5,9 @@
 > 当前真源：docs/QUALITY_AND_AUDIT.md；docs/ORCHESTRATION_LAYER.md
 > 复核触发：crates/infra-core/src/bake.rs；crates/infra-core/src/search/**；crates/infra-core/src/layout/**
 > 摘要：设施无关条件化响应 Bake 的后续实施任务
-> 源摘要：9ed4426fa597846dd858227fa5cef78d342f64685e317550f8b4d233f743aa95
+> 源摘要：171661d66d2d47f82860e9e76dfe84ead658682a828c6c5e96656acf263dbc80
 > 文档摘要：9d047abba0ec10f45087d588b2be74cfdb1603c8321d028f3c2a762b8905c0e3
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：设施无关条件化响应 Bake 的后续实施任务
 > 证据引用：tracked:docs/TODO/CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md

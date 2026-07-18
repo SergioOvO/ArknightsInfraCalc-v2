@@ -5,9 +5,9 @@
 > 当前真源：docs/排班模式.md；docs/定时换班.md；docs/Fiammetta.md
 > 复核触发：crates/infra-core/src/schedule/**；crates/infra-core/src/export/**；crates/infra-cli/src/commands/plan.rs；crates/infra-cli/src/commands/layout.rs
 > 摘要：记录当前 ABC 三队轮换实现事实和入口
-> 源摘要：a699419f90799111eb604a229bcd1e5ed1cfc819b2f8639df3e0b01b6f23d0e6
+> 源摘要：aa3d400d79dbc3f13e595c2337361d831826d2b1af8f2814d18f1f918f592e66
 > 文档摘要：d21840ee8c72f9b97aab4e8bb1fe67ed10fe28ee56cbe64cf784c2ea05e4aedf
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：记录当前 ABC 三队轮换实现事实和入口
 > 证据引用：tracked:docs/SCHEDULE_ROTATION.md

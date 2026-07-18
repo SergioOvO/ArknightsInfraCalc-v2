@@ -6,9 +6,9 @@
 > 当前真源：self
 > 复核触发：crates/infra-core/src/layout/orchestrate/**；crates/infra-core/src/global_resource/**；data/orchestration_rules.json；data/skill_table.json；data/operator_instances.json
 > 摘要：裁决迷迭香感知体系的激活、成员和编排
-> 源摘要：5a84053162102e02cde70fe2ea98f5a3335058746f4fa8339ffc62d00e5d149a
+> 源摘要：47cfb3c6e4e5f88fd622a246ac1e4111ee208bc32bae891aedd5dddfccb400c6
 > 文档摘要：53099cd9916066811054d0f4644e96210154a4141ed199d374f6fa1118cf5b42
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决迷迭香感知体系的激活、成员和编排
 > 证据引用：tracked:docs/公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md

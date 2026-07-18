@@ -262,6 +262,8 @@ class DocsImpactTests(unittest.TestCase):
             encoding="utf-8",
         )
         (self.repo / "src/app.py").write_text("print('ok')\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-q"], cwd=self.repo, check=True)
+        subprocess.run(["git", "add", "docs/A.md", "src/app.py"], cwd=self.repo, check=True)
         document = docs_inventory.parse_document(self.repo, self.repo / "docs/A.md")
         docs_inventory.write_review_record(self.repo, document, cause="lifecycle-migration")
         self.config = {
@@ -298,6 +300,40 @@ class DocsImpactTests(unittest.TestCase):
             ),
             [],
         )
+
+    def test_changed_markdown_requires_exact_review_entry(self) -> None:
+        manifest = self.manifest("updated")
+        manifest["docs_impact"]["entries"] = []
+        errors = check_docs_impact.run_checks(
+            self.repo, self.config, manifest, {"docs/A.md"}, []
+        )
+        self.assertTrue(any("missing changed or triggered documents" in error for error in errors))
+
+    def test_generator_change_requires_review_entry(self) -> None:
+        generator = self.repo / "scripts/gen.py"
+        generator.parent.mkdir()
+        generator.write_text("print('generate')\n", encoding="utf-8")
+        generated = self.repo / "docs/GENERATED.md"
+        generated.write_text(
+            "# Generated\n\n"
+            "> 文档角色：generated-reference\n"
+            "> 生命周期状态：generated\n"
+            "> 当前真源：docs/A.md\n"
+            "> 生成器：scripts/gen.py\n"
+            "> 摘要：generated fixture for dependency coverage\n\n"
+            "Generated output.\n",
+            encoding="utf-8",
+        )
+        subprocess.run(["git", "add", "scripts/gen.py", "docs/GENERATED.md"], cwd=self.repo, check=True)
+        document = docs_inventory.parse_document(self.repo, generated)
+        docs_inventory.write_review_record(self.repo, document, cause="source-change")
+        document = docs_inventory.parse_document(self.repo, generated)
+        manifest = self.manifest("updated")
+        manifest["docs_impact"]["entries"] = []
+        errors = check_docs_impact.run_checks(
+            self.repo, self.config, manifest, {"scripts/gen.py"}, []
+        )
+        self.assertTrue(any("missing changed or triggered documents" in error for error in errors))
 
     def test_blocked_uncovered_missing_and_false_updated_fail(self) -> None:
         valid_manifest = self.manifest()

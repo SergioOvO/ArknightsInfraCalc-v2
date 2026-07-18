@@ -245,15 +245,24 @@ def run_checks(
         document.path
         for document in documents
         if any(
-            fnmatch_path(path, trigger)
+            docs_inventory.path_matches_pattern(path, trigger)
             for path in changed_paths
             if not path.endswith(".md")
-            for trigger in document.triggers
+            for trigger in docs_inventory.dependency_patterns(document)
         )
     }
-    missing = triggered - set(entries)
+    changed_reviewable = {
+        document.path
+        for document in documents
+        if docs_inventory.is_reviewable(document) and document.path in changed_paths
+    }
+    expected_entries = triggered | changed_reviewable
+    missing = expected_entries - set(entries)
     if missing:
-        errors.append(f"docs impact entries missing triggered documents: {sorted(missing)}")
+        errors.append(f"docs impact entries missing changed or triggered documents: {sorted(missing)}")
+    unexpected = set(entries) - expected_entries
+    if unexpected:
+        errors.append(f"docs impact entries contain documents outside the exact review set: {sorted(unexpected)}")
 
     for path, entry in entries.items():
         document = by_path.get(path)
@@ -291,12 +300,6 @@ def run_checks(
         else:
             errors.append(f"unknown generated check: {check}")
     return errors
-
-
-def fnmatch_path(path: str, pattern: str) -> bool:
-    import fnmatch
-
-    return fnmatch.fnmatchcase(path, pattern)
 
 
 def build_parser() -> argparse.ArgumentParser:

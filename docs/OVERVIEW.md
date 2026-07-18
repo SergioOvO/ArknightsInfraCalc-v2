@@ -5,9 +5,9 @@
 > 当前真源：docs/EFFECT_ATOM_DESIGN.md；docs/BASE_ASSIGNMENT.md；docs/ORCHESTRATION_LAYER.md；docs/排班模式.md
 > 复核触发：crates/infra-core/src/**；crates/infra-cli/src/**；data/orchestration_rules.json
 > 摘要：提供项目当前范围和能力总览
-> 源摘要：4ad8c5e75485c56da9cfa8ee6728cac533c2e37f7933daa8d3044bc1d2524bc1
+> 源摘要：83c633a77723a2ba49ff5d437d2b94ab1994fcf34fa6c3de35470987db11d0a4
 > 文档摘要：f41c8aa86e45c92012aef618b147630d49bffa19d8e082cfb0b4c66bd345ddce
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：提供项目当前范围和能力总览
 > 证据引用：tracked:docs/OVERVIEW.md

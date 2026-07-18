@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import tempfile
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -37,6 +37,8 @@ class DocsInventoryTests(unittest.TestCase):
             "> 复核触发：src/**\n"
             "> 摘要：canonical fixture",
         )
+        subprocess.run(["git", "init", "-q"], cwd=self.repo, check=True)
+        subprocess.run(["git", "add", "src/a.rs", path], cwd=self.repo, check=True)
         return docs_inventory.parse_document(self.repo, target)
 
     def test_parses_and_validates_canonical(self) -> None:
@@ -90,15 +92,66 @@ class DocsInventoryTests(unittest.TestCase):
         document = self.canonical()
         first = docs_inventory.source_digest(self.repo, document)
         (self.repo / "src/a.rs").write_text("b\n", encoding="utf-8")
+        self.assertEqual(first, docs_inventory.source_digest(self.repo, document))
+        subprocess.run(["git", "add", "src/a.rs"], cwd=self.repo, check=True)
         self.assertNotEqual(first, docs_inventory.source_digest(self.repo, document))
 
     def test_source_digest_ignores_untracked_files_in_git_repo(self) -> None:
         document = self.canonical()
-        subprocess.run(["git", "init", "-q"], cwd=self.repo, check=True)
-        subprocess.run(["git", "add", "docs/A.md", "src/a.rs"], cwd=self.repo, check=True)
         first = docs_inventory.source_digest(self.repo, document)
         (self.repo / "src/untracked.pyc").write_bytes(b"generated")
         self.assertEqual(first, docs_inventory.source_digest(self.repo, document))
+
+    def test_source_digest_tracks_symlink_blob(self) -> None:
+        document = self.canonical()
+        link = self.repo / "src/current"
+        link.symlink_to("a.rs")
+        subprocess.run(["git", "add", "src/current"], cwd=self.repo, check=True)
+        first = docs_inventory.source_digest(self.repo, document)
+        link.unlink()
+        link.symlink_to("other.rs")
+        subprocess.run(["git", "add", "src/current"], cwd=self.repo, check=True)
+        self.assertNotEqual(first, docs_inventory.source_digest(self.repo, document))
+
+    def test_source_digest_fails_closed_without_git_index(self) -> None:
+        target = write_doc(
+            self.repo,
+            "docs/B.md",
+            "> 文档角色：canonical\n"
+            "> 生命周期状态：current\n"
+            "> 领域键：b\n"
+            "> 当前真源：self\n"
+            "> 复核触发：src\n"
+            "> 摘要：canonical fixture",
+        )
+        document = docs_inventory.parse_document(self.repo, target)
+        with self.assertRaises(docs_inventory.InventoryError):
+            docs_inventory.source_digest(self.repo, document)
+
+    def test_concrete_directory_trigger_covers_tracked_descendants(self) -> None:
+        document = self.canonical()
+        text = document.text.replace("> 复核触发：src/**", "> 复核触发：src")
+        document = docs_inventory.parse_document(self.repo, self.repo / document.path, text)
+        first = docs_inventory.source_digest(self.repo, document)
+        (self.repo / "src/a.rs").write_text("directory trigger\n", encoding="utf-8")
+        subprocess.run(["git", "add", "src/a.rs"], cwd=self.repo, check=True)
+        self.assertNotEqual(first, docs_inventory.source_digest(self.repo, document))
+
+    def test_generator_must_be_concrete_and_resolve_to_tracked_blob(self) -> None:
+        document = self.canonical()
+        invalid_text = document.text.replace("> 摘要：", "> 生成器：../gen.py\n> 摘要：")
+        invalid = docs_inventory.parse_document(self.repo, self.repo / document.path, invalid_text)
+        self.assertTrue(
+            any(
+                "generator must be a concrete" in error
+                for error in docs_inventory.validate_document(invalid, final=False)
+            )
+        )
+
+        missing_text = document.text.replace("> 摘要：", "> 生成器：scripts/missing.py\n> 摘要：")
+        missing = docs_inventory.parse_document(self.repo, self.repo / document.path, missing_text)
+        with self.assertRaises(docs_inventory.InventoryError):
+            docs_inventory.source_digest(self.repo, missing)
 
     def test_source_coverage_requires_owner(self) -> None:
         document = self.canonical()
@@ -115,11 +168,20 @@ class DocsInventoryTests(unittest.TestCase):
         refreshed = docs_inventory.parse_document(self.repo, self.repo / document.path)
         self.assertEqual(docs_inventory.review_errors(self.repo, refreshed), [])
         (self.repo / "src/a.rs").write_text("changed\n", encoding="utf-8")
+        subprocess.run(["git", "add", "src/a.rs"], cwd=self.repo, check=True)
         self.assertTrue(any("source digest drift" in error for error in docs_inventory.review_errors(self.repo, refreshed)))
         entry = docs_inventory.docs_impact_entry(refreshed)
         self.assertEqual(entry["path"], "docs/A.md")
         self.assertEqual(entry["source_digest"], refreshed.metadata["源摘要"])
         self.assertEqual(entry["disposition"], "updated")
+
+    def test_refresh_records_a_new_explicit_cause(self) -> None:
+        document = self.canonical()
+        docs_inventory.write_review_record(self.repo, document, cause="lifecycle-migration")
+        refreshed = docs_inventory.parse_document(self.repo, self.repo / document.path)
+        docs_inventory.write_review_record(self.repo, refreshed, cause="user-ruling")
+        final = docs_inventory.parse_document(self.repo, self.repo / document.path)
+        self.assertEqual(final.metadata["复核原因"], "user-ruling")
 
     def test_generated_tables_are_deterministic(self) -> None:
         first = self.canonical("docs/B.md", "z")

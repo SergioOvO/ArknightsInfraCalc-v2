@@ -6,9 +6,9 @@
 > 当前真源：self
 > 复核触发：crates/infra-core/src/layout/orchestrate/**；crates/infra-core/src/manufacture/**；data/orchestration_rules.json；data/skill_table.json
 > 摘要：裁决红松林体系的激活、成员和编排
-> 源摘要：6802bd3c45398d007dce0bd641e57ef3f375e463a7a15b6623908521f5c01341
+> 源摘要：03c47eb4839a59a09bbb5574613696aaf36852a893a68c33e204ad43101293d7
 > 文档摘要：11ca25a49863bb6518b34b99c80317ccffb3f6fe6b86465142c2643396c0a1c9
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决红松林体系的激活、成员和编排
 > 证据引用：tracked:docs/公孙长乐的体系分析文档/RED_PINE_FOREST_CHAIN.md

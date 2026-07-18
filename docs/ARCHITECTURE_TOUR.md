@@ -5,9 +5,9 @@
 > 当前真源：docs/ORCHESTRATION_LAYER.md；docs/BASE_ASSIGNMENT.md
 > 复核触发：crates/infra-core/src/**；crates/infra-cli/src/**
 > 摘要：解释当前核心调用链和模块边界
-> 源摘要：84228ad55cfea1aa9f8daaf312f1519a5bff4c64d5403ada93a31538b50c5542
+> 源摘要：290ee52981199432d3e856619658bb2b92e661874052ff90b5d8a4d19ae14961
 > 文档摘要：0dbf26e16469952507202dadc13dca4c99a99f91097a9c99ea1ec9a32851e3e6
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：解释当前核心调用链和模块边界
 > 证据引用：tracked:docs/ARCHITECTURE_TOUR.md

@@ -6,9 +6,9 @@
 > 当前真源：self
 > 复核触发：crates/infra-core/src/scoring/**；crates/infra-core/src/search/**
 > 摘要：裁决各域排序 policy 和评分分量
-> 源摘要：37950fcdc98c429da40e042a17c52344a45fa46eb68b6e037728e0bb8296c35b
+> 源摘要：ecbd9ce1640cb984aa458012a51d798ddbfcdc56f37d1fe771684f500d0c9ac3
 > 文档摘要：541dcc38ac48247c50805e6d9c6a3e83baa66319180063bbddaf07c33d1ba7af
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决各域排序 policy 和评分分量
 > 证据引用：tracked:docs/SCORING_MODEL.md

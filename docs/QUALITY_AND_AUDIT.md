@@ -6,7 +6,7 @@
 > 当前真源：self
 > 复核触发：AGENTS.md；.agents/skills/arknights-quality/**；.agents/skills/arknights-evidence/**；scripts/codex/**
 > 摘要：裁决质量、求解保证和交付证据要求
-> 源摘要：ea29491049c411d275d156f22485f3929936148a4b53d05e6fe801a506381c46
+> 源摘要：349f00ae40e1a36098d397e8061ff37f4a2055bfc20cd6dfb13cde574d3ded26
 > 文档摘要：21163483916a9db6e151742ddc4d8e328afc6f3ee4544872ab2f36421add1d1b
 > 复核原因：source-change
 > 复核结论：updated

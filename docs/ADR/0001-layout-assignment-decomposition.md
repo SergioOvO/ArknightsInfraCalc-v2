@@ -4,9 +4,9 @@
 > 生命周期状态：accepted
 > 当前真源：docs/ORCHESTRATION_LAYER.md；docs/BASE_ASSIGNMENT.md
 > 摘要：保存布局编制分解为 System、Plan、Execute 的架构决策
-> 源摘要：91f1e1a8c63a2073c8f1ee6c702ca1fbf623f02c5c77b0a3d4d9887d2d59befc
+> 源摘要：545f18ff68a6061a7f846bc1f1c69e99afbc235ecb9f6a9fbcde44e90b78bae2
 > 文档摘要：c04c7bef13c373818b3acc559f00fe6b87d5eb99afb4cb970cc2102e65dcf157
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：保存布局编制分解为 System、Plan、Execute 的架构决策
 > 证据引用：tracked:docs/ADR/0001-layout-assignment-decomposition.md

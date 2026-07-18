@@ -5,9 +5,9 @@
 > 当前真源：docs/EFFECT_ATOM_DESIGN.md；docs/EFFICIENCY_MODEL.md；docs/ORCHESTRATION_LAYER.md；docs/排班模式.md
 > 复核触发：crates/infra-core/src/types.rs；crates/infra-core/src/layout/**；crates/infra-core/src/schedule/**
 > 摘要：路由项目术语到各 canonical owner
-> 源摘要：0230f57a930ab42f1ebf44409234203e0e9304f2ca35256f3b13677c9da03abe
+> 源摘要：c854818367db9037b953b37a9d36c80452fda6c484051c72b114cad1060677f8
 > 文档摘要：77f66f042906b3a5d6f7168f594198305b86b880099b52d09b17a54380dc8f06
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：路由项目术语到各 canonical owner
 > 证据引用：tracked:docs/GLOSSARY.md

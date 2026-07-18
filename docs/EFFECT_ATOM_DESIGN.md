@@ -6,9 +6,9 @@
 > 当前真源：self
 > 复核触发：crates/infra-core/src/types.rs；crates/infra-core/src/trade/**；crates/infra-core/src/global_resource/**；data/skill_table.json；data/operator_instances.json
 > 摘要：裁决 EffectAtom 词汇和机制解释分层
-> 源摘要：d71e96d080b8c1292c62b46bb1ebf98da9244ad0f330ad2f2381dbe345203a2a
+> 源摘要：543c53f7f4e8c0e5e3389d968c5295148ad97226fddbae2d3db09909bb801406
 > 文档摘要：1a88ad7e9778844ca3e037f836cf496fb9bd036f8d45af52834a39e40f79e6a8
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决 EffectAtom 词汇和机制解释分层
 > 证据引用：tracked:docs/EFFECT_ATOM_DESIGN.md

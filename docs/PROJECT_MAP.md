@@ -5,7 +5,7 @@
 > 当前真源：docs/文档生命周期.md；docs/ORCHESTRATION_LAYER.md；docs/INFRA_CLI.md
 > 复核触发：crates/**；data/**；scripts/**；Cargo.toml；README.md
 > 摘要：提供当前代码、数据和命令 owner 地图
-> 源摘要：06e8618074bb62173ee4797b90e468b9f27a575a8e0fd71a1ffcc0d9edff9d1e
+> 源摘要：0e09d4d88c224b54b73a1467910835661cd677bc5521467e961de7bf03cde9aa
 > 文档摘要：57ba4f3e156dc692d20694c88b5ca071f5059e959a977357e2ad9754162dba5c
 > 复核原因：source-change
 > 复核结论：updated

@@ -6,9 +6,9 @@
 > 当前真源：self
 > 复核触发：crates/infra-core/src/layout/orchestrate/**；crates/infra-core/src/layout/assign.rs；data/orchestration_rules.json；data/base_systems.json
 > 摘要：裁决 System 到 Plan 到 Execute 的编排契约
-> 源摘要：8f78307624666226da667debb09b66736b712c5c01a81cbc59a74b656597a3f8
+> 源摘要：54d66a95636c72f5e23e32dc32b8c64ed83685eebacc059a495648562e9040f6
 > 文档摘要：d84271d8451a3e93b8a1c0e71f04f2fb82d6436e8f10c4ab7582c7ea0a818c21
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决 System 到 Plan 到 Execute 的编排契约
 > 证据引用：tracked:docs/ORCHESTRATION_LAYER.md

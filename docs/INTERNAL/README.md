@@ -5,9 +5,9 @@
 > 当前真源：docs/文档生命周期.md；docs/PROJECT_MAP.md
 > 复核触发：crates/infra-core/src/trade/**；crates/infra-core/src/cross_facility/**
 > 摘要：路由大模块内部实现地图和对应 current owner
-> 源摘要：e019ab55b34b489aa2efe19a2a9fcd13f1f827eac4ed62121db6bd428d345f1a
+> 源摘要：5c8954b03bd80d49780d0fda95e9e79c45aae2530e436c2223982890bf218e69
 > 文档摘要：c83ace131b8904d0338e76645446158708c7ea356700643e123c8e4f0e901942
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：路由大模块内部实现地图和对应 current owner
 > 证据引用：tracked:docs/INTERNAL/README.md

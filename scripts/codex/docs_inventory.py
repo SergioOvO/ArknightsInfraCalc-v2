@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 META_KEYS = {
     "文档角色",
     "生命周期状态",
@@ -198,6 +198,17 @@ def _is_repo_glob(value: str) -> bool:
     return not any(part == ".." for part in Path(value).parts)
 
 
+def path_matches_pattern(path: str, pattern: str) -> bool:
+    normalized = pattern.rstrip("/")
+    if any(character in normalized for character in "*?["):
+        return fnmatch.fnmatchcase(path, normalized)
+    return path == normalized or path.startswith(f"{normalized}/")
+
+
+def dependency_patterns(document: Document) -> list[str]:
+    return [*document.triggers, *split_values(document.metadata.get("生成器", ""))]
+
+
 def markdown_anchors(text: str) -> set[str]:
     anchors: set[str] = set()
     counts: dict[str, int] = {}
@@ -287,6 +298,11 @@ def validate_document(document: Document, *, final: bool) -> list[str]:
             errors.append(f"invalid review trigger {trigger!r}: {document.path}")
         if trigger.startswith(("docs/", "plans/", "feedback/")):
             errors.append(f"review trigger must not target governed Markdown roots: {document.path}: {trigger}")
+    for generator in split_values(document.metadata.get("生成器", "")):
+        if not _is_repo_glob(generator) or any(char in generator for char in "*?["):
+            errors.append(f"generator must be a concrete repository path: {document.path}: {generator}")
+        if generator.startswith(("docs/", "plans/", "feedback/")):
+            errors.append(f"generator must not target governed Markdown roots: {document.path}: {generator}")
     for owner in document.owners:
         if owner == "self":
             continue
@@ -369,58 +385,76 @@ def document_digest(document: Document) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _trigger_paths(repo: Path, pattern: str) -> list[Path]:
+def _tracked_objects(repo: Path) -> list[tuple[str, str, str]]:
     try:
         result = subprocess.run(
-            ["git", "-c", "core.quotepath=false", "-C", str(repo), "ls-files", "-z"],
+            ["git", "-c", "core.quotepath=false", "-C", str(repo), "ls-files", "--stage", "-z"],
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        relatives = [value.decode("utf-8") for value in result.stdout.split(b"\0") if value]
-        return [
-            repo / relative
-            for relative in sorted(relatives)
-            if fnmatch.fnmatchcase(relative, pattern)
-            and (repo / relative).is_file()
-            and not (repo / relative).is_symlink()
-        ]
-    except subprocess.CalledProcessError:
-        paths: set[Path] = set()
-        for candidate in repo.glob(pattern):
-            if candidate.is_file() and not candidate.is_symlink():
-                paths.add(candidate)
-            elif candidate.is_dir() and not candidate.is_symlink():
-                paths.update(path for path in candidate.rglob("*") if path.is_file() and not path.is_symlink())
-        return sorted(paths, key=lambda path: _repo_relative(repo, path))
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise InventoryError(f"cannot read tracked Git blobs from {repo}") from error
+
+    objects: list[tuple[str, str, str]] = []
+    try:
+        for record in result.stdout.split(b"\0"):
+            if not record:
+                continue
+            attributes, raw_path = record.split(b"\t", 1)
+            mode, raw_oid, stage = attributes.split(b" ")
+            if stage != b"0":
+                raise InventoryError(f"unmerged tracked path cannot be hashed: {raw_path.decode('utf-8')}")
+            oid = raw_oid.decode("ascii")
+            if not oid.strip("0"):
+                raise InventoryError(f"tracked path lacks a Git object: {raw_path.decode('utf-8')}")
+            if mode == b"160000":
+                object_type = "gitlink"
+            elif mode.startswith((b"100", b"120")):
+                object_type = "blob"
+            else:
+                raise InventoryError(f"unsupported tracked mode {mode.decode('ascii')}: {raw_path.decode('utf-8')}")
+            objects.append((raw_path.decode("utf-8"), object_type, oid))
+    except (UnicodeError, ValueError) as error:
+        raise InventoryError("cannot parse tracked Git blob inventory") from error
+    return sorted(objects)
+
+
+def _trigger_objects(repo: Path, pattern: str) -> list[tuple[str, str, str]]:
+    return [item for item in _tracked_objects(repo) if path_matches_pattern(item[0], pattern)]
 
 
 def source_digest(repo: Path, document: Document) -> str:
     digest = hashlib.sha256()
     digest.update(f"docs-source-digest-v{SCHEMA_VERSION}\0".encode())
-    patterns = [*document.triggers]
-    if document.metadata.get("生成器"):
-        patterns.append(document.metadata["生成器"])
-    for pattern in sorted(patterns):
+    generators = set(split_values(document.metadata.get("生成器", "")))
+    for pattern in sorted(dependency_patterns(document)):
         digest.update(f"pattern\0{pattern}\0".encode())
-        paths = _trigger_paths(repo, pattern)
-        if not paths:
+        objects = _trigger_objects(repo, pattern)
+        if pattern in generators and (
+            len(objects) != 1 or objects[0][0] != pattern or objects[0][1] != "blob"
+        ):
+            raise InventoryError(f"generator must resolve to exactly one tracked Git blob: {document.path}: {pattern}")
+        if not objects:
             digest.update(b"empty\0")
-        for path in paths:
-            relative = _repo_relative(repo, path)
+        for relative, object_type, oid in objects:
             digest.update(f"file\0{relative}\0".encode())
-            digest.update(path.read_bytes())
-            digest.update(b"\0")
+            digest.update(f"{object_type}\0{oid}\0".encode())
     return digest.hexdigest()
 
 
+def is_reviewable(document: Document) -> bool:
+    return document.role in REVIEWABLE_ROLES or (document.role == "evidence" and document.status == "current")
+
+
 def review_errors(repo: Path, document: Document) -> list[str]:
-    role = document.role
-    reviewable = role in REVIEWABLE_ROLES or (role == "evidence" and document.status == "current")
-    if not reviewable:
+    if not is_reviewable(document):
         return []
     errors: list[str] = []
-    expected_source = source_digest(repo, document)
+    try:
+        expected_source = source_digest(repo, document)
+    except InventoryError as error:
+        return [f"{error}: {document.path}"]
     expected_document = document_digest(document)
     if document.metadata.get("源摘要") != expected_source:
         errors.append(f"source digest drift: {document.path}")
@@ -460,15 +494,14 @@ def _line_ending(line: str) -> str:
 def write_review_record(repo: Path, document: Document, *, cause: str) -> None:
     if cause not in REVIEW_CAUSES:
         raise InventoryError(f"unsupported review cause: {cause}")
-    role = document.role
-    reviewable = role in REVIEWABLE_ROLES or (role == "evidence" and document.status == "current")
-    if not reviewable:
+    if not is_reviewable(document):
         return
     expected_source = source_digest(repo, document)
     expected_document = document_digest(document)
     if (
         document.metadata.get("源摘要") == expected_source
         and document.metadata.get("文档摘要") == expected_document
+        and document.metadata.get("复核原因") == cause
         and all(document.metadata.get(key) for key in ("复核原因", "复核结论", "稳定事实", "证据引用"))
     ):
         return
@@ -730,14 +763,14 @@ def source_coverage_errors(
     triggers = [
         (document.path, pattern)
         for document in [*documents, *base_documents]
-        for pattern in document.triggers
+        for pattern in dependency_patterns(document)
     ]
     for path in sorted(set(changed_paths)):
         if path.endswith(".md") and path.startswith(("docs/", "plans/", "feedback/")):
             continue
-        if any(fnmatch.fnmatchcase(path, pattern) for pattern in ignore_globs):
+        if any(path_matches_pattern(path, pattern) for pattern in ignore_globs):
             continue
-        owners = {owner for owner, pattern in triggers if fnmatch.fnmatchcase(path, pattern)}
+        owners = {owner for owner, pattern in triggers if path_matches_pattern(path, pattern)}
         if not owners:
             errors.append(f"changed source path has no document owner: {path}")
     return errors
@@ -795,7 +828,7 @@ def continuity_errors(
                     required_reviews.add(path)
                 continue
             for document in [*base_documents, *head_documents]:
-                if any(fnmatch.fnmatchcase(path, trigger) for trigger in document.triggers):
+                if any(path_matches_pattern(path, trigger) for trigger in dependency_patterns(document)):
                     if document.path in head_by_path:
                         required_reviews.add(document.path)
 
@@ -870,9 +903,13 @@ def main() -> int:
         else:
             write_migration_ledger(repo, documents, args.base, args.write_migration_ledger)
     if args.refresh_reviews and not errors:
-        refresh_review_records(repo, documents, cause=args.review_cause)
-        documents, refresh_errors = load_inventory(repo)
-        errors.extend(refresh_errors)
+        try:
+            refresh_review_records(repo, documents, cause=args.review_cause)
+        except InventoryError as error:
+            errors.append(str(error))
+        if not errors:
+            documents, refresh_errors = load_inventory(repo)
+            errors.extend(refresh_errors)
     if args.write_docs_impact_metadata and not errors:
         write_docs_impact_metadata(args.write_docs_impact_metadata, documents)
     if args.check:

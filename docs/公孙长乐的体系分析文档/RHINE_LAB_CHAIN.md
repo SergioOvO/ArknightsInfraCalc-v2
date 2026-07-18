@@ -6,9 +6,9 @@
 > 当前真源：self
 > 复核触发：crates/infra-core/src/layout/orchestrate/**；crates/infra-core/src/manufacture/**；crates/infra-core/src/power/**；data/orchestration_rules.json
 > 摘要：裁决莱茵体系的候选、挂件和编排
-> 源摘要：26daf1bb8c57d1faeecbc28effc01f36e8759d8594656b919de194d64594a53a
+> 源摘要：bc48abab7ab5e0c655102554b33e6c443d60b7e6683195212976c37f81f2d5cb
 > 文档摘要：cbbde855aef9fd5ded93e89cbc80bac22b40d1fb145031f71a1c61af94ebb179
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决莱茵体系的候选、挂件和编排
 > 证据引用：tracked:docs/公孙长乐的体系分析文档/RHINE_LAB_CHAIN.md

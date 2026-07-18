@@ -6,9 +6,9 @@
 > 当前真源：self
 > 复核触发：crates/infra-core/src/schedule/**；crates/infra-core/src/layout/**；crates/infra-core/src/export/**
 > 摘要：裁决菲亚梅塔在当前排班中的目标和边界
-> 源摘要：35043f55ddd451fba386cfbf49e98d386d946768196f51686fe4e8552869a6fa
+> 源摘要：3d1075ac1197f3cb64bbaaab787b5bc8c6c0bde9355bc7ce659418e35848ab99
 > 文档摘要：72db7921f8ce8db89fda6ba4a2ecee43823251511d097f31361d632b9f94e39a
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决菲亚梅塔在当前排班中的目标和边界
 > 证据引用：tracked:docs/Fiammetta.md

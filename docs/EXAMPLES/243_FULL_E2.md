@@ -5,9 +5,9 @@
 > 当前真源：docs/BASE_ASSIGNMENT.md；docs/SCHEDULE_ROTATION.md
 > 复核触发：data/fixtures/243/**；crates/infra-cli/src/commands/plan.rs；crates/infra-core/src/schedule/**
 > 摘要：记录 243 全精二当前示例和可复现入口
-> 源摘要：1701dbdfd3f9e0a54e3d05c85c7f9154d6706ad02bea29ea1a07f01fcb4353e4
+> 源摘要：e19b9b939270bc6b2b8b5f6c4776105bd2be26cd972c90003ca2947e68b3bcde
 > 文档摘要：5aecb8e9749ca50d36513e12dce188a5d79a98d556ae1fb3217b75e85b32910d
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：记录 243 全精二当前示例和可复现入口
 > 证据引用：tracked:docs/EXAMPLES/243_FULL_E2.md
