@@ -72,7 +72,7 @@ ArknightsInfraCalc-v2/
 ├── Cargo.toml              workspace：infra-core + infra-cli
 ├── README.md
 ├── AGENTS.md               Agent / 新会话首读（链到本文）
-├── .agents/skills/         项目 Skills：debug / feature / quality / system audit / evidence
+├── .agents/skills/         项目 Skills：debug / feature / quality / system audit / evidence / training review
 ├── docs/
 │   ├── INDEX.md            文档总入口：首读、TODO、归档、任务路由
 │   ├── PROJECT_MAP.md      ← 本文：当前架构地图
@@ -269,6 +269,7 @@ ArknightsInfraCalc-v2/
 | `build_power_skill_table.py` | 发电技能表构建/校验 |
 | `audit_control_buffs.py` | 中枢 buff 审计 |
 | `audit_tier_mapping.py` | tier 映射审计 |
+| `render_training_recommendations.py` | 将练卡推荐规则确定性渲染为公孙长乐中文验收稿 |
 | `codex/run_evidence.sh` | 统一执行验证命令并原子追加任务 manifest |
 | `codex/compare_test_failures.py` | 比较 Cargo full-suite 失败名称集合 |
 | `codex/render_evidence.py` | 校验 manifest / status / 日志 / 产物并生成证据 Markdown |

@@ -22,6 +22,7 @@ feature -> arknights-feature
 quality-refactor -> arknights-quality
 system / conformance / formal audit -> arknights-system-audit
 命令或产物结论 -> arknights-evidence
+公孙长乐验收练卡推荐 -> gongsun-training-review
 ```
 
 - 已知领域文档时直接完整读取，不需要先读本文。
@@ -52,6 +53,7 @@ system / conformance / formal audit -> arknights-system-audit
 | 架构、性能、工作流、技术债或 solver assurance | [Quality Skill](../.agents/skills/arknights-quality/SKILL.md) | [质量与审计](QUALITY_AND_AUDIT.md)、相关架构/性能文档 |
 | 体系、跨设施、required admission、scope、Team/Shift bind | [System Audit Skill](../.agents/skills/arknights-system-audit/SKILL.md) | 对应体系 canonical 文档；formal 时再读审计工作流 |
 | build、test、CLI、性能或产物证据 | [Evidence Skill](../.agents/skills/arknights-evidence/SKILL.md) | [工具协议](../scripts/codex/README.md)；高风险搜索改动读质量规范 |
+| 公孙长乐验收练卡推荐表 | [练卡推荐验收 Skill](../.agents/skills/gongsun-training-review/SKILL.md) | [基建练卡推荐规则](练卡推荐规则.md) + 生成验收稿 |
 | 只读调查或知识提取 | `terra-explorer` / `luna-extractor` | Codex：`.codex/agents/`；OpenCode：`.opencode/agents/`；按独立调查轴读取原始材料 |
 
 具名 subagent 必须由当前运行时的 profile 选择能力实际加载，不能用 `task_name`、昵称或提示词模拟模型路由。结构化提取优先 `luna-extractor`，代码和文档 owner 调查优先 `terra-explorer`，高风险最终反方审阅才使用 `sol-reviewer`；运行时不暴露目标 profile 时，主 Agent 应缩小委派或明确说明默认模型成本。
