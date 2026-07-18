@@ -29,8 +29,19 @@ If the quality migration changes System/Rule/Plan admission, cross-facility scop
 
 For Agent/workflow changes, preserve progressive disclosure: root rules route, Skills execute, canonical docs define semantics, deterministic scripts enforce mechanical facts. Avoid adding new memory or roles without a demonstrated missing owner.
 
+For documentation governance, use `../_shared/CHANGE_LIFECYCLE.md` and
+treat current truth, active changes, decisions, generated facts, and archives as
+separate roles. The minimal correct migration is the full lifecycle boundary:
+leave one current owner, absorb valid facts, split open work, and archive or
+delete every conflicting path. Do not optimize for the fewest touched files.
+
 ## Complete
 
 Use `arknights-evidence` to capture baseline and current facts. Prove migration completion, delete old paths, compare behavior/performance/validation as scoped, update current docs, and defer unrelated discoveries.
+
+When the quality task owns a tracked plan or documentation migration, closure
+must also prove lifecycle state, index coverage, and repository references. Do
+not leave completed or superseded plans in the active tree with banner-only
+updates.
 
 Report why this was an independent quality task, old maintenance cost or correctness risk, new owner, deleted conflicts, measured result, unverified risks, and the next real task that can now be done more safely or cheaply.

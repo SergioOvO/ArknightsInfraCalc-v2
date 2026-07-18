@@ -48,3 +48,8 @@ Declare one primary invariant, required/consumer/proof paths, and deferred findi
 Use independent read-only exploration and invariant extraction by default when both code reality and domain documents are nontrivial. Freeze the responsibility boundary before one writer starts. For rebuilds, use an adversarial reviewer on the actual diff and evidence.
 
 Require invariant-level regression and a real `plan` or `layout team-rotation` entry for scheduling/export changes. Use `arknights-evidence` for all command evidence and final scope/docs checks. Report the old illegal path, new owner, deleted conflicts, exact/heuristic impact if search space changed, tests, CLI result, and unresolved risks.
+
+If the audit owns an active TODO, plan, or change package, apply
+`../_shared/CHANGE_LIFECYCLE.md` after the invariant is proven. Formal
+audit waits govern semantic approval; they do not waive current-document and
+archive closure.

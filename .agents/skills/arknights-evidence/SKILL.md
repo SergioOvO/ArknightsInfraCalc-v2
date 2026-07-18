@@ -16,6 +16,13 @@ Use repository evidence tools for every build, test, CLI, benchmark, format, or 
 
 Use categories `build`, `targeted-test`, `full-suite`, `cli`, `performance`, `format`, and `structure`. Include actual layout, operbox, assignment, fixture, policy, output, baseline, seed, and time limit when relevant.
 
+For tracked changes and documentation migrations, structure evidence must also
+cover the lifecycle contract in `../_shared/CHANGE_LIFECYCLE.md`: unique
+current ownership, valid active states, archive placement, index coverage,
+repository links, and generated-reference drift. If no deterministic checker
+exists for a claimed invariant, mark that part unverified rather than treating
+manual confidence as machine proof.
+
 ## Match Evidence to Risk
 
 - Owner-local data/logic fix: minimal reproducer, adjacent counterexample, and affected real entry.
@@ -35,5 +42,10 @@ Before completion run:
 1. `scripts/codex/check_docs_impact.py --manifest <manifest>`;
 2. `scripts/codex/check_task_scope.py --manifest <manifest>`;
 3. `scripts/codex/render_evidence.py --manifest <manifest> --output <report>`.
+
+When a task closes or supersedes tracked work, inspect the final tree as well as
+the diff: a completed document left under an active path, or an archived path
+still routed as current, is a failed closure even when docs-impact and scope
+scripts pass.
 
 Inspect logs, status files, exit codes, artifacts, changed paths, deferred findings, and renderer “未跑” categories. An extractor may organize complex logs or failure sets, but the main Agent must judge domain semantics, exact/heuristic claims, and final completion.

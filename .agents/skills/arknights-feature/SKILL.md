@@ -13,7 +13,9 @@ Deliver one user-visible vertical capability without disguising it as a bug fix 
 2. State the user scenario, observable output, canonical domain rule, success evidence, and explicit non-goals.
 3. Read the target canonical domain document completely. Use `docs/INDEX.md` only when its location is unknown.
 4. Inspect existing extension points and callers directly; use the relevant `docs/PROJECT_MAP.md` section only when ownership is unclear.
-5. If restoring a TODO, treat it as a proposal: reconcile it with current docs/code before implementation.
+5. If restoring a TODO, treat it as an active change: reconcile it with current
+   docs/code before implementation, then apply
+   `../_shared/CHANGE_LIFECYCLE.md` through closure.
 
 If domain semantics are missing or conflicting, pause in semantic audit and obtain a ruling before writing.
 
@@ -34,3 +36,8 @@ When candidate space or objectives change, name the hard constraint, safe reduct
 Use read-only explorers for extension points/callers and extractors for multi-document specs. The main Agent freezes the contract before one writer starts; use an adversarial reviewer for product-semantic or multi-module changes.
 
 Stop when the user scenario works through the real entry, shared owners remain singular, old transitional paths are removed, non-goals remain untouched, and risk-matched evidence is complete.
+
+For tracked features, completion also requires merging confirmed behavior into
+the current canonical owner, extracting durable decisions when needed,
+splitting remaining work, archiving the change package, and closing indexes and
+references. Documentation is part of the vertical slice, not a follow-up.
