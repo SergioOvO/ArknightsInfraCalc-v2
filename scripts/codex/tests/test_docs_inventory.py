@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -91,6 +92,14 @@ class DocsInventoryTests(unittest.TestCase):
         (self.repo / "src/a.rs").write_text("b\n", encoding="utf-8")
         self.assertNotEqual(first, docs_inventory.source_digest(self.repo, document))
 
+    def test_source_digest_ignores_untracked_files_in_git_repo(self) -> None:
+        document = self.canonical()
+        subprocess.run(["git", "init", "-q"], cwd=self.repo, check=True)
+        subprocess.run(["git", "add", "docs/A.md", "src/a.rs"], cwd=self.repo, check=True)
+        first = docs_inventory.source_digest(self.repo, document)
+        (self.repo / "src/untracked.pyc").write_bytes(b"generated")
+        self.assertEqual(first, docs_inventory.source_digest(self.repo, document))
+
     def test_source_coverage_requires_owner(self) -> None:
         document = self.canonical()
         self.assertEqual(
@@ -109,6 +118,7 @@ class DocsInventoryTests(unittest.TestCase):
         self.assertTrue(any("source digest drift" in error for error in docs_inventory.review_errors(self.repo, refreshed)))
         entry = docs_inventory.docs_impact_entry(refreshed)
         self.assertEqual(entry["path"], "docs/A.md")
+        self.assertEqual(entry["source_digest"], refreshed.metadata["源摘要"])
         self.assertEqual(entry["disposition"], "updated")
 
     def test_generated_tables_are_deterministic(self) -> None:

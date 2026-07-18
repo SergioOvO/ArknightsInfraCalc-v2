@@ -6,9 +6,9 @@
 > 当前真源：self
 > 复核触发：AGENTS.md；.agents/skills/arknights-quality/**；.agents/skills/arknights-evidence/**；scripts/codex/**
 > 摘要：裁决质量、求解保证和交付证据要求
-> 源摘要：a4642eedff88af074d440bed14c25f5bd9a52443d32068e729e16a0b19765c5d
+> 源摘要：ea29491049c411d275d156f22485f3929936148a4b53d05e6fe801a506381c46
 > 文档摘要：21163483916a9db6e151742ddc4d8e328afc6f3ee4544872ab2f36421add1d1b
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决质量、求解保证和交付证据要求
 > 证据引用：tracked:docs/QUALITY_AND_AUDIT.md

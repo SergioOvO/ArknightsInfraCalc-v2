@@ -5,9 +5,9 @@
 > 当前真源：docs/文档生命周期.md
 > 复核触发：scripts/codex/docs_inventory.py；AGENTS.md；.agents/skills/**
 > 摘要：提供文档路由和生成的 canonical 入口
-> 源摘要：21861c21c5d48db295593dcc3fe72d8b24ad9c918414e5a2184276a8644db111
+> 源摘要：2bd7c381af656bf412208f1e571b5e8d80aeee79cb5022b02f2c3a6ab4e933df
 > 文档摘要：c99c36a8cb70179d54ecd0adf7b8cc126f0e1a0abaafb4a47fcae425a23f5ae3
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：提供文档路由和生成的 canonical 入口
 > 证据引用：tracked:docs/INDEX.md

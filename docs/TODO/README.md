@@ -5,9 +5,9 @@
 > 当前真源：docs/文档生命周期.md
 > 复核触发：scripts/codex/docs_inventory.py
 > 摘要：说明 TODO 目录并承载生成的活动变更表
-> 源摘要：a7f83b7945c6bee8b4eeb259aeac349622fbdcf8227541d044d342b0c230fc99
+> 源摘要：8a82e00570d4a91f0233e5503f314746e345dbd6f935e79be39206a78ec609b7
 > 文档摘要：7992d506db5b6b505e5a48f13dda133512f4d3803cf4b1a9b7fc3da2bcff5157
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：说明 TODO 目录并承载生成的活动变更表
 > 证据引用：tracked:docs/TODO/README.md

@@ -6,9 +6,9 @@
 > 当前真源：self
 > 复核触发：AGENTS.md；.agents/skills/arknights-system-audit/**；scripts/codex/**
 > 摘要：裁决 formal system audit 工作流
-> 源摘要：22279bb12c263f40f52c9926d5fd7101eb433bf67d9d791dad658070c5005a48
+> 源摘要：98f208048c0239143b2699a3dd8db9edd5e1203ac0baa3d052d247f56a4161ee
 > 文档摘要：b28d0e70fbff65fd47995db63213329c4b29a9635cbd0c05b2af6714c8d1a80f
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决 formal system audit 工作流
 > 证据引用：tracked:docs/SYSTEM_AUDIT_WORKFLOW.md

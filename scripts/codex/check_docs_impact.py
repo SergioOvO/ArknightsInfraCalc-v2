@@ -201,6 +201,9 @@ def _entry_map(value: object, errors: list[str]) -> dict[str, dict[str, Any]]:
         entries[path] = item
         if item.get("disposition") not in {"updated", "unchanged"}:
             errors.append(f"invalid docs impact disposition: {path}")
+        for field in ("source_digest", "document_digest", "cause"):
+            if not isinstance(item.get(field), str) or not item.get(field):
+                errors.append(f"docs impact {field} is required: {path}")
         for field in ("stable_facts", "evidence"):
             values = item.get(field)
             if not isinstance(values, list) or not values or not all(isinstance(value, str) and value for value in values):
@@ -263,6 +266,12 @@ def run_checks(
         expected_evidence = docs_inventory.split_values(document.metadata.get("证据引用", ""))
         if entry.get("disposition") != document.metadata.get("复核结论"):
             errors.append(f"docs impact disposition disagrees with file review record: {path}")
+        if entry.get("source_digest") != document.metadata.get("源摘要"):
+            errors.append(f"docs impact source digest disagrees with file review record: {path}")
+        if entry.get("document_digest") != document.metadata.get("文档摘要"):
+            errors.append(f"docs impact document digest disagrees with file review record: {path}")
+        if entry.get("cause") != document.metadata.get("复核原因"):
+            errors.append(f"docs impact cause disagrees with file review record: {path}")
         if entry.get("stable_facts") != expected_facts:
             errors.append(f"docs impact stable facts disagree with file review record: {path}")
         if entry.get("evidence") != expected_evidence:

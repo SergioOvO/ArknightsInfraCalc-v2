@@ -276,14 +276,7 @@ class DocsImpactTests(unittest.TestCase):
         document = docs_inventory.parse_document(self.repo, self.repo / "docs/A.md")
         entries = []
         if status == "updated":
-            entries = [
-                {
-                    "path": "docs/A.md",
-                    "disposition": document.metadata["复核结论"],
-                    "stable_facts": docs_inventory.split_values(document.metadata["稳定事实"]),
-                    "evidence": docs_inventory.split_values(document.metadata["证据引用"]),
-                }
-            ]
+            entries = [docs_inventory.docs_impact_entry(document)]
         return {
             "docs_impact": {
                 "status": status,

@@ -8,9 +8,9 @@
 > 转换处置：delete-after-absorb
 > 事实映射：docs/文档生命周期.md#6-目录规则；docs/ARCHIVE/README.md#归档
 > 摘要：说明归档目录角色和当前入口
-> 源摘要：a7f83b7945c6bee8b4eeb259aeac349622fbdcf8227541d044d342b0c230fc99
+> 源摘要：8a82e00570d4a91f0233e5503f314746e345dbd6f935e79be39206a78ec609b7
 > 文档摘要：ef00ef896f204a391f7f7b2b3099e03cb5032b5485a86a31f5f14616bee2f1da
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：说明归档目录角色和当前入口
 > 证据引用：tracked:docs/ARCHIVE/README.md

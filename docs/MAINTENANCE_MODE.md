@@ -6,9 +6,9 @@
 > 当前真源：self
 > 复核触发：AGENTS.md；.agents/skills/arknights-maintenance/**；scripts/codex/**
 > 摘要：裁决 bug 和既有行为修复工作流
-> 源摘要：2d09c48894df6c6abd2a1168812d0efc1751c1aa7c194d84acd0ffd9c97402b7
+> 源摘要：0616ead5315d1907e8e8caa388bf8b6e768f68260b9057a577a309a203da7a7c
 > 文档摘要：a26bbddd87b70db746f20f908f2efabb6fadc949b3a44a5a7d38966783ac5077
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：裁决 bug 和既有行为修复工作流
 > 证据引用：tracked:docs/MAINTENANCE_MODE.md

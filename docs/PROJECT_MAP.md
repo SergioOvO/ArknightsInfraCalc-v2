@@ -5,9 +5,9 @@
 > 当前真源：docs/文档生命周期.md；docs/ORCHESTRATION_LAYER.md；docs/INFRA_CLI.md
 > 复核触发：crates/**；data/**；scripts/**；Cargo.toml；README.md
 > 摘要：提供当前代码、数据和命令 owner 地图
-> 源摘要：c4952d912010a676e23be20d86b421c9fe66dc634230c8ccbc373a748775cd26
+> 源摘要：06e8618074bb62173ee4797b90e468b9f27a575a8e0fd71a1ffcc0d9edff9d1e
 > 文档摘要：57ba4f3e156dc692d20694c88b5ca071f5059e959a977357e2ad9754162dba5c
-> 复核原因：lifecycle-migration
+> 复核原因：source-change
 > 复核结论：updated
 > 稳定事实：提供当前代码、数据和命令 owner 地图
 > 证据引用：tracked:docs/PROJECT_MAP.md

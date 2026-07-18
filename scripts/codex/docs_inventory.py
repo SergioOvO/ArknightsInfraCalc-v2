@@ -370,13 +370,29 @@ def document_digest(document: Document) -> str:
 
 
 def _trigger_paths(repo: Path, pattern: str) -> list[Path]:
-    paths: set[Path] = set()
-    for candidate in repo.glob(pattern):
-        if candidate.is_file() and not candidate.is_symlink():
-            paths.add(candidate)
-        elif candidate.is_dir() and not candidate.is_symlink():
-            paths.update(path for path in candidate.rglob("*") if path.is_file() and not path.is_symlink())
-    return sorted(paths, key=lambda path: _repo_relative(repo, path))
+    try:
+        result = subprocess.run(
+            ["git", "-c", "core.quotepath=false", "-C", str(repo), "ls-files", "-z"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        relatives = [value.decode("utf-8") for value in result.stdout.split(b"\0") if value]
+        return [
+            repo / relative
+            for relative in sorted(relatives)
+            if fnmatch.fnmatchcase(relative, pattern)
+            and (repo / relative).is_file()
+            and not (repo / relative).is_symlink()
+        ]
+    except subprocess.CalledProcessError:
+        paths: set[Path] = set()
+        for candidate in repo.glob(pattern):
+            if candidate.is_file() and not candidate.is_symlink():
+                paths.add(candidate)
+            elif candidate.is_dir() and not candidate.is_symlink():
+                paths.update(path for path in candidate.rglob("*") if path.is_file() and not path.is_symlink())
+        return sorted(paths, key=lambda path: _repo_relative(repo, path))
 
 
 def source_digest(repo: Path, document: Document) -> str:
@@ -448,9 +464,17 @@ def write_review_record(repo: Path, document: Document, *, cause: str) -> None:
     reviewable = role in REVIEWABLE_ROLES or (role == "evidence" and document.status == "current")
     if not reviewable:
         return
+    expected_source = source_digest(repo, document)
+    expected_document = document_digest(document)
+    if (
+        document.metadata.get("源摘要") == expected_source
+        and document.metadata.get("文档摘要") == expected_document
+        and all(document.metadata.get(key) for key in ("复核原因", "复核结论", "稳定事实", "证据引用"))
+    ):
+        return
     values = {
-        "源摘要": source_digest(repo, document),
-        "文档摘要": document_digest(document),
+        "源摘要": expected_source,
+        "文档摘要": expected_document,
         "复核原因": cause,
         "复核结论": "updated",
         "稳定事实": document.metadata["摘要"],
@@ -487,6 +511,9 @@ def refresh_review_records(repo: Path, documents: list[Document], *, cause: str)
 def docs_impact_entry(document: Document) -> dict[str, object]:
     return {
         "path": document.path,
+        "source_digest": document.metadata["源摘要"],
+        "document_digest": document.metadata["文档摘要"],
+        "cause": document.metadata["复核原因"],
         "disposition": document.metadata["复核结论"],
         "stable_facts": split_values(document.metadata["稳定事实"]),
         "evidence": split_values(document.metadata["证据引用"]),

@@ -21,6 +21,9 @@
     "entries": [
       {
         "path": "docs/PROJECT_MAP.md",
+        "source_digest": "sha256-from-file-header",
+        "document_digest": "sha256-from-file-header",
+        "cause": "source-change",
         "disposition": "unchanged",
         "stable_facts": [
           "本次 source 变更没有改变 PROJECT_MAP 中记录的 owner 和入口"
