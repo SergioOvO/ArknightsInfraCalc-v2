@@ -288,6 +288,60 @@ mod tests {
         assert!(validate_rules(&rules).is_err());
     }
 
+    #[test]
+    fn externally_reviewed_rules_are_confirmed_with_skill_targets() {
+        let rules =
+            load_training_recommendation_rules(&default_training_recommendations_path().unwrap())
+                .unwrap();
+        let expected = [
+            ("blackkey_closure", "可露希尔", 2, "特别订单"),
+            ("penguin_exusiai_lemuen", "能天使", 2, "物流专家"),
+            ("penguin_exusiai_lemuen", "蕾缪安", 2, "相伴"),
+            ("penguin_texlap_e0", "德克萨斯", 0, "恩怨"),
+            ("penguin_texlap_e0", "拉普兰德", 2, "醉翁之意·β"),
+        ];
+        for (rule_id, operator, elite, skill_name) in expected {
+            let rule = rules.rules.iter().find(|rule| rule.id == rule_id).unwrap();
+            assert_eq!(rule.review.status, ReviewStatus::Confirmed);
+            assert!(rule.review.conflicts.is_empty());
+            let member = rule
+                .members
+                .iter()
+                .find(|member| member.operator == operator)
+                .unwrap();
+            assert_eq!(member.target.elite, elite);
+            assert_eq!(member.target.skill_name.as_deref(), Some(skill_name));
+        }
+
+        let expected_members = [
+            ("blackkey_closure", vec!["可露希尔"]),
+            ("penguin_exusiai_lemuen", vec!["能天使", "蕾缪安"]),
+            ("penguin_texlap_e0", vec!["德克萨斯", "拉普兰德"]),
+        ];
+        for (rule_id, expected) in expected_members {
+            let rule = rules.rules.iter().find(|rule| rule.id == rule_id).unwrap();
+            let members = rule
+                .members
+                .iter()
+                .map(|member| member.operator.as_str())
+                .collect::<std::collections::BTreeSet<_>>();
+            let expected = expected
+                .into_iter()
+                .collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(members, expected);
+            assert_eq!(
+                rule.admission
+                    .required_core
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<std::collections::BTreeSet<_>>(),
+                expected
+            );
+            assert!(rule.admission.pick_one_core.is_empty());
+            assert!(rule.admission.required_core_groups.is_empty());
+        }
+    }
+
     fn member_for_group(name: &str) -> RuleMember {
         RuleMember {
             operator: name.to_string(),

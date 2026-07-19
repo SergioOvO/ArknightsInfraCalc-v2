@@ -58,6 +58,55 @@ pub fn build_training_advice_rag_input(
     }
 }
 
+pub fn render_training_advice_answer(report: &TrainingAdviceReport) -> String {
+    let facts = build_fact_skeleton(report);
+    let mut train = Vec::new();
+    let mut conditional = Vec::new();
+    let mut blocked = Vec::new();
+    let mut review = Vec::new();
+    let mut ready = Vec::new();
+    for fact in &facts {
+        match fact.action {
+            RecommendationAction::Train => train.push(fact),
+            RecommendationAction::AcquireThenTrain => conditional.push(fact),
+            RecommendationAction::Blocked => blocked.push(fact),
+            RecommendationAction::Review => review.push(fact),
+            RecommendationAction::Ready => ready.push(fact),
+        }
+    }
+
+    let mut lines = vec![
+        "# 基建练卡建议".to_string(),
+        String::new(),
+        format!("账号：{}", report.operbox_label),
+        format!(
+            "当前可练 {}；获取后可练 {}；暂缓体系 {}；待复核 {}；已达标 {}。",
+            train.len(),
+            conditional.len(),
+            blocked.len(),
+            review.len(),
+            ready.len()
+        ),
+    ];
+    append_answer_section(&mut lines, "当前可练", &train);
+    append_answer_section(&mut lines, "获取后可练", &conditional);
+    append_answer_section(&mut lines, "暂缓体系", &blocked);
+    append_answer_section(&mut lines, "待复核", &review);
+    append_answer_section(&mut lines, "已达标", &ready);
+    lines.join("\n") + "\n"
+}
+
+fn append_answer_section(lines: &mut Vec<String>, title: &str, facts: &[&TrainingAdviceFact]) {
+    lines.push(String::new());
+    lines.push(format!("## {title}（{}）", facts.len()));
+    lines.push(String::new());
+    if facts.is_empty() {
+        lines.push("- 无".to_string());
+        return;
+    }
+    lines.extend(facts.iter().map(|fact| format!("- {}", fact.text)));
+}
+
 fn build_fact_skeleton(report: &TrainingAdviceReport) -> Vec<TrainingAdviceFact> {
     let mut facts = Vec::new();
     for item in report
@@ -441,6 +490,12 @@ mod tests {
         assert!(rag_input.evidence_snippets.is_empty());
         assert_eq!(rag_input.unavailable_source_refs.len(), 1);
         assert_eq!(rag_input.unavailable_source_refs[0].path, source_ref.path);
+
+        let answer = render_training_advice_answer(&report);
+        assert!(answer.contains("## 当前可练（1）"));
+        assert!(answer.contains("清流"));
+        assert!(answer.contains("## 获取后可练（0）\n\n- 无"));
+        assert!(!answer.contains("/outside/secret.md"));
     }
 
     #[test]

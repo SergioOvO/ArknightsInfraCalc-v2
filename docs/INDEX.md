@@ -54,7 +54,7 @@ system / conformance / formal audit -> arknights-system-audit
 | 架构、性能、工作流、技术债或 solver assurance | [Quality Skill](../.agents/skills/arknights-quality/SKILL.md) | [质量与审计](QUALITY_AND_AUDIT.md)、相关架构/性能文档 |
 | 体系、跨设施、required admission、scope、Team/Shift bind | [System Audit Skill](../.agents/skills/arknights-system-audit/SKILL.md) | 对应体系 canonical 文档；formal 时再读审计工作流 |
 | build、test、CLI、性能或产物证据 | [Evidence Skill](../.agents/skills/arknights-evidence/SKILL.md) | [工具协议](../scripts/codex/README.md)；高风险搜索改动读质量规范 |
-| 练卡推荐语义、过滤器、`advice` CLI、规则 schema | [基建练卡推荐规则](练卡推荐规则.md) | 代码 `training_advice/`；数据 `data/training_recommendations.json`；夹具 `data/fixtures/training_advice/`；开放项 [练卡推荐规则表剩余人工验收](TODO/练卡推荐规则表剩余人工验收.md) |
+| 练卡推荐语义、过滤器、`advice` CLI、规则 schema | [基建练卡推荐规则](练卡推荐规则.md) | 代码 `training_advice/`；数据 `data/training_recommendations.json`；夹具 `data/fixtures/training_advice/`；开放项 [练卡推荐规则来源精修](TODO/练卡推荐规则来源精修.md) |
 | 公孙长乐验收练卡推荐表 | [练卡推荐验收 Skill](../.agents/skills/gongsun-training-review/SKILL.md) | [基建练卡推荐规则](练卡推荐规则.md) + `render_training_recommendations.py` 验收稿 |
 | 只读调查或知识提取 | `terra-explorer` / `luna-extractor` | Codex：`.codex/agents/`；OpenCode：`.opencode/agents/`；按独立调查轴读取原始材料 |
 

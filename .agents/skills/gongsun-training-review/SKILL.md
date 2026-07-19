@@ -34,7 +34,7 @@ cargo run -p infra-cli -- advice --operbox data/fixtures/training_advice/witch_o
 2. 完整读取生成的验收稿。
 3. 只在具体条目需要时读取其 `evidence.path` / 对应体系 canonical 和技能数据，不默认通读全仓。
 4. `data/standalone_roster.json` 只证明候选进入搜索缩池，不证明值得培养。
-5. 开放规则项见 `docs/TODO/练卡推荐规则表剩余人工验收.md`；代码 owner 见 `docs/PROJECT_MAP.md` 的 `training_advice` / `advice`。
+5. 开放规则项见 `docs/TODO/练卡推荐规则来源精修.md`；代码 owner 见 `docs/PROJECT_MAP.md` 的 `training_advice` / `advice`。
 
 ## 逐条门禁
 

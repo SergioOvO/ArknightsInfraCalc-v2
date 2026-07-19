@@ -61,6 +61,46 @@ fn run_explain(rules_path: &Path) -> serde_json::Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
+fn run_answer() -> String {
+    let root = workspace_root();
+    let output = Command::new(env!("CARGO_BIN_EXE_infra-cli"))
+        .current_dir(&root)
+        .args([
+            "advice",
+            "--operbox",
+            "data/fixtures/training_advice/witch_ready_untrained.json",
+            "--answer",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap()
+}
+
+fn run_default_json(explain: bool) -> serde_json::Value {
+    let root = workspace_root();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_infra-cli"));
+    command.current_dir(&root).args([
+        "advice",
+        "--operbox",
+        "data/fixtures/training_advice/witch_ready_untrained.json",
+    ]);
+    if explain {
+        command.arg("--explain");
+    }
+    let output = command.output().unwrap();
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).unwrap()
+}
+
 #[test]
 fn custom_rules_explain_reads_workspace_markdown_but_rejects_absolute_sources() {
     let directory = std::env::temp_dir().join(format!(
@@ -103,4 +143,48 @@ fn custom_rules_explain_reads_workspace_markdown_but_rejects_absolute_sources() 
     );
 
     fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn answer_mode_prints_deterministic_sections_without_changing_json_modes() {
+    let answer = run_answer();
+    let report = run_default_json(false);
+    let bundle = run_default_json(true);
+    assert_eq!(bundle["report"], report);
+    assert_eq!(report["schema_version"], 2);
+    assert!(report.get("report").is_none());
+    assert!(bundle.get("rag_input").is_some());
+
+    assert!(answer.starts_with("# 基建练卡建议\n"));
+    assert!(answer.contains(&format!(
+        "## 当前可练（{}）",
+        report["now"].as_array().unwrap().len()
+    )));
+    assert!(answer.contains(&format!(
+        "## 获取后可练（{}）",
+        report["conditional"].as_array().unwrap().len()
+    )));
+    assert!(answer.contains(&format!(
+        "## 暂缓体系（{}）",
+        report["blocked"].as_array().unwrap().len()
+    )));
+    assert!(answer.contains(&format!(
+        "## 待复核（{}）",
+        report["review"].as_array().unwrap().len()
+    )));
+    assert!(answer.contains(&format!(
+        "## 已达标（{}）",
+        report["ready"].as_array().unwrap().len()
+    )));
+    for fact in bundle["rag_input"]["fact_skeleton"].as_array().unwrap() {
+        let text = fact["text"].as_str().unwrap();
+        assert!(
+            answer.contains(&format!("- {text}")),
+            "missing fact: {text}"
+        );
+    }
+    assert!(answer.contains("巫恋"));
+    assert!(answer.contains("龙舌兰"));
+    assert!(answer.contains("卡夫卡"));
+    assert!(!answer.trim_start().starts_with('{'));
 }

@@ -5,7 +5,8 @@ use infra_core::operbox::OperBox;
 use infra_core::skill_table::workspace_root;
 use infra_core::training_advice::{
     build_training_advice, build_training_advice_rag_input, default_training_recommendations_path,
-    load_training_recommendation_rules, TrainingAdviceBundle, TrainingAdviceOptions,
+    load_training_recommendation_rules, render_training_advice_answer, TrainingAdviceBundle,
+    TrainingAdviceOptions,
 };
 use infra_core::Error;
 
@@ -29,6 +30,11 @@ pub fn advice_cmd(args: &[String]) -> Result<(), Error> {
         },
     )?;
 
+    if options.answer {
+        print!("{}", render_training_advice_answer(&report));
+        return Ok(());
+    }
+
     let json = if options.explain {
         let rag_input = build_training_advice_rag_input(&report, &workspace_root()?);
         let bundle = TrainingAdviceBundle { report, rag_input };
@@ -51,6 +57,7 @@ struct AdviceCommandOptions {
     rules_path: Option<PathBuf>,
     pretty: bool,
     explain: bool,
+    answer: bool,
 }
 
 fn parse_args(args: &[String]) -> Result<AdviceCommandOptions, Error> {
@@ -58,6 +65,7 @@ fn parse_args(args: &[String]) -> Result<AdviceCommandOptions, Error> {
     let mut rules_path = None;
     let mut pretty = false;
     let mut explain = false;
+    let mut answer = false;
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -85,8 +93,18 @@ fn parse_args(args: &[String]) -> Result<AdviceCommandOptions, Error> {
                 explain = true;
                 index += 1;
             }
+            "--answer" => {
+                answer = true;
+                index += 1;
+            }
             other => return Err(Error::msg(format!("unknown advice option {other:?}"))),
         }
+    }
+    if answer && explain {
+        return Err(Error::msg("--answer conflicts with --explain"));
+    }
+    if answer && pretty {
+        return Err(Error::msg("--answer conflicts with --pretty"));
     }
     Ok(AdviceCommandOptions {
         operbox_path: operbox_path
@@ -94,6 +112,7 @@ fn parse_args(args: &[String]) -> Result<AdviceCommandOptions, Error> {
         rules_path,
         pretty,
         explain,
+        answer,
     })
 }
 
@@ -120,6 +139,7 @@ mod tests {
         assert_eq!(options.rules_path, Some(PathBuf::from("rules.json")));
         assert!(options.pretty);
         assert!(options.explain);
+        assert!(!options.answer);
     }
 
     #[test]
@@ -134,5 +154,7 @@ mod tests {
         ]))
         .is_err());
         assert!(parse_args(&args(&["--operbox", "box.json", "--unknown"])).is_err());
+        assert!(parse_args(&args(&["--operbox", "box.json", "--answer", "--explain"])).is_err());
+        assert!(parse_args(&args(&["--operbox", "box.json", "--answer", "--pretty"])).is_err());
     }
 }

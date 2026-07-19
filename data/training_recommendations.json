@@ -165,49 +165,31 @@
           "operator": "可露希尔",
           "role": "core",
           "target": {
-            "elite": 2
+            "elite": 2,
+            "skill_name": "特别订单"
           },
           "priority": "P0",
-          "acquisition": "owned_only",
-          "rarity": 5
-        },
-        {
-          "operator": "黑键",
-          "role": "hanger",
-          "target": {
-            "elite": 2
-          },
-          "priority": "P1",
-          "acquisition": "owned_only",
-          "rarity": 6
-        },
-        {
-          "operator": "吉星",
-          "role": "hanger",
-          "target": {
-            "elite": 2
-          },
-          "priority": "P1",
           "acquisition": "owned_only",
           "rarity": 5
         }
       ],
       "evidence": [
         {
-          "path": "data/base_systems.json"
+          "path": "data/MECHANICS_REGISTRY.csv",
+          "heading": "特别订单"
         },
         {
-          "path": "data/MECHANICS_REGISTRY.csv"
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/可露希尔特别订单.md",
+          "heading": "何时值得开"
         },
         {
-          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/可露希尔特别订单.md"
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/可露希尔特别订单.md",
+          "heading": "搭配建议"
         }
       ],
       "review": {
-        "status": "needs_review",
-        "conflicts": [
-          "vault docs system_id=closure_special_order operators=[可露希尔]; base_systems blackkey_closure uses 可露希尔+黑键+吉星"
-        ]
+        "status": "confirmed",
+        "conflicts": []
       }
     },
     {
@@ -282,7 +264,8 @@
           "operator": "能天使",
           "role": "core",
           "target": {
-            "elite": 2
+            "elite": 2,
+            "skill_name": "物流专家"
           },
           "priority": "P1",
           "acquisition": "owned_only",
@@ -292,49 +275,31 @@
           "operator": "蕾缪安",
           "role": "core",
           "target": {
-            "elite": 2
+            "elite": 2,
+            "skill_name": "相伴"
           },
           "priority": "P1",
           "acquisition": "owned_only",
           "rarity": 6
-        },
-        {
-          "operator": "空",
-          "role": "hanger",
-          "target": {
-            "elite": 2
-          },
-          "priority": "P2",
-          "acquisition": "owned_only",
-          "rarity": 5
-        },
-        {
-          "operator": "芬",
-          "role": "hanger",
-          "target": {
-            "elite": 1
-          },
-          "priority": "P2",
-          "acquisition": "policy",
-          "rarity": 3
         }
       ],
       "evidence": [
         {
-          "path": "data/base_systems.json"
+          "path": "data/MECHANICS_REGISTRY.csv",
+          "heading": "物流专家 / 相伴"
         },
         {
-          "path": "data/MECHANICS_REGISTRY.csv"
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md",
+          "heading": "路线 B：能蕾（能天使精 2 + 蕾缪安精 2）"
         },
         {
-          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md",
+          "heading": "数值锚点"
         }
       ],
       "review": {
-        "status": "needs_review",
-        "conflicts": [
-          "base_systems penguin_exusiai_lemuen 能天使 elite 0 vs MECHANICS 物流专家 elite 2"
-        ]
+        "status": "confirmed",
+        "conflicts": []
       }
     },
     {
@@ -355,7 +320,8 @@
           "operator": "德克萨斯",
           "role": "core",
           "target": {
-            "elite": 0
+            "elite": 0,
+            "skill_name": "恩怨"
           },
           "priority": "P1",
           "acquisition": "owned_only",
@@ -365,49 +331,31 @@
           "operator": "拉普兰德",
           "role": "core",
           "target": {
-            "elite": 2
+            "elite": 2,
+            "skill_name": "醉翁之意·β"
           },
           "priority": "P1",
           "acquisition": "owned_only",
           "rarity": 5
-        },
-        {
-          "operator": "空",
-          "role": "hanger",
-          "target": {
-            "elite": 2
-          },
-          "priority": "P2",
-          "acquisition": "owned_only",
-          "rarity": 5
-        },
-        {
-          "operator": "芬",
-          "role": "hanger",
-          "target": {
-            "elite": 1
-          },
-          "priority": "P2",
-          "acquisition": "policy",
-          "rarity": 3
         }
       ],
       "evidence": [
         {
-          "path": "data/base_systems.json"
+          "path": "data/MECHANICS_REGISTRY.csv",
+          "heading": "恩怨 / 醉翁之意·β"
         },
         {
-          "path": "data/MECHANICS_REGISTRY.csv"
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md",
+          "heading": "路线 A：德狼（德克萨斯 + 拉普兰德）"
         },
         {
-          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md",
+          "heading": "德克萨斯的技能说明"
         }
       ],
       "review": {
-        "status": "needs_review",
-        "conflicts": [
-          "base_systems 拉普兰德 elite 0；训练按 vault/MECHANICS 取 E2"
-        ]
+        "status": "confirmed",
+        "conflicts": []
       }
     },
     {
