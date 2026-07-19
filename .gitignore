@@ -28,6 +28,7 @@ summaries*.jsonl
 /dist/
 
 # Personal / local data (not repo fixtures)
+.env
 *.xlsx
 data/operbox_account.json
 data/operbox_xlsx.json
