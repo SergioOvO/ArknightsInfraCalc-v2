@@ -52,6 +52,11 @@ pub fn solve_control(input: &ControlRoomInput, table: &SkillTable) -> ControlCen
         state_pool: input.layout.global.to_room_state(),
         inject: GlobalInjectManifest::default(),
     };
+    for operator in &ctx.operators {
+        for buff_id in &operator.buff_ids {
+            ctx.inject.record_active_source_buff(buff_id);
+        }
+    }
 
     let atoms = collect_control_atoms(&ctx.operators, table);
     for (atom, owner, source_buff_id) in atoms {
@@ -153,7 +158,7 @@ fn scaled_inject_value(ctx: &ControlContext, atom: &EffectAtom, base: f64) -> f6
 fn apply_atom(ctx: &mut ControlContext, atom: &EffectAtom, owner: &str, source_buff_id: &str) {
     match atom.phase {
         Phase::StateWrite => apply_state_write(ctx, atom),
-        Phase::GlobalInject => apply_global_inject(ctx, atom, source_buff_id),
+        Phase::GlobalInject => apply_global_inject(ctx, atom, owner, source_buff_id),
         Phase::Mood => apply_mood_action(ctx, &atom.action, owner),
         _ => {}
     }
@@ -224,7 +229,13 @@ fn apply_state_write(ctx: &mut ControlContext, atom: &EffectAtom) {
     }
 }
 
-fn apply_global_inject(ctx: &mut ControlContext, atom: &EffectAtom, source_buff_id: &str) {
+fn apply_global_inject(
+    ctx: &mut ControlContext,
+    atom: &EffectAtom,
+    owner: &str,
+    source_buff_id: &str,
+) {
+    ctx.inject.record_active_source_buff(source_buff_id);
     let family = atom.tag.as_deref().unwrap_or(match &atom.action {
         Action::GlobalInjectTradeEff { .. } => INJECT_FAMILY_TRADE_GLOBAL_FLAT,
         Action::GlobalInjectManuEff { .. } => INJECT_FAMILY_MANU_GLOBAL_ALL,
@@ -246,10 +257,20 @@ fn apply_global_inject(ctx: &mut ControlContext, atom: &EffectAtom, source_buff_
                 Some(Selector::TaggedCountInCurrentTradeRoom { tag }) => {
                     Some((tag, 0, TradeTaggedCountScope::CurrentTradeRoom))
                 }
+                Some(Selector::TradeStationsWithTaggedGte { tag, min }) => Some((
+                    tag,
+                    ctx.layout
+                        .trade_stations_tagged_gte
+                        .get(&trade_station_tagged_gte_key(tag, *min))
+                        .copied()
+                        .unwrap_or(0),
+                    TradeTaggedCountScope::QualifiedTradeRooms { min: *min },
+                )),
                 _ => None,
             };
             if let Some((tag, resolved_count, count_scope)) = tagged_rule {
                 ctx.inject.record_trade_tagged(
+                    owner,
                     source_buff_id,
                     family,
                     tag,
@@ -265,9 +286,27 @@ fn apply_global_inject(ctx: &mut ControlContext, atom: &EffectAtom, source_buff_
             }
         }
         Action::GlobalInjectManuEff { value, recipe } => {
-            let v = scaled_inject_value(ctx, atom, *value);
-            if v != 0.0 {
-                ctx.inject.record_manu(family, *recipe, v);
+            if let Some(Selector::TaggedCountInManuSum { tag }) = atom.selector.as_ref() {
+                let resolved_count = ctx
+                    .layout
+                    .manu_tagged_count_sum
+                    .get(tag)
+                    .copied()
+                    .unwrap_or(0);
+                ctx.inject.record_manu_count_scaled(
+                    owner,
+                    source_buff_id,
+                    family,
+                    tag,
+                    *recipe,
+                    *value,
+                    resolved_count,
+                );
+            } else {
+                let v = scaled_inject_value(ctx, atom, *value);
+                if v != 0.0 {
+                    ctx.inject.record_manu(family, *recipe, v);
+                }
             }
         }
         Action::GlobalInjectManuTaggedEff {
@@ -458,6 +497,48 @@ mod tests {
             result.inject.trade_tagged()[0].count_scope,
             TradeTaggedCountScope::CurrentTradeRoom
         );
+    }
+
+    #[test]
+    fn silver_trade_threshold_is_preserved_as_a_dynamic_rule() {
+        let mut layout = LayoutContext::default();
+        layout
+            .trade_stations_tagged_gte
+            .insert(trade_station_tagged_gte_key("cc.g.karlan", 3), 2);
+        let result = solve_control(
+            &ControlRoomInput {
+                operators: vec![control_op("凛御银灰", 2)],
+                mood: 24.0,
+                layout,
+            },
+            &table(),
+        );
+        assert_eq!(result.inject.trade_eff_pct(), 20.0);
+        assert!(matches!(
+            result.inject.trade_tagged()[0].count_scope,
+            TradeTaggedCountScope::QualifiedTradeRooms { min: 3 }
+        ));
+    }
+
+    #[test]
+    fn jessica_manufacture_count_is_delayed_to_actual_workforce() {
+        let mut layout = LayoutContext::default();
+        layout
+            .manu_tagged_count_sum
+            .insert("cc.g.blacksteel".to_string(), 2);
+        let result = solve_control(
+            &ControlRoomInput {
+                operators: vec![control_op("涤火杰西卡", 2)],
+                mood: 24.0,
+                layout,
+            },
+            &table(),
+        );
+        assert_eq!(
+            result.inject.manu_eff_for(crate::types::RecipeKind::Gold),
+            10.0
+        );
+        assert_eq!(result.inject.manu_count_scaled().len(), 1);
     }
 
     #[test]

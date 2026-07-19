@@ -13,7 +13,7 @@ use crate::scoring::{
     evaluate_control_inject_policy, ScoringPolicyId, TradeManuEfficiencyComponents,
 };
 use crate::skill_table::SkillTable;
-use crate::types::{Action, Phase, RecipeKind, Selector};
+use crate::types::{Action, Condition, Phase, RecipeKind, Selector};
 
 /// 木天蓼 consumer：贸易/制造侧的泰拉大陆调查团。
 pub const MATATABI_CONSUMER_NAME: &str = "泰拉大陆调查团";
@@ -178,6 +178,27 @@ fn control_inject_sort_key(hit: &ControlSearchHit) -> f64 {
     hit.breakdown.policy_sort_key
 }
 
+fn prefer_control_name_pair(a: &ControlSearchHit, b: &ControlSearchHit) -> std::cmp::Ordering {
+    control_replacement_preference(b).cmp(&control_replacement_preference(a))
+}
+
+fn control_replacement_preference(hit: &ControlSearchHit) -> i32 {
+    let mut score = 0;
+    if hit.names.iter().any(|name| name == "Mon3tr") {
+        score += 2;
+    }
+    if hit.names.iter().any(|name| name == "凯尔希") {
+        score -= 2;
+    }
+    if hit.names.iter().any(|name| name == "阿斯卡纶") {
+        score += 1;
+    }
+    if hit.names.iter().any(|name| name == "明椒") {
+        score -= 1;
+    }
+    score
+}
+
 pub fn control_entry_core_inject_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
     if entry.name == "琴柳" {
         return false;
@@ -208,7 +229,8 @@ pub fn control_entry_dynamic_trade_tags(
             match atom.selector.as_ref() {
                 Some(
                     Selector::TaggedCountInTradeSum { tag }
-                    | Selector::TaggedCountInCurrentTradeRoom { tag },
+                    | Selector::TaggedCountInCurrentTradeRoom { tag }
+                    | Selector::TradeStationsWithTaggedGte { tag, .. },
                 ) => {
                     tags.insert(tag.clone());
                 }
@@ -219,24 +241,43 @@ pub fn control_entry_dynamic_trade_tags(
     tags
 }
 
-/// 本轮允许主动建立 control↔trade 比较分支的动态 producer。
-///
-/// `TaggedCountInTradeSum` 也被其他既有体系使用；是否为“自然可选 producer”是
-/// 机制分类，不应由 pipeline 泛化所有 selector。当前确认的家族认可 buff 在此
-/// 单点登记，pipeline 仍只消费标签集合，不认识干员名或倍率。
-pub fn control_entry_optional_dynamic_trade_tags(
+/// 返回编排规则明确分类为 deferred-optional 的贸易 producer 标签。
+pub fn control_entry_deferred_trade_tags(
     entry: &crate::pool::ControlPoolEntry,
     table: &SkillTable,
-) -> HashSet<String> {
-    const OPTIONAL_DYNAMIC_TRADE_BUFFS: &[&str] = &["control_tra_limit&spd2[000]"];
-    if !entry
+) -> Result<HashSet<String>> {
+    let rules = crate::response_dependency::deferred_producer_rules_for_buffs(
+        table,
+        entry.buff_ids.iter().map(String::as_str),
+        "trade",
+    )?;
+    let rule_buffs: HashSet<_> = rules
+        .iter()
+        .map(|rule| rule.source_buff_id.as_str())
+        .collect();
+    let mut tags = HashSet::new();
+    for buff_id in entry
         .buff_ids
         .iter()
-        .any(|buff_id| OPTIONAL_DYNAMIC_TRADE_BUFFS.contains(&buff_id.as_str()))
+        .filter(|buff_id| rule_buffs.contains(buff_id.as_str()))
     {
-        return HashSet::new();
+        let Some(skill) = table.get(buff_id) else {
+            continue;
+        };
+        for atom in &skill.atoms {
+            match atom.selector.as_ref() {
+                Some(
+                    Selector::TaggedCountInTradeSum { tag }
+                    | Selector::TaggedCountInCurrentTradeRoom { tag }
+                    | Selector::TradeStationsWithTaggedGte { tag, .. },
+                ) => {
+                    tags.insert(tag.clone());
+                }
+                _ => {}
+            }
+        }
     }
-    control_entry_dynamic_trade_tags(entry, table)
+    Ok(tags)
 }
 
 pub fn control_entry_mood_cost_fill(entry: &crate::pool::ControlPoolEntry) -> bool {
@@ -427,20 +468,256 @@ fn evaluate_control_policy(
     }
 }
 
-/// 对已经完成贸易落位的候选前缀，使用现有具名
-/// `ControlInjectRawSumV0` policy 计算比较键。
-pub(crate) fn control_inject_policy_sort_key_for_layout(layout: &LayoutContext) -> f64 {
-    evaluate_control_inject_policy(TradeManuEfficiencyComponents {
-        trade_eff_pct: layout
-            .global_inject
-            .trade_eff_pct_with_tag_counts(&layout.trade_tagged_count_sum),
-        gold_manu_eff_pct: layout.global_inject.manu_eff_for(RecipeKind::Gold),
-        battle_record_manu_eff_pct: layout.global_inject.manu_eff_for(RecipeKind::BattleRecord),
+pub(crate) fn control_inject_policy_sort_key_for_assignment(
+    layout: &LayoutContext,
+    blueprint: &crate::layout::BaseBlueprint,
+    assignment: &crate::layout::BaseAssignment,
+    instances: &crate::instances::OperatorInstances,
+) -> f64 {
+    evaluate_control_inject_policy(control_inject_components_for_assignment(
+        layout, blueprint, assignment, instances,
+    ))
+    .sort_key_pct
+}
+
+pub(crate) fn control_inject_components_for_assignment(
+    layout: &LayoutContext,
+    blueprint: &crate::layout::BaseBlueprint,
+    assignment: &crate::layout::BaseAssignment,
+    instances: &crate::instances::OperatorInstances,
+) -> TradeManuEfficiencyComponents {
+    let empty = std::collections::HashMap::new();
+    let global_trade = layout
+        .global_inject
+        .trade_eff_pct_with_scoped_tag_counts(&layout.trade_tagged_count_sum, &empty);
+    let current_room_increment: f64 = blueprint
+        .rooms
+        .iter()
+        .filter(|room| room.kind == crate::layout::FacilityKind::TradePost)
+        .map(|room| {
+            let mut counts = std::collections::HashMap::new();
+            for operator in assignment.operators_in(&room.id) {
+                let mut seen = HashSet::new();
+                for tag in instances.tags_for(&operator.name, operator.tier()) {
+                    if seen.insert(tag.clone()) {
+                        *counts.entry(tag).or_insert(0) += 1;
+                    }
+                }
+            }
+            layout
+                .global_inject
+                .trade_eff_pct_with_scoped_tag_counts(&layout.trade_tagged_count_sum, &counts)
+                - global_trade
+        })
+        .sum();
+    let mut gold_manu = layout.global_inject.manu_eff_for(RecipeKind::Gold);
+    let mut battle_record_manu = layout.global_inject.manu_eff_for(RecipeKind::BattleRecord);
+    for room in blueprint
+        .rooms
+        .iter()
+        .filter(|room| room.kind == crate::layout::FacilityKind::Factory)
+    {
+        let Some(crate::layout::RoomProduct::Factory { recipe }) = room.product.as_ref() else {
+            continue;
+        };
+        let tagged: f64 = assignment
+            .operators_in(&room.id)
+            .iter()
+            .flat_map(|operator| {
+                let tags = instances.tags_for(&operator.name, operator.tier());
+                layout
+                    .global_inject
+                    .manu_tagged()
+                    .iter()
+                    .filter(move |rule| {
+                        rule.recipe.is_none_or(|target| target == *recipe)
+                            && tags.iter().any(|tag| tag == &rule.target_tag)
+                    })
+                    .map(|rule| rule.value)
+            })
+            .sum();
+        match recipe {
+            RecipeKind::Gold => gold_manu += tagged,
+            RecipeKind::BattleRecord => battle_record_manu += tagged,
+            RecipeKind::All | RecipeKind::Originium => {}
+        }
+    }
+    TradeManuEfficiencyComponents {
+        trade_eff_pct: global_trade + current_room_increment,
+        gold_manu_eff_pct: gold_manu,
+        battle_record_manu_eff_pct: battle_record_manu,
         trade_station_count: layout.trade_station_count,
         gold_line_count: layout.gold_manu_line_count.min(u32::from(u8::MAX)) as u8,
         battle_record_line_count: layout
             .manufacture_station_count
             .saturating_sub(layout.gold_manu_line_count.min(u32::from(u8::MAX)) as u8),
+    }
+}
+
+pub(crate) fn control_inject_policy_sort_key_upper_bound(
+    layout: &LayoutContext,
+    blueprint: &crate::layout::BaseBlueprint,
+    table: &SkillTable,
+) -> f64 {
+    let support_dependent = layout.global_inject.active_source_buffs().any(|buff_id| {
+        table.get(buff_id).is_some_and(|skill| {
+            skill.atoms.iter().any(|atom| {
+                let policy_action = matches!(
+                    &atom.action,
+                    Action::GlobalInjectTradeEff { .. }
+                        | Action::GlobalInjectManuEff { .. }
+                        | Action::GlobalInjectManuTaggedEff { .. }
+                );
+                let condition_is_safe = matches!(
+                    atom.condition.as_ref(),
+                    None | Some(
+                        Condition::MoodAbove { .. }
+                            | Condition::MoodAboveOrEq { .. }
+                            | Condition::MoodBelow { .. }
+                            | Condition::MoodBelowOrEq { .. }
+                            | Condition::OwnerEliteGte { .. }
+                            | Condition::OwnerEliteBelow { .. }
+                            | Condition::PartnerInRoom { .. }
+                            | Condition::TagPresentInRoom { .. }
+                            | Condition::PeerTagInRoom { .. }
+                            | Condition::OwnerLacksBuff { .. }
+                            | Condition::ExternalMomentumGteField {}
+                            | Condition::FieldMomentumGtExternal {}
+                    )
+                );
+                let selector_is_safe = matches!(
+                    atom.selector.as_ref(),
+                    None | Some(
+                        Selector::TaggedCountInControl { .. }
+                            | Selector::ControlOperatorCount
+                            | Selector::TradeStationCount
+                            | Selector::PowerStationCount
+                            | Selector::TaggedCountInTradeSum { .. }
+                            | Selector::TaggedCountInCurrentTradeRoom { .. }
+                            | Selector::TradeStationsWithTaggedGte { .. }
+                            | Selector::TaggedCountInManuSum { .. }
+                    )
+                );
+                policy_action && (!condition_is_safe || !selector_is_safe)
+            })
+        })
+    });
+    if support_dependent {
+        return f64::INFINITY;
+    }
+    let mut upper = layout.clone();
+    let trade_rules: Vec<_> = upper.global_inject.trade_tagged().to_vec();
+    let max_trade_slots: u8 = blueprint
+        .rooms
+        .iter()
+        .filter(|room| room.kind == crate::layout::FacilityKind::TradePost)
+        .map(|room| room.operator_capacity().min(usize::from(u8::MAX)) as u8)
+        .fold(0u8, u8::saturating_add);
+    for rule in &trade_rules {
+        match rule.count_scope {
+            crate::global_resource::TradeTaggedCountScope::AllTradeRooms => {
+                upper
+                    .trade_tagged_count_sum
+                    .entry(rule.target_tag.clone())
+                    .and_modify(|count| *count = (*count).max(max_trade_slots))
+                    .or_insert(max_trade_slots);
+            }
+            crate::global_resource::TradeTaggedCountScope::QualifiedTradeRooms { min } => {
+                let rooms = blueprint
+                    .rooms
+                    .iter()
+                    .filter(|room| {
+                        room.kind == crate::layout::FacilityKind::TradePost
+                            && room.operator_capacity() >= usize::from(min)
+                    })
+                    .count()
+                    .min(usize::from(u8::MAX)) as u8;
+                upper.trade_stations_tagged_gte.insert(
+                    crate::layout::trade_station_tagged_gte_key(&rule.target_tag, min),
+                    rooms,
+                );
+            }
+            crate::global_resource::TradeTaggedCountScope::CurrentTradeRoom => {}
+        }
+    }
+    upper
+        .global_inject
+        .refresh_qualified_trade_counts(&upper.trade_stations_tagged_gte);
+
+    let max_manu_slots: u8 = blueprint
+        .rooms
+        .iter()
+        .filter(|room| room.kind == crate::layout::FacilityKind::Factory)
+        .map(|room| room.operator_capacity().min(usize::from(u8::MAX)) as u8)
+        .fold(0u8, u8::saturating_add);
+    for rule in upper.global_inject.manu_count_scaled().to_vec() {
+        upper
+            .manu_tagged_count_sum
+            .entry(rule.target_tag)
+            .and_modify(|count| *count = (*count).max(max_manu_slots))
+            .or_insert(max_manu_slots);
+    }
+    upper
+        .global_inject
+        .refresh_manu_count_scaled(&upper.manu_tagged_count_sum);
+
+    let empty = std::collections::HashMap::new();
+    let global_trade = upper
+        .global_inject
+        .trade_eff_pct_with_scoped_tag_counts(&upper.trade_tagged_count_sum, &empty);
+    let current_room_increment: f64 = blueprint
+        .rooms
+        .iter()
+        .filter(|room| room.kind == crate::layout::FacilityKind::TradePost)
+        .map(|room| {
+            let count = room.operator_capacity().min(usize::from(u8::MAX)) as u8;
+            let current: std::collections::HashMap<_, _> = trade_rules
+                .iter()
+                .filter(|rule| {
+                    rule.count_scope
+                        == crate::global_resource::TradeTaggedCountScope::CurrentTradeRoom
+                })
+                .map(|rule| (rule.target_tag.clone(), count))
+                .collect();
+            upper
+                .global_inject
+                .trade_eff_pct_with_scoped_tag_counts(&upper.trade_tagged_count_sum, &current)
+                - global_trade
+        })
+        .sum();
+    let mut gold_manu = upper.global_inject.manu_eff_for(RecipeKind::Gold);
+    let mut battle_record_manu = upper.global_inject.manu_eff_for(RecipeKind::BattleRecord);
+    for room in blueprint
+        .rooms
+        .iter()
+        .filter(|room| room.kind == crate::layout::FacilityKind::Factory)
+    {
+        let Some(crate::layout::RoomProduct::Factory { recipe }) = room.product.as_ref() else {
+            continue;
+        };
+        let per_operator: f64 = upper
+            .global_inject
+            .manu_tagged()
+            .iter()
+            .filter(|rule| rule.recipe.is_none_or(|target| target == *recipe))
+            .map(|rule| rule.value.max(0.0))
+            .sum();
+        let tagged = per_operator * room.operator_capacity() as f64;
+        match recipe {
+            RecipeKind::Gold => gold_manu += tagged,
+            RecipeKind::BattleRecord => battle_record_manu += tagged,
+            RecipeKind::All | RecipeKind::Originium => {}
+        }
+    }
+    evaluate_control_inject_policy(TradeManuEfficiencyComponents {
+        trade_eff_pct: global_trade + current_room_increment,
+        gold_manu_eff_pct: gold_manu,
+        battle_record_manu_eff_pct: battle_record_manu,
+        trade_station_count: upper.trade_station_count,
+        gold_line_count: upper.gold_manu_line_count.min(u32::from(u8::MAX)) as u8,
+        battle_record_line_count: upper
+            .manufacture_station_count
+            .saturating_sub(upper.gold_manu_line_count.min(u32::from(u8::MAX)) as u8),
     })
     .sort_key_pct
 }
@@ -486,7 +763,27 @@ pub fn search_control_combos(
 
     let start = Instant::now();
     let max_k = options.max_operators.min(5).min(n as u8) as usize;
-    let combos: Vec<Vec<usize>> = combinations_indices(n, max_k).collect();
+    let required_indices: Vec<_> = entries
+        .iter()
+        .enumerate()
+        .filter(|(_, entry)| options.must_include.contains(&entry.name))
+        .map(|(index, _)| index)
+        .collect();
+    if required_indices.len() != options.must_include.len() || required_indices.len() > max_k {
+        return Ok(Vec::new());
+    }
+    let optional_indices: Vec<_> = (0..n)
+        .filter(|index| !required_indices.contains(index))
+        .collect();
+    let remaining = max_k - required_indices.len();
+    let combos: Vec<Vec<usize>> = combinations_indices(optional_indices.len(), remaining)
+        .map(|indices| {
+            let mut combo = required_indices.clone();
+            combo.extend(indices.into_iter().map(|index| optional_indices[index]));
+            combo.sort_unstable();
+            combo
+        })
+        .collect();
 
     let layout = options.layout.clone();
     let mood = options.mood;
@@ -518,14 +815,6 @@ pub fn search_control_combos(
         })
         .collect();
 
-    if !options.must_include.is_empty() {
-        hits.retain(|h| {
-            options
-                .must_include
-                .iter()
-                .all(|name| h.names.contains(name))
-        });
-    }
     if !options.candidate_requirements.is_empty() {
         hits.retain(|hit| {
             options
@@ -545,6 +834,7 @@ pub fn search_control_combos(
         control_inject_sort_key(b)
             .partial_cmp(&control_inject_sort_key(a))
             .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| prefer_control_name_pair(a, b))
             .then_with(|| a.names.cmp(&b.names))
     });
     hits.truncate(options.top_k);
@@ -585,6 +875,108 @@ mod tests {
             table,
         );
         (result, ops)
+    }
+
+    #[test]
+    fn producer_subset_upper_bound_covers_every_dynamic_scope() {
+        let blueprint = crate::layout::BaseBlueprint {
+            template: None,
+            drone_cap: 0,
+            scenario: crate::layout::BlueprintScenario::default(),
+            rooms: vec![
+                crate::layout::RoomBlueprint {
+                    id: crate::layout::RoomId::from("trade"),
+                    kind: crate::layout::FacilityKind::TradePost,
+                    level: 3,
+                    product: Some(crate::layout::RoomProduct::Trade {
+                        order: crate::trade::input::TradeOrderKind::Gold,
+                    }),
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+                crate::layout::RoomBlueprint {
+                    id: crate::layout::RoomId::from("gold"),
+                    kind: crate::layout::FacilityKind::Factory,
+                    level: 3,
+                    product: Some(crate::layout::RoomProduct::Factory {
+                        recipe: RecipeKind::Gold,
+                    }),
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+                crate::layout::RoomBlueprint {
+                    id: crate::layout::RoomId::from("battle"),
+                    kind: crate::layout::FacilityKind::Factory,
+                    level: 3,
+                    product: Some(crate::layout::RoomProduct::Factory {
+                        recipe: RecipeKind::BattleRecord,
+                    }),
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+            ],
+        };
+        let mut layout = LayoutContext::default();
+        layout.global_inject.record_trade_tagged(
+            "all",
+            "all_buff",
+            "all_family",
+            "all_tag",
+            5.0,
+            0,
+            crate::global_resource::TradeTaggedCountScope::AllTradeRooms,
+        );
+        layout.global_inject.record_trade_tagged(
+            "current",
+            "current_buff",
+            "current_family",
+            "current_tag",
+            10.0,
+            0,
+            crate::global_resource::TradeTaggedCountScope::CurrentTradeRoom,
+        );
+        layout.global_inject.record_trade_tagged(
+            "threshold",
+            "threshold_buff",
+            "threshold_family",
+            "threshold_tag",
+            10.0,
+            0,
+            crate::global_resource::TradeTaggedCountScope::QualifiedTradeRooms { min: 3 },
+        );
+        layout.global_inject.record_manu_count_scaled(
+            "count",
+            "count_buff",
+            "count_family",
+            "count_tag",
+            None,
+            5.0,
+            0,
+        );
+        layout
+            .global_inject
+            .record_manu_tagged("tagged_buff", "tagged_tag", None, 7.0);
+
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        assert_eq!(
+            control_inject_policy_sort_key_upper_bound(&layout, &blueprint, &table),
+            157.0
+        );
+    }
+
+    #[test]
+    fn producer_subset_pruning_disables_for_unresolved_support_inputs() {
+        let blueprint = crate::layout::BaseBlueprint::template_243_use_this().unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        for buff_id in ["control_token_prod_spd[000]", "control_mp_bd&trade[000]"] {
+            let mut layout = LayoutContext::default();
+            layout.global_inject.record_active_source_buff(buff_id);
+            assert!(
+                control_inject_policy_sort_key_upper_bound(&layout, &blueprint, &table)
+                    .is_infinite(),
+                "{buff_id} reads support/state that is unresolved before the full prefix"
+            );
+        }
     }
 
     #[test]
@@ -694,23 +1086,27 @@ mod tests {
     }
 
     #[test]
-    fn optional_dynamic_branch_classifies_family_recognition_not_daifeen() {
+    fn deferred_dynamic_branch_is_driven_by_producer_rule_catalog() {
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let roster = Roster::from_elite_map(
-            [("八幡海铃", 2), ("戴菲恩", 2)]
+            [("八幡海铃", 2), ("戴菲恩", 2), ("凛御银灰", 2)]
                 .into_iter()
                 .map(|(name, elite)| (name.to_string(), elite))
                 .collect(),
         );
         let pool = build_control_pool(&roster, &instances, &table).unwrap();
         assert_eq!(
-            control_entry_optional_dynamic_trade_tags(pool.entry("八幡海铃").unwrap(), &table),
+            control_entry_deferred_trade_tags(pool.entry("八幡海铃").unwrap(), &table).unwrap(),
             HashSet::from(["cc.g.siracusa".to_string()])
         );
-        assert!(
-            control_entry_optional_dynamic_trade_tags(pool.entry("戴菲恩").unwrap(), &table)
-                .is_empty()
+        assert_eq!(
+            control_entry_deferred_trade_tags(pool.entry("戴菲恩").unwrap(), &table).unwrap(),
+            HashSet::from(["cc.g.glasgow".to_string()])
+        );
+        assert_eq!(
+            control_entry_deferred_trade_tags(pool.entry("凛御银灰").unwrap(), &table).unwrap(),
+            HashSet::from(["cc.g.karlan".to_string()])
         );
     }
 
@@ -745,6 +1141,36 @@ mod tests {
             hits[0].breakdown.inject_subtotal > hits[0].breakdown.mood_fill_sort_component * 0.01,
             "efficiency pieces should outrank pure mood fill: {:?}",
             hits[0].breakdown
+        );
+    }
+
+    #[test]
+    fn control_search_prefers_declared_replacements_on_equal_outputs() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let roster = Roster::from_elite_map(
+            [("Mon3tr", 2), ("凯尔希", 2), ("阿斯卡纶", 2), ("明椒", 2)]
+                .into_iter()
+                .map(|(n, e)| (n.to_string(), e))
+                .collect(),
+        );
+        let pool = build_control_pool(&roster, &instances, &table).unwrap();
+
+        let hits = search_control_combos(
+            &pool,
+            &table,
+            &ControlSearchOptions {
+                max_operators: 2,
+                top_k: 1,
+                fill_policy: ControlFillPolicy::LayeredFill,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            hits[0].names,
+            vec!["Mon3tr".to_string(), "阿斯卡纶".to_string()]
         );
     }
 

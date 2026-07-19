@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "trade_siracusa_scaling",
+      "source_buff_id": "control_tra_limit&spd2[000]",
+      "admission": "deferred_optional",
+      "target_facility": "trade",
+      "schedule_relation": "exact_presence"
+    },
+    {
+      "id": "trade_glasgow_scaling",
+      "source_buff_id": "control_tra_limit&spd[010]",
+      "admission": "deferred_optional",
+      "target_facility": "trade",
+      "schedule_relation": "exact_presence"
+    },
+    {
+      "id": "trade_karlan_station",
+      "source_buff_id": "control_tra_limit&spd3[000]",
+      "admission": "deferred_optional",
+      "target_facility": "trade",
+      "schedule_relation": "exact_presence"
+    },
+    {
+      "id": "manu_blacksteel_scaling",
+      "source_buff_id": "control_bd_spd[000]",
+      "admission": "deferred_optional",
+      "target_facility": "manufacture",
+      "schedule_relation": "none",
+      "on_shifts": 0,
+      "off_shifts": 0
+    }
+  ]
+}

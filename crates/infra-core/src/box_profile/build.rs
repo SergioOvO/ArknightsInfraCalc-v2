@@ -7,15 +7,18 @@ use crate::error::Result;
 use crate::instances::OperatorInstances;
 use crate::layout::BaseBlueprint;
 use crate::operbox::{default_operbox_full_e2_path, OperBox};
+use crate::schedule::TimedRotationProfile;
 use crate::skill_table::SkillTable;
 use crate::tier::PromotionTier;
 
 use super::eval::{default_schedule_export_path, run_schedule_eval_probe};
-use super::probe::{run_user_rotation_probe, LayoutProbe};
+use super::probe::{run_user_rotation_probe_with_profile_and_preferences, LayoutProbe};
 
 #[derive(Debug, Clone)]
 pub struct BoxProfileOptions {
     pub top_k: usize,
+    pub rotation_profile: TimedRotationProfile,
+    pub system_preferences: std::collections::HashMap<String, String>,
     /// baseline 练度（默认 full_e2，用于公孙 schedule eval）。
     pub baseline_operbox: Option<PathBuf>,
     /// 公孙参考排班 JSON（默认 `schedule_export.json`）。
@@ -28,6 +31,8 @@ impl Default for BoxProfileOptions {
     fn default() -> Self {
         Self {
             top_k: 10,
+            rotation_profile: TimedRotationProfile::default(),
+            system_preferences: std::collections::HashMap::new(),
             baseline_operbox: None,
             baseline_schedule: None,
             gap_warn: 0.08,
@@ -102,6 +107,7 @@ pub struct RotationSnapshot {
 #[derive(Debug, Clone, Serialize)]
 pub struct BoxProfile {
     pub schema_version: u32,
+    pub rotation_profile: TimedRotationProfile,
     pub layout_label: String,
     pub operbox_label: String,
     pub baseline_label: String,
@@ -124,7 +130,15 @@ pub fn build_box_profile(
     options: &BoxProfileOptions,
 ) -> Result<BoxProfile> {
     // current：用户练度 → solver 排班；baseline：公孙固定编制 + 顶配练度 eval。
-    let current = run_user_rotation_probe(blueprint, operbox, instances, table, options.top_k)?;
+    let current = run_user_rotation_probe_with_profile_and_preferences(
+        blueprint,
+        operbox,
+        instances,
+        table,
+        options.top_k,
+        options.rotation_profile,
+        &options.system_preferences,
+    )?;
     build_box_profile_from_current_probe(
         &current,
         blueprint,
@@ -195,6 +209,7 @@ fn assemble_box_profile(
 
     BoxProfile {
         schema_version: 4,
+        rotation_profile: current.rotation.profile,
         layout_label: layout_label.to_string(),
         operbox_label: operbox_label.to_string(),
         baseline_label,

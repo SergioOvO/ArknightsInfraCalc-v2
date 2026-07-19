@@ -898,18 +898,28 @@ mod tests {
             "砾",
             "断罪者",
             "Castle-3",
-            "慕斯",
             "缠丸",
             "安比尔",
             "斑点",
             "霜叶",
             "白雪",
-            "红豆",
             "空弦",
             "吉星",
             "槐琥",
         ] {
             assert!(actual.contains_key(name), "missing {name} in {:?}", actual);
+        }
+        let ready: std::collections::HashSet<_> = report
+            .ready
+            .iter()
+            .map(|rec| rec.operator.as_str())
+            .collect();
+        for name in ["慕斯", "红豆"] {
+            assert!(ready.contains(name), "missing {name} in ready {:?}", ready);
+            assert!(
+                !actual.contains_key(name),
+                "{name} should not be in now.train"
+            );
         }
     }
 }

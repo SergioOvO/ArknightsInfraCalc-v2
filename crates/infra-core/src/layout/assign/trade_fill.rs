@@ -28,14 +28,13 @@ const KARLAN_JIE_TRADE_NAME: &str = "孑";
 /// 这些 `base_systems` 条目是 L3/兼容锚点或贸易 role 目录，不再由 registry fixed 早占岗位。
 /// 主路径的可露希尔/但书 required anchor 来自 `orchestration_rules.json`；
 /// 这里只跳过仍由贸易 role 搜索消费的旧 registry 条目，不声明跨体系总优先级。
-const TRADE_ROLE_MANAGED_REGISTRY_SYSTEMS: [&str; 7] = [
+const TRADE_ROLE_MANAGED_REGISTRY_SYSTEMS: [&str; 6] = [
     "blackkey_closure",
     "witch_long_beta",
     "ling_jie_karlan",
     "penguin_exusiai_lemuen",
     "penguin_texangel_e2",
     "penguin_texlap_e0",
-    "vina_lungmen",
 ];
 
 /// 黑键贸站不得与巫恋同房（含巫恋 shortcut 三人组）。
@@ -337,25 +336,6 @@ pub(super) fn pick_trade_meta_then_plain(
             }
         }
     }
-    if order == TradeOrderKind::Gold {
-        if let Ok(hit) = pick_trade_role_hit(
-            "meta_vina",
-            pool,
-            table,
-            trade_room_options(
-                layout,
-                gold_lines,
-                options,
-                TradeOrderKind::Gold,
-                room_level,
-            ),
-            layout,
-            used,
-            options.top_k,
-        ) {
-            return Ok(hit);
-        }
-    }
     if order == TradeOrderKind::Gold && !used.contains(WITCH_TRADE_NAME) {
         if let Ok(hit) = pick_trade_role_hit(
             "witch_fallback",
@@ -506,100 +486,9 @@ mod tests {
     use super::*;
     use crate::instances::{default_instances_path, OperatorInstances};
     use crate::layout::blueprint::{BlueprintScenario, RoomBlueprint};
-    use crate::pool::{add_jie_market_to_trade_pool, build_trade_pool};
+    use crate::pool::build_trade_pool;
     use crate::roster::Roster;
     use crate::skill_table::{default_skill_table_path, SkillTable};
-    use std::collections::HashMap;
-
-    #[test]
-    fn vina_role_is_fourth_before_karlan_jie() {
-        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
-        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-        let roster = Roster::from_elite_map(
-            [
-                ("推进之王", 2),
-                ("摩根", 2),
-                ("维娜·维多利亚", 2),
-                ("孑", 2),
-                ("银灰", 2),
-                ("崖心", 2),
-            ]
-            .into_iter()
-            .map(|(name, elite)| (name.to_string(), elite))
-            .collect::<HashMap<_, _>>(),
-        );
-        let mut pool = build_trade_pool(&roster, &instances, &table).unwrap();
-        add_jie_market_to_trade_pool(&mut pool, &instances, &table);
-
-        let mut layout = LayoutContext::search_baseline();
-        layout.global_inject.record_daifeen_e2_in_control();
-        layout.global_inject.record_karlan_precision(-15.0, 6);
-
-        let hit = pick_trade_meta_then_plain(
-            &pool,
-            &table,
-            &layout,
-            4,
-            &AssignBaseOptions {
-                top_k: 20,
-                ..Default::default()
-            },
-            TradeOrderKind::Gold,
-            3,
-            &mut HashSet::new(),
-            &[],
-        )
-        .unwrap();
-
-        assert_eq!(hit.rule_id.as_deref(), Some("gsl_vina_lungmen"));
-        for name in ["推进之王", "摩根", "维娜·维多利亚"] {
-            assert!(hit.names.iter().any(|n| n == name), "{hit:?}");
-        }
-        assert!(!hit.names.iter().any(|n| n == "孑"), "{hit:?}");
-    }
-
-    #[test]
-    fn vina_role_precedes_witch_fallback_without_tequila() {
-        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
-        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-        let roster = Roster::from_elite_map(
-            [
-                ("推进之王", 2),
-                ("摩根", 2),
-                ("维娜·维多利亚", 2),
-                ("巫恋", 2),
-                ("贝娜", 2),
-                ("古米", 2),
-                ("夜刀", 2),
-            ]
-            .into_iter()
-            .map(|(name, elite)| (name.to_string(), elite))
-            .collect::<HashMap<_, _>>(),
-        );
-        let pool = build_trade_pool(&roster, &instances, &table).unwrap();
-
-        let mut layout = LayoutContext::search_baseline();
-        layout.global_inject.record_daifeen_e2_in_control();
-
-        let hit = pick_trade_meta_then_plain(
-            &pool,
-            &table,
-            &layout,
-            4,
-            &AssignBaseOptions {
-                top_k: 20,
-                ..Default::default()
-            },
-            TradeOrderKind::Gold,
-            3,
-            &mut HashSet::new(),
-            &[],
-        )
-        .unwrap();
-
-        assert_eq!(hit.rule_id.as_deref(), Some("gsl_vina_lungmen"));
-        assert!(!hit.names.iter().any(|n| n == "巫恋"), "{hit:?}");
-    }
 
     #[test]
     fn later_trade_room_sees_vigil_committed_in_earlier_room() {

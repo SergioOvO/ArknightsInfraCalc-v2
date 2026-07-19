@@ -5,13 +5,16 @@ mod power;
 mod role_pick;
 mod trade;
 
-pub(crate) use control::control_inject_policy_sort_key_for_layout;
 pub use control::{
     control_efficiency_fill_sort_weight, control_entry_core_inject_fill,
-    control_entry_dynamic_trade_tags, control_entry_layered_fill, control_entry_mood_cost_fill,
-    control_entry_optional_dynamic_trade_tags, control_entry_plugin_fill, search_control_combos,
-    ControlFillPolicy, ControlPolicyBreakdown, ControlSearchHit, ControlSearchOptions,
-    MATATABI_CONSUMER_NAME,
+    control_entry_deferred_trade_tags, control_entry_dynamic_trade_tags,
+    control_entry_layered_fill, control_entry_mood_cost_fill, control_entry_plugin_fill,
+    search_control_combos, ControlFillPolicy, ControlPolicyBreakdown, ControlSearchHit,
+    ControlSearchOptions, MATATABI_CONSUMER_NAME,
+};
+pub(crate) use control::{
+    control_inject_components_for_assignment, control_inject_policy_sort_key_for_assignment,
+    control_inject_policy_sort_key_upper_bound,
 };
 pub(crate) use manufacture::{compare_manufacture_hits, evaluate_manufacture_room};
 pub use manufacture::{

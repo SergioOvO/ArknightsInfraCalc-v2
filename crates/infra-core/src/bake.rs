@@ -3147,6 +3147,7 @@ mod tests {
     fn dynamic_trade_inject_rejects_only_trade_bake() {
         let mut layout = LayoutContext::search_baseline();
         layout.global_inject.record_trade_tagged(
+            "八幡海铃",
             "control_tra_limit&spd2[000]",
             "dynamic_test",
             "cc.g.siracusa",
@@ -3263,7 +3264,9 @@ mod tests {
     #[test]
     fn trade_producer_flag_rejects_only_trade_bake() {
         let mut layout = LayoutContext::search_baseline();
-        layout.global_inject.record_haru_e2_in_control();
+        layout
+            .global_inject
+            .record_active_source_buff("control_tra_limit&spd2[000]");
         let trade_pool = TradePool {
             entries: vec![],
             skipped: vec![],

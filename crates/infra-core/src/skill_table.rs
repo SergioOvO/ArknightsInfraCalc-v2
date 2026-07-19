@@ -269,6 +269,10 @@ fn exact_embedded_data(name: &str) -> Option<(&'static str, &'static [u8])> {
             env!("CARGO_MANIFEST_DIR"),
             "/../../data/skill_table.json"
         )) as &[u8],
+        "producer_rules.json" => include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/producer_rules.json"
+        )) as &[u8],
         "mood_model.json" => include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../data/mood_model.json"
@@ -383,6 +387,7 @@ fn exact_embedded_data(name: &str) -> Option<(&'static str, &'static [u8])> {
         match name {
             "operator_instances.json" => "operator_instances.json",
             "skill_table.json" => "skill_table.json",
+            "producer_rules.json" => "producer_rules.json",
             "mood_model.json" => "mood_model.json",
             "standalone_roster.json" => "standalone_roster.json",
             "base_systems.json" => "base_systems.json",
@@ -451,6 +456,7 @@ mod tests {
         for name in [
             "operator_instances.json",
             "skill_table.json",
+            "producer_rules.json",
             "mood_model.json",
             "standalone_roster.json",
             "base_systems.json",
@@ -464,6 +470,38 @@ mod tests {
                 "missing embedded {name}"
             );
         }
+    }
+
+    #[test]
+    fn embedded_producer_catalog_loads_through_runtime_loader() {
+        let (skill_name, skill_bytes) = exact_embedded_data("skill_table.json").unwrap();
+        let skill_path = materialize_embedded_data(
+            "tests/embedded-runtime/skill_table.json",
+            skill_name,
+            skill_bytes,
+        )
+        .unwrap();
+        let table = SkillTable::load(&skill_path).unwrap();
+
+        let (producer_name, producer_bytes) = exact_embedded_data("producer_rules.json").unwrap();
+        let producer_path = materialize_embedded_data(
+            "tests/embedded-runtime/producer_rules.json",
+            producer_name,
+            producer_bytes,
+        )
+        .unwrap();
+        let catalog =
+            crate::response_dependency::load_producer_rule_catalog(&producer_path, &table).unwrap();
+
+        assert_eq!(catalog.rules.len(), 4);
+        assert!(catalog
+            .rules
+            .iter()
+            .any(|rule| rule.id == "trade_glasgow_scaling"));
+        assert!(catalog
+            .rules
+            .iter()
+            .any(|rule| rule.id == "manu_blacksteel_scaling"));
     }
 
     #[test]

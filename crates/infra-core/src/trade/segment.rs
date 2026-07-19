@@ -38,11 +38,7 @@ pub struct TradeSegmentDef {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct SegmentProducerDef {
     #[serde(default)]
-    pub haru_e2_in_control: bool,
-    #[serde(default)]
-    pub karlan_precision: bool,
-    #[serde(default)]
-    pub daifeen_e2_in_control: bool,
+    pub required_control_buff_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -128,21 +124,10 @@ pub fn segment_producer_active(
     producer: &SegmentProducerDef,
     inject: &GlobalInjectManifest,
 ) -> bool {
-    let any_required =
-        producer.haru_e2_in_control || producer.karlan_precision || producer.daifeen_e2_in_control;
-    if !any_required {
-        return true;
-    }
-    if producer.haru_e2_in_control && !inject.haru_e2_in_control() {
-        return false;
-    }
-    if producer.karlan_precision && inject.karlan_precision().is_none() {
-        return false;
-    }
-    if producer.daifeen_e2_in_control && !inject.daifeen_e2_in_control() {
-        return false;
-    }
-    true
+    producer
+        .required_control_buff_id
+        .as_deref()
+        .is_none_or(|buff_id| inject.has_active_source_buff(buff_id))
 }
 
 fn segment_consumer_matches(
@@ -213,7 +198,7 @@ mod tests {
         assert!(cache.role("docus").is_some());
         assert!(cache.role("closure").is_some());
         assert!(cache.role("witch").is_some());
-        assert!(cache.role("meta_vina").is_some());
+        assert!(cache.role("meta_vina").is_none());
     }
 
     #[test]
@@ -232,7 +217,7 @@ mod tests {
             .map(|n| pool.entry(n).unwrap().to_trade_operator())
             .collect();
         let mut inject = GlobalInjectManifest::default();
-        inject.record_haru_e2_in_control();
+        inject.record_active_source_buff("control_tra_limit&spd2[000]");
         let m = resolve_trade_shortcut(&ops, &table, 80.0, 3, &inject).expect("match");
         assert_eq!(m.entry.id, "gsl_docus_syracusa");
     }
@@ -246,7 +231,7 @@ mod tests {
             mk_op("维娜·维多利亚", 2, vec!["trade_ord_spd&par[001]"]),
         ];
         let mut inject = GlobalInjectManifest::default();
-        inject.record_daifeen_e2_in_control();
+        inject.record_active_source_buff("control_tra_limit&spd[010]");
         let m = resolve_trade_shortcut(&ops, &table, 80.0, 3, &inject).expect("match");
         assert_eq!(m.entry.id, "gsl_vina_lungmen");
     }

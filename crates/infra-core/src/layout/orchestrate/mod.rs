@@ -11,9 +11,9 @@ mod select;
 pub use execute::{execute_plan, ExecuteResult};
 pub(crate) use plan::pack_production_components;
 pub use plan::{
-    ActivatedSystem, ActiveDependency, AssignmentPlan, ContinuousRole, ControlCandidateRequirement,
-    ProducerSlot, ReserveReusePolicy, ResolvedRoleReserve, SelectedRuleAlternative, SlotFill,
-    SystemAnchor, SystemConstraint,
+    ActivatedSystem, ActiveDependency, AnchorFillPolicy, AssignmentPlan, ContinuousRole,
+    ControlCandidateRequirement, ProducerSlot, ReserveReusePolicy, ResolvedRoleReserve,
+    SelectedRuleAlternative, ShiftBind, SlotFill, SystemAnchor, SystemConstraint,
 };
 pub use select::{build_plan, build_plan_with_runtime};
 
@@ -366,6 +366,10 @@ mod tests {
                 ]
                 .contains(&selected.alternative_id.as_str())
         }));
+        if operbox.owns("塑心") {
+            assert!(plan.anchors.iter().any(|a| a.operator == "塑心"
+                && a.facility == crate::layout::blueprint::FacilityKind::Dormitory));
+        }
         // forbid-same-room 约束汇入 plan.constraints（迷迭香 ≠ 清流/温蒂同房）。
         assert!(
             plan.constraints.iter().any(|c| matches!(

@@ -245,7 +245,6 @@ fn apply_tagged_control_injects(ctx: &mut ManuContext) {
 }
 
 fn apply_abyssal_hunters_control(ctx: &mut ManuContext) {
-    const GLADIIA: &str = "歌蕾蒂娅";
     const GLADIIA_ALPHA: &str = "control_mp_aegir2[000]";
     const GLADIIA_BETA: &str = "control_mp_aegir2[010]";
     const TAG_ABYSSAL: &str = "cc.g.abyssal";
@@ -263,9 +262,17 @@ fn apply_abyssal_hunters_control(ctx: &mut ManuContext) {
         return;
     }
 
-    let (rate, cap) = if ctx.layout.control_buff_active(GLADIIA, GLADIIA_BETA) {
+    let (rate, cap) = if ctx
+        .layout
+        .global_inject
+        .has_active_source_buff(GLADIIA_BETA)
+    {
         (10.0, 90.0)
-    } else if ctx.layout.control_buff_active(GLADIIA, GLADIIA_ALPHA) {
+    } else if ctx
+        .layout
+        .global_inject
+        .has_active_source_buff(GLADIIA_ALPHA)
+    {
         (5.0, 45.0)
     } else {
         (0.0, 0.0)
@@ -1207,10 +1214,9 @@ mod tests {
     fn gladiia_control_boosts_each_abyssal_by_global_hunter_count() {
         let table = table();
         let mut layout = LayoutContext::default();
-        layout.control_workforce.push("歌蕾蒂娅".to_string());
         layout
-            .control_buffs
-            .push(("歌蕾蒂娅".to_string(), "control_mp_aegir2[010]".to_string()));
+            .global_inject
+            .record_active_source_buff("control_mp_aegir2[010]");
         layout
             .manu_tagged_count_sum
             .insert("cc.g.abyssal".to_string(), 4);
@@ -1272,10 +1278,9 @@ mod tests {
     fn abyssal_control_does_not_stack_with_bionic_seadragon() {
         let table = table();
         let mut layout = LayoutContext::default();
-        layout.control_workforce.push("歌蕾蒂娅".to_string());
         layout
-            .control_buffs
-            .push(("歌蕾蒂娅".to_string(), "control_mp_aegir2[010]".to_string()));
+            .global_inject
+            .record_active_source_buff("control_mp_aegir2[010]");
         layout
             .manu_tagged_count_sum
             .insert("cc.g.abyssal".to_string(), 2);
@@ -1702,8 +1707,8 @@ mod tests {
             .copied()
             .unwrap_or(0.0);
         assert!(
-            (robots - 45.0).abs() < f64::EPSILON,
-            "243_use_this_ 设施等级和 45（含办公室 Lv3），got {robots}"
+            (robots - 64.0).abs() < f64::EPSILON,
+            "243_use_this_ 满级设施等级和按至简上限截断到 64，got {robots}"
         );
     }
 
@@ -1711,9 +1716,9 @@ mod tests {
     fn zhijian_mechanical_mastery_e0_on_search_baseline() {
         let table = table();
         let result = solve_manufacture(&zhijian_room(0), &table).unwrap();
-        // floor(42/16)×5 = 10%
+        // floor(64/16)×5 = 20%
         assert!(
-            ((result.skill_efficiency.as_f64() * 100.0) - 10.0).abs() < 0.01,
+            ((result.skill_efficiency.as_f64() * 100.0) - 20.0).abs() < 0.01,
             "got {}",
             (result.skill_efficiency.as_f64() * 100.0)
         );
@@ -1723,9 +1728,9 @@ mod tests {
     fn zhijian_mechanical_mastery_e2_on_search_baseline() {
         let table = table();
         let result = solve_manufacture(&zhijian_room(2), &table).unwrap();
-        // floor(42/8)×5 = 25%
+        // floor(64/8)×5 = 40%
         assert!(
-            ((result.skill_efficiency.as_f64() * 100.0) - 25.0).abs() < 0.01,
+            ((result.skill_efficiency.as_f64() * 100.0) - 40.0).abs() < 0.01,
             "got {}",
             (result.skill_efficiency.as_f64() * 100.0)
         );

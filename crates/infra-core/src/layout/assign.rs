@@ -247,11 +247,44 @@ pub fn assign_shift_with_plan_skip(
     seed: &BaseAssignment,
     skip_system_ids: &HashSet<String>,
 ) -> Result<AssignShiftResult> {
+    assign_shift_with_preclaimed_plan(
+        blueprint,
+        operbox,
+        instances,
+        table,
+        options,
+        mode,
+        seed,
+        seed,
+        skip_system_ids,
+        |_| Ok(()),
+    )
+}
+
+/// Build a plan around `planning_seed`, then execute the augmented plan from
+/// `execution_seed`. Timed profiles use this to make hard preclaims visible to
+/// ordinary system selection without double-placing their final anchors.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn assign_shift_with_preclaimed_plan<F>(
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+    options: &AssignBaseOptions,
+    mode: AssignShiftMode,
+    planning_seed: &BaseAssignment,
+    execution_seed: &BaseAssignment,
+    skip_system_ids: &HashSet<String>,
+    augment_plan: F,
+) -> Result<AssignShiftResult>
+where
+    F: FnOnce(&mut AssignmentPlan) -> Result<()>,
+{
     blueprint.validate()?;
 
     let mut skip_system_ids = skip_system_ids.clone();
     skip_trade_core_registry_systems(&mut skip_system_ids);
-    let plan = crate::layout::orchestrate::build_plan_with_runtime(
+    let mut plan = crate::layout::orchestrate::build_plan_with_runtime(
         blueprint,
         operbox,
         instances,
@@ -259,12 +292,20 @@ pub fn assign_shift_with_plan_skip(
         options.mood,
         &options.system_preferences,
         mode,
-        seed,
+        planning_seed,
         &skip_system_ids,
     )?;
+    augment_plan(&mut plan)?;
 
     let assignment = pipeline::run_shift_pipeline(
-        blueprint, operbox, instances, table, options, mode, seed, &plan,
+        blueprint,
+        operbox,
+        instances,
+        table,
+        options,
+        mode,
+        execution_seed,
+        &plan,
     )?;
 
     Ok(AssignShiftResult { assignment, plan })
@@ -976,24 +1017,23 @@ mod tests {
     }
 
     #[test]
-    fn assign_vina_consumers_never_run_without_daifeen_producer() {
+    fn glasgow_consumer_is_not_admission_gated_by_daifeen() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let operbox = OperBox::load(&default_operbox_full_e2_path().unwrap()).unwrap();
         let operbox = operbox.excluding(&HashSet::from([
             "龙舌兰".to_string(),
             "可露希尔".to_string(),
             "但书".to_string(),
+            "戴菲恩".to_string(),
         ]));
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
-        for name in ["戴菲恩", "推进之王", "摩根", "维娜·维多利亚", "灵知", "孑"]
-        {
-            if !operbox.owns(name) {
-                return;
-            }
+        if !operbox.owns("摩根") {
+            return;
         }
-
-        let assignment = assign_base_greedy(
+        let mut seed = BaseAssignment::default();
+        seed.set_room("trade_1", vec![AssignedOperator::new("摩根", 2)]);
+        let assignment = assign_shift(
             &blueprint,
             &operbox,
             &instances,
@@ -1002,24 +1042,19 @@ mod tests {
                 top_k: 10,
                 ..Default::default()
             },
+            AssignShiftMode::Peak,
+            &seed,
         )
         .unwrap();
 
-        let control: HashSet<_> = assignment
+        assert!(assignment
+            .operators_in(&RoomId::from("trade_1"))
+            .iter()
+            .any(|operator| operator.name == "摩根"));
+        assert!(assignment
             .control_operators()
-            .into_iter()
-            .map(|o| o.name)
-            .collect();
-        let vina_room = assignment.rooms.iter().find(|r| {
-            ["推进之王", "摩根", "维娜·维多利亚"]
-                .iter()
-                .all(|name| r.operators.iter().any(|o| o.name == *name))
-        });
-        assert!(
-            vina_room.is_none() || control.contains("戴菲恩"),
-            "推王消费方实际上岗时必须有戴菲恩 producer: {:?}",
-            assignment.rooms
-        );
+            .iter()
+            .all(|operator| operator.name != "戴菲恩"));
     }
 
     #[test]
@@ -1120,7 +1155,7 @@ mod tests {
             ("诗怀雅", 2, 5),
             ("Mon3tr", 2, 6),
             ("凯尔希", 2, 6),
-            ("明椒", 0, 5),
+            ("阿斯卡纶", 2, 6),
             ("望", 2, 5),
             ("薇薇安娜", 2, 6),
             ("阿米娅", 2, 5),

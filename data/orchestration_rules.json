@@ -121,13 +121,21 @@
               "min_count": 0,
               "max_count": 2,
               "selection": "all_available"
+            },
+            {
+              "id": "dorm_silent_echo",
+              "facility": "dormitory",
+              "candidates": [{ "name": "塑心", "elite": 2 }],
+              "min_count": 0,
+              "max_count": 1,
+              "selection": "all_available"
             }
           ],
           "relations": [
             { "kind": "forbid_same_room", "a": "迷迭香", "b": "清流" },
             { "kind": "forbid_same_room", "a": "迷迭香", "b": "温蒂" }
           ],
-          "bind_roles": ["rosemary", "blackkey", "xi", "dorm_perception"]
+          "bind_roles": ["rosemary", "blackkey", "xi", "dorm_perception", "dorm_silent_echo"]
         },
         {
           "id": "recruit_refresh",
@@ -167,6 +175,14 @@
               "min_count": 0,
               "max_count": 2,
               "selection": "all_available"
+            },
+            {
+              "id": "dorm_silent_echo",
+              "facility": "dormitory",
+              "candidates": [{ "name": "塑心", "elite": 2 }],
+              "min_count": 0,
+              "max_count": 1,
+              "selection": "all_available"
             }
           ],
           "relations": [
@@ -174,7 +190,7 @@
             { "kind": "forbid_same_room", "a": "迷迭香", "b": "温蒂" },
             { "kind": "forbid_same_station", "a": "黑键", "b": "巫恋" }
           ],
-          "bind_roles": ["rosemary", "blackkey", "xi", "dorm_perception"]
+          "bind_roles": ["rosemary", "blackkey", "xi", "dorm_perception", "dorm_silent_echo"]
         },
         {
           "id": "high_perception",
@@ -253,6 +269,14 @@
               "min_count": 0,
               "max_count": 2,
               "selection": "all_available"
+            },
+            {
+              "id": "dorm_silent_echo",
+              "facility": "dormitory",
+              "candidates": [{ "name": "塑心", "elite": 2 }],
+              "min_count": 0,
+              "max_count": 1,
+              "selection": "all_available"
             }
           ],
           "relations": [
@@ -260,7 +284,7 @@
             { "kind": "forbid_same_room", "a": "迷迭香", "b": "温蒂" },
             { "kind": "forbid_same_station", "a": "黑键", "b": "巫恋" }
           ],
-          "bind_roles": ["rosemary", "blackkey", "xi", "dorm_perception"]
+          "bind_roles": ["rosemary", "blackkey", "xi", "dorm_perception", "dorm_silent_echo"]
         }
       ]
     },

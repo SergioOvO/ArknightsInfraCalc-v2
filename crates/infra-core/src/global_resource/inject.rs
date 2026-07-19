@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use crate::types::RecipeKind;
 
@@ -20,12 +20,11 @@ pub struct GlobalInjectManifest {
     manu_originium_by_family: HashMap<String, f64>,
     trade_tagged: Vec<TaggedTradeInject>,
     manu_tagged: Vec<TaggedManuInject>,
+    manu_count_scaled: Vec<TaggedManuCountInject>,
+    /// 当前中枢编制实际激活的机制 buff；供 L3 capability gate 使用。
+    active_source_buffs: BTreeSet<String>,
     /// 灵知·精密计算规则（单一中枢，不与自身叠加）。
     karlan_precision: Option<KarlanPrecision>,
-    /// 中枢八幡海铃 E2「家族认可」已进驻（叙拉古但书链段 producer；不含贸易站计数）。
-    haru_e2_in_control: bool,
-    /// 中枢戴菲恩 E2「运筹好手」已进驻（推王组链段 producer）。
-    daifeen_e2_in_control: bool,
 }
 
 /// 中枢按贸易站实际标签人数结算的延迟注入规则。
@@ -35,6 +34,7 @@ pub struct GlobalInjectManifest {
 /// [`GlobalInjectManifest::trade_eff_pct_with_scoped_tag_counts`] 分别提供全站与当前房计数。
 #[derive(Debug, Clone, PartialEq)]
 pub struct TaggedTradeInject {
+    pub source_operator: String,
     pub source_buff_id: String,
     pub family: String,
     pub target_tag: String,
@@ -47,6 +47,7 @@ pub struct TaggedTradeInject {
 pub enum TradeTaggedCountScope {
     AllTradeRooms,
     CurrentTradeRoom,
+    QualifiedTradeRooms { min: u8 },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -55,6 +56,17 @@ pub struct TaggedManuInject {
     pub target_tag: String,
     pub recipe: Option<RecipeKind>,
     pub value: f64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaggedManuCountInject {
+    pub source_operator: String,
+    pub source_buff_id: String,
+    pub family: String,
+    pub target_tag: String,
+    pub recipe: Option<RecipeKind>,
+    pub value_per_operator: f64,
+    pub resolved_count: u8,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -85,6 +97,9 @@ impl GlobalInjectManifest {
             let counts = match rule.count_scope {
                 TradeTaggedCountScope::AllTradeRooms => all_trade_counts,
                 TradeTaggedCountScope::CurrentTradeRoom => current_room_counts,
+                TradeTaggedCountScope::QualifiedTradeRooms { .. } => {
+                    return rule.resolved_count;
+                }
             };
             counts.get(&rule.target_tag).copied().unwrap_or(0)
         })
@@ -127,13 +142,26 @@ impl GlobalInjectManifest {
     }
 
     pub fn manu_eff_for(&self, recipe: RecipeKind) -> f64 {
-        let all: f64 = self.manu_all_by_family.values().sum();
-        all + match recipe {
-            RecipeKind::All => 0.0,
-            RecipeKind::Gold => self.manu_gold_by_family.values().sum(),
-            RecipeKind::BattleRecord => self.manu_battle_record_by_family.values().sum(),
-            RecipeKind::Originium => self.manu_originium_by_family.values().sum(),
+        let mut all_by_family = self.manu_all_by_family.clone();
+        let mut recipe_by_family = match recipe {
+            RecipeKind::All => HashMap::new(),
+            RecipeKind::Gold => self.manu_gold_by_family.clone(),
+            RecipeKind::BattleRecord => self.manu_battle_record_by_family.clone(),
+            RecipeKind::Originium => self.manu_originium_by_family.clone(),
+        };
+        for rule in &self.manu_count_scaled {
+            let value = f64::from(rule.resolved_count) * rule.value_per_operator;
+            let map = if rule.recipe.is_none_or(|target| target == RecipeKind::All) {
+                &mut all_by_family
+            } else if rule.recipe == Some(recipe) {
+                &mut recipe_by_family
+            } else {
+                continue;
+            };
+            let entry = map.entry(rule.family.clone()).or_insert(0.0);
+            *entry = entry.max(value);
         }
+        all_by_family.values().sum::<f64>() + recipe_by_family.values().sum::<f64>()
     }
 
     pub fn record_trade(&mut self, family: &str, value: f64) {
@@ -146,6 +174,7 @@ impl GlobalInjectManifest {
 
     pub fn record_trade_tagged(
         &mut self,
+        source_operator: &str,
         source_buff_id: &str,
         family: &str,
         target_tag: &str,
@@ -154,6 +183,7 @@ impl GlobalInjectManifest {
         count_scope: TradeTaggedCountScope,
     ) {
         self.trade_tagged.push(TaggedTradeInject {
+            source_operator: source_operator.to_string(),
             source_buff_id: source_buff_id.to_string(),
             family: family.to_string(),
             target_tag: target_tag.to_string(),
@@ -167,6 +197,16 @@ impl GlobalInjectManifest {
         &self.trade_tagged
     }
 
+    pub fn refresh_qualified_trade_counts(&mut self, counts: &HashMap<String, u8>) {
+        for rule in &mut self.trade_tagged {
+            let TradeTaggedCountScope::QualifiedTradeRooms { min } = rule.count_scope else {
+                continue;
+            };
+            let key = crate::layout::trade_station_tagged_gte_key(&rule.target_tag, min);
+            rule.resolved_count = counts.get(&key).copied().unwrap_or(0);
+        }
+    }
+
     pub fn has_dynamic_trade_inject(&self) -> bool {
         !self.trade_tagged.is_empty()
     }
@@ -175,8 +215,7 @@ impl GlobalInjectManifest {
         self.trade_by_family == other.trade_by_family
             && self.trade_tagged == other.trade_tagged
             && self.karlan_precision == other.karlan_precision
-            && self.haru_e2_in_control == other.haru_e2_in_control
-            && self.daifeen_e2_in_control == other.daifeen_e2_in_control
+            && self.active_source_buffs == other.active_source_buffs
     }
 
     pub fn record_manu(&mut self, family: &str, recipe: Option<RecipeKind>, value: f64) {
@@ -219,12 +258,44 @@ impl GlobalInjectManifest {
         &self.manu_tagged
     }
 
+    pub fn record_manu_count_scaled(
+        &mut self,
+        source_operator: &str,
+        source_buff_id: &str,
+        family: &str,
+        target_tag: &str,
+        recipe: Option<RecipeKind>,
+        value_per_operator: f64,
+        resolved_count: u8,
+    ) {
+        self.manu_count_scaled.push(TaggedManuCountInject {
+            source_operator: source_operator.to_string(),
+            source_buff_id: source_buff_id.to_string(),
+            family: family.to_string(),
+            target_tag: target_tag.to_string(),
+            recipe,
+            value_per_operator,
+            resolved_count,
+        });
+    }
+
+    pub fn manu_count_scaled(&self) -> &[TaggedManuCountInject] {
+        &self.manu_count_scaled
+    }
+
+    pub fn refresh_manu_count_scaled(&mut self, counts: &HashMap<String, u8>) {
+        for rule in &mut self.manu_count_scaled {
+            rule.resolved_count = counts.get(&rule.target_tag).copied().unwrap_or(0);
+        }
+    }
+
     pub(crate) fn same_manufacture_effects_as(&self, other: &Self) -> bool {
         self.manu_all_by_family == other.manu_all_by_family
             && self.manu_gold_by_family == other.manu_gold_by_family
             && self.manu_battle_record_by_family == other.manu_battle_record_by_family
             && self.manu_originium_by_family == other.manu_originium_by_family
             && self.manu_tagged == other.manu_tagged
+            && self.manu_count_scaled == other.manu_count_scaled
     }
 
     /// 记录灵知·精密计算；单一中枢不叠加，取订单上限增益更大的一条。
@@ -243,22 +314,16 @@ impl GlobalInjectManifest {
         self.karlan_precision
     }
 
-    /// 叙拉古但书链段：中枢有八幡海铃 E2 时激活；贸易站三人组不全则仍走 `gsl_docus_solo` fallback。
-    pub fn record_haru_e2_in_control(&mut self) {
-        self.haru_e2_in_control = true;
+    pub fn record_active_source_buff(&mut self, buff_id: &str) {
+        self.active_source_buffs.insert(buff_id.to_string());
     }
 
-    pub fn haru_e2_in_control(&self) -> bool {
-        self.haru_e2_in_control
+    pub fn has_active_source_buff(&self, buff_id: &str) -> bool {
+        self.active_source_buffs.contains(buff_id)
     }
 
-    /// 推王组链段：中枢有戴菲恩 E2 时激活。
-    pub fn record_daifeen_e2_in_control(&mut self) {
-        self.daifeen_e2_in_control = true;
-    }
-
-    pub fn daifeen_e2_in_control(&self) -> bool {
-        self.daifeen_e2_in_control
+    pub fn active_source_buffs(&self) -> impl Iterator<Item = &str> {
+        self.active_source_buffs.iter().map(String::as_str)
     }
 }
 
@@ -282,6 +347,7 @@ mod tests {
         let mut inject = GlobalInjectManifest::default();
         inject.record_trade("shared", 4.0);
         inject.record_trade_tagged(
+            "producer_a",
             "source_a",
             "shared",
             "tag_a",
@@ -290,6 +356,7 @@ mod tests {
             TradeTaggedCountScope::AllTradeRooms,
         );
         inject.record_trade_tagged(
+            "producer_b",
             "source_b",
             "shared",
             "tag_b",
@@ -298,6 +365,7 @@ mod tests {
             TradeTaggedCountScope::AllTradeRooms,
         );
         inject.record_trade_tagged(
+            "producer_c",
             "source_c",
             "other",
             "tag_c",
@@ -327,6 +395,7 @@ mod tests {
     fn tagged_trade_inject_keeps_all_trade_and_current_room_counts_distinct() {
         let mut inject = GlobalInjectManifest::default();
         inject.record_trade_tagged(
+            "haru_owner",
             "haru",
             "siracusa",
             "cc.g.siracusa",
@@ -335,6 +404,7 @@ mod tests {
             TradeTaggedCountScope::AllTradeRooms,
         );
         inject.record_trade_tagged(
+            "daifeen_owner",
             "daifeen",
             "glasgow",
             "cc.g.glasgow",
@@ -359,6 +429,25 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn qualified_trade_room_count_uses_resolved_threshold_snapshot() {
+        let mut inject = GlobalInjectManifest::default();
+        inject.record_trade_tagged(
+            "silver_owner",
+            "silver_buff",
+            "karlan",
+            "cc.g.karlan",
+            10.0,
+            2,
+            TradeTaggedCountScope::QualifiedTradeRooms { min: 3 },
+        );
+        assert_eq!(inject.trade_eff_pct(), 20.0);
+        assert_eq!(
+            inject.trade_eff_pct_with_scoped_tag_counts(&HashMap::new(), &HashMap::new()),
+            20.0
+        );
+    }
 }
 
 /// 默认注入族：全贸易站 flat %（阿米娅/诗怀雅/明椒/阿斯卡纶等）。
@@ -366,18 +455,3 @@ pub const INJECT_FAMILY_TRADE_GLOBAL_FLAT: &str = "trade_global_flat";
 
 /// 默认注入族：全制造站 flat %（凯尔希/Mon3tr 等）。
 pub const INJECT_FAMILY_MANU_GLOBAL_ALL: &str = "manu_global_all";
-
-/// Per-faction scaling 注入族：每叙拉古干员在贸易站提供 +5%。
-pub const INJECT_FAMILY_TRADE_SIRACUSA_SCALING: &str = "trade_siracusa_scaling";
-
-/// Per-faction scaling 注入族：每 3 谢拉格贸易站提供 +10%。
-pub const INJECT_FAMILY_TRADE_KARLAN_STATION: &str = "trade_karlan_station";
-
-/// Per-faction scaling 注入族：每格拉斯哥帮干员在贸易站提供 +10%。
-pub const INJECT_FAMILY_TRADE_GLASGOW_SCALING: &str = "trade_glasgow_scaling";
-
-/// Per-faction scaling 注入族：每黑钢国际干员在制造站提供 +5%。
-pub const INJECT_FAMILY_MANU_BLACKSTEEL_SCALING: &str = "manu_blacksteel_scaling";
-
-/// Per-faction scaling 注入族：每骑士干员在制造站提供 +7%。
-pub const INJECT_FAMILY_MANU_KNIGHT_SCALING: &str = "manu_knight_scaling";

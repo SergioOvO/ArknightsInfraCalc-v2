@@ -136,7 +136,7 @@ crates/infra-cli/src/
 | `search trade` | `main.rs` | `output::emit_trade_search` | roster / operbox |
 | `bench` | `main.rs` | `output::emit_bench` | 必选 `--operbox`；布局固定 `search_baseline`（`243_use_this_.json`） |
 | **`layout test`** | `commands/layout.rs` | `output::emit_bench` | 必选 `--layout` + `--operbox`；默认调用 `assign_base_greedy` |
-| **`layout team-rotation`** | `commands/layout.rs` | `output::emit_team_rotation` | 必选 `--layout` + `--operbox`；**αβγ ABC 轮换**；仅排班时用 |
+| **`layout team-rotation`** | `commands/layout.rs` | `output::emit_team_rotation` | 必选 `--layout` + `--operbox`；支持默认 ABC、二班与两个具名四班；仅排班时用 |
 | **`layout analyze`** | `commands/layout.rs` | `print_box_profile_report` | 必选 `--layout` + `--operbox`；练度概况分析 |
 | **`layout eval`** | `commands/layout.rs` | stderr 文本 / JSON | 必选 `--layout` + `--operbox` + `--assignment`；评估指定编制 |
 | `profile layout-full` | `commands/profile.rs` | stderr 性能报告 | 开发辅助；默认路径为历史性能夹具，用户模拟不要用 |
@@ -180,9 +180,10 @@ cargo run -p infra-cli -- plan \
 |------|------|
 | `--operbox` | **必填**。`OperBox` JSON 或一图流练度 xlsx |
 | `--layout` | 可选。默认 `data/fixtures/243/layout.json` |
+| `--rotation` | 可选。`2` / `3` / `fiammetta-8844` / `abyssal-7575`；省略为 `3`，裸 `4` 报错 |
 | `--maa-out` | 写出 MAA 基建排班 JSON |
 | `--profile-out` | 可选。账号画像 JSON 路径（默认同目录 `*_profile.json`） |
-| `--output-dir` | 可选。写出三队 `team_shift_*.json` assignment |
+| `--output-dir` | 可选。按最终 2 / 3 / 4 个状态写出 `team_shift_*.json` assignment |
 | `--baseline` | 可选。对比用基准 operbox（默认 `data/box_profile_knightcode.json`） |
 | `--top` | Top-K 搜索条数，默认 20 |
 | `--prefer system=alternative` | 可重复。优先尝试声明式规则 alternative；不可行时按规则顺序回退。未知 rule/alternative 会明确报错；例如 `--prefer rosemary_perception=recruit_refresh_witch` |
@@ -222,6 +223,7 @@ cargo run -p infra-cli -- layout team-rotation \
 |------|------|
 | `--layout` | `plan` 可选，默认 `data/fixtures/243/layout.json`；`layout team-rotation` 必填 |
 | `--operbox` | **必填**。`OperBox` JSON；**Agent 默认** `data/fixtures/243/operbox_full_e2.json` |
+| `--rotation` | 可选；显式 profile 是 hard constraint，不会静默回退默认三班 |
 | `--maa-out` | **Agent 默认必带**。写出 MAA 基建排班 JSON；默认 `out/243_maa.json` |
 | `--maa-title` | 可选。覆盖 JSON 顶层 `title` |
 | `--top` | Top-K 搜索条数，默认 20 |
@@ -232,7 +234,7 @@ cargo run -p infra-cli -- layout team-rotation \
 
 | 流 | 说明 |
 |----|------|
-| **stderr** | 三队花名册、轮换表、各班设施上岗与加权产出 |
+| **stderr** | 所选 profile 的队伍花名册、轮换表、各班设施上岗与加权产出 |
 | **`--maa-out` 文件** | MAA 协议 JSON（见 [FRONTEND_CLI.md](FRONTEND_CLI.md) §6） |
 
 用户指定 `--layout` / `--operbox` / `--maa-out` 时以用户为准。MAA 映射实现见 `crates/infra-core/src/export/maa.rs`。

@@ -1,9 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::path::Path;
+use std::sync::OnceLock;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
+use crate::error::{Error, Result};
 use crate::global_resource::CONVERSIONS;
-use crate::layout::BaseBlueprint;
+use crate::instances::OperatorInstances;
+use crate::layout::{BaseAssignment, BaseBlueprint, FacilityKind, RoomId};
 use crate::skill_table::SkillTable;
 use crate::types::{Action, AtomScope, Condition, Selector};
 
@@ -26,6 +30,65 @@ pub enum ResponseField {
     Mood,
     StateResource,
     GlobalInject,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProducerAdmission {
+    DeferredOptional,
+    PlanRequired,
+    NormalObservation,
+    PolicyManaged,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScheduleDependencyRelation {
+    ExactPresence,
+    RequiresPresence,
+    None,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProducerRule {
+    pub id: String,
+    pub source_buff_id: String,
+    pub admission: ProducerAdmission,
+    pub target_facility: String,
+    pub schedule_relation: ScheduleDependencyRelation,
+    #[serde(default = "default_on_shifts")]
+    pub on_shifts: u8,
+    #[serde(default = "default_off_shifts")]
+    pub off_shifts: u8,
+}
+
+fn default_on_shifts() -> u8 {
+    2
+}
+
+fn default_off_shifts() -> u8 {
+    1
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProducerRuleCatalog {
+    pub version: u32,
+    pub rules: Vec<ProducerRule>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ResolvedProducerDependency {
+    pub rule_id: String,
+    pub source_buff_id: String,
+    pub producers: Vec<String>,
+    pub consumers: Vec<String>,
+    pub target_facility: String,
+    pub target_rooms: Vec<RoomId>,
+    pub relation: ScheduleDependencyRelation,
+    pub on_shifts: u8,
+    pub off_shifts: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effective_contribution: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -214,6 +277,252 @@ pub struct ResponseDependencyReport {
     pub resource_reachable_ranges: Vec<ResourceReachableRange>,
     pub resource_equivalence_classes: Vec<ResourceEquivalenceClass>,
     pub rows: Vec<ResponseDependencyRow>,
+}
+
+static PRODUCER_RULE_CATALOG: OnceLock<std::result::Result<ProducerRuleCatalog, String>> =
+    OnceLock::new();
+
+pub fn default_producer_rules_path() -> Result<std::path::PathBuf> {
+    crate::skill_table::data_path("producer_rules.json")
+}
+
+pub fn load_producer_rule_catalog(path: &Path, table: &SkillTable) -> Result<ProducerRuleCatalog> {
+    let raw = std::fs::read_to_string(path)?;
+    let catalog: ProducerRuleCatalog = serde_json::from_str(&raw)
+        .map_err(|error| Error::msg(format!("producer rules parse {}: {error}", path.display())))?;
+    validate_producer_rule_catalog(&catalog, table).map_err(Error::msg)?;
+    Ok(catalog)
+}
+
+pub fn producer_rule_catalog(table: &SkillTable) -> Result<&'static ProducerRuleCatalog> {
+    let catalog = PRODUCER_RULE_CATALOG
+        .get_or_init(|| {
+            let path = default_producer_rules_path().map_err(|error| error.to_string())?;
+            let raw = std::fs::read_to_string(&path).map_err(|error| error.to_string())?;
+            serde_json::from_str(&raw)
+                .map_err(|error| format!("producer rules parse {}: {error}", path.display()))
+        })
+        .as_ref()
+        .map_err(|message| Error::msg(message.clone()))?;
+    validate_producer_rule_catalog(catalog, table).map_err(Error::msg)?;
+    Ok(catalog)
+}
+
+fn validate_producer_rule_catalog(
+    catalog: &ProducerRuleCatalog,
+    table: &SkillTable,
+) -> std::result::Result<(), String> {
+    if catalog.version != 1 {
+        return Err(format!(
+            "unsupported producer rules version {}, expected 1",
+            catalog.version
+        ));
+    }
+    let mut ids = BTreeSet::new();
+    let mut buff_ids = BTreeSet::new();
+    for rule in &catalog.rules {
+        if !ids.insert(rule.id.as_str()) {
+            return Err(format!("duplicate producer rule id {}", rule.id));
+        }
+        if !buff_ids.insert(rule.source_buff_id.as_str()) {
+            return Err(format!(
+                "duplicate producer source buff {}",
+                rule.source_buff_id
+            ));
+        }
+        let skill = table.get(&rule.source_buff_id).ok_or_else(|| {
+            format!(
+                "producer rule {} references unknown buff {}",
+                rule.id, rule.source_buff_id
+            )
+        })?;
+        let matching_atoms: Vec<_> = skill
+            .atoms
+            .iter()
+            .filter(|atom| {
+                dynamic_workforce_selector(atom.selector.as_ref()).is_some()
+                    && target_facility(&skill.facility, &atom.action, atom.scope)
+                        == rule.target_facility
+            })
+            .collect();
+        if matching_atoms.is_empty() {
+            return Err(format!(
+                "producer rule {} does not match a dynamic workforce atom targeting {}",
+                rule.id, rule.target_facility
+            ));
+        }
+        if matching_atoms.iter().any(|atom| {
+            matches!(
+                atom.action,
+                Action::GlobalInjectTradeEff { value }
+                    | Action::GlobalInjectManuEff { value, .. }
+                    if value < 0.0
+            )
+        }) {
+            return Err(format!(
+                "producer rule {} has a negative dynamic inject unsupported by safe upper-bound pruning",
+                rule.id
+            ));
+        }
+    }
+
+    let expected: BTreeSet<&str> = table
+        .skills()
+        .iter()
+        .filter(|skill| {
+            skill.atoms.iter().any(|atom| {
+                matches!(
+                    atom.action,
+                    Action::GlobalInjectTradeEff { .. } | Action::GlobalInjectManuEff { .. }
+                ) && dynamic_workforce_selector(atom.selector.as_ref()).is_some()
+            })
+        })
+        .map(|skill| skill.id.as_str())
+        .collect();
+    if buff_ids != expected {
+        let missing: Vec<_> = expected.difference(&buff_ids).copied().collect();
+        let extra: Vec<_> = buff_ids.difference(&expected).copied().collect();
+        return Err(format!(
+            "producer rule coverage mismatch: missing={missing:?} extra={extra:?}"
+        ));
+    }
+    Ok(())
+}
+
+fn dynamic_workforce_selector(selector: Option<&Selector>) -> Option<(&str, Option<u8>)> {
+    match selector? {
+        Selector::TaggedCountInTradeSum { tag }
+        | Selector::TaggedCountInCurrentTradeRoom { tag }
+        | Selector::TaggedCountInManuSum { tag } => Some((tag, None)),
+        Selector::TradeStationsWithTaggedGte { tag, min } => Some((tag, Some(*min))),
+        _ => None,
+    }
+}
+
+pub fn deferred_producer_rules_for_buffs<'a>(
+    table: &SkillTable,
+    buff_ids: impl IntoIterator<Item = &'a str>,
+    target_facility: &str,
+) -> Result<Vec<ProducerRule>> {
+    let requested: BTreeSet<&str> = buff_ids.into_iter().collect();
+    Ok(producer_rule_catalog(table)?
+        .rules
+        .iter()
+        .filter(|rule| {
+            rule.admission == ProducerAdmission::DeferredOptional
+                && rule.target_facility == target_facility
+                && requested.contains(rule.source_buff_id.as_str())
+        })
+        .cloned()
+        .collect())
+}
+
+pub fn resolve_assignment_producer_dependencies(
+    blueprint: &BaseBlueprint,
+    assignment: &BaseAssignment,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+) -> Result<Vec<ResolvedProducerDependency>> {
+    let catalog = producer_rule_catalog(table)?;
+    let mut resolved = Vec::new();
+    for rule in &catalog.rules {
+        let mut producers: Vec<_> = assignment
+            .control_operators()
+            .into_iter()
+            .filter(|operator| {
+                instances
+                    .resolve_control_buff_ids(&operator.name, operator.tier())
+                    .iter()
+                    .any(|buff_id| buff_id == &rule.source_buff_id)
+            })
+            .map(|operator| operator.name)
+            .collect();
+        producers.sort();
+        producers.dedup();
+        producers.truncate(1);
+        if producers.is_empty() {
+            continue;
+        }
+
+        let skill = table.get(&rule.source_buff_id).ok_or_else(|| {
+            Error::msg(format!(
+                "resolved producer rule {} missing skill {}",
+                rule.id, rule.source_buff_id
+            ))
+        })?;
+        let mut consumers = BTreeSet::new();
+        let mut target_rooms = Vec::new();
+        let mut contribution = 0.0;
+        for atom in &skill.atoms {
+            if target_facility(&skill.facility, &atom.action, atom.scope) != rule.target_facility {
+                continue;
+            }
+            let Some((tag, threshold)) = dynamic_workforce_selector(atom.selector.as_ref()) else {
+                continue;
+            };
+            let facility = match rule.target_facility.as_str() {
+                "trade" => FacilityKind::TradePost,
+                "manufacture" => FacilityKind::Factory,
+                other => {
+                    return Err(Error::msg(format!(
+                        "producer rule {} has unsupported target facility {other}",
+                        rule.id
+                    )))
+                }
+            };
+            let value = match atom.action {
+                Action::GlobalInjectTradeEff { value }
+                | Action::GlobalInjectManuEff { value, .. } => value,
+                _ => continue,
+            };
+            for room in blueprint.rooms.iter().filter(|room| room.kind == facility) {
+                let tagged: Vec<_> = assignment
+                    .operators_in(&room.id)
+                    .iter()
+                    .filter(|operator| {
+                        instances
+                            .tags_for(&operator.name, operator.tier())
+                            .iter()
+                            .any(|candidate| candidate == tag)
+                    })
+                    .map(|operator| operator.name.clone())
+                    .collect();
+                if threshold.is_some_and(|min| tagged.len() < usize::from(min)) {
+                    continue;
+                }
+                if tagged.is_empty() {
+                    continue;
+                }
+                contribution += if threshold.is_some() {
+                    value
+                } else {
+                    value * tagged.len() as f64
+                };
+                if !target_rooms.contains(&room.id) {
+                    target_rooms.push(room.id.clone());
+                }
+                consumers.extend(tagged);
+            }
+        }
+        if consumers.is_empty() || contribution == 0.0 {
+            continue;
+        }
+        target_rooms.sort_by(|left, right| left.0.cmp(&right.0));
+        resolved.push(ResolvedProducerDependency {
+            rule_id: rule.id.clone(),
+            source_buff_id: rule.source_buff_id.clone(),
+            producers,
+            consumers: consumers.into_iter().collect(),
+            target_facility: rule.target_facility.clone(),
+            target_rooms,
+            relation: rule.schedule_relation,
+            on_shifts: rule.on_shifts,
+            off_shifts: rule.off_shifts,
+            effective_contribution: Some(contribution),
+        });
+    }
+    resolved.sort_by(|left, right| left.rule_id.cmp(&right.rule_id));
+    Ok(resolved)
 }
 
 pub fn build_response_dependency_report(table: &SkillTable) -> ResponseDependencyReport {
@@ -919,6 +1228,32 @@ fn condition_dependency(condition: &Condition) -> (&'static str, DependencyScope
 mod tests {
     use super::*;
     use crate::skill_table::default_skill_table_path;
+
+    #[test]
+    fn producer_rule_catalog_exhaustively_classifies_dynamic_workforce_injects() {
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let catalog = producer_rule_catalog(&table).unwrap();
+        let buffs: BTreeSet<_> = catalog
+            .rules
+            .iter()
+            .map(|rule| rule.source_buff_id.as_str())
+            .collect();
+        assert_eq!(
+            buffs,
+            BTreeSet::from([
+                "control_bd_spd[000]",
+                "control_tra_limit&spd2[000]",
+                "control_tra_limit&spd3[000]",
+                "control_tra_limit&spd[010]",
+            ])
+        );
+        assert!(catalog.rules.iter().all(|rule| {
+            !rule.id.contains("八幡")
+                && !rule.id.contains("戴菲恩")
+                && !rule.id.contains("银灰")
+                && !rule.id.contains("杰西卡")
+        }));
+    }
 
     #[test]
     fn report_finds_external_trade_and_manufacture_dependencies() {

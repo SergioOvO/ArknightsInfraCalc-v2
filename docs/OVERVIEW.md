@@ -207,7 +207,7 @@ WorkforceIndex
 
 跨设施关系不自动等于固定体系：producer 与 consumer 是否必须同时进编、是否要求同房、是否要求同班，都要由领域 Markdown 分别说明。
 
-当前动态 producer 搜索仍有专用候选路径，并未完成统一的多 producer 联合求解。未来的完整候选列、响应签名索引 Join 与跨房精确连接只记录在 [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN](TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)，不得把该 TODO 当作当前实现说明。
+当前动态 producer 已由统一 catalog、presence 集合比较和 winner dependency 处理；目标房仍按具名有序填房 policy 提交，不保证跨房 exact joint。未来的完整候选列、响应签名索引 Join 与跨房精确连接记录在 [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN](TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)，不得把该 TODO 当作当前能力。
 
 ## 9. 从 Peak 到 αβγ ABC 轮换
 
@@ -234,7 +234,7 @@ S3  6h：γ + α 上岗，β 休息
 
 生产设施容量、满编和同班人员互斥主要由候选构造、全局 `used` 与分层回归保证；它们仍属于端到端验收项，但当前不是全部集中在同一个 final validator 中。
 
-当前报告还会计算 peak 主力的心情 ETA 锚点，并支持一次轻量菲亚梅塔主力回岗覆盖；固定 `12h + 6h + 6h` 尚不会根据 ETA 自动改写。完整契约见 [SCHEDULE_ROTATION](SCHEDULE_ROTATION.md)。
+当前报告还会计算 peak 主力的心情 ETA 锚点，并支持一次轻量菲亚梅塔主力回岗覆盖；默认 ABC 的 `12h + 6h + 6h` 不会根据 ETA 自动改写。显式 `--rotation` 另支持二班 `12/12`、菲亚 `8/8/4/4` 和深海 `7/5/7/5`，均以具名 profile 和硬失败语义进入。完整契约见 [SCHEDULE_ROTATION](SCHEDULE_ROTATION.md)。
 
 ## 10. CLI、账号画像与 MAA
 

@@ -89,16 +89,21 @@ pub use power::{
 };
 pub use response_dependency::{
     build_response_dependency_report, build_response_dependency_report_for_blueprint,
-    DependencyScenario, DependencyScope, DomainDependencyContributor, DomainDependencyInput,
-    DomainDependencyInputDecl, DomainInputSource, ResourceClosureEdge, ResourceClosureEdgeKind,
+    default_producer_rules_path, deferred_producer_rules_for_buffs, load_producer_rule_catalog,
+    producer_rule_catalog, resolve_assignment_producer_dependencies, DependencyScenario,
+    DependencyScope, DomainDependencyContributor, DomainDependencyInput, DomainDependencyInputDecl,
+    DomainInputSource, ProducerAdmission, ProducerRule, ProducerRuleCatalog,
+    ResolvedProducerDependency, ResourceClosureEdge, ResourceClosureEdgeKind,
     ResourceConversionDependency, ResourceEquivalenceClass, ResourceReachableRange,
     ResourceReadFormula, ResourceReverseClosure, ResourceValueDomainFact, ResponseDependencyReport,
-    ResponseDependencyRow, ResponseField, UnresolvedDelegatedDependency,
+    ResponseDependencyRow, ResponseField, ScheduleDependencyRelation,
+    UnresolvedDelegatedDependency,
 };
 pub use roster::{OperatorProgress, Roster};
 pub use schedule::{
-    evaluate_base_assignment_efficiencies, operator_team_map, schedule_team_rotation, DailyTotals,
-    ShiftEfficiencies, TeamAssignment, TeamLabel, TeamRotationReport, TeamShiftResult,
+    evaluate_base_assignment_efficiencies, operator_team_map, schedule_team_rotation,
+    schedule_timed_rotation, DailyTotals, DormRestPlan, ShiftEfficiencies, ShiftTransition,
+    TeamAssignment, TeamLabel, TeamRotationReport, TeamShiftResult, TimedRotationProfile,
 };
 pub use scoring::{
     evaluate_control_inject_policy, EffPct, PolicyEvaluation, ScoringPolicyId,

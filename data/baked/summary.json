@@ -1,17 +1,19 @@
 {
-  "out_dir": "/home/knightcode/Projects/ArknightsInfraCalc-v2/data/baked",
-  "schema_version": 5,
-  "operator_count": 109,
+  "out_dir": "/home/knightcode/Projects/ArknightsInfraCalc-v2-remote-61.184.13.127/data/baked",
+  "schema_version": 12,
+  "operator_count": 110,
   "trade_signatures": 6,
-  "trade_hits": 140330,
+  "trade_hits": 134324,
+  "trade_mechanism_rows": 30306,
+  "trade_mechanism_signatures": 45,
   "manufacture_signatures": 9,
-  "manufacture_hits": 2711,
-  "combo_table_rows": 143041,
+  "manufacture_hits": 2943,
+  "combo_table_rows": 137267,
   "generator": {
     "kind": "infra-cli-exe",
-    "path": "/home/knightcode/Projects/ArknightsInfraCalc-v2/target/release/infra-cli",
-    "bytes": 5283656,
-    "hash64": "1a9fb5cf8dbd7098"
+    "path": "/home/knightcode/Projects/ArknightsInfraCalc-v2-remote-61.184.13.127/target/debug/infra-cli",
+    "bytes": 83883560,
+    "hash64": "d1a95cff10884430"
   },
-  "elapsed_ms": 1350
+  "elapsed_ms": 2272
 }

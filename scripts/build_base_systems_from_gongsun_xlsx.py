@@ -112,26 +112,6 @@ CURATED_SYSTEMS = [
         ],
     },
     {
-        "id": "vina_lungmen",
-        "label": "推王组：戴菲恩+推进之王+摩根+维娜·维多利亚（95%贸，但书替补）",
-        "priority": 12,
-        "exclusive_group": "meta_chain",
-        "shift_modes": ["peak"],
-        "xlsx_hint": "推王 摩根Ⅱ+维娜Ⅱ + 中枢戴菲恩",
-        "slots": [
-            {"facility": "control", "operators": [{"name": "戴菲恩", "elite": 2}]},
-            {
-                "facility": "trade_post",
-                "trade_role": "meta_vina",
-                "operators": [
-                    {"name": "推进之王", "elite": 2},
-                    {"name": "摩根", "elite": 2},
-                    {"name": "维娜·维多利亚", "elite": 2},
-                ],
-            },
-        ],
-    },
-    {
         "id": "snhunt_monhun_control",
         "label": "怪猎中枢：火龙S黑角+麒麟R夜刀（木天蓼；贸易由搜索填缝）",
         "priority": 10,

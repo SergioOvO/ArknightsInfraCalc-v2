@@ -248,7 +248,7 @@ pub struct ControlCandidateRequirement {
 }
 
 /// 单班进驻前的编排计划；`execute_plan` 将其落成 `BaseAssignment`。
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct AssignmentPlan {
     pub mode: AssignShiftMode,
     /// 计划阶段已确定的规则 alternatives 与兼容 registry claims 的统一视图。
@@ -274,6 +274,9 @@ pub struct AssignmentPlan {
     pub shift_binds: Vec<ShiftBind>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub active_dependencies: Vec<ActiveDependency>,
+    /// hard Plan 与 winner 实际贡献规范化后的统一排班依赖输出。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub resolved_producer_dependencies: Vec<crate::response_dependency::ResolvedProducerDependency>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub continuous_roles: Vec<ContinuousRole>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -283,96 +286,183 @@ pub struct AssignmentPlan {
 }
 
 impl AssignmentPlan {
-    /// Derive cross-facility rotation binds from operators that actually made the peak assignment.
-    /// This constrains rotation without turning a bind into an admission requirement.
-    pub fn derive_actual_shift_binds(
+    /// 把声明式 hard 关系与 winner 的实际 producer/consumer 统一为排班事实。
+    pub fn resolve_actual_producer_dependencies(
         &mut self,
         blueprint: &crate::layout::BaseBlueprint,
         assignment: &crate::layout::BaseAssignment,
-    ) {
-        let in_control = |name: &str| {
-            assignment
-                .control_operators()
-                .iter()
-                .any(|op| op.name == name)
+        instances: &crate::instances::OperatorInstances,
+        table: &crate::skill_table::SkillTable,
+    ) -> crate::error::Result<()> {
+        use crate::response_dependency::{
+            resolve_assignment_producer_dependencies, ResolvedProducerDependency,
+            ScheduleDependencyRelation,
         };
-        let together_in = |facility: FacilityKind, names: &[&str]| {
-            blueprint.rooms.iter().any(|room| {
-                room.kind == facility
-                    && names.iter().all(|name| {
-                        assignment
-                            .operators_in(&room.id)
-                            .iter()
-                            .any(|op| op.name == *name)
-                    })
-            })
-        };
-        let anywhere_in = |facility: FacilityKind, names: &[&str]| {
-            names.iter().all(|name| {
-                blueprint.rooms.iter().any(|room| {
-                    room.kind == facility
-                        && assignment
-                            .operators_in(&room.id)
-                            .iter()
-                            .any(|op| op.name == *name)
-                })
-            })
-        };
-        let pure_fireworks_active = self
-            .activated
-            .iter()
-            .any(|system| system.system_id == "human_fireworks_pure");
 
-        let mut add = |operators: &[&str]| {
-            if self.shift_binds.iter().any(|bind| {
-                operators
-                    .iter()
-                    .all(|name| bind.operators.iter().any(|bound| bound == name))
-            }) {
-                return;
+        self.derive_registry_binds_from_actual_assignment(assignment);
+        let room_ids_for = |names: &[String]| {
+            let mut rooms: Vec<_> = assignment
+                .rooms
+                .iter()
+                .filter(|room| {
+                    room.operators
+                        .iter()
+                        .any(|operator| names.contains(&operator.name))
+                })
+                .map(|room| room.room_id.clone())
+                .collect();
+            rooms.sort_by(|left, right| left.0.cmp(&right.0));
+            rooms.dedup();
+            rooms
+        };
+        let source_rule_for = |members: &[String]| {
+            self.selected_rules
+                .iter()
+                .find(|selected| {
+                    members
+                        .iter()
+                        .all(|member| selected.operators.contains(member))
+                })
+                .map(|selected| selected.rule_id.clone())
+                .or_else(|| {
+                    self.registry_claims
+                        .iter()
+                        .find(|claim| {
+                            let operators: HashSet<_> = claim
+                                .slots
+                                .iter()
+                                .flat_map(|slot| &slot.operators)
+                                .map(|operator| operator.name.as_str())
+                                .collect();
+                            members
+                                .iter()
+                                .all(|member| operators.contains(member.as_str()))
+                        })
+                        .map(|claim| claim.system_id.clone())
+                })
+                .or_else(|| {
+                    self.activated
+                        .iter()
+                        .find(|system| {
+                            let operators: HashSet<_> = system
+                                .slots
+                                .iter()
+                                .flat_map(|slot| match slot {
+                                    SlotFill::Fixed { operator, .. }
+                                    | SlotFill::OptionalFixed { operator, .. } => {
+                                        vec![operator.as_str()]
+                                    }
+                                    SlotFill::PickOne { candidates, .. } => {
+                                        candidates.iter().map(String::as_str).collect()
+                                    }
+                                })
+                                .collect();
+                            members
+                                .iter()
+                                .all(|member| operators.contains(member.as_str()))
+                        })
+                        .map(|system| system.system_id.clone())
+                })
+                .unwrap_or_else(|| "plan".to_string())
+        };
+
+        let mut dependencies = Vec::new();
+        for bind in &self.shift_binds {
+            dependencies.push(ResolvedProducerDependency {
+                rule_id: source_rule_for(&bind.operators),
+                source_buff_id: String::new(),
+                producers: Vec::new(),
+                consumers: bind.operators.clone(),
+                target_facility: "multiple".to_string(),
+                target_rooms: room_ids_for(&bind.operators),
+                relation: ScheduleDependencyRelation::ExactPresence,
+                on_shifts: bind.on_shifts,
+                off_shifts: bind.off_shifts,
+                effective_contribution: None,
+            });
+        }
+        for dependency in &self.active_dependencies {
+            let mut members = dependency.consumers.clone();
+            members.extend(dependency.required.iter().cloned());
+            dependencies.push(ResolvedProducerDependency {
+                rule_id: source_rule_for(&members),
+                source_buff_id: String::new(),
+                producers: dependency.required.clone(),
+                consumers: dependency.consumers.clone(),
+                target_facility: "multiple".to_string(),
+                target_rooms: room_ids_for(&members),
+                relation: ScheduleDependencyRelation::RequiresPresence,
+                on_shifts: 0,
+                off_shifts: 0,
+                effective_contribution: None,
+            });
+        }
+
+        let dynamic =
+            resolve_assignment_producer_dependencies(blueprint, assignment, instances, table)?;
+        for dependency in &dynamic {
+            if dependency.relation != ScheduleDependencyRelation::ExactPresence {
+                continue;
+            }
+            let mut operators = dependency.producers.clone();
+            operators.extend(dependency.consumers.iter().cloned());
+            operators.sort();
+            operators.dedup();
+            if operators.len() > 1
+                && !self.shift_binds.iter().any(|bind| {
+                    operators
+                        .iter()
+                        .all(|operator| bind.operators.contains(operator))
+                })
+            {
+                self.shift_binds.push(ShiftBind {
+                    operators,
+                    on_shifts: dependency.on_shifts,
+                    off_shifts: dependency.off_shifts,
+                });
+            }
+        }
+        dependencies.extend(dynamic);
+        dependencies.sort_by(|left, right| {
+            left.rule_id
+                .cmp(&right.rule_id)
+                .then_with(|| left.producers.cmp(&right.producers))
+                .then_with(|| left.consumers.cmp(&right.consumers))
+        });
+        self.resolved_producer_dependencies = dependencies;
+        Ok(())
+    }
+
+    fn derive_registry_binds_from_actual_assignment(
+        &mut self,
+        assignment: &crate::layout::BaseAssignment,
+    ) {
+        let actual = assignment.operator_names();
+        for claim in self.registry_claims.iter().filter(|claim| claim.bind_all) {
+            let mut operators: Vec<_> = claim
+                .slots
+                .iter()
+                .flat_map(|slot| &slot.operators)
+                .map(|operator| operator.name.clone())
+                .filter(|name| actual.contains(name))
+                .collect();
+            operators.sort();
+            operators.dedup();
+            if operators.len() < 2
+                || self.shift_binds.iter().any(|bind| {
+                    bind.operators.len() == operators.len()
+                        && operators
+                            .iter()
+                            .all(|operator| bind.operators.contains(operator))
+                })
+            {
+                continue;
             }
             self.shift_binds.push(ShiftBind {
-                operators: operators.iter().map(|name| (*name).to_string()).collect(),
-                on_shifts: 2,
-                off_shifts: 1,
+                operators,
+                on_shifts: claim.on_shifts,
+                off_shifts: claim.off_shifts,
             });
-        };
-
-        if in_control("戴菲恩") && together_in(FacilityKind::TradePost, &["推进之王", "摩根"])
-        {
-            add(&["戴菲恩", "推进之王", "摩根"]);
-        }
-        if in_control("灵知") && together_in(FacilityKind::TradePost, &["孑", "银灰"]) {
-            add(&["灵知", "孑", "银灰"]);
-        }
-        let family_recognition_active = assignment
-            .control_operators()
-            .iter()
-            .any(|operator| operator.name == "八幡海铃" && operator.elite >= 2);
-        if family_recognition_active {
-            let mut operators = vec!["八幡海铃"];
-            for name in ["伺夜", "贝洛内"] {
-                if anywhere_in(FacilityKind::TradePost, &[name]) {
-                    operators.push(name);
-                }
-            }
-            if operators.len() > 1 {
-                add(&operators);
-            }
-        }
-
-        let wuyou_active = anywhere_in(FacilityKind::TradePost, &["乌有"]);
-        if pure_fireworks_active && wuyou_active && anywhere_in(FacilityKind::Office, &["桑葚"]) {
-            let mut operators = vec!["桑葚", "乌有"];
-            if in_control("重岳") {
-                operators.push("重岳");
-            }
-            if in_control("令") {
-                operators.push("令");
-            }
-            if operators.len() >= 3 {
-                add(&operators);
-            }
         }
     }
 
@@ -389,6 +479,7 @@ impl AssignmentPlan {
             degradations: Vec::new(),
             shift_binds: Vec::new(),
             active_dependencies: Vec::new(),
+            resolved_producer_dependencies: Vec::new(),
             continuous_roles: Vec::new(),
             rotation_reserves: Vec::new(),
             control_candidate_requirements: Vec::new(),
@@ -500,91 +591,67 @@ mod tests {
         );
     }
 
-    #[test]
-    fn actual_vina_bind_requires_control_producer_and_both_trade_consumers() {
-        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let mut assignment = BaseAssignment::default();
-        assignment.set_room("control", vec![AssignedOperator::new("戴菲恩", 2)]);
-        set_trade_group(&mut assignment, &["推进之王", "摩根"]);
-
-        let mut plan = AssignmentPlan::recovery(AssignShiftMode::Peak);
-        plan.derive_actual_shift_binds(&blueprint, &assignment);
-        assert!(plan.shift_binds.iter().any(|bind| {
-            ["戴菲恩", "推进之王", "摩根"]
-                .iter()
-                .all(|name| bind.operators.iter().any(|bound| bound == name))
-        }));
-
-        set_trade_group(&mut assignment, &["推进之王"]);
-        let mut missing = AssignmentPlan::recovery(AssignShiftMode::Peak);
-        missing.derive_actual_shift_binds(&blueprint, &assignment);
-        assert!(missing.shift_binds.is_empty());
+    fn resolve(plan: &mut AssignmentPlan, blueprint: &BaseBlueprint, assignment: &BaseAssignment) {
+        let instances = crate::instances::OperatorInstances::load(
+            &crate::instances::default_instances_path().unwrap(),
+        )
+        .unwrap();
+        let table = crate::skill_table::SkillTable::load(
+            &crate::skill_table::default_skill_table_path().unwrap(),
+        )
+        .unwrap();
+        plan.resolve_actual_producer_dependencies(blueprint, assignment, &instances, &table)
+            .unwrap();
     }
 
     #[test]
-    fn actual_karlan_bind_does_not_admit_missing_control_producer() {
-        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
-        let mut assignment = BaseAssignment::default();
-        set_trade_group(&mut assignment, &["孑", "银灰"]);
-
-        let mut plan = AssignmentPlan::recovery(AssignShiftMode::Peak);
-        plan.derive_actual_shift_binds(&blueprint, &assignment);
-        assert!(plan.shift_binds.is_empty());
-
-        assignment.set_room("control", vec![AssignedOperator::new("灵知", 2)]);
-        plan.derive_actual_shift_binds(&blueprint, &assignment);
-        assert_eq!(plan.shift_binds.len(), 1);
-    }
-
-    #[test]
-    fn actual_syracusa_bind_uses_only_present_cross_station_consumers() {
+    fn resolved_dynamic_trade_dependencies_follow_buff_selectors() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let mut assignment = BaseAssignment::default();
         assignment.set_room("control", vec![AssignedOperator::new("八幡海铃", 2)]);
-
-        let mut no_consumer = AssignmentPlan::recovery(AssignShiftMode::Peak);
-        no_consumer.derive_actual_shift_binds(&blueprint, &assignment);
-        assert!(no_consumer.shift_binds.is_empty());
-
         set_trade_group(&mut assignment, &["伺夜"]);
-        assignment.set_room("control", vec![AssignedOperator::new("八幡海铃", 0)]);
-        let mut e0_no_skill = AssignmentPlan::recovery(AssignShiftMode::Peak);
-        e0_no_skill.derive_actual_shift_binds(&blueprint, &assignment);
-        assert!(
-            e0_no_skill.shift_binds.is_empty(),
-            "精0 八幡海铃没有家族认可，不能仅因补位与 consumer 共存就派生 bind"
-        );
-
-        assignment.set_room("control", vec![AssignedOperator::new("八幡海铃", 2)]);
         let mut single = AssignmentPlan::recovery(AssignShiftMode::Peak);
-        single.derive_actual_shift_binds(&blueprint, &assignment);
+        resolve(&mut single, &blueprint, &assignment);
         assert_eq!(single.shift_binds.len(), 1);
-        assert_eq!(single.shift_binds[0].operators.len(), 2);
-        assert!(single.shift_binds[0]
-            .operators
-            .contains(&"八幡海铃".to_string()));
-        assert!(single.shift_binds[0]
-            .operators
-            .contains(&"伺夜".to_string()));
+        assert_eq!(single.resolved_producer_dependencies.len(), 1);
+        let dependency = &single.resolved_producer_dependencies[0];
+        assert_eq!(dependency.source_buff_id, "control_tra_limit&spd2[000]");
+        assert_eq!(dependency.producers, vec!["八幡海铃"]);
+        assert_eq!(dependency.consumers, vec!["伺夜"]);
 
         assignment.set_room("trade_2", vec![AssignedOperator::new("贝洛内", 2)]);
         let mut cross_station = AssignmentPlan::recovery(AssignShiftMode::Peak);
-        cross_station.derive_actual_shift_binds(&blueprint, &assignment);
+        resolve(&mut cross_station, &blueprint, &assignment);
         assert_eq!(cross_station.shift_binds.len(), 1);
         for name in ["八幡海铃", "伺夜", "贝洛内"] {
             assert!(cross_station.shift_binds[0]
                 .operators
                 .contains(&name.to_string()));
         }
-
-        assignment.set_room("control", vec![]);
-        let mut no_producer = AssignmentPlan::recovery(AssignShiftMode::Peak);
-        no_producer.derive_actual_shift_binds(&blueprint, &assignment);
-        assert!(no_producer.shift_binds.is_empty());
     }
 
     #[test]
-    fn natural_standardization_members_do_not_create_exact_shift_bind() {
+    fn resolved_threshold_dependency_uses_only_qualified_room_members() {
+        let blueprint = BaseBlueprint::template_243_use_this().unwrap();
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room("control", vec![AssignedOperator::new("凛御银灰", 2)]);
+        set_trade_group(&mut assignment, &["银灰", "崖心", "讯使"]);
+        assignment.set_room("trade_2", vec![AssignedOperator::new("角峰", 2)]);
+
+        let mut plan = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        resolve(&mut plan, &blueprint, &assignment);
+
+        let dependency = plan
+            .resolved_producer_dependencies
+            .iter()
+            .find(|dependency| dependency.source_buff_id == "control_tra_limit&spd3[000]")
+            .unwrap();
+        assert_eq!(dependency.consumers, vec!["崖心", "讯使", "银灰"]);
+        assert!(!dependency.consumers.contains(&"角峰".to_string()));
+    }
+
+    #[test]
+    fn natural_blacksteel_response_is_explained_without_exact_bind() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let mut assignment = BaseAssignment::default();
         assignment.set_room("control", vec![AssignedOperator::new("涤火杰西卡", 2)]);
@@ -598,42 +665,35 @@ mod tests {
         );
 
         let mut plan = AssignmentPlan::recovery(AssignShiftMode::Peak);
-        plan.derive_actual_shift_binds(&blueprint, &assignment);
+        resolve(&mut plan, &blueprint, &assignment);
 
-        assert!(
-            plan.shift_binds.is_empty(),
-            "普通制造自然入选不得升级为固定成员/班次绑定: {:?}",
-            plan.shift_binds
+        assert!(plan.shift_binds.is_empty());
+        let dependency = plan
+            .resolved_producer_dependencies
+            .iter()
+            .find(|dependency| dependency.source_buff_id == "control_bd_spd[000]")
+            .unwrap();
+        assert_eq!(
+            dependency.relation,
+            crate::response_dependency::ScheduleDependencyRelation::None
         );
+        assert!(!dependency.consumers.is_empty());
     }
 
     #[test]
-    fn pure_fireworks_legacy_bind_uses_actual_selected_members() {
+    fn declared_plan_bind_is_normalized_without_name_inference() {
         let blueprint = BaseBlueprint::template_243_use_this().unwrap();
         let mut assignment = BaseAssignment::default();
-        set_trade_group(&mut assignment, &["乌有"]);
-        let office_id = blueprint
-            .rooms
-            .iter()
-            .find(|room| room.kind == FacilityKind::Office)
-            .unwrap()
-            .id
-            .clone();
-        assignment.set_room(office_id, vec![AssignedOperator::new("桑葚", 2)]);
-        assignment.set_room("control", vec![AssignedOperator::new("令", 2)]);
-        let mut pure = AssignmentPlan::recovery(AssignShiftMode::Peak);
-        pure.activated.push(ActivatedSystem {
-            system_id: "human_fireworks_pure".to_string(),
-            priority: 18,
-            tier: crate::layout::tier::OperatorTier::CrossStation,
-            slots: Vec::new(),
+        assignment.set_room("control", vec![AssignedOperator::new("规则成员A", 2)]);
+        set_trade_group(&mut assignment, &["规则成员B"]);
+        let mut plan = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        plan.shift_binds.push(ShiftBind {
+            operators: vec!["规则成员A".to_string(), "规则成员B".to_string()],
+            on_shifts: 2,
+            off_shifts: 1,
         });
-        pure.derive_actual_shift_binds(&blueprint, &assignment);
-        assert!(pure.shift_binds.iter().any(|bind| {
-            ["乌有", "桑葚", "令"]
-                .iter()
-                .all(|name| bind.operators.iter().any(|bound| bound == name))
-                && !bind.operators.iter().any(|bound| bound == "重岳")
-        }));
+        resolve(&mut plan, &blueprint, &assignment);
+        assert_eq!(plan.resolved_producer_dependencies.len(), 1);
+        assert_eq!(plan.resolved_producer_dependencies[0].rule_id, "plan");
     }
 }

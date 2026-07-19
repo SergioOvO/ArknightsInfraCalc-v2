@@ -314,7 +314,7 @@ pub fn is_docus_syracusa_station(ops: &[TradeOperator], table: &SkillTable) -> b
 
 /// 链段 producer 已满足（中枢八幡海铃 E2）。
 pub fn docus_syracusa_segment_active(inject: &GlobalInjectManifest) -> bool {
-    inject.haru_e2_in_control()
+    inject.has_active_source_buff("control_tra_limit&spd2[000]")
 }
 
 /// 可露希尔特别订单站（不含但书/巫恋低语）。
@@ -976,7 +976,7 @@ mod tests {
             "推王龙门 135% 满配锚点必须由戴菲恩中枢 producer 激活"
         );
         let mut inject = GlobalInjectManifest::default();
-        inject.record_daifeen_e2_in_control();
+        inject.record_active_source_buff("control_tra_limit&spd[010]");
         let with_segment = resolve_trade_shortcut(&ops, &table, 80.0, 3, &inject).expect("segment");
         assert_eq!(with_segment.entry.id, "gsl_vina_lungmen");
         assert_eq!(with_segment.entry.id, "gsl_vina_lungmen");
@@ -1179,7 +1179,7 @@ mod tests {
         let trio = mk(&["但书", "伺夜", "贝洛内"]);
 
         let mut with_haru = GlobalInjectManifest::default();
-        with_haru.record_haru_e2_in_control();
+        with_haru.record_active_source_buff("control_tra_limit&spd2[000]");
         let m = resolve_trade_shortcut(&trio, &table, 80.0, 3, &with_haru).expect("match");
         assert_eq!(m.entry.id, "gsl_docus_syracusa");
         assert_eq!(
@@ -1209,7 +1209,7 @@ mod tests {
             mk_op("泰拉大陆调查团", 2, vec!["trade_ord_spd&limit&bd[000]"]),
         ];
         let mut inject = GlobalInjectManifest::default();
-        inject.record_haru_e2_in_control();
+        inject.record_active_source_buff("control_tra_limit&spd2[000]");
         let pre = 55.0;
         let m = resolve_trade_shortcut(&ops, &table, pre, 3, &inject).expect("match");
         assert_eq!(m.entry.id, "gsl_docus_solo");

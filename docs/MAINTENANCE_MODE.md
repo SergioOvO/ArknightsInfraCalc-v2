@@ -58,14 +58,14 @@ Debug 任务按以下原则处理：
 | 场景 | 命令 |
 |------|------|
 | 用户说“跑一遍模拟” | `cargo run -q -p infra-cli -- plan --operbox data/fixtures/243/operbox_full_e2.json --profile-out out/<task>-profile.json --maa-out out/<task>-maa.json` |
-| 只验证当前 Team ABC / Shift 1–3 排班与 MAA | `cargo run -q -p infra-cli -- layout team-rotation --layout <layout> --operbox <operbox> --maa-out <out>` |
+| 只验证当前定时换班与 MAA | `cargo run -q -p infra-cli -- layout team-rotation --layout <layout> --operbox <operbox> [--rotation <profile>] --maa-out <out>` |
 | 单班布局搜索 | `cargo run -q -p infra-cli -- layout test --layout <layout> --operbox <operbox> --text` |
 | 指定编制结算 | `cargo run -q -p infra-cli -- layout eval --layout <layout> --operbox <operbox> --assignment <assignment> --text` |
 | 贸易 shortcut / 产量 | `cargo run -q -p infra-cli -- verify --case <case>` 或 `trade yield <fixture>` |
 | 贸易 / 制造池缺人 | `cargo run -q -p infra-cli -- pool --trade --manufacture --operbox <operbox> --text` |
 | 性能回退 | `cargo run -q -p infra-cli -- profile layout-full --layout <layout> --operbox <operbox>` |
 
-A-B-A 的 `layout rotation` / `schedule rotation` 已移除；当前 Team ABC / Shift 1–3 bug 只走 `plan` 或 `layout team-rotation` 复现。
+A-B-A 的 `layout rotation` / `schedule rotation` 已移除；当前默认 ABC、二班和具名四班 bug 都只走 `plan` 或 `layout team-rotation` 复现，并显式记录 `--rotation`。
 
 ### 2.3 验证证据硬门禁
 

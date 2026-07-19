@@ -36,7 +36,7 @@ pub struct LayoutContext {
     pub control_workforce: Vec<String>,
     /// 控制中枢运行时 buff，格式为 `(operator_name, buff_id)`。
     pub control_buffs: Vec<(String, String)>,
-    /// 无人机上限（承曦·巡线框架；默认 135）。
+    /// 无人机上限（承曦·巡线框架；满清理 235）。
     pub drone_cap: u32,
     /// 基建内发电站作业平台数量（阿兰娜/布丁中枢·超频）。
     pub platform_count_in_power: u8,

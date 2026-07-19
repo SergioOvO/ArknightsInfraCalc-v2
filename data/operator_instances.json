@@ -2792,7 +2792,9 @@
     "杰西卡@tier_up": {
       "name": "杰西卡",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.blacksteel"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [
@@ -6454,7 +6456,9 @@
     "雷蛇@tier_0": {
       "name": "雷蛇",
       "tier": "tier_0",
-      "tags": [],
+      "tags": [
+        "cc.g.blacksteel"
+      ],
       "facilities": {
         "power": {
           "buff_ids": [
@@ -6467,7 +6471,9 @@
     "雷蛇@tier_up": {
       "name": "雷蛇",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.blacksteel"
+      ],
       "facilities": {
         "power": {
           "buff_ids": [
@@ -6618,7 +6624,9 @@
     "香草@tier_up": {
       "name": "香草",
       "tier": "tier_up",
-      "tags": [],
+      "tags": [
+        "cc.g.blacksteel"
+      ],
       "facilities": {
         "manufacture": {
           "buff_ids": [

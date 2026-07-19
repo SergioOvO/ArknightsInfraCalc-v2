@@ -63,7 +63,7 @@ Windows 可在资源管理器双击，或运行 `start release/layout-gen/index.
 |------|------|
 | 基建预设 | 243 / 153 / 333 / 252 / 342（贸/制/电数量） |
 | 房间编辑 | 等级、贸易订单（LMD/合成玉）、制造配方、宿舍床位、宿舍有效等级 |
-| 场景假设 | `drone_cap`、`sui_facility_count`、`dorm_occupant_count`、`monster_cuisine` 等 |
+| 场景假设 | `drone_cap`、`sui_facility_count`、`dorm_occupant_count`、`monster_cuisine` 等；满清理基建 `drone_cap` 为 235，用于承曦格雷伊「巡线框架」 |
 | 导出 | 下载 `BaseBlueprint` JSON → 作为 CLI `--layout` |
 | 导入 | 加载已有 layout JSON 继续编辑 |
 
@@ -83,7 +83,7 @@ infra-cli plan         ──→  --profile-out 账号画像 JSON + --maa-out MA
 
 ## 3. 运行前提：内置数据
 
-`plan` / `layout team-rotation` 使用程序内置机制数据；前端只需要传入 `--layout` 和 `--operbox`。
+`plan` / `layout team-rotation` 使用程序内置机制数据；前端传入 `--layout`、`--operbox`，需要非默认班制时再传 `--rotation`。
 
 默认布局：243。
 默认练度盒：full_e2。
@@ -100,6 +100,7 @@ infra-cli plan         ──→  --profile-out 账号画像 JSON + --maa-out MA
 infra-cli plan \
   --operbox <练度盒.json | 一图流.xlsx> \
   [--layout <蓝图.json>] \
+  [--rotation <2 | 3 | fiammetta-8844 | abyssal-7575>] \
   [--maa-out <输出/schedule.json>] \
   [--profile-out <画像.json>]
 ```
@@ -108,6 +109,7 @@ infra-cli plan \
 |------|------|------|
 | `--operbox <path>` | 是 | `OperBox` JSON 数组，或一图流导出的 **xlsx** |
 | `--layout <path>` | 否 | 默认 `data/fixtures/243/layout.json` |
+| `--rotation <profile>` | 否 | 默认 `3`；可选 `2`、`fiammetta-8844`、`abyssal-7575`；裸 `4` 硬错误 |
 | `--maa-out <path>` | 否* | MAA 自定义基建排班 JSON；前端主链路应传入已知临时路径 |
 | `--profile-out <path>` | 否 | 账号画像 JSON；前端主链路应传入已知临时路径 |
 | `--baseline <operbox>` | 否 | 对比基准练度盒（画像用） |
@@ -120,7 +122,7 @@ infra-cli plan \
 
 | 流 | 内容 |
 |----|------|
-| **stdout** | 账号画像摘要 + αβγ 三队排班人类可读表 |
+| **stdout** | 账号画像摘要 + 所选 rotation profile 的人类可读排班表 |
 | **stderr** | `layout=` / `operbox=` 元数据；`profile JSON →` / `MAA 排班 JSON →` 路径提示 |
 | **文件** | `--profile-out` 写账户画像 JSON；`--maa-out` 写 MAA 排班 JSON |
 
@@ -149,6 +151,7 @@ infra-cli plan \
 ```json
 {
   "schema_version": 4,
+  "rotation_profile": "abc_12_6_6",
   "layout_label": "data/fixtures/243/layout.json",
   "operbox_label": "data/fixtures/243/operbox_full_e2.json",
   "baseline_label": "data/fixtures/243/schedule_export.json (full_e2)",
@@ -195,6 +198,7 @@ infra-cli plan \
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `schema_version` | `4` | 直接效率契约版本；不兼容变更必须升版本 |
+| `rotation_profile` | string | 本次画像与 `rotation` 指标使用的 profile：`abc_12_6_6`、`main_backup_12_12`、`fiammetta_8_8_4_4`、`abyssal_7_5_7_5` |
 | `layout_label` / `operbox_label` / `baseline_label` | `string` | 展示用来源标签，不作为路径依赖 |
 | `summary` | object | 账号概览：`owned`、`tier_up_owned`、`trade_pool_ready`、`manufacture_pool_ready` |
 | `domains[]` | array | 分域对比，UI 主表使用 |
@@ -202,7 +206,7 @@ infra-cli plan \
 | `domains[].current` / `baseline` | object | 当前 / 参考快照：`operators[]`、`final_efficiency`，贸易域可带 `mechanic_equivalent_efficiency` |
 | `domains[].gap_ratio` | number | `(current.final_efficiency - baseline.final_efficiency) / baseline.final_efficiency` |
 | `domains[].severity` | `"ok" | "warn" | "critical"` | 缺口等级 |
-| `rotation` / `baseline_rotation` | object | 24h 三队轮休加权：`daily_trade_efficiency`、`daily_manufacture_efficiency`、`daily_power_efficiency` |
+| `rotation` / `baseline_rotation` | object | 当前所选 24h profile / 固定参考排班加权：`daily_trade_efficiency`、`daily_manufacture_efficiency`、`daily_power_efficiency` |
 | `actions[]` | array | 提升建议，元素含 `priority`、`kind`、`operator`、`domain_id`、`message` |
 | `flags[]` | string[] | 机器可读状态标记 |
 | `narration_hints[]` | string[] | 面向用户的补充说明 |
@@ -213,6 +217,7 @@ infra-cli plan \
 infra-cli layout team-rotation \
   --layout <蓝图.json> \
   --operbox <练度盒.json> \
+  [--rotation <2 | 3 | fiammetta-8844 | abyssal-7575>] \
   --maa-out <输出/schedule.json>
 ```
 
@@ -231,6 +236,7 @@ infra-cli layout team-rotation \
 |------|------|------|
 | `--layout <path>` | 是 | `BaseBlueprint` JSON（见 §5.1） |
 | `--operbox <path>` | 是 | `OperBox` JSON 数组（见 §5.2） |
+| `--rotation <profile>` | 否 | 与 `plan` 相同；省略保持 ABC `12/6/6` |
 | `--maa-out <path>` | 否* | 写出 MAA 自定义基建 JSON；**前端集成建议始终带上** |
 | `--maa-title <text>` | 否 | 覆盖 JSON 顶层 `title` |
 | `--top <n>` | 否 | 编制搜索候选深度，默认 `20` |
@@ -256,6 +262,9 @@ infra-cli layout team-rotation \
 - 下载 / 导入 MAA：使用 **`--maa-out` 已知路径** 读文件。
 - 成功：`exit code == 0`；失败：stderr 含 `error:`，非零退出码。
 
+`serve` 的 `method: "plan"` 参数新增可选 `rotation`，取序列化 profile 名：
+`abc_12_6_6`、`main_backup_12_12`、`fiammetta_8_8_4_4`、`abyssal_7_5_7_5`。省略时仍为默认 ABC。响应 result 同时回传 `rotation`，`shifts[]` 长度随 profile 为 2 / 3 / 4；非法值在反序列化阶段返回错误，不降级。
+
 ### 4.5 stderr 提示示例
 
 ```
@@ -275,7 +284,7 @@ MAA 排班 JSON 已写入: out/243_maa.json
 ```json
 {
   "template": "243_2gold_trade",
-  "drone_cap": 135,
+  "drone_cap": 235,
   "scenario": {
     "sui_facility_count": 2,
     "dorm_occupant_count": 20,
@@ -348,7 +357,8 @@ JSON **数组**，每项一名干员：
 {
   "title": "243_2gold_trade 基建排班",
   "description": "由 ArknightsInfraCalc 生成；…",
-  "plans": [ /* 3 个班次，αβγ 为 12h + 6h + 6h */ ]
+  "planTimes": "2班 | 3班 | 4班",
+  "plans": [ /* 与所选 profile 的 2 / 3 / 4 个状态一一对应 */ ]
 }
 ```
 
@@ -357,8 +367,8 @@ JSON **数组**，每项一名干员：
 | 字段 | 说明 |
 |------|------|
 | `name` | 如 `Shift 1 · 12h · α+β` |
-| `description` | 班次说明 |
-| `Fiammetta` | ABC 排班按 `但书 > 巫恋 > 龙舌兰 > 清流 > 可露希尔` 选择一次 peak 主力回岗；只有实际执行回岗的 plan 为 `enable: true`、`order: pre` |
+| `description` | 当前段时长与“多少小时后执行下一计划”的相对间隔说明；不是 MAA 自动定时器 |
+| `Fiammetta` | 默认 ABC 可有一次休息班回岗；`fiammetta-8844` 的第二个 8h plan 是菲亚事件态 |
 | `drones` | 默认赤金制造站无人机；`room`/`index`/`order` |
 | `rooms` | 见下表 |
 
@@ -377,6 +387,8 @@ JSON **数组**，每项一名干员：
 
 每个 slot 常见字段：`skip`, `product`, `operators`, `sort`, `autofill`。
 
+`fiammetta-8844` 的事件态只将目标原工作房设为 `skip: false`，用于在换心情后送回原岗；其他房间、宿舍和无人机都跳过，避免把一次菲亚事件误执行成完整换班。
+
 ### 6.4 MAA 任务配置
 
 集成协议见 [MAA Integration - Infrast](https://docs.maa.plus/zh-cn/protocol/integration.html)：
@@ -391,8 +403,8 @@ JSON **数组**，每项一名干员：
 
 | 命令 | 用途 |
 |------|------|
-| **`plan`** | **账号画像 + αβγ 排班 + MAA**（前端首选） |
-| `layout team-rotation` | 仅 αβγ 三队排班 + MAA |
+| **`plan`** | **账号画像 + 所选定时换班 profile + MAA**（前端首选） |
+| `layout team-rotation` | 仅排班；支持 2 / 默认 3 / 两个具名 4 班 profile |
 | `layout test` | 单班贸易/制造 Top-K 搜索（无轮换） |
 | `layout analyze` | 账号画像（不写 MAA） |
 | `layout eval` | 给定 `--assignment` 结算直接效率 |
@@ -409,9 +421,10 @@ JSON **数组**，每项一名干员：
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 
-async function runPlan({ cliPath, repoRoot, operbox, layout, maaOut, profileOut }) {
+async function runPlan({ cliPath, repoRoot, operbox, layout, rotation, maaOut, profileOut }) {
   const args = ["plan", "--operbox", operbox];
   if (layout) args.push("--layout", layout);
+  if (rotation) args.push("--rotation", rotation);
   args.push("--profile-out", profileOut);
   args.push("--maa-out", maaOut);
 
@@ -444,13 +457,14 @@ import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-async function runTeamRotation({ cliPath, repoRoot, layout, operbox, maaOut, title }) {
+async function runTeamRotation({ cliPath, repoRoot, layout, operbox, rotation, maaOut, title }) {
   const args = [
     "layout", "team-rotation",
     "--layout", layout,
     "--operbox", operbox,
     "--maa-out", maaOut,
   ];
+  if (rotation) args.push("--rotation", rotation);
   if (title) args.push("--maa-title", title);
 
   const stderr = await new Promise((resolve, reject) => {
@@ -474,6 +488,10 @@ async function runTeamRotation({ cliPath, repoRoot, layout, operbox, maaOut, tit
 ## 9. 限制（告知产品 / UI）
 
 - 干员名必须为**客户端语言**（国服中文）。
+- `2` 当前采用完整状态干员互斥 policy；失败表示该受限策略无解，不是所有可能二班方案全局无解。
+- `fiammetta-8844` 与 `abyssal-7575` 是具名 hard profiles；缺硬前提直接非零退出，不回退默认三班。五班和自由时长数组尚未开放。
+- `abyssal-7575` 的 5h plan 会在 `dormitory[]` 中固定输出“单回宿管、群回宿管、歌蕾蒂娅”的同宿顺序；求解器在生成前验证床位与回复量。
+- 心情终验覆盖完整循环中的连续工作段与 `0.5h` 余量，不证明宿舍恢复永续。MAA 的实际触发时间仍由任务配置或人工控制。
 - 不建模完整心情曲线和宿管恢复。当前每个 ABC 周期只安排一次菲亚主力回岗；被换下者的具体宿舍操作由 MAA 自动处理，本项目不保证写入某个宿舍槽位。基础龙巫 reserve 已由 rotation 构造，但菲亚可改写最终房间成员。布局动态排序和跨周期就绪模拟尚未实现，详见 [Fiammetta.md](Fiammetta.md)。
 - 会客室若 solver 未分配人，导出为 `autofill: true`。
 - `layout eval --assignment ...` 会在 JSON 的 `office` / `meeting` 字段返回显式编制的静态技能速度、心情修正、贡献明细以及 `ignored` / `unsupported`。该结果不代表自动选人或线索概率模拟。
@@ -499,7 +517,7 @@ infra-cli layout team-rotation \
   --maa-out out/test_maa.json
 
 # 3. 确认账户画像：profile.summary.owned > 0 且 profile.domains.length > 0
-# 4. 确认 MAA 三班：maa.plans.length === 3
+# 4. 确认 MAA 班次数：默认 maa.plans.length === 3；--rotation 2 为 2；具名四班为 4
 # 5. 确认贸易产物：maa.plans[0].rooms.trading[0].product === "LMD"
 ```
 

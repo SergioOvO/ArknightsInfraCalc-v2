@@ -1053,10 +1053,10 @@ mod tests {
         assert_eq!(layout.dorm_occupant_count, 20);
         assert_eq!(layout.elite_facility_count, 0);
         assert_eq!(layout.sui_facility_count, 2);
-        assert_eq!(layout.drone_cap, 135);
+        assert_eq!(layout.drone_cap, 235);
         assert_eq!(layout.gold_manu_line_count, 2);
         assert_eq!(layout.durin_in_base, 0);
-        assert_eq!(layout.facility_level_sum_excl_meeting, 45);
+        assert_eq!(layout.facility_level_sum_excl_meeting, 64);
         // MonsterCuisine 基线已从 search_baseline_legacy 中移除，由编排层按需生产
         assert!(
             (layout

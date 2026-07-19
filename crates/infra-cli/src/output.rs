@@ -778,7 +778,17 @@ fn write_trade_yield_text(row: &TradeYieldRow<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-fn team_label(label: TeamLabel) -> &'static str {
+fn team_label(
+    profile: infra_core::schedule::TimedRotationProfile,
+    label: TeamLabel,
+) -> &'static str {
+    if profile.is_two_team() {
+        return match label {
+            TeamLabel::Alpha => "主力",
+            TeamLabel::Beta => "替补",
+            TeamLabel::Gamma => "γ",
+        };
+    }
     match label {
         TeamLabel::Alpha => "α",
         TeamLabel::Beta => "β",
@@ -855,6 +865,7 @@ const SHIFT_STATION_ORDER: &[&str] = &[
 fn format_shift_station_line(
     shift: &infra_core::schedule::TeamShiftResult,
     op_team: &std::collections::HashMap<String, TeamLabel>,
+    profile: infra_core::schedule::TimedRotationProfile,
     room_id: &str,
 ) -> String {
     let label = room_display_name(room_id);
@@ -885,7 +896,7 @@ fn format_shift_station_line(
         if let Some(team) = room_active_team(op_team, &ops) {
             format!(
                 "  {label}: {names}（{t}队）{score_hint}",
-                t = team_label(team)
+                t = team_label(profile, team)
             )
         } else if matches!(
             room_id,
@@ -942,6 +953,7 @@ fn write_team_rotation_csv(
         "layout",
         "operbox",
         "owned",
+        "rotation_profile",
         "班次",
         "时长h",
         "上岗队",
@@ -957,7 +969,11 @@ fn write_team_rotation_csv(
         "耗时秒",
     ])?;
     for shift in &report.shifts {
-        let active: Vec<&str> = shift.active_teams.iter().map(|t| team_label(*t)).collect();
+        let active: Vec<&str> = shift
+            .active_teams
+            .iter()
+            .map(|team| team_label(report.profile, *team))
+            .collect();
         let peak_eta = report
             .peak_mood_eta
             .as_ref()
@@ -973,10 +989,11 @@ fn write_team_rotation_csv(
             layout,
             operbox,
             &owned.to_string(),
+            report.profile.cli_name(),
             &(shift.index + 1).to_string(),
             &format!("{:.0}", shift.duration_hours),
             &active.join("+"),
-            team_label(shift.resting_team),
+            team_label(report.profile, shift.resting_team),
             &shift.efficiencies.trade_efficiency.to_string(),
             &shift.efficiencies.manufacture_efficiency.to_string(),
             &shift.efficiencies.power_efficiency.to_string(),
@@ -1010,7 +1027,8 @@ fn write_team_rotation_text(
     let op_team = infra_core::schedule::operator_team_map(report);
 
     report_line(&format!(
-        "αβγ team rotation: layout={layout} operbox={operbox} owned={owned} elapsed={:.2?}",
+        "{}: layout={layout} operbox={operbox} owned={owned} elapsed={:.2?}",
+        report.profile.display_name(),
         report.elapsed
     ));
     if let Some(eta) = &report.peak_mood_eta {
@@ -1049,11 +1067,11 @@ fn write_team_rotation_text(
         report.daily.trade, report.daily.manufacture, report.daily.power
     ));
 
-    report_line("\n--- 三队花名册（每班两队上岗、一队休息；设施始终满编不空转）---");
+    report_line("\n--- 轮换队伍花名册（设施始终满编不空转）---");
     for team in &report.teams {
         report_line(&format!(
             "  {} 队 ({} 人): {}",
-            team_label(team.label),
+            team_label(report.profile, team.label),
             team.operators.len(),
             team.operators.join(", ")
         ));
@@ -1062,31 +1080,48 @@ fn write_team_rotation_text(
     report_line("\n--- 轮换一览 ---");
     report_line("  班次   时长   上班队        休息队");
     for shift in &report.shifts {
-        let active: Vec<&str> = shift.active_teams.iter().map(|t| team_label(*t)).collect();
+        let active: Vec<&str> = shift
+            .active_teams
+            .iter()
+            .map(|team| team_label(report.profile, *team))
+            .collect();
         report_line(&format!(
             "  {:>5}  {:>3.0}h   {:<12}  {}",
             format!("shift{}", shift.index + 1),
             shift.duration_hours,
             active.join("+"),
-            team_label(shift.resting_team),
+            team_label(report.profile, shift.resting_team),
         ));
     }
 
     for shift in &report.shifts {
-        let active_names: Vec<&str> = shift.active_teams.iter().map(|t| team_label(*t)).collect();
+        let active_names: Vec<&str> = shift
+            .active_teams
+            .iter()
+            .map(|team| team_label(report.profile, *team))
+            .collect();
         let resting = team_by_label(&report.teams, shift.resting_team);
         report_line(&format!(
             "\n======== Shift {} · {:.0}h · 上班 {} · 休息 {} ========",
             shift.index + 1,
             shift.duration_hours,
             active_names.join("+"),
-            team_label(shift.resting_team),
+            team_label(report.profile, shift.resting_team),
         ));
         report_line(&format!(
             "  休息干员（{}队）: {}",
-            team_label(resting.label),
+            team_label(report.profile, resting.label),
             resting.operators.join(", ")
         ));
+        if let Some(rest) = &shift.dorm_rest {
+            report_line(&format!(
+                "  指定宿舍恢复（{}）: 单回 {} + 群回 {} + 目标 {}",
+                room_display_name(&rest.room_id.0),
+                rest.single_manager,
+                rest.group_manager,
+                rest.target,
+            ));
+        }
         report_line(&format!(
             "  效率(原值): trade={}  manufacture={}  power={}",
             shift.efficiencies.trade_efficiency,
@@ -1103,12 +1138,31 @@ fn write_team_rotation_text(
 
         report_line("\n  【各设施上岗情况】");
         for room_id in SHIFT_STATION_ORDER {
-            report_line(&format_shift_station_line(shift, &op_team, room_id));
+            report_line(&format_shift_station_line(
+                shift,
+                &op_team,
+                report.profile,
+                room_id,
+            ));
         }
     }
 
+    let formula = report
+        .shifts
+        .iter()
+        .map(|shift| {
+            let active = shift
+                .active_teams
+                .iter()
+                .map(|team| team_label(report.profile, *team))
+                .collect::<Vec<_>>()
+                .join("+");
+            format!("{:.0}h×{active}", shift.duration_hours)
+        })
+        .collect::<Vec<_>>()
+        .join(" + ");
     report_line(&format!(
-        "\n每日加权效率（三类分开，12h×αβ + 6h×βγ + 6h×γα）: 贸易={}  制造={}  发电={}",
+        "\n每日加权效率（三类分开，{formula}）: 贸易={}  制造={}  发电={}",
         report.daily.trade, report.daily.manufacture, report.daily.power
     ));
     Ok(())

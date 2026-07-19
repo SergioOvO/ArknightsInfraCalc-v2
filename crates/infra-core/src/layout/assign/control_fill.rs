@@ -37,20 +37,22 @@ pub(crate) fn assign_control(
         options,
         candidate_requirements,
         None,
+        None,
         used,
     )?
     .then_some(())
     .ok_or_else(|| Error::msg("control: no legal fill combo"))
 }
 
-pub(crate) fn assign_control_requiring_any(
+pub(crate) fn assign_control_matching_dynamic_set(
     assignment: &mut BaseAssignment,
     pool: &ControlPool,
     table: &SkillTable,
     layout: &LayoutContext,
     options: &AssignBaseOptions,
     candidate_requirements: &[crate::layout::ControlCandidateRequirement],
-    required_any: &HashSet<String>,
+    required_all: &HashSet<String>,
+    excluded: &HashSet<String>,
     used: &mut HashSet<String>,
 ) -> Result<bool> {
     assign_control_inner(
@@ -60,7 +62,8 @@ pub(crate) fn assign_control_requiring_any(
         layout,
         options,
         candidate_requirements,
-        Some(required_any),
+        Some(required_all),
+        Some(excluded),
         used,
     )
 }
@@ -73,12 +76,13 @@ fn assign_control_inner(
     layout: &LayoutContext,
     options: &AssignBaseOptions,
     candidate_requirements: &[crate::layout::ControlCandidateRequirement],
-    required_any: Option<&HashSet<String>>,
+    required_all: Option<&HashSet<String>>,
+    excluded: Option<&HashSet<String>>,
     used: &mut HashSet<String>,
 ) -> Result<bool> {
     const MAX_CONTROL: usize = 5;
     if pool.entries.is_empty() {
-        return Ok(required_any.is_none());
+        return Ok(required_all.is_none_or(HashSet::is_empty));
     }
     let pinned: HashSet<String> = assignment
         .control_operators()
@@ -86,10 +90,13 @@ fn assign_control_inner(
         .map(|o| o.name)
         .collect();
     if pinned.len() >= MAX_CONTROL {
-        return Ok(required_any.is_none_or(|required| !pinned.is_disjoint(required)));
+        return Ok(required_all.is_none_or(|required| required.is_subset(&pinned)));
+    }
+    if excluded.is_some_and(|excluded| !pinned.is_disjoint(excluded)) {
+        return Ok(false);
     }
 
-    let mut requirements: Vec<(HashSet<String>, u8)> = candidate_requirements
+    let requirements: Vec<(HashSet<String>, u8)> = candidate_requirements
         .iter()
         .map(|requirement| {
             (
@@ -98,8 +105,9 @@ fn assign_control_inner(
             )
         })
         .collect();
-    if let Some(required_any) = required_any {
-        requirements.push((required_any.clone(), 1));
+    let mut must_include = pinned.clone();
+    if let Some(required_all) = required_all {
+        must_include.extend(required_all.iter().cloned());
     }
     let control_opts = ControlSearchOptions {
         max_operators: 5,
@@ -107,13 +115,13 @@ fn assign_control_inner(
         mood: options.mood,
         layout: layout.clone(),
         matatabi_consumer_active: assignment_has_matatabi_consumer(assignment),
-        must_include: pinned.clone(),
+        must_include: must_include.clone(),
         candidate_requirements: requirements,
         fill_policy: ControlFillPolicy::LayeredFill,
     };
 
     let base_pool =
-        if options.skip_standalone_control || !pinned.is_empty() || required_any.is_some() {
+        if options.skip_standalone_control || !pinned.is_empty() || required_all.is_some() {
             pool.clone()
         } else {
             let preferred = try_filter_standalone(pool, FacilityKind::ControlCenter, 1);
@@ -123,11 +131,17 @@ fn assign_control_inner(
                 pool.clone()
             }
         };
-    let filtered_pool = filter_control_pool_for_fill(&base_pool, used, &pinned);
+    let empty_excluded = HashSet::new();
+    let filtered_pool = filter_control_pool_for_fill(
+        &base_pool,
+        used,
+        &pinned,
+        excluded.unwrap_or(&empty_excluded),
+    );
 
     let combos = search_control_combos(&filtered_pool, table, &control_opts)?;
-    let Some(hit) = pick_control_extending_pins(combos, &pinned, used, &|h| &h.names) else {
-        if required_any.is_some() {
+    let Some(hit) = pick_control_extending_pins(combos, &must_include, used, &|h| &h.names) else {
+        if required_all.is_some() {
             return Ok(false);
         }
         return Err(Error::msg(
@@ -154,12 +168,15 @@ fn filter_control_pool_for_fill(
     pool: &ControlPool,
     used: &HashSet<String>,
     pinned: &HashSet<String>,
+    excluded: &HashSet<String>,
 ) -> ControlPool {
     ControlPool {
         entries: pool
             .entries
             .iter()
-            .filter(|e| !used.contains(&e.name) || pinned.contains(&e.name))
+            .filter(|e| {
+                !excluded.contains(&e.name) && (!used.contains(&e.name) || pinned.contains(&e.name))
+            })
             .cloned()
             .collect(),
         skipped: pool.skipped.clone(),
@@ -256,7 +273,8 @@ mod tests {
         let mut pool = build_control_pool(&roster, &instances, &table).unwrap();
         pool.entries[0].buff_ids.clear();
 
-        let filtered = filter_control_pool_for_fill(&pool, &HashSet::new(), &HashSet::new());
+        let filtered =
+            filter_control_pool_for_fill(&pool, &HashSet::new(), &HashSet::new(), &HashSet::new());
 
         assert_eq!(filtered.entries.len(), 1);
         assert!(filtered.entries[0].buff_ids.is_empty());

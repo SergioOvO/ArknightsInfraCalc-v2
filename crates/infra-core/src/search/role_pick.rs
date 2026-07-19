@@ -220,7 +220,6 @@ fn shortcut_hit_filter(shortcut_id: &str) -> Option<fn(&TradeSearchHit) -> bool>
         "gsl_docus_syracusa" => Some(hit_docus_syracusa_shortcut),
         id if id.starts_with("gsl_closure") => Some(hit_closure_shortcut),
         id if id.starts_with("gsl_witch") => Some(hit_witch_shortcut),
-        "gsl_vina_lungmen" => Some(|hit| hit_shortcut_id(hit, "gsl_vina_lungmen")),
         "gsl_penguin_texlap_e0" => Some(|hit| hit_shortcut_id(hit, "gsl_penguin_texlap_e0")),
         "gsl_penguin_texangel_e2" => Some(|hit| hit_shortcut_id(hit, "gsl_penguin_texangel_e2")),
         "gsl_penguin_exusiai_lemuen" => {
@@ -486,54 +485,6 @@ mod tests {
     }
 
     #[test]
-    fn vina_role_requires_daifeen_and_picks_glasgow_trio() {
-        let (pool, table, mut layout) = fixtures(&[
-            ("推进之王", 2),
-            ("摩根", 2),
-            ("维娜·维多利亚", 2),
-            ("古米", 2),
-        ]);
-
-        let err = pick_trade_role_hit(
-            "meta_vina",
-            &pool,
-            &table,
-            gold_opts(&layout),
-            &layout,
-            &HashSet::new(),
-            20,
-        )
-        .unwrap_err();
-        assert!(
-            err.to_string().contains("meta_vina"),
-            "meta_vina should fail without Daifeen producer instead of returning plain: {err}"
-        );
-
-        layout.global_inject.record_daifeen_e2_in_control();
-        let hit = pick_trade_role_hit(
-            "meta_vina",
-            &pool,
-            &table,
-            gold_opts(&layout),
-            &layout,
-            &HashSet::new(),
-            20,
-        )
-        .unwrap();
-
-        for name in ["推进之王", "摩根", "维娜·维多利亚"] {
-            assert!(hit.names.iter().any(|n| n == name), "{hit:?}");
-        }
-        assert_eq!(hit.rule_id.as_deref(), Some("gsl_vina_lungmen"));
-        assert!(hit.final_efficiency.as_f64() > 2.0, "{hit:?}");
-        assert!(
-            ((hit.final_efficiency.as_f64() * 100.0) - hit.final_efficiency.as_f64() * 100.0).abs()
-                < 0.01,
-            "{hit:?}"
-        );
-    }
-
-    #[test]
     fn docus_role_naturally_selects_syracusa_when_final_efficiency_wins() {
         let (pool, table, mut layout) = fixtures(&[
             ("但书", 2),
@@ -544,7 +495,9 @@ mod tests {
             ("空弦", 2),
             ("石英", 2),
         ]);
-        layout.global_inject.record_haru_e2_in_control();
+        layout
+            .global_inject
+            .record_active_source_buff("control_tra_limit&spd2[000]");
         let hit = pick_docus_trade_hit(
             &pool,
             &table,

@@ -77,16 +77,16 @@ operbox + blueprint
 
 1. **registry 体系**（`base_systems.json` → `build_plan` → `execute_plan`；跨站优先，同站次之）
 2. **控制中枢补位** `control`（木天蓼 / 全局贸易·制造 % 等；不足 5 人时用 `search_control_combos` 补满）
-3. **宿舍 / 感知 producer**（如森西、迷迭香感知源；先落位再 `resolve_base`）
+3. **宿舍 / 感知 producer**（如森西、爱丽丝/车尔尼的梦境/小节→感知源；塑心作为迷迭香/黑键链的宿舍无声共鸣可选插件；先落位再 `resolve_base`）
 4. **发电各站**（每站 1 人，`search_power_assignment` 同款 `used`）
-5. **贸易余站**（当前 legacy 路径仍走 `docus → closure → witch → meta_vina → witch_fallback → karlan → penguin → plain`；其中 `meta_vina` 已确认应删除并回到自然候选，见下方已知缺口；源石单走 plain）
+5. **贸易余站**（`docus → closure → witch → witch_fallback → karlan → penguin → plain`；格拉斯哥为普通候选，源石单走 plain）
 6. **制造各产线**（按蓝图 `manu_line_scenario`：各制造房按配方独立搜索 `C(n,k)`）
 
 同类型多房间：按蓝图 `rooms` 数组顺序或稳定 `room_id` 字典序。
 
 **贸易 core priority**：只看蓝图中的实际贸易站数量与实际订单。恰有 1 间贸易站且为龙门币订单时，可露希尔是 required core；至少 2 间贸易站且任一为龙门币订单时，但书是首个 required core；全部贸易站均为源石订单时两者都不上。“首个”不表示排斥其他 cohort：双贸易站中 Rosemary/黑键体系已激活，且可露希尔与完整龙巫都可形成时，Plan 必须同时保留 A=但书核心站、B=可露希尔+黑键站，并把 C=巫恋+龙舌兰+合法裁缝留给 γ 替补；A/B 队友仍由各房正式 `final_efficiency` 搜索决定。八幡海铃、伺夜、贝洛内都不是编排硬核心，也不通过 registry 强制进编：伺夜、贝洛内可上 0/1/2 人且不预设同房，full-E2 下 A 期望自然选中伺夜+贝洛内。`gsl_docus_solo` / `gsl_docus_syracusa` 只在求解实际同房候选时提供机制结算，不参与总 core 顺序或队友候选优先顺序。缺可露、缺完整龙巫或 Rosemary 未激活时分别按可行路径降级，不伪造完整三 cohort。自动龙巫的合法性仍要求巫恋 + 龙舌兰 + 裁缝 β/α，普通白板只保留单站结算兼容，不进入自动 role。
 
-**已确认缺口**：八幡海铃、戴菲恩、凛御银灰应共用一次 control + trade 联合枚举；戴菲恩不得通过 `vina_lungmen` / `meta_vina` 固定推王组，凛御银灰也不得借用灵知精密计算。当前代码仍是 Haru 专用多前缀和 Vina legacy role，尚未符合该口径。精确公式、删除清单和 A+ 交接见 [CONTROL_CENTER_ASSIGNMENT.md](CONTROL_CENTER_ASSIGNMENT.md) 与 [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md](TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)。
+**动态 producer 当前边界**：八幡海铃、戴菲恩、凛御银灰和涤火杰西卡由一次 producer presence 子集枚举比较完整生产前缀；`vina_lungmen` / `meta_vina` 不再参与选型，灵知精密计算也不替代凛御银灰商业版图。贸易/制造多房内部仍是上述有序填房 policy；完整条件响应行 join 与 Bake/live 等价证明见 [CONTROL_CENTER_ASSIGNMENT.md](CONTROL_CENTER_ASSIGNMENT.md) 和 [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md](TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)。
 
 ---
 
@@ -159,8 +159,8 @@ operbox + blueprint
 |------|----------|------|
 | `layout test` | 默认调用 `assign_base_greedy`；传 `--assignment` 时消费用户给定编制 | 自定义布局 + operbox 的单班搜索 / 效率探测入口 |
 | `bench` | 固定 243 基准分搜 | 不代表宏观编制；不要用它替代 `layout test` |
-| `plan` | 账号画像 + αβγ ABC 排班 + 可选 MAA 导出 | 用户说“跑一遍模拟”时的推荐入口 |
-| `layout team-rotation` | αβγ ABC 三队轮换 | 当前全基建多班轮换入口 |
+| `plan` | 账号画像 + 定时换班 profile + 可选 MAA 导出 | 用户说“跑一遍模拟”时的推荐入口；默认 ABC，可显式 2 / 具名 4 班 |
+| `layout team-rotation` | 默认 ABC、二班主替、菲亚 / 深海具名四班 | 当前全基建多班轮换入口 |
 | `search trade` | 单贸易站探索 | 不做制造 / 全基建编制 |
 
 ---

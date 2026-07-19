@@ -1,4 +1,17 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "formatter": true
+  "formatter": true,
+  "agent": {
+    "build": {
+      "permission": {
+        "task": {
+          "*": "deny",
+          "plan-reviewer": "allow",
+          "terra-explorer": "allow",
+          "luna-extractor": "allow",
+          "sol-reviewer": "allow"
+        }
+      }
+    }
+  }
 }

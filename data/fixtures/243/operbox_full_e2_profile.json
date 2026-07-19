@@ -19,7 +19,7 @@
           "巫恋",
           "龙舌兰"
         ],
-        "final_efficiency": 2.606,
+        "final_efficiency": 2.482,
         "mechanic_equivalent_efficiency": 0.46
       },
       "baseline": {
@@ -31,7 +31,7 @@
         "final_efficiency": 2.482,
         "mechanic_equivalent_efficiency": 0.46
       },
-      "gap_ratio": 0.049959709911361665,
+      "gap_ratio": 0.0,
       "severity": "ok"
     },
     {
@@ -39,11 +39,11 @@
       "label": "贸易·订单/源石线",
       "current": {
         "operators": [
-          "贝洛内",
-          "伺夜",
-          "但书"
+          "维娜·维多利亚",
+          "但书",
+          "摩根"
         ],
-        "final_efficiency": 3.1
+        "final_efficiency": 3.255
       },
       "baseline": {
         "operators": [
@@ -53,7 +53,7 @@
         ],
         "final_efficiency": 2.79
       },
-      "gap_ratio": 0.11111111111111113,
+      "gap_ratio": 0.1666666666666666,
       "severity": "ok"
     },
     {
@@ -106,8 +106,8 @@
       "current": {
         "operators": [
           "乌尔比安",
-          "断罪者",
-          "裂响"
+          "弑君者",
+          "断罪者"
         ],
         "final_efficiency": 2.185
       },
@@ -127,13 +127,13 @@
       "label": "轮休·24h贸易加权",
       "current": {
         "operators": [],
-        "final_efficiency": 5.35
+        "final_efficiency": 5.498
       },
       "baseline": {
         "operators": [],
-        "final_efficiency": 5.313
+        "final_efficiency": 5.332
       },
-      "gap_ratio": 0.006964050442311297,
+      "gap_ratio": 0.03113278319579902,
       "severity": "ok"
     },
     {
@@ -141,25 +141,25 @@
       "label": "轮休·24h制造加权",
       "current": {
         "operators": [],
-        "final_efficiency": 9.273
+        "final_efficiency": 9.27
       },
       "baseline": {
         "operators": [],
-        "final_efficiency": 8.951
+        "final_efficiency": 9.084
       },
-      "gap_ratio": 0.0359736342308121,
+      "gap_ratio": 0.020475561426684274,
       "severity": "ok"
     }
   ],
   "rotation": {
-    "daily_trade_efficiency": 5.35,
-    "daily_manufacture_efficiency": 9.273,
-    "daily_power_efficiency": 3.589
+    "daily_trade_efficiency": 5.498,
+    "daily_manufacture_efficiency": 9.27,
+    "daily_power_efficiency": 3.664
   },
   "baseline_rotation": {
-    "daily_trade_efficiency": 5.313,
-    "daily_manufacture_efficiency": 8.951,
-    "daily_power_efficiency": 3.552
+    "daily_trade_efficiency": 5.332,
+    "daily_manufacture_efficiency": 9.084,
+    "daily_power_efficiency": 3.627
   },
   "actions": [],
   "flags": [

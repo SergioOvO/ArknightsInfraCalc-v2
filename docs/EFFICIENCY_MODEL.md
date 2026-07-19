@@ -85,7 +85,7 @@ final_efficiency
   + ramp_efficiency
 ```
 
-发电搜索按直接充能效率排序。`virtual_power_produced` 是独立资源，不匿名折入发电或
+发电搜索按直接充能效率排序。布局 `drone_cap` 表示无人机持有上限；满清理基建按 PRTS 为 235，承曦格雷伊「巡线框架」读取该值并按每 10 架 +1%（上限 25%）进入 `skill_efficiency`。`virtual_power_produced` 是独立资源，不匿名折入发电或
 制造效率。
 
 ## 4. 数据流与职责

@@ -40,7 +40,18 @@ pub struct RegistrySystemClaim {
     pub system_id: String,
     pub priority: i32,
     pub tier: OperatorTier,
+    pub bind_all: bool,
+    pub on_shifts: u8,
+    pub off_shifts: u8,
     pub slots: Vec<RegistrySlotClaim>,
+}
+
+fn default_on_shifts() -> u8 {
+    2
+}
+
+fn default_off_shifts() -> u8 {
+    1
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, Deserialize, Default)]
@@ -140,6 +151,12 @@ pub struct BaseSystemDef {
     pub exclusive_group: Option<String>,
     #[serde(default)]
     pub shift_modes: Vec<String>,
+    #[serde(default)]
+    pub bind_all: bool,
+    #[serde(default = "default_on_shifts")]
+    pub on_shifts: u8,
+    #[serde(default = "default_off_shifts")]
+    pub off_shifts: u8,
     pub slots: Vec<SystemSlotDef>,
 }
 
@@ -949,6 +966,9 @@ fn plan_registry_system_detailed(
             system_id: system.id.clone(),
             priority: system.priority,
             tier: system.tier.unwrap_or(OperatorTier::Standalone),
+            bind_all: system.bind_all,
+            on_shifts: system.on_shifts,
+            off_shifts: system.off_shifts,
             slots,
         },
         slots: slot_explains,

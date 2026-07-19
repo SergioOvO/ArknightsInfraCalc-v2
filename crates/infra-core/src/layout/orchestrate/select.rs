@@ -196,6 +196,7 @@ fn compile_plan_once(
         degradations: Vec::new(),
         shift_binds: compiled.shift_binds,
         active_dependencies: compiled.active_dependencies,
+        resolved_producer_dependencies: Vec::new(),
         continuous_roles: compiled.continuous_roles,
         rotation_reserves: compiled.rotation_reserves,
         control_candidate_requirements,
@@ -228,14 +229,29 @@ fn pre_split_pack_violation(
     )
     .map_err(Error::msg)?;
     for reserve in guarded {
-        let has_target = |components: &[Vec<crate::layout::RoomId>]| {
-            components.iter().any(|component| {
-                component
-                    .iter()
-                    .any(|room| reserve.eligible_rooms.contains(room))
-            })
+        let eligible_count = |component: &[crate::layout::RoomId]| {
+            component
+                .iter()
+                .filter(|room| reserve.eligible_rooms.contains(room))
+                .count()
         };
-        if has_target(&halves[0]) && has_target(&halves[1]) {
+        let has_target = |components: &[Vec<crate::layout::RoomId>]| {
+            components
+                .iter()
+                .any(|component| eligible_count(component) > 0)
+        };
+        let can_split_from_one_half = |components: &[Vec<crate::layout::RoomId>]| {
+            components
+                .iter()
+                .filter(|component| eligible_count(component) > 0)
+                .take(2)
+                .count()
+                >= 2
+        };
+        if (has_target(&halves[0]) && has_target(&halves[1]))
+            || can_split_from_one_half(&halves[0])
+            || can_split_from_one_half(&halves[1])
+        {
             continue;
         }
         let selected = plan

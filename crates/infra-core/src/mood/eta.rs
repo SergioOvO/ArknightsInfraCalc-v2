@@ -12,6 +12,10 @@ use crate::types::RecipeKind;
 use super::drain::{operator_net_drain, DrainInputs};
 use super::{facility_key, MoodModel};
 
+const ABYSSAL_CONTROL_RECOVERY_BUFF: &str = "control_mp_aegir1[000]";
+const ABYSSAL_CONTROL_DRAIN_BUFF: &str = "control_mp_aegir2[010]";
+const TAG_ABYSSAL: &str = "cc.g.abyssal";
+
 /// 单个在岗干员的 ETA 明细。
 #[derive(Debug, Clone, Serialize)]
 pub struct OperatorEta {
@@ -48,6 +52,26 @@ pub fn shift_eta(
     blueprint: &BaseBlueprint,
     assignment: &BaseAssignment,
 ) -> ShiftEta {
+    shift_eta_inner(model, blueprint, assignment, None)
+}
+
+/// Contextual ETA used by scheduling. Operator capabilities and actual
+/// outside-dorm presence are needed for conditional control-center mood rules.
+pub fn shift_eta_with_instances(
+    model: &MoodModel,
+    blueprint: &BaseBlueprint,
+    assignment: &BaseAssignment,
+    instances: &crate::instances::OperatorInstances,
+) -> ShiftEta {
+    shift_eta_inner(model, blueprint, assignment, Some(instances))
+}
+
+fn shift_eta_inner(
+    model: &MoodModel,
+    blueprint: &BaseBlueprint,
+    assignment: &BaseAssignment,
+    instances: Option<&crate::instances::OperatorInstances>,
+) -> ShiftEta {
     // 中枢是否满 5 人 → 全局 −0.25。
     let full_control = assignment
         .rooms
@@ -64,6 +88,33 @@ pub fn shift_eta(
         .iter()
         .map(|o| (o.name.clone(), o.elite))
         .collect();
+
+    let abyssal_outside_dorm = instances.map_or(0, |instances| {
+        assignment
+            .rooms
+            .iter()
+            .filter(|room| {
+                blueprint
+                    .room(&room.room_id)
+                    .is_some_and(|room| room.kind != FacilityKind::Dormitory)
+            })
+            .flat_map(|room| &room.operators)
+            .filter(|operator| {
+                instances
+                    .tags_for(&operator.name, operator.tier())
+                    .iter()
+                    .any(|tag| tag == TAG_ABYSSAL)
+            })
+            .count()
+    });
+    let abyssal_control_recovery = instances.is_some_and(|instances| {
+        assignment.control_operators().iter().any(|operator| {
+            instances
+                .resolve_control_buff_ids(&operator.name, operator.tier())
+                .iter()
+                .any(|buff_id| buff_id == ABYSSAL_CONTROL_RECOVERY_BUFF)
+        })
+    });
 
     let mut per_op: Vec<OperatorEta> = Vec::new();
 
@@ -95,7 +146,21 @@ pub fn shift_eta(
                 control_ops: &control_ops,
                 recipe,
             };
-            let x = operator_net_drain(model, &inputs);
+            let mut x = operator_net_drain(model, &inputs);
+            if bp.kind == FacilityKind::ControlCenter {
+                if abyssal_control_recovery {
+                    x -= 0.05;
+                }
+                if instances.is_some_and(|instances| {
+                    instances
+                        .resolve_control_buff_ids(&op.name, op.tier())
+                        .iter()
+                        .any(|buff_id| buff_id == ABYSSAL_CONTROL_DRAIN_BUFF)
+                }) {
+                    x += abyssal_outside_dorm as f64 * 0.5;
+                }
+                x = x.max(0.0);
+            }
             let hours = if x <= 0.0 {
                 None
             } else {
@@ -135,6 +200,58 @@ mod tests {
 
     fn model() -> MoodModel {
         MoodModel::load_default().expect("bundled mood_model.json")
+    }
+
+    #[test]
+    fn contextual_abyssal_drain_matches_seven_and_half_hour_limit() {
+        let blueprint: BaseBlueprint = serde_json::from_str(
+            r#"{
+                "rooms": [
+                    {"id":"control","kind":"control_center","level":5},
+                    {"id":"manu_1","kind":"factory","level":3,"product":{"factory":{"recipe":"gold"}}},
+                    {"id":"manu_2","kind":"factory","level":3,"product":{"factory":{"recipe":"battle_record"}}}
+                ]
+            }"#,
+        )
+        .unwrap();
+        let instances = crate::instances::OperatorInstances::load(
+            &crate::instances::default_instances_path().unwrap(),
+        )
+        .unwrap();
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room(
+            "control",
+            vec![
+                AssignedOperator::new("歌蕾蒂娅", 2),
+                AssignedOperator::new("中枢填充1", 0),
+                AssignedOperator::new("中枢填充2", 0),
+                AssignedOperator::new("中枢填充3", 0),
+                AssignedOperator::new("中枢填充4", 0),
+            ],
+        );
+        assignment.set_room(
+            "manu_1",
+            vec![
+                AssignedOperator::new("乌尔比安", 2),
+                AssignedOperator::new("斯卡蒂", 2),
+            ],
+        );
+        assignment.set_room(
+            "manu_2",
+            vec![
+                AssignedOperator::new("幽灵鲨", 2),
+                AssignedOperator::new("安哲拉", 2),
+            ],
+        );
+
+        let eta = shift_eta_with_instances(&model(), &blueprint, &assignment, &instances);
+        let gladiia = eta
+            .per_op
+            .iter()
+            .find(|operator| operator.name == "歌蕾蒂娅")
+            .unwrap();
+        assert!((gladiia.drain_per_hour - 3.2).abs() < 1e-9);
+        assert!((gladiia.workable_hours.unwrap() - 7.5).abs() < 1e-9);
     }
 
     /// 构造一个最小蓝图：一个中枢(5位) + 一个 L3 制造 + 一个 L3 贸易。

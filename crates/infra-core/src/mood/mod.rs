@@ -10,7 +10,7 @@ mod eta;
 mod recovery;
 
 pub use drain::{operator_net_drain, workable_hours, DrainInputs};
-pub use eta::{shift_eta, OperatorEta, ShiftEta};
+pub use eta::{shift_eta, shift_eta_with_instances, OperatorEta, ShiftEta};
 pub use recovery::{dorm_recovery_rates, DormOccupant};
 
 use std::collections::HashMap;

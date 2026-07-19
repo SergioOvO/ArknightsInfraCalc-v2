@@ -1,6 +1,6 @@
 {
   "template": "243_2gold_trade",
-  "drone_cap": 135,
+  "drone_cap": 235,
   "scenario": {
     "sui_facility_count": 2,
     "dorm_occupant_count": 20,
@@ -9,7 +9,7 @@
     }
   },
   "rooms": [
-    { "id": "control", "kind": "control_center", "level": 3 },
+    { "id": "control", "kind": "control_center", "level": 5 },
     {
       "id": "trade_1",
       "kind": "trade_post",
@@ -51,9 +51,11 @@
     { "id": "power_3", "kind": "power_plant", "level": 3 },
     { "id": "meeting", "kind": "meeting_room", "level": 3 },
     { "id": "office_1", "kind": "office", "level": 3 },
-    { "id": "dorm_1", "kind": "dormitory", "level": 3, "dorm_beds": 5, "dorm_ambience_level": 5 },
-    { "id": "dorm_2", "kind": "dormitory", "level": 3, "dorm_beds": 5, "dorm_ambience_level": 5 },
-    { "id": "dorm_3", "kind": "dormitory", "level": 3, "dorm_beds": 5, "dorm_ambience_level": 5 },
-    { "id": "dorm_4", "kind": "dormitory", "level": 3, "dorm_beds": 5, "dorm_ambience_level": 5 }
+    { "id": "workshop", "kind": "workshop", "level": 3 },
+    { "id": "training", "kind": "training_room", "level": 3 },
+    { "id": "dorm_1", "kind": "dormitory", "level": 5, "dorm_beds": 5, "dorm_ambience_level": 5 },
+    { "id": "dorm_2", "kind": "dormitory", "level": 5, "dorm_beds": 5, "dorm_ambience_level": 5 },
+    { "id": "dorm_3", "kind": "dormitory", "level": 5, "dorm_beds": 5, "dorm_ambience_level": 5 },
+    { "id": "dorm_4", "kind": "dormitory", "level": 5, "dorm_beds": 5, "dorm_ambience_level": 5 }
   ]
 }

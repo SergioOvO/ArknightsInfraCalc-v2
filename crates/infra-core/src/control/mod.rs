@@ -24,32 +24,8 @@ pub fn apply_control_to_layout(
         mood,
         layout: layout.clone(),
     };
-    let mut result = solve_control(&input, table);
-    if control_has_haru_e2(operators) {
-        result.inject.record_haru_e2_in_control();
-    }
-    if control_has_daifeen_e2(operators) {
-        result.inject.record_daifeen_e2_in_control();
-    }
+    let result = solve_control(&input, table);
     layout.global = result.global.clone();
     layout.global_inject = result.inject.clone();
     result
-}
-
-/// 中枢八幡海铃 E2「家族认可」——叙拉古但书链段 producer 条件。
-pub fn control_has_haru_e2(operators: &[ControlOperator]) -> bool {
-    const HARU: &str = "八幡海铃";
-    const FAMILY_RECOGNITION: &str = "control_tra_limit&spd2[000]";
-    operators.iter().any(|o| {
-        o.name == HARU && o.elite >= 2 && o.buff_ids.iter().any(|b| b == FAMILY_RECOGNITION)
-    })
-}
-
-/// 中枢戴菲恩 E2「运筹好手」——推王组链段 producer 条件。
-pub fn control_has_daifeen_e2(operators: &[ControlOperator]) -> bool {
-    const DAIFEEN: &str = "戴菲恩";
-    const OPS_HAND: &str = "control_tra_limit&spd[010]";
-    operators
-        .iter()
-        .any(|o| o.name == DAIFEEN && o.elite >= 2 && o.buff_ids.iter().any(|b| b == OPS_HAND))
 }

@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -280,12 +281,13 @@ fn search_manufacture_single_recipe(
                 .iter()
                 .map(|i| sub.entries[*i].to_manu_operator())
                 .collect();
+            let layout = manufacture_combo_layout(&options.layout, &ops);
             let base = ManuRoomInput {
                 level: options.level,
                 operators: ops,
                 active_recipe: recipe,
                 mood: options.mood,
-                layout: Arc::clone(&options.layout),
+                layout,
             };
             evaluate_manufacture_room(&base, table, recipe)
         })
@@ -308,6 +310,43 @@ fn search_manufacture_single_recipe(
         gold_line: None,
         battle_record_line: None,
     })
+}
+
+fn manufacture_combo_layout(
+    base: &SharedLayout,
+    operators: &[crate::manufacture::ManuOperator],
+) -> SharedLayout {
+    let changes_dynamic_count = base.global_inject.manu_count_scaled().iter().any(|rule| {
+        operators
+            .iter()
+            .any(|operator| operator.tags.iter().any(|tag| tag == &rule.target_tag))
+    });
+    if !changes_dynamic_count {
+        return Arc::clone(base);
+    }
+
+    let mut layout = (**base).clone();
+    let mut base_names: HashSet<_> = layout.base_workforce.iter().cloned().collect();
+    let mut manu_names: HashSet<_> = layout.manu_workforce.iter().cloned().collect();
+    for operator in operators {
+        if base_names.insert(operator.name.clone()) {
+            layout.base_workforce.push(operator.name.clone());
+        }
+        if !manu_names.insert(operator.name.clone()) {
+            continue;
+        }
+        layout.manu_workforce.push(operator.name.clone());
+        let mut seen_tags = HashSet::new();
+        for tag in &operator.tags {
+            if seen_tags.insert(tag.as_str()) {
+                *layout.manu_tagged_count_sum.entry(tag.clone()).or_insert(0) += 1;
+            }
+        }
+    }
+    layout
+        .global_inject
+        .refresh_manu_count_scaled(&layout.manu_tagged_count_sum);
+    Arc::new(layout)
 }
 
 fn filter_recipe_productive_pool(
@@ -499,6 +538,29 @@ mod tests {
             has_l2_delegate: false,
             tier: crate::layout::tier::OperatorTier::Standalone,
         }
+    }
+
+    #[test]
+    fn manufacture_candidate_projects_dynamic_tag_count() {
+        let mut layout = LayoutContext::default();
+        layout.global_inject.record_manu_count_scaled(
+            "producer",
+            "source_buff",
+            "blacksteel",
+            "cc.g.blacksteel",
+            None,
+            5.0,
+            0,
+        );
+        let operator = ManuOperator {
+            name: "consumer".to_string(),
+            elite: 2,
+            buff_ids: Vec::new(),
+            tags: vec!["cc.g.blacksteel".to_string()],
+        };
+        let projected = manufacture_combo_layout(&Arc::new(layout), &[operator]);
+        assert_eq!(projected.manu_tagged_count_sum["cc.g.blacksteel"], 1);
+        assert_eq!(projected.global_inject.manu_eff_for(RecipeKind::Gold), 5.0);
     }
 
     #[test]

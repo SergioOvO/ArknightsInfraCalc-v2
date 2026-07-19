@@ -806,6 +806,7 @@ mod tests {
             .trade_tagged_count_sum
             .insert("cc.g.glasgow".to_string(), 3);
         layout.global_inject.record_trade_tagged(
+            "戴菲恩",
             "control_tra_limit&spd[010]",
             "trade_glasgow_scaling",
             "cc.g.glasgow",

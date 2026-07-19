@@ -239,13 +239,9 @@ impl BaseBlueprint {
             .sum()
     }
 
-    /// 至简「绘图设计」：除会客室外每间设施每级 +1 工程机器人（上限 64）。
+    /// 至简「绘图设计」：除活动室外每间设施每级 +1 工程机器人（上限 64）。
     pub fn facility_level_sum_excl_meeting(&self) -> u16 {
-        self.rooms
-            .iter()
-            .filter(|r| r.kind != FacilityKind::MeetingRoom)
-            .map(|r| u16::from(r.level))
-            .sum()
+        self.rooms.iter().map(|r| u16::from(r.level)).sum()
     }
 
     pub fn dorm_bed_capacity(&self) -> u8 {
@@ -373,7 +369,8 @@ mod tests {
     #[test]
     fn template_243_use_this_loads_and_validates() {
         let bp = BaseBlueprint::template_243_use_this().unwrap();
-        assert_eq!(bp.training_room_max_level(), 0);
+        assert_eq!(bp.training_room_max_level(), 3);
+        assert_eq!(bp.facility_level_sum_excl_meeting(), 64);
         assert_eq!(bp.count_facility(FacilityKind::TradePost), 2);
         assert_eq!(bp.count_facility(FacilityKind::Factory), 4);
         assert_eq!(bp.manu_recipe_kinds(), 2);

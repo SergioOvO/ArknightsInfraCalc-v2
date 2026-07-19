@@ -31,18 +31,18 @@
 | `segments[]` | producer 条件 + `consumer` 种类 + `shortcut_id` + `priority` |
 | `roles[].pick_steps` | meta 站落位顺序：`segment` / `shortcut` / `filtered` / `unfiltered`；可带 `must_include_name` 或 `must_include_names` |
 
-**Producer**（`GlobalInjectManifest`）：`haru_e2_in_control`、`daifeen_e2_in_control` 等；`karlan_precision` 仍是全局注入，但喀兰市井孑已改走 L1 自然计算，不再注册 active L3 segment。
+**Producer**（`GlobalInjectManifest`）：记录实际 active source buff capability；segment 只读取稳定 buff id，不读取干员名。`karlan_precision` 仍是全局注入，但喀兰市井孑走 L1 自然计算，不注册 active L3 segment。
 
 **Consumer**（Rust 匹配器）：`docus_syracusa`、`blackkey_closure`、`vina_lungmen`、`penguin_*`。
 
 **贸易 core role 消费边界**：总 core 顺序由声明式编排按实际贸易站数量与订单先解析：恰有 1 间贸易站且为龙门币订单时固定可露希尔；至少 2 间贸易站且任一为龙门币订单时固定但书；全源石订单时两者均不解析。`docus` / `closure` role 只为已解析 anchor 的房间补队友，L3 shortcut 只结算最终实际同房组合，两者都不再决定总 core 顺序。
 
-> `meta_vina` 是截至 2026-07-14 仍存在的 legacy 选型路径，已确认应从自动 role / fixed System 中删除。戴菲恩、八幡海铃、凛御银灰的选型真源见 [CONTROL_CENTER_ASSIGNMENT.md](../CONTROL_CENTER_ASSIGNMENT.md)；A+ 改造见 [DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md](../TODO/DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md)。`gsl_vina_lungmen` 如保留，只能结算最终实际组合。
+> `meta_vina` 自动 role 和 `vina_lungmen` fixed System 已删除。戴菲恩、八幡海铃、凛御银灰的选型真源见 [CONTROL_CENTER_ASSIGNMENT.md](../CONTROL_CENTER_ASSIGNMENT.md)；`gsl_vina_lungmen` 只结算最终实际组合。
 
 - `docus`：只补已解析但书 anchor 所在房；执行 `unfiltered + must_include_name=但书`，全部候选统一按 `final_efficiency` 排序。`gsl_docus_syracusa` / `gsl_docus_solo` 由 shortcut matcher 对最终实际候选自然结算，不参与总 core 或 pick step 优先级。
 - `closure`：只补已解析可露希尔 anchor 所在房；`gsl_blackkey_closure` 优先，再 `closure` 分档，最后 `unfiltered + must_include_name=可露希尔`。黑键缺失不影响该 anchor 补位。
 - `witch`：`filtered hit_filter=witch + must_include_names=[巫恋, 龙舌兰]`，只接受 `gsl_witch_long_beta` / `gsl_witch_long_alpha`；blank 仅用于单站结算兼容。`witch_fallback` 使用独立过滤器，不与龙巫约束混用。
-- **legacy `meta_vina`（待删除）**：当前仅走 `segment/vina_lungmen`，并由 `daifeen_e2_in_control` 激活固定优先；目标状态让相关成员进入普通合法候选，按 `final_efficiency` 自然胜出或落败。
+- 格拉斯哥成员进入普通合法候选；`segment/vina_lungmen` 仅在实际组合与 source buff capability 同时存在时结算，不占 role 优先级。
 - `witch_fallback`：`filtered hit_filter=witch + must_include_name=巫恋`，只做无龙舌兰时的低优先兜底。
 
 `resolve_trade_shortcut` 在巫恋/可露之前调用 `match_registered_trade_segment`（按 `priority`）。

@@ -7,7 +7,7 @@
       "shortcut_id": "gsl_docus_syracusa",
       "priority": 20,
       "producer": {
-        "haru_e2_in_control": true
+        "required_control_buff_id": "control_tra_limit&spd2[000]"
       },
       "consumer": "docus_syracusa"
     },
@@ -30,7 +30,7 @@
       "shortcut_id": "gsl_vina_lungmen",
       "priority": 16,
       "producer": {
-        "daifeen_e2_in_control": true
+        "required_control_buff_id": "control_tra_limit&spd[010]"
       },
       "consumer": "vina_lungmen"
     },
@@ -125,16 +125,6 @@
         {
           "kind": "segment",
           "segment_id": "penguin_texlap_e0"
-        }
-      ]
-    },
-    {
-      "id": "meta_vina",
-      "pick_steps": [
-        {
-          "kind": "segment",
-          "segment_id": "vina_lungmen",
-          "only_if_producer": true
         }
       ]
     }

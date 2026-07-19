@@ -20,14 +20,43 @@ pub struct RuntimeShiftBind {
 
 /// 从统一 plan 提取运行期绑定组。plan 的 shift_binds 仅在体系激活时产出，已隐含 ownership gate。
 pub fn shift_binds_from_plan(plan: &AssignmentPlan) -> Vec<RuntimeShiftBind> {
-    plan.shift_binds
+    let mut normalized: Vec<_> = plan
+        .resolved_producer_dependencies
         .iter()
-        .map(|b| RuntimeShiftBind {
-            operators: b.operators.clone(),
-            on_shifts: b.on_shifts,
-            off_shifts: b.off_shifts,
+        .filter(|dependency| {
+            dependency.relation
+                == crate::response_dependency::ScheduleDependencyRelation::ExactPresence
         })
-        .collect()
+        .filter_map(|dependency| {
+            let mut operators = dependency.producers.clone();
+            operators.extend(dependency.consumers.iter().cloned());
+            operators.sort();
+            operators.dedup();
+            (operators.len() > 1).then_some(RuntimeShiftBind {
+                operators,
+                on_shifts: dependency.on_shifts,
+                off_shifts: dependency.off_shifts,
+            })
+        })
+        .collect();
+    for bind in &plan.shift_binds {
+        let mut operators = bind.operators.clone();
+        operators.sort();
+        operators.dedup();
+        if operators.len() < 2
+            || normalized
+                .iter()
+                .any(|existing| existing.operators == operators)
+        {
+            continue;
+        }
+        normalized.push(RuntimeShiftBind {
+            operators,
+            on_shifts: bind.on_shifts,
+            off_shifts: bind.off_shifts,
+        });
+    }
+    normalized
 }
 
 fn room_for_operator(assignment: &BaseAssignment, name: &str) -> Option<RoomId> {

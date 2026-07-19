@@ -6,10 +6,13 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, Result};
 use crate::layout::{
     assignment_operator_names, AssignedOperator, BaseAssignment, BaseBlueprint, FacilityKind,
-    RoomProduct,
+    RoomId, RoomProduct,
 };
 use crate::operbox::OperBox;
-use crate::schedule::{TeamLabel, TeamRotationReport, FIAMMETTA_RETURN_PRIORITY};
+use crate::schedule::{
+    DormRestPlan, ShiftTransition, TeamLabel, TeamRotationReport, TimedRotationProfile,
+    FIAMMETTA_RETURN_PRIORITY,
+};
 use crate::trade::input::TradeOrderKind;
 use crate::types::RecipeKind;
 
@@ -139,6 +142,9 @@ struct PlanInput<'a> {
     fiammetta_target: Option<&'a str>,
     fiammetta_priority: &'a [String],
     special_rest: Vec<(FacilityKind, String)>,
+    transition: ShiftTransition,
+    fiammetta_room: Option<&'a RoomId>,
+    dorm_rest: Option<&'a DormRestPlan>,
 }
 
 impl MaaSchedule {
@@ -169,18 +175,20 @@ pub fn build_from_team_rotation(
             let active: Vec<&str> = shift
                 .active_teams
                 .iter()
-                .map(|team| team_label_zh(*team))
+                .map(|team| team_label_zh(report.profile, *team))
                 .collect();
             let mut resting = resting_team_operators(report, shift.resting_team, &shift.assignment);
             if let Some(action) = &shift.fiammetta {
-                if !resting.contains(&action.displaced) {
+                if !action.displaced.is_empty() && !resting.contains(&action.displaced) {
                     // 被菲亚主力顶下来的干员必须优先拿到宿舍位，不能排在整支休息队
                     // 后面因床位截断而丢失。
                     resting.insert(0, action.displaced.clone());
                 }
             }
             let special_rest: Vec<_> = report
-                .peak_plan
+                .assignment_plans
+                .get(shift.plan_index)
+                .unwrap_or(&report.peak_plan)
                 .anchors
                 .iter()
                 .filter_map(|anchor| {
@@ -201,9 +209,10 @@ pub fn build_from_team_rotation(
                     active.join("+")
                 ),
                 description: format!(
-                    "本班 {:.0} 小时；休息 {} 队",
+                    "本班 {:.0} 小时；下次在 {:.0} 小时后执行下一计划；休息 {} 队",
                     shift.duration_hours,
-                    team_label_zh(shift.resting_team)
+                    shift.duration_hours,
+                    team_label_zh(report.profile, shift.resting_team)
                 ),
                 resting,
                 fiammetta_target: shift
@@ -213,26 +222,59 @@ pub fn build_from_team_rotation(
                 // ABC 主路径只执行 schedule 已确认的回岗动作；没有动作就保持关闭。
                 fiammetta_priority: &[],
                 special_rest,
+                transition: shift.transition,
+                fiammetta_room: shift.fiammetta.as_ref().map(|action| &action.room_id),
+                dorm_rest: shift.dorm_rest.as_ref(),
             }
         })
         .map(|input| build_plan(blueprint, &input))
         .collect();
-    Ok(wrap_schedule(opts, plans))
+    Ok(wrap_schedule(
+        opts,
+        plans,
+        Some(report.profile.plan_times()),
+    ))
 }
 
-fn wrap_schedule(opts: &MaaExportOptions, plans: Vec<MaaPlan>) -> MaaSchedule {
+fn wrap_schedule(
+    opts: &MaaExportOptions,
+    plans: Vec<MaaPlan>,
+    default_plan_times: Option<&str>,
+) -> MaaSchedule {
     MaaSchedule {
         author: opts.author.clone(),
         title: Some(opts.title.clone()),
         description: opts.description.clone(),
         id: opts.id,
         building_type: opts.building_type,
-        plan_times: opts.plan_times.clone(),
+        plan_times: opts
+            .plan_times
+            .clone()
+            .or_else(|| default_plan_times.map(str::to_owned)),
         plans,
     }
 }
 
 fn build_plan(blueprint: &BaseBlueprint, input: &PlanInput) -> MaaPlan {
+    let mut rooms = if input.transition == ShiftTransition::FiammettaOnly {
+        build_fiammetta_transition_rooms(
+            blueprint,
+            input.assignment,
+            input
+                .fiammetta_room
+                .expect("Fiammetta-only transition has target room"),
+        )
+    } else {
+        build_rooms(
+            blueprint,
+            input.assignment,
+            &input.resting,
+            &input.special_rest,
+        )
+    };
+    if let Some(dorm_rest) = input.dorm_rest {
+        apply_dorm_rest(blueprint, &mut rooms, dorm_rest);
+    }
     MaaPlan {
         name: input.name.clone(),
         description: input.description.clone(),
@@ -240,13 +282,14 @@ fn build_plan(blueprint: &BaseBlueprint, input: &PlanInput) -> MaaPlan {
             .fiammetta_target
             .map(resolve_scheduled_fiammetta)
             .unwrap_or_else(|| resolve_fiammetta(input.fiammetta_priority, input.assignment)),
-        drones: drone_defaults(blueprint),
-        rooms: build_rooms(
-            blueprint,
-            input.assignment,
-            &input.resting,
-            &input.special_rest,
-        ),
+        drones: if input.transition == ShiftTransition::FiammettaOnly {
+            let mut drones = drone_defaults(blueprint);
+            drones.enable = false;
+            drones
+        } else {
+            drone_defaults(blueprint)
+        },
+        rooms,
     }
 }
 
@@ -328,6 +371,89 @@ fn build_rooms(
     }
 }
 
+fn build_fiammetta_transition_rooms(
+    blueprint: &BaseBlueprint,
+    assignment: &BaseAssignment,
+    target_room: &RoomId,
+) -> MaaRooms {
+    let mut rooms = build_rooms(blueprint, assignment, &[], &[]);
+    let target = blueprint
+        .room(target_room)
+        .expect("scheduled Fiammetta target room remains in blueprint");
+    let target_index = blueprint
+        .rooms_of(target.kind)
+        .iter()
+        .position(|room| room.id == *target_room)
+        .expect("target room remains in facility order");
+    let keep = match target.kind {
+        FacilityKind::TradePost => rooms.trading[target_index].clone(),
+        FacilityKind::Factory => rooms.manufacture[target_index].clone(),
+        FacilityKind::PowerPlant => rooms.power[target_index].clone(),
+        _ => unreachable!("Fiammetta target selection only admits production rooms"),
+    };
+    for slot in rooms
+        .trading
+        .iter_mut()
+        .chain(&mut rooms.manufacture)
+        .chain(&mut rooms.power)
+        .chain(&mut rooms.dormitory)
+        .chain(&mut rooms.control)
+        .chain(&mut rooms.meeting)
+        .chain(&mut rooms.hire)
+        .chain(&mut rooms.processing)
+    {
+        slot.skip = true;
+        slot.operators.clear();
+        slot.sort = false;
+        slot.autofill = false;
+    }
+    match target.kind {
+        FacilityKind::TradePost => rooms.trading[target_index] = keep,
+        FacilityKind::Factory => rooms.manufacture[target_index] = keep,
+        FacilityKind::PowerPlant => rooms.power[target_index] = keep,
+        _ => unreachable!(),
+    }
+    rooms
+}
+
+fn apply_dorm_rest(blueprint: &BaseBlueprint, rooms: &mut MaaRooms, rest: &DormRestPlan) {
+    let dorm_index = blueprint
+        .rooms_of(FacilityKind::Dormitory)
+        .iter()
+        .position(|room| room.id == rest.room_id)
+        .expect("scheduled dorm rest room remains in blueprint");
+    let required = [
+        rest.single_manager.as_str(),
+        rest.group_manager.as_str(),
+        rest.target.as_str(),
+    ];
+    for slot in &mut rooms.dormitory {
+        slot.operators
+            .retain(|operator| !required.contains(&operator.as_str()));
+    }
+    let slot = &mut rooms.dormitory[dorm_index];
+    let mut operators = vec![
+        rest.single_manager.clone(),
+        rest.group_manager.clone(),
+        rest.target.clone(),
+    ];
+    operators.extend(slot.operators.iter().cloned());
+    let capacity = blueprint
+        .room(&rest.room_id)
+        .and_then(|room| room.dorm_beds)
+        .unwrap_or(5)
+        .max(1) as usize;
+    // Generic resting fill may already have used every spare bed. The explicit
+    // recovery group has priority; retain any remaining occupants only while
+    // the destination dorm still has capacity.
+    operators.truncate(capacity);
+    slot.skip = false;
+    slot.operators = operators;
+    // MAA must preserve manager -> target order for single-target recovery.
+    slot.sort = false;
+    slot.autofill = false;
+}
+
 fn production_slot(
     assignment: &BaseAssignment,
     room_id: &str,
@@ -401,24 +527,18 @@ fn build_dorm_slots(
         .rooms_of(FacilityKind::Dormitory)
         .into_iter()
         .map(|room| {
-            let assigned = operator_names(assignment, &room.id.0);
-            if !assigned.is_empty() {
-                return MaaRoomSlot {
-                    skip: false,
-                    product: None,
-                    operators: assigned,
-                    sort: true,
-                    autofill: false,
-                };
+            let beds = room.dorm_beds.unwrap_or(5).max(1) as usize;
+            let mut operators = operator_names(assignment, &room.id.0);
+            let spare = beds.saturating_sub(operators.len());
+            if spare > 0 && !resting.is_empty() {
+                let take = resting.len().min(spare);
+                operators.extend(resting.drain(..take));
             }
-            if !resting.is_empty() {
-                let beds = room.dorm_beds.unwrap_or(5).max(1) as usize;
-                let take = resting.len().min(beds);
-                let ops: Vec<String> = resting.drain(..take).collect();
+            if !operators.is_empty() {
                 return MaaRoomSlot {
                     skip: false,
                     product: None,
-                    operators: ops,
+                    operators,
                     sort: true,
                     autofill: false,
                 };
@@ -525,7 +645,14 @@ fn maa_factory_product(recipe: RecipeKind) -> &'static str {
     }
 }
 
-fn team_label_zh(label: TeamLabel) -> &'static str {
+fn team_label_zh(profile: TimedRotationProfile, label: TeamLabel) -> &'static str {
+    if profile.is_two_team() {
+        return match label {
+            TeamLabel::Alpha => "主力",
+            TeamLabel::Beta => "替补",
+            TeamLabel::Gamma => "γ",
+        };
+    }
     match label {
         TeamLabel::Alpha => "α",
         TeamLabel::Beta => "β",
@@ -710,6 +837,46 @@ mod tests {
     }
 
     #[test]
+    fn occupied_dorm_keeps_manager_and_uses_spare_beds_for_resting_team() {
+        let blueprint = sample_blueprint();
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room("dorm_1", vec![AssignedOperator::new("宿管", 2)]);
+        let rooms = build_rooms(
+            &blueprint,
+            &assignment,
+            &["休息甲".to_string(), "休息乙".to_string()],
+            &[],
+        );
+        assert_eq!(
+            rooms.dormitory[0].operators,
+            vec!["宿管", "休息甲", "休息乙"]
+        );
+    }
+
+    #[test]
+    fn explicit_dorm_rest_preserves_manager_target_order() {
+        let blueprint = sample_blueprint();
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room("dorm_1", vec![AssignedOperator::new("原宿舍成员", 2)]);
+        let mut rooms = build_rooms(&blueprint, &assignment, &[], &[]);
+        apply_dorm_rest(
+            &blueprint,
+            &mut rooms,
+            &DormRestPlan {
+                room_id: RoomId::new("dorm_1"),
+                target: "歌蕾蒂娅".into(),
+                single_manager: "单回宿管".into(),
+                group_manager: "群回宿管".into(),
+            },
+        );
+        assert_eq!(
+            rooms.dormitory[0].operators,
+            vec!["单回宿管", "群回宿管", "歌蕾蒂娅", "原宿舍成员"]
+        );
+        assert!(!rooms.dormitory[0].sort);
+    }
+
+    #[test]
     fn build_team_rotation_emits_maa_products() {
         let blueprint = sample_blueprint();
         let mut assignment = BaseAssignment::default();
@@ -724,9 +891,13 @@ mod tests {
         assignment.set_power_operator("power_1", AssignedOperator::new("格雷伊", 2));
 
         let report = TeamRotationReport {
+            profile: crate::schedule::TimedRotationProfile::default(),
             peak_plan: crate::layout::AssignmentPlan::recovery(
                 crate::layout::AssignShiftMode::Peak,
             ),
+            assignment_plans: vec![crate::layout::AssignmentPlan::recovery(
+                crate::layout::AssignShiftMode::Peak,
+            )],
             peak_mood_eta: None,
             teams: vec![TeamAssignment {
                 label: TeamLabel::Gamma,
@@ -734,6 +905,7 @@ mod tests {
             }],
             shifts: vec![TeamShiftResult {
                 index: 0,
+                plan_index: 0,
                 duration_hours: 12.0,
                 active_teams: vec![TeamLabel::Alpha, TeamLabel::Beta],
                 resting_team: TeamLabel::Gamma,
@@ -743,6 +915,8 @@ mod tests {
                     displaced: "被换下干员".into(),
                     room_id: RoomId::new("trade_1"),
                 }),
+                dorm_rest: None,
+                transition: crate::schedule::ShiftTransition::ReplaceRooms,
                 efficiencies: ShiftEfficiencies::default(),
                 weighted_trade: crate::Efficiency::ZERO,
                 weighted_manufacture: crate::Efficiency::ZERO,
@@ -770,6 +944,71 @@ mod tests {
         assert!(schedule.plans[0].fiammetta.enable);
         assert_eq!(schedule.plans[0].fiammetta.target, "但书");
         assert_eq!(schedule.plans[0].fiammetta.order, "pre");
+    }
+
+    #[test]
+    fn fiammetta_only_transition_restores_target_room_and_skips_everything_else() {
+        let blueprint = sample_blueprint();
+        let mut assignment = BaseAssignment::default();
+        assignment.set_room(
+            "trade_1",
+            vec![
+                AssignedOperator::new("但书", 2),
+                AssignedOperator::new("龙舌兰", 2),
+                AssignedOperator::new("卡夫卡", 2),
+            ],
+        );
+        assignment.set_power_operator("power_1", AssignedOperator::new("格雷伊", 2));
+        let plan = crate::layout::AssignmentPlan::recovery(crate::layout::AssignShiftMode::Peak);
+        let report = TeamRotationReport {
+            profile: crate::schedule::TimedRotationProfile::Fiammetta8_8_4_4,
+            peak_plan: plan.clone(),
+            assignment_plans: vec![plan],
+            peak_mood_eta: None,
+            teams: vec![TeamAssignment {
+                label: TeamLabel::Gamma,
+                operators: vec!["休息干员".into()],
+            }],
+            shifts: vec![TeamShiftResult {
+                index: 1,
+                plan_index: 0,
+                duration_hours: 8.0,
+                active_teams: vec![TeamLabel::Alpha, TeamLabel::Beta],
+                resting_team: TeamLabel::Gamma,
+                assignment,
+                fiammetta: Some(crate::schedule::FiammettaShiftAction {
+                    target: "但书".into(),
+                    displaced: String::new(),
+                    room_id: RoomId::new("trade_1"),
+                }),
+                dorm_rest: None,
+                transition: crate::schedule::ShiftTransition::FiammettaOnly,
+                efficiencies: ShiftEfficiencies::default(),
+                weighted_trade: crate::Efficiency::ZERO,
+                weighted_manufacture: crate::Efficiency::ZERO,
+                weighted_power: crate::Efficiency::ZERO,
+            }],
+            daily: Default::default(),
+            elapsed: Duration::ZERO,
+        };
+
+        let schedule = build_from_team_rotation(
+            &blueprint,
+            &report,
+            &MaaExportOptions::for_blueprint(&blueprint),
+        )
+        .unwrap();
+        assert_eq!(schedule.plan_times.as_deref(), Some("4班"));
+        assert!(!schedule.plans[0].rooms.trading[0].skip);
+        assert_eq!(
+            schedule.plans[0].rooms.trading[0].operators,
+            vec!["但书", "龙舌兰", "卡夫卡"]
+        );
+        assert!(schedule.plans[0].rooms.power[0].skip);
+        assert!(schedule.plans[0].rooms.power[0].operators.is_empty());
+        assert!(schedule.plans[0].rooms.dormitory[0].skip);
+        assert!(schedule.plans[0].rooms.dormitory[0].operators.is_empty());
+        assert!(!schedule.plans[0].drones.enable);
     }
 
     #[test]

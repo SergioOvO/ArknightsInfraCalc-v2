@@ -9,13 +9,14 @@ use infra_core::bake::{
     warm_runtime_baked_table, BakeGeneratorFingerprint, BakeOptions, BakeProgressEvent,
 };
 use infra_core::box_profile::{
-    baseline_path_or_default, build_box_profile_from_current_probe, run_user_rotation_probe,
-    BoxProfileOptions,
+    baseline_path_or_default, build_box_profile_from_current_probe,
+    run_user_rotation_probe_with_profile, BoxProfileOptions,
 };
 use infra_core::export::{build_from_team_rotation, MaaExportOptions};
 use infra_core::instances::{default_instances_path, OperatorInstances};
 use infra_core::layout::BaseBlueprint;
 use infra_core::operbox::{default_layout_243_path, default_operbox_full_e2_path, OperBox};
+use infra_core::schedule::TimedRotationProfile;
 use infra_core::skill_table::{default_skill_table_path, SkillTable};
 use infra_core::Error;
 use serde::{Deserialize, Serialize};
@@ -62,7 +63,7 @@ fn print_serve_usage() {
     eprintln!("  stdout: one JSON response per line");
     eprintln!("Methods:");
     eprintln!(
-        "  plan: params {{ operbox, layout?, baseline?, top?, profile_out?, maa_out?, output_dir?, maa_title? }}"
+        "  plan: params {{ operbox, layout?, baseline?, top?, rotation?, profile_out?, maa_out?, output_dir?, maa_title? }}"
     );
 }
 
@@ -183,6 +184,8 @@ struct PlanParams {
     #[serde(default)]
     top: Option<usize>,
     #[serde(default)]
+    rotation: Option<TimedRotationProfile>,
+    #[serde(default)]
     profile_out: Option<PathBuf>,
     #[serde(default)]
     maa_out: Option<PathBuf>,
@@ -198,6 +201,7 @@ struct PlanResult {
     operbox: String,
     owned: usize,
     top: usize,
+    rotation: TimedRotationProfile,
     #[serde(skip_serializing_if = "Option::is_none")]
     profile_out: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -257,6 +261,7 @@ fn error_response(
 fn handle_plan(state: &ServeState, params: serde_json::Value) -> Result<serde_json::Value, Error> {
     let params: PlanParams = serde_json::from_value(params)?;
     let top = params.top.unwrap_or(20);
+    let rotation_profile = params.rotation.unwrap_or_default();
     let layout_path = match params.layout {
         Some(path) => path,
         None => default_layout_243_path()?,
@@ -268,8 +273,14 @@ fn handle_plan(state: &ServeState, params: serde_json::Value) -> Result<serde_js
 
     let layout_label = layout_path.to_string_lossy().into_owned();
     let operbox_label = operbox_path.to_string_lossy().into_owned();
-    let current =
-        run_user_rotation_probe(&blueprint, &operbox, &state.instances, &state.table, top)?;
+    let current = run_user_rotation_probe_with_profile(
+        &blueprint,
+        &operbox,
+        &state.instances,
+        &state.table,
+        top,
+        rotation_profile,
+    )?;
 
     if let Some(dir) = params.output_dir.as_ref() {
         fs::create_dir_all(dir)?;
@@ -301,6 +312,7 @@ fn handle_plan(state: &ServeState, params: serde_json::Value) -> Result<serde_js
             &BoxProfileOptions {
                 top_k: top,
                 baseline_operbox: Some(baseline_path),
+                rotation_profile,
                 ..BoxProfileOptions::default()
             },
         )?;
@@ -312,6 +324,7 @@ fn handle_plan(state: &ServeState, params: serde_json::Value) -> Result<serde_js
         operbox: operbox_label,
         owned: operbox.owned_count(),
         top,
+        rotation: rotation_profile,
         profile_out: params
             .profile_out
             .as_ref()

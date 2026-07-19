@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::error::Result;
@@ -6,7 +7,7 @@ use crate::layout::{assign_base_greedy, resolve_base, AssignBaseOptions, BaseBlu
 use crate::manufacture::ManuSearchRecipeMode;
 use crate::operbox::OperBox;
 use crate::pool::{build_manufacture_pool, build_trade_pool};
-use crate::schedule::schedule_team_rotation;
+use crate::schedule::{schedule_team_rotation, schedule_timed_rotation, TimedRotationProfile};
 use crate::search::{
     search_manufacture_triples, search_trade_triples, ManuSearchOptions, ManuSearchReport,
     TradeSearchOptions, TradeSearchReport,
@@ -38,15 +39,55 @@ pub fn run_user_rotation_probe(
     table: &SkillTable,
     top_k: usize,
 ) -> Result<LayoutProbe> {
-    let rotation = schedule_team_rotation(
+    run_user_rotation_probe_with_profile(
+        blueprint,
+        operbox,
+        instances,
+        table,
+        top_k,
+        TimedRotationProfile::default(),
+    )
+}
+
+pub fn run_user_rotation_probe_with_profile(
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+    top_k: usize,
+    profile: TimedRotationProfile,
+) -> Result<LayoutProbe> {
+    run_user_rotation_probe_with_profile_and_preferences(
+        blueprint,
+        operbox,
+        instances,
+        table,
+        top_k,
+        profile,
+        &HashMap::new(),
+    )
+}
+
+pub fn run_user_rotation_probe_with_profile_and_preferences(
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+    top_k: usize,
+    profile: TimedRotationProfile,
+    system_preferences: &HashMap<String, String>,
+) -> Result<LayoutProbe> {
+    let rotation = schedule_timed_rotation(
         blueprint,
         operbox,
         instances,
         table,
         &AssignBaseOptions {
             top_k,
+            system_preferences: system_preferences.clone(),
             ..AssignBaseOptions::default()
         },
+        profile,
     )?;
 
     let durin_plan = operbox.durin_dorm_planning_count(instances);

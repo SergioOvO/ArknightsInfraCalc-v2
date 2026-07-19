@@ -743,6 +743,17 @@
     ]
   },
   {
+    "name": "红云",
+    "progress": {
+      "elite": 2,
+      "level": 1,
+      "rarity": 6
+    },
+    "facilities": [
+      "manufacture"
+    ]
+  },
+  {
     "name": "红豆",
     "progress": {
       "elite": 2,

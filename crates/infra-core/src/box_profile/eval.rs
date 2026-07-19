@@ -41,11 +41,17 @@ pub fn default_schedule_export_path() -> Result<PathBuf> {
     Ok(crate::skill_table::workspace_root()?.join("data/fixtures/243/schedule_export.json"))
 }
 
-/// 与 baseline 对齐：取第 2 班编制看巫恋线 / 制造分域（index 1，6h 班）。
+/// Default ABC keeps the historical second-shift probe. Explicit profiles use
+/// their first declared main state rather than accidentally profiling backup.
 pub fn reference_shift_assignment(report: &TeamRotationReport) -> &BaseAssignment {
+    let index = if report.profile == crate::schedule::TimedRotationProfile::Abc12_6_6 {
+        1
+    } else {
+        0
+    };
     &report
         .shifts
-        .get(1)
+        .get(index)
         .or_else(|| report.shifts.first())
         .expect("rotation report has shifts")
         .assignment
@@ -284,7 +290,9 @@ fn probe_shell(
         trade_report,
         manu_report,
         rotation: TeamRotationReport {
+            profile: crate::schedule::TimedRotationProfile::default(),
             peak_plan: AssignmentPlan::recovery(AssignShiftMode::Peak),
+            assignment_plans: vec![AssignmentPlan::recovery(AssignShiftMode::Peak)],
             peak_mood_eta: None,
             teams: vec![],
             shifts: vec![],

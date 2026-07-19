@@ -9,11 +9,12 @@ use infra_core::export::{build_from_team_rotation, MaaExportOptions};
 use infra_core::instances::{default_instances_path, OperatorInstances};
 use infra_core::layout::{AssignBaseOptions, BaseBlueprint};
 use infra_core::operbox::{default_layout_243_path, default_operbox_full_e2_path, OperBox};
-use infra_core::schedule::schedule_team_rotation;
+use infra_core::schedule::schedule_timed_rotation;
 use infra_core::skill_table::{default_skill_table_path, SkillTable};
 use infra_core::Error;
 
 pub fn plan_cmd(args: &[String]) -> Result<(), Error> {
+    let rotation_profile = super::timed_rotation_profile_from_args(args)?;
     let operbox_path = operbox_path_from_args(args)?;
     let layout_path = match layout_path_from_args(args) {
         Some(p) => p,
@@ -48,6 +49,8 @@ pub fn plan_cmd(args: &[String]) -> Result<(), Error> {
         &BoxProfileOptions {
             top_k,
             baseline_operbox: Some(baseline_path),
+            rotation_profile,
+            system_preferences: system_preferences.clone(),
             ..BoxProfileOptions::default()
         },
     )?;
@@ -59,7 +62,7 @@ pub fn plan_cmd(args: &[String]) -> Result<(), Error> {
     eprintln!("profile JSON → {}", profile_out.display());
 
     // ── 2. αβγ 三队排班 ─────────────────────────────────────────────────
-    let rotation = schedule_team_rotation(
+    let rotation = schedule_timed_rotation(
         &blueprint,
         &operbox,
         &instances,
@@ -69,6 +72,7 @@ pub fn plan_cmd(args: &[String]) -> Result<(), Error> {
             system_preferences,
             ..AssignBaseOptions::default()
         },
+        rotation_profile,
     )?;
 
     if let Some(dir) = output_dir_from_args(args) {
@@ -110,7 +114,7 @@ pub fn plan_cmd(args: &[String]) -> Result<(), Error> {
         print_box_profile_report(&profile);
         println!();
         println!("══════════════════════════════════════");
-        println!("  αβγ 三队轮休排班");
+        println!("  {}", rotation.profile.display_name());
         println!("══════════════════════════════════════");
         println!();
         print_team_rotation_text(&layout_label, &operbox_label, owned, &rotation)?;

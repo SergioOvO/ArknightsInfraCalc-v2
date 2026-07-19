@@ -19,11 +19,12 @@ use crate::pool::{
     build_power_pool, build_trade_pool, karlan_precision_active, ControlPool, PowerPool, TradePool,
 };
 use crate::search::{
-    control_entry_optional_dynamic_trade_tags, control_inject_policy_sort_key_for_layout,
+    control_entry_deferred_trade_tags, control_inject_policy_sort_key_for_assignment,
+    control_inject_policy_sort_key_upper_bound,
 };
 use crate::skill_table::SkillTable;
 
-use super::control_fill::{assign_control, assign_control_requiring_any};
+use super::control_fill::{assign_control, assign_control_matching_dynamic_set};
 use super::manufacture_fill::{assign_manufacture_lines, refresh_manufacture_efficiency_snapshots};
 use super::power_fill::assign_power_stations;
 use super::producer_fill::{
@@ -49,6 +50,23 @@ pub(super) fn run_shift_pipeline(
     mode: AssignShiftMode,
     seed: &BaseAssignment,
     plan: &AssignmentPlan,
+) -> Result<BaseAssignment> {
+    run_shift_pipeline_with_producer_pruning(
+        blueprint, operbox, instances, table, options, mode, seed, plan, true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_shift_pipeline_with_producer_pruning(
+    blueprint: &BaseBlueprint,
+    operbox: &OperBox,
+    instances: &OperatorInstances,
+    table: &SkillTable,
+    options: &AssignBaseOptions,
+    mode: AssignShiftMode,
+    seed: &BaseAssignment,
+    plan: &AssignmentPlan,
+    enable_producer_pruning: bool,
 ) -> Result<BaseAssignment> {
     let mut timer = StageTimer::new("单班");
 
@@ -91,61 +109,79 @@ pub(super) fn run_shift_pipeline(
     match mode {
         AssignShiftMode::Peak => {
             let dynamic_producers =
-                dynamic_trade_producer_candidates(&control_pool, &trade_pool, table);
-            let mut best = run_peak_prefix_candidate(
-                run.clone(),
-                plan,
-                &control_pool,
-                &trade_pool,
-                &power_pool,
-                gold_lines,
-                None,
-            )?
-            .ok_or_else(|| Error::msg("ordinary peak prefix unexpectedly infeasible"))?;
-            let normal_control: HashSet<String> = best
-                .run
-                .assignment
-                .control_operators()
-                .into_iter()
-                .map(|op| op.name)
-                .collect();
-            for producer in dynamic_producers {
-                if normal_control.contains(&producer) {
-                    continue;
-                }
-                let required = HashSet::from([producer]);
-                let Some(candidate) = run_peak_prefix_candidate(
+                dynamic_producer_candidates(&control_pool, &trade_pool, &manu_pool, table)?;
+            if dynamic_producers.len() >= usize::BITS as usize {
+                return Err(Error::msg(
+                    "too many deferred producer presence combinations",
+                ));
+            }
+            let all_dynamic: HashSet<_> = dynamic_producers.iter().cloned().collect();
+            let producer_layout = run.resolve_snapshot(false)?;
+            let mut prepared = Vec::new();
+            for mask in 0..(1usize << dynamic_producers.len()) {
+                let required: HashSet<_> = dynamic_producers
+                    .iter()
+                    .enumerate()
+                    .filter(|(index, _)| mask & (1usize << index) != 0)
+                    .map(|(_, producer)| producer.clone())
+                    .collect();
+                let excluded: HashSet<_> = all_dynamic.difference(&required).cloned().collect();
+                if let Some(candidate) = prepare_peak_control_candidate(
                     run.clone(),
                     plan,
                     &control_pool,
+                    &producer_layout,
+                    Some((&required, &excluded)),
+                    mask,
+                )? {
+                    prepared.push(candidate);
+                }
+            }
+            prepared.sort_by(|left, right| {
+                right
+                    .policy_upper_bound
+                    .partial_cmp(&left.policy_upper_bound)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| left.stable_order.cmp(&right.stable_order))
+            });
+            timer.mark("中枢候选上界");
+            let mut best = None;
+            for prepared in prepared {
+                if should_prune_peak_candidate(
+                    enable_producer_pruning,
+                    best.as_ref()
+                        .map(|best: &PeakPrefixCandidate<'_>| best.policy_sort_key),
+                    prepared.policy_upper_bound,
+                ) {
+                    continue;
+                }
+                let stable_order = prepared.stable_order;
+                let Some(candidate) = finish_peak_prefix_candidate(
+                    prepared.run,
+                    plan,
                     &trade_pool,
+                    &manu_pool,
                     &power_pool,
                     gold_lines,
-                    Some(&required),
+                    &forbid_same_room,
+                    stable_order,
                 )?
                 else {
                     continue;
                 };
-                if candidate.policy_sort_key > best.policy_sort_key {
-                    best = candidate;
+                if best.as_ref().is_none_or(|best: &PeakPrefixCandidate<'_>| {
+                    candidate.policy_sort_key > best.policy_sort_key
+                        || (candidate.policy_sort_key == best.policy_sort_key
+                            && candidate.stable_order < best.stable_order)
+                }) {
+                    best = Some(candidate);
                 }
             }
-            run = best.run;
+            run = best
+                .ok_or_else(|| Error::msg("all peak prefix candidates are infeasible"))?
+                .run;
             timer.mark("中枢-生产前缀候选");
 
-            let manu_layout = run.resolve_snapshot(true)?;
-            assign_manufacture_lines(
-                blueprint,
-                operbox,
-                instances,
-                &manu_pool,
-                table,
-                &manu_layout,
-                options,
-                &forbid_same_room,
-                &mut run.assignment,
-                &mut run.used,
-            )?;
             timer.mark("制造");
         }
         AssignShiftMode::Recovery => {
@@ -215,32 +251,110 @@ pub(super) fn run_shift_pipeline(
 struct PeakPrefixCandidate<'a> {
     run: AssignmentRun<'a>,
     policy_sort_key: f64,
+    stable_order: usize,
 }
 
-/// 从同一个 execute/producer seed 运行制造前候选前缀。
-/// control 的选择会改变 `used`、producer/dorm、power 与贸易上下文，因此这些阶段
-/// 必须作为一个候选整体推进；制造、轮换与导出只消费最终胜者。
+struct PreparedPeakControlCandidate<'a> {
+    run: AssignmentRun<'a>,
+    policy_upper_bound: f64,
+    stable_order: usize,
+}
+
+fn should_prune_peak_candidate(
+    enabled: bool,
+    best_policy_sort_key: Option<f64>,
+    candidate_upper_bound: f64,
+) -> bool {
+    enabled
+        && best_policy_sort_key
+            .is_some_and(|best_policy_sort_key| best_policy_sort_key > candidate_upper_bound)
+}
+
+/// 从同一个 execute/producer seed 运行完整生产候选前缀。
+/// control 的选择会改变 `used`、producer/dorm、power、贸易与制造上下文，因此这些阶段
+/// 必须作为一个候选整体推进；轮换与导出只消费最终胜者。
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 fn run_peak_prefix_candidate<'a>(
-    mut run: AssignmentRun<'a>,
+    run: AssignmentRun<'a>,
     plan: &AssignmentPlan,
     control_pool: &ControlPool,
     base_trade_pool: &TradePool,
+    manu_pool: &crate::pool::ManuPool,
     power_pool: &PowerPool,
     gold_lines: u32,
-    required_dynamic_producer: Option<&HashSet<String>>,
+    forbid_same_room: &[(String, String)],
+    dynamic_set: Option<(&HashSet<String>, &HashSet<String>)>,
 ) -> Result<Option<PeakPrefixCandidate<'a>>> {
     let producer_layout = run.resolve_snapshot(false)?;
+    let Some(prepared) =
+        prepare_peak_control_candidate(run, plan, control_pool, &producer_layout, dynamic_set, 0)?
+    else {
+        return Ok(None);
+    };
+    let stable_order = prepared.stable_order;
+    finish_peak_prefix_candidate(
+        prepared.run,
+        plan,
+        base_trade_pool,
+        manu_pool,
+        power_pool,
+        gold_lines,
+        forbid_same_room,
+        stable_order,
+    )
+}
+
+fn control_layout_for_upper_bound(
+    run: &AssignmentRun<'_>,
+    producer_layout: &crate::layout::LayoutContext,
+) -> crate::layout::LayoutContext {
+    let operators = run
+        .assignment
+        .control_operators()
+        .into_iter()
+        .map(|operator| crate::control::ControlOperator {
+            name: operator.name.clone(),
+            elite: operator.elite,
+            buff_ids: run
+                .instances
+                .resolve_control_buff_ids(&operator.name, operator.tier()),
+            tags: run.instances.tags_for(&operator.name, operator.tier()),
+        })
+        .collect();
+    let result = crate::control::solve_control(
+        &crate::control::ControlRoomInput {
+            operators,
+            mood: run.options.mood,
+            layout: producer_layout.clone(),
+        },
+        run.table,
+    );
+    let mut layout = producer_layout.clone();
+    layout.global = result.global;
+    layout.global_inject = result.inject;
+    layout
+}
+
+fn prepare_peak_control_candidate<'a>(
+    mut run: AssignmentRun<'a>,
+    plan: &AssignmentPlan,
+    control_pool: &ControlPool,
+    producer_layout: &crate::layout::LayoutContext,
+    dynamic_set: Option<(&HashSet<String>, &HashSet<String>)>,
+    stable_order: usize,
+) -> Result<Option<PreparedPeakControlCandidate<'a>>> {
     if run.assignment.control_operators().len() < 5 {
-        if let Some(required) = required_dynamic_producer {
-            if !assign_control_requiring_any(
+        if let Some((required, excluded)) = dynamic_set {
+            if !assign_control_matching_dynamic_set(
                 &mut run.assignment,
                 control_pool,
                 run.table,
-                &producer_layout,
+                producer_layout,
                 run.options,
                 &plan.control_candidate_requirements,
                 required,
+                excluded,
                 &mut run.used,
             )? {
                 return Ok(None);
@@ -250,25 +364,48 @@ fn run_peak_prefix_candidate<'a>(
                 &mut run.assignment,
                 control_pool,
                 run.table,
-                &producer_layout,
+                producer_layout,
                 run.options,
                 &plan.control_candidate_requirements,
                 &mut run.used,
             )?;
         }
     }
-    if let Some(required) = required_dynamic_producer {
+    if let Some((required, excluded)) = dynamic_set {
         let control_names: HashSet<String> = run
             .assignment
             .control_operators()
             .into_iter()
             .map(|op| op.name)
             .collect();
-        if control_names.is_disjoint(required) {
+        if !required.is_subset(&control_names) || !control_names.is_disjoint(excluded) {
             return Ok(None);
         }
     }
 
+    let control_layout = control_layout_for_upper_bound(&run, producer_layout);
+    Ok(Some(PreparedPeakControlCandidate {
+        policy_upper_bound: control_inject_policy_sort_key_upper_bound(
+            &control_layout,
+            run.blueprint,
+            run.table,
+        ),
+        stable_order,
+        run,
+    }))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn finish_peak_prefix_candidate<'a>(
+    mut run: AssignmentRun<'a>,
+    plan: &AssignmentPlan,
+    base_trade_pool: &TradePool,
+    manu_pool: &crate::pool::ManuPool,
+    power_pool: &PowerPool,
+    gold_lines: u32,
+    forbid_same_room: &[(String, String)],
+    stable_order: usize,
+) -> Result<Option<PeakPrefixCandidate<'a>>> {
     place_system_producers(
         run.blueprint,
         run.operbox,
@@ -289,7 +426,6 @@ fn run_peak_prefix_candidate<'a>(
         &mut run.assignment,
         &mut run.used,
     )?;
-
     let layout = run.resolve_snapshot(true)?;
     let mut trade_pool = base_trade_pool.clone();
     if karlan_precision_active(&layout.global_inject) {
@@ -304,6 +440,24 @@ fn run_peak_prefix_candidate<'a>(
         &mut run.assignment,
         &mut run.used,
     )?;
+    let remaining_trade_slots: usize = run
+        .blueprint
+        .rooms
+        .iter()
+        .filter(|room| room.kind == crate::layout::FacilityKind::TradePost)
+        .map(|room| {
+            room.operator_capacity()
+                .saturating_sub(run.assignment.operators_in(&room.id).len())
+        })
+        .sum();
+    let available_trade_operators = trade_pool
+        .entries
+        .iter()
+        .filter(|entry| !run.used.contains(&entry.name))
+        .count();
+    if available_trade_operators < remaining_trade_slots {
+        return Ok(None);
+    }
     assign_trade_remainder(
         run.blueprint,
         &trade_pool,
@@ -318,38 +472,78 @@ fn run_peak_prefix_candidate<'a>(
     )?;
     cleanup_unused_sphinx_urrbian_dorm_anchor(run.blueprint, &mut run.assignment, &mut run.used);
 
+    let manu_layout = run.resolve_snapshot(true)?;
+    assign_manufacture_lines(
+        run.blueprint,
+        run.operbox,
+        run.instances,
+        manu_pool,
+        run.table,
+        &manu_layout,
+        run.options,
+        forbid_same_room,
+        &mut run.assignment,
+        &mut run.used,
+    )?;
+
     let final_layout = run.resolve_snapshot(true)?;
     Ok(Some(PeakPrefixCandidate {
-        policy_sort_key: control_inject_policy_sort_key_for_layout(&final_layout),
+        policy_sort_key: control_inject_policy_sort_key_for_assignment(
+            &final_layout,
+            run.blueprint,
+            &run.assignment,
+            run.instances,
+        ),
+        stable_order,
         run,
     }))
 }
 
 /// 只为拥有实际贸易标签消费者的动态中枢 producer 建候选；按 atom 结构识别，
 /// 不枚举任何消费方人员套餐。
-fn dynamic_trade_producer_candidates(
+fn dynamic_producer_candidates(
     control_pool: &ControlPool,
     trade_pool: &TradePool,
+    manu_pool: &crate::pool::ManuPool,
     table: &SkillTable,
-) -> Vec<String> {
-    let consumer_tags: HashSet<&str> = trade_pool
+) -> Result<Vec<String>> {
+    let trade_tags: HashSet<&str> = trade_pool
         .entries
         .iter()
         .flat_map(|entry| entry.tags.iter().map(String::as_str))
         .collect();
-    let mut producers: Vec<String> = control_pool
+    let manu_tags: HashSet<&str> = manu_pool
         .entries
         .iter()
-        .filter(|entry| {
-            control_entry_optional_dynamic_trade_tags(entry, table)
-                .iter()
-                .any(|tag| consumer_tags.contains(tag.as_str()))
-        })
-        .map(|entry| entry.name.clone())
+        .flat_map(|entry| entry.tags.iter().map(String::as_str))
         .collect();
+    let mut producers = Vec::new();
+    for entry in &control_pool.entries {
+        let trade_match = control_entry_deferred_trade_tags(entry, table)?
+            .iter()
+            .any(|tag| trade_tags.contains(tag.as_str()));
+        let manu_rules = crate::response_dependency::deferred_producer_rules_for_buffs(
+            table,
+            entry.buff_ids.iter().map(String::as_str),
+            "manufacture",
+        )?;
+        let manu_match = manu_rules.iter().any(|rule| {
+            table.get(&rule.source_buff_id).is_some_and(|skill| {
+                skill.atoms.iter().any(|atom| match atom.selector.as_ref() {
+                    Some(crate::types::Selector::TaggedCountInManuSum { tag }) => {
+                        manu_tags.contains(tag.as_str())
+                    }
+                    _ => false,
+                })
+            })
+        });
+        if trade_match || manu_match {
+            producers.push(entry.name.clone());
+        }
+    }
     producers.sort();
     producers.dedup();
-    producers
+    Ok(producers)
 }
 
 /// 从统一 plan 的 constraints 提取 forbid-same-room 名对，供制造 anchor 房搜索排除。
@@ -446,6 +640,95 @@ mod tests {
             entries.push(e2("伺夜"));
         }
         OperBox::from_entries(entries)
+    }
+
+    fn plan_requiring_control_fillers(names: &[&str]) -> AssignmentPlan {
+        let mut plan = AssignmentPlan::recovery(AssignShiftMode::Peak);
+        plan.control_candidate_requirements
+            .push(crate::layout::ControlCandidateRequirement {
+                candidates: names.iter().map(|name| (*name).to_string()).collect(),
+                min_count: names.len() as u8,
+            });
+        plan
+    }
+
+    fn assert_producer_pruning_matches_unpruned(
+        blueprint: &BaseBlueprint,
+        operbox: &OperBox,
+        instances: &OperatorInstances,
+        table: &SkillTable,
+        options: &AssignBaseOptions,
+        seed: &BaseAssignment,
+        plan: &AssignmentPlan,
+    ) -> (
+        BaseAssignment,
+        f64,
+        Vec<crate::response_dependency::ResolvedProducerDependency>,
+    ) {
+        let pruned = run_shift_pipeline_with_producer_pruning(
+            blueprint,
+            operbox,
+            instances,
+            table,
+            options,
+            AssignShiftMode::Peak,
+            seed,
+            plan,
+            true,
+        )
+        .unwrap();
+        let unpruned = run_shift_pipeline_with_producer_pruning(
+            blueprint,
+            operbox,
+            instances,
+            table,
+            options,
+            AssignShiftMode::Peak,
+            seed,
+            plan,
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(&pruned).unwrap(),
+            serde_json::to_value(&unpruned).unwrap(),
+            "safe reduction changed the winner assignment"
+        );
+
+        let durin_plan = operbox.durin_dorm_planning_count(instances);
+        let outcome = |assignment: &BaseAssignment| {
+            let layout = crate::layout::resolve_base(
+                blueprint,
+                assignment,
+                Some(instances),
+                Some(table),
+                options.mood,
+                Some(durin_plan),
+            )
+            .unwrap()
+            .layout_snapshot();
+            let policy_sort_key = control_inject_policy_sort_key_for_assignment(
+                &layout, blueprint, assignment, instances,
+            );
+            let dependencies =
+                crate::response_dependency::resolve_assignment_producer_dependencies(
+                    blueprint, assignment, instances, table,
+                )
+                .unwrap();
+            (policy_sort_key, dependencies)
+        };
+        let (pruned_policy, pruned_dependencies) = outcome(&pruned);
+        let (unpruned_policy, unpruned_dependencies) = outcome(&unpruned);
+        assert_eq!(
+            pruned_policy.to_bits(),
+            unpruned_policy.to_bits(),
+            "safe reduction changed the named policy result"
+        );
+        assert_eq!(
+            pruned_dependencies, unpruned_dependencies,
+            "safe reduction changed resolved producer dependencies"
+        );
+        (pruned, pruned_policy, pruned_dependencies)
     }
 
     #[test]
@@ -556,6 +839,371 @@ mod tests {
     }
 
     #[test]
+    fn coexisting_dynamic_producers_are_compared_as_one_presence_set() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let operbox = OperBox::from_entries(
+            [
+                "古米",
+                "夜刀",
+                "斑点",
+                "八幡海铃",
+                "戴菲恩",
+                "玛恩纳",
+                "焰尾",
+                "伺夜",
+                "摩根",
+            ]
+            .into_iter()
+            .map(e2)
+            .collect(),
+        );
+        let mut blueprint = control_blueprint(true);
+        blueprint
+            .rooms
+            .iter_mut()
+            .find(|room| room.kind == FacilityKind::TradePost)
+            .unwrap()
+            .level = 2;
+        let mut seed = BaseAssignment::default();
+        seed.set_room(
+            "control",
+            ["古米", "夜刀", "斑点"]
+                .into_iter()
+                .map(|name| crate::layout::AssignedOperator::new(name, 2))
+                .collect(),
+        );
+
+        let (assignment, _, dependencies) = assert_producer_pruning_matches_unpruned(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions {
+                top_k: 20,
+                ..Default::default()
+            },
+            &seed,
+            &AssignmentPlan::recovery(AssignShiftMode::Peak),
+        );
+
+        let control: HashSet<_> = assignment
+            .control_operators()
+            .into_iter()
+            .map(|operator| operator.name)
+            .collect();
+        assert!(control.contains("八幡海铃"), "control={control:?}");
+        assert!(control.contains("戴菲恩"), "control={control:?}");
+        let trade: HashSet<_> = assignment
+            .operators_in(&RoomId::from("trade_one"))
+            .iter()
+            .map(|operator| operator.name.as_str())
+            .collect();
+        assert_eq!(trade, HashSet::from(["伺夜", "摩根"]));
+        assert_eq!(dependencies.len(), 2);
+        assert!(dependencies
+            .iter()
+            .any(|dependency| dependency.rule_id == "trade_siracusa_scaling"));
+        assert!(dependencies
+            .iter()
+            .any(|dependency| dependency.rule_id == "trade_glasgow_scaling"));
+    }
+
+    #[test]
+    fn threshold_trade_producer_competes_through_the_same_rule_path() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let operbox = OperBox::from_entries(
+            [
+                "古米",
+                "夜刀",
+                "斑点",
+                "玫兰莎",
+                "玛恩纳",
+                "凛御银灰",
+                "银灰",
+                "崖心",
+                "讯使",
+            ]
+            .into_iter()
+            .map(e2)
+            .collect(),
+        );
+        let mut blueprint = control_blueprint(true);
+        blueprint
+            .rooms
+            .iter_mut()
+            .find(|room| room.kind == FacilityKind::TradePost)
+            .unwrap()
+            .level = 3;
+        let mut seed = BaseAssignment::default();
+        seed.set_room(
+            "control",
+            ["古米", "夜刀", "斑点", "玫兰莎"]
+                .into_iter()
+                .map(|name| crate::layout::AssignedOperator::new(name, 2))
+                .collect(),
+        );
+        let (assignment, _, dependencies) = assert_producer_pruning_matches_unpruned(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions::default(),
+            &seed,
+            &AssignmentPlan::recovery(AssignShiftMode::Peak),
+        );
+        assert!(assignment
+            .control_operators()
+            .iter()
+            .any(|operator| operator.name == "凛御银灰"));
+        let trade: HashSet<_> = assignment
+            .operators_in(&RoomId::from("trade_one"))
+            .iter()
+            .map(|operator| operator.name.as_str())
+            .collect();
+        assert_eq!(trade, HashSet::from(["银灰", "崖心", "讯使"]));
+        assert_eq!(dependencies.len(), 1);
+        assert_eq!(dependencies[0].rule_id, "trade_karlan_station");
+    }
+
+    #[test]
+    fn manufacture_target_producer_uses_the_same_complete_prefix_comparison() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let operbox = OperBox::from_entries(
+            [
+                "古米",
+                "夜刀",
+                "斑点",
+                "玫兰莎",
+                "玛恩纳",
+                "涤火杰西卡",
+                "杰西卡",
+            ]
+            .into_iter()
+            .map(e2)
+            .collect(),
+        );
+        let blueprint = BaseBlueprint {
+            template: None,
+            drone_cap: 135,
+            scenario: BlueprintScenario::default(),
+            rooms: vec![
+                RoomBlueprint {
+                    id: RoomId::from("control"),
+                    kind: FacilityKind::ControlCenter,
+                    level: 5,
+                    product: None,
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+                RoomBlueprint {
+                    id: RoomId::from("manu_one"),
+                    kind: FacilityKind::Factory,
+                    level: 1,
+                    product: Some(RoomProduct::Factory {
+                        recipe: crate::types::RecipeKind::Gold,
+                    }),
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+                RoomBlueprint {
+                    id: RoomId::from("meeting"),
+                    kind: FacilityKind::MeetingRoom,
+                    level: 3,
+                    product: None,
+                    dorm_beds: None,
+                    dorm_ambience_level: None,
+                },
+            ],
+        };
+        let mut seed = BaseAssignment::default();
+        seed.set_room(
+            "control",
+            ["古米", "夜刀", "斑点", "玫兰莎"]
+                .into_iter()
+                .map(|name| crate::layout::AssignedOperator::new(name, 2))
+                .collect(),
+        );
+        let (assignment, _, dependencies) = assert_producer_pruning_matches_unpruned(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &AssignBaseOptions::default(),
+            &seed,
+            &AssignmentPlan::recovery(AssignShiftMode::Peak),
+        );
+        assert!(assignment
+            .control_operators()
+            .iter()
+            .any(|operator| operator.name == "涤火杰西卡"));
+        assert_eq!(
+            assignment.operators_in(&RoomId::from("manu_one"))[0].name,
+            "杰西卡"
+        );
+        assert_eq!(dependencies.len(), 1);
+        assert_eq!(dependencies[0].rule_id, "manu_blacksteel_scaling");
+    }
+
+    #[test]
+    fn producer_safe_reduction_preserves_equal_policy_tie() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let operbox = OperBox::from_entries(
+            [
+                "古米",
+                "夜刀",
+                "斑点",
+                "玫兰莎",
+                "八幡海铃",
+                "涤火杰西卡",
+                "伺夜",
+                "贝洛内",
+                "杰西卡",
+            ]
+            .into_iter()
+            .map(e2)
+            .collect(),
+        );
+        let mut blueprint = control_blueprint(true);
+        blueprint
+            .rooms
+            .iter_mut()
+            .find(|room| room.kind == FacilityKind::TradePost)
+            .unwrap()
+            .level = 2;
+        blueprint.rooms.push(RoomBlueprint {
+            id: RoomId::from("manu_one"),
+            kind: FacilityKind::Factory,
+            level: 1,
+            product: Some(RoomProduct::Factory {
+                recipe: crate::types::RecipeKind::Gold,
+            }),
+            dorm_beds: None,
+            dorm_ambience_level: None,
+        });
+        let mut seed = BaseAssignment::default();
+        seed.set_room(
+            "control",
+            ["古米", "夜刀", "斑点", "玫兰莎"]
+                .into_iter()
+                .map(|name| crate::layout::AssignedOperator::new(name, 2))
+                .collect(),
+        );
+        let options = AssignBaseOptions {
+            top_k: 20,
+            ..Default::default()
+        };
+        let plan = plan_requiring_control_fillers(&["古米", "夜刀", "斑点", "玫兰莎"]);
+        let control_pool = build_control_pool_with_fillers(&operbox, &instances, &table).unwrap();
+        let trade_pool =
+            build_trade_pool(&operbox.trade_roster(&instances), &instances, &table).unwrap();
+        let manu_pool =
+            build_manufacture_pool(&operbox.manufacture_roster(&instances), &instances, &table)
+                .unwrap();
+        assert_eq!(
+            dynamic_producer_candidates(&control_pool, &trade_pool, &manu_pool, &table)
+                .unwrap()
+                .into_iter()
+                .collect::<HashSet<_>>(),
+            HashSet::from(["八幡海铃".to_string(), "涤火杰西卡".to_string()])
+        );
+
+        let (_, policy_sort_key, dependencies) = assert_producer_pruning_matches_unpruned(
+            &blueprint, &operbox, &instances, &table, &options, &seed, &plan,
+        );
+        // Haru contributes 5 * 2 Siracusa to trade; Jessica contributes
+        // 5 * 1 Blacksteel to both manufacture recipe components in this policy.
+        assert_eq!(policy_sort_key, 10.0);
+        assert!(!should_prune_peak_candidate(true, Some(10.0), 10.0));
+        assert_eq!(dependencies.len(), 1);
+        match dependencies[0].rule_id.as_str() {
+            "trade_siracusa_scaling" => {
+                assert_eq!(dependencies[0].effective_contribution, Some(10.0));
+            }
+            "manu_blacksteel_scaling" => {
+                assert_eq!(dependencies[0].effective_contribution, Some(5.0));
+            }
+            rule_id => panic!("unexpected tie winner {rule_id}"),
+        }
+    }
+
+    #[test]
+    fn producer_safe_reduction_matches_unpruned_after_infinite_upper_bound() {
+        let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
+        let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
+        let operbox = OperBox::from_entries(
+            [
+                "古米",
+                "夜刀",
+                "斑点",
+                "玫兰莎",
+                "八幡海铃",
+                "若叶睦",
+                "伺夜",
+            ]
+            .into_iter()
+            .map(e2)
+            .collect(),
+        );
+        let blueprint = control_blueprint(true);
+        let options = AssignBaseOptions {
+            top_k: 20,
+            ..Default::default()
+        };
+        let plan = plan_requiring_control_fillers(&["古米", "夜刀", "斑点", "玫兰莎"]);
+        let mut seed = BaseAssignment::default();
+        seed.set_room(
+            "control",
+            ["古米", "夜刀", "斑点", "玫兰莎"]
+                .into_iter()
+                .map(|name| crate::layout::AssignedOperator::new(name, 2))
+                .collect(),
+        );
+
+        let mut unresolved_support = seed.clone();
+        let mut control = unresolved_support.control_operators();
+        control.push(crate::layout::AssignedOperator::new("若叶睦", 2));
+        unresolved_support.set_room("control", control);
+        let used = unresolved_support
+            .control_operators()
+            .into_iter()
+            .map(|operator| operator.name)
+            .collect();
+        let run = AssignmentRun::new(
+            &blueprint,
+            &operbox,
+            &instances,
+            &table,
+            &options,
+            unresolved_support,
+            used,
+        );
+        let producer_layout = run.resolve_snapshot(false).unwrap();
+        let upper_layout = control_layout_for_upper_bound(&run, &producer_layout);
+        let unresolved_upper_bound =
+            control_inject_policy_sort_key_upper_bound(&upper_layout, &blueprint, &table);
+        assert!(unresolved_upper_bound.is_infinite());
+        assert!(!should_prune_peak_candidate(
+            true,
+            Some(f64::MAX),
+            unresolved_upper_bound
+        ));
+
+        let (assignment, _, dependencies) = assert_producer_pruning_matches_unpruned(
+            &blueprint, &operbox, &instances, &table, &options, &seed, &plan,
+        );
+        assert!(assignment
+            .control_operators()
+            .iter()
+            .any(|operator| operator.name == "八幡海铃"));
+        assert_eq!(dependencies.len(), 1);
+        assert_eq!(dependencies[0].rule_id, "trade_siracusa_scaling");
+    }
+
+    #[test]
     fn dynamic_prefix_propagates_real_resolve_errors_instead_of_falling_back() {
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
@@ -572,6 +1220,9 @@ mod tests {
         let control_pool = build_control_pool_with_fillers(&operbox, &instances, &table).unwrap();
         let trade_pool =
             build_trade_pool(&operbox.trade_roster(&instances), &instances, &table).unwrap();
+        let manu_pool =
+            build_manufacture_pool(&operbox.manufacture_roster(&instances), &instances, &table)
+                .unwrap();
         let power_pool =
             build_power_pool(&operbox.power_roster(&instances), &instances, &table).unwrap();
         let run = AssignmentRun::new(
@@ -589,9 +1240,11 @@ mod tests {
             &plan,
             &control_pool,
             &trade_pool,
+            &manu_pool,
             &power_pool,
             0,
-            Some(&HashSet::from(["八幡海铃".to_string()])),
+            &[],
+            Some((&HashSet::from(["八幡海铃".to_string()]), &HashSet::new())),
         );
         assert!(result.is_err(), "真实 resolve 错误不得降级成不可行候选");
     }

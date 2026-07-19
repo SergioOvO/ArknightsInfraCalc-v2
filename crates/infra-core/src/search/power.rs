@@ -249,7 +249,7 @@ mod tests {
     use crate::skill_table::SkillTable;
 
     #[test]
-    fn greyy2_has_virtual_power_but_lower_charge() {
+    fn greyy2_uses_prts_full_drone_cap_and_virtual_power() {
         let table = SkillTable::load(&default_skill_table_path().unwrap()).unwrap();
         let instances = OperatorInstances::load(&default_instances_path().unwrap()).unwrap();
         let operbox = OperBox::load(&default_operbox_full_e2_path().unwrap()).unwrap();
@@ -269,10 +269,9 @@ mod tests {
             .expect("承曦格雷伊");
         let greyy = hits.iter().find(|h| h.name == "格雷伊").expect("格雷伊");
         assert!(greyy2.virtual_power_produced > 0.0, "E2 晨曦应产出虚拟发电");
-        // 纯充能排序：承曦格雷伊 13.5% < 格雷伊 20%
         assert!(
-            greyy.final_efficiency > greyy2.final_efficiency,
-            "纯充能排序: greyy=20% > greyy2=13.5% (vpower 在制造站 resolve 体现)"
+            greyy2.final_efficiency > greyy.final_efficiency,
+            "满清理 235 无人机上限: 承曦格雷伊=23.5% > 格雷伊=20%"
         );
     }
 
@@ -293,15 +292,14 @@ mod tests {
         };
         let report = search_power_assignment(&pool, &table, &opts).unwrap();
         assert_eq!(report.assignments.len(), 3);
-        // 纯充能排序：前 3 站为 20% 充能组，承曦格雷伊(13.5%) 排第 4
         let names: Vec<_> = report
             .assignments
             .iter()
             .map(|a| a.hit.name.as_str())
             .collect();
         assert!(
-            names.iter().all(|n| *n != "承曦格雷伊"),
-            "承曦格雷伊(13.5%) 不应进前 3 站 (vpower 在制造 resolve 体现): {names:?}"
+            names.iter().any(|n| *n == "承曦格雷伊"),
+            "满清理 235 无人机上限时，承曦格雷伊应凭 23.5% 充能进入前 3 站: {names:?}"
         );
     }
 

@@ -10,6 +10,7 @@ pub use shift_bind::{
     shift_binds_from_plan, team_of_operator, verify_shift_binds, RuntimeShiftBind,
 };
 pub use team_rotation::{
-    operator_team_map, schedule_team_rotation, DailyTotals, FacilityHalf, FiammettaShiftAction,
-    TeamAssignment, TeamLabel, TeamRotationReport, TeamShiftResult, FIAMMETTA_RETURN_PRIORITY,
+    operator_team_map, schedule_team_rotation, schedule_timed_rotation, DailyTotals, DormRestPlan,
+    FacilityHalf, FiammettaShiftAction, ShiftTransition, TeamAssignment, TeamLabel,
+    TeamRotationReport, TeamShiftResult, TimedRotationProfile, FIAMMETTA_RETURN_PRIORITY,
 };

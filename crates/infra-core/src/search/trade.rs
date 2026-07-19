@@ -510,6 +510,31 @@ fn project_trade_combo_layout(base: &LayoutContext, operators: &[TradeOperator])
         }
     }
 
+    let threshold_rules: Vec<_> = layout
+        .global_inject
+        .trade_tagged()
+        .iter()
+        .filter_map(|rule| match rule.count_scope {
+            crate::global_resource::TradeTaggedCountScope::QualifiedTradeRooms { min } => {
+                Some((rule.target_tag.clone(), min))
+            }
+            _ => None,
+        })
+        .collect();
+    for (tag, min) in threshold_rules {
+        let count = operators
+            .iter()
+            .filter(|operator| operator.tags.iter().any(|candidate| candidate == &tag))
+            .count();
+        if count >= usize::from(min) {
+            let key = crate::layout::trade_station_tagged_gte_key(&tag, min);
+            *layout.trade_stations_tagged_gte.entry(key).or_insert(0) += 1;
+        }
+    }
+    layout
+        .global_inject
+        .refresh_qualified_trade_counts(&layout.trade_stations_tagged_gte);
+
     Arc::new(layout)
 }
 
@@ -724,6 +749,7 @@ mod tests {
         let operators = vec![pool.entry("古米").unwrap().to_trade_operator()];
         let mut context = LayoutContext::search_baseline();
         context.global_inject.record_trade_tagged(
+            "dynamic_owner",
             "dynamic_source",
             "dynamic_family",
             "cc.g.siracusa",

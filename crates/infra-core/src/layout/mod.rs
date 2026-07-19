@@ -11,6 +11,7 @@ mod workforce;
 
 pub(crate) use assign::assign_control;
 pub(crate) use assign::assign_manu_room_with_anchors;
+pub(crate) use assign::assign_shift_with_preclaimed_plan;
 pub use assign::{
     assign_base_greedy, assign_power_rooms, assign_power_stations, assign_shift,
     assign_shift_with_plan, assign_shift_with_plan_skip, assign_team_gamma_half,
@@ -28,8 +29,9 @@ pub use context::{
 pub(crate) use orchestrate::pack_production_components;
 pub use orchestrate::{
     build_plan, build_plan_with_runtime, execute_plan, ActivatedSystem, ActiveDependency,
-    AssignmentPlan, ContinuousRole, ControlCandidateRequirement, ExecuteResult, ReserveReusePolicy,
-    ResolvedRoleReserve, SelectedRuleAlternative, SlotFill,
+    AnchorFillPolicy, AssignmentPlan, ContinuousRole, ControlCandidateRequirement, ExecuteResult,
+    ReserveReusePolicy, ResolvedRoleReserve, SelectedRuleAlternative, ShiftBind, SlotFill,
+    SystemAnchor,
 };
 pub use resolve::{
     resolve_automation_group_1_layout, resolve_base, resolve_search_baseline_layout,
