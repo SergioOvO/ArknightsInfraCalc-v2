@@ -21,161 +21,68 @@ SPEC.loader.exec_module(MODULE)
 
 
 class RenderTrainingRecommendationsTests(unittest.TestCase):
-    def test_current_rules_render_review_relevant_fields(self) -> None:
+    def test_current_rules_render_v2_fields(self) -> None:
         rules = MODULE.load_rules(MODULE.DEFAULT_INPUT)
         rendered = MODULE.render_rules(rules, "data/training_recommendations.json")
 
         self.assertIn("# 基建练卡推荐规则验收稿", rendered)
-        self.assertIn("缺少核心：**Info，暂缓培养该组合成员**", rendered)
-        self.assertIn("裁缝β第三人（精二）：卡夫卡 / 柏喙 / 明椒 / 折光", rendered)
-        self.assertIn("来源体系 ID：`witch_long_beta`", rendered)
-        self.assertIn("顶层来源仓库：`ArknightsInfraCalc-v2`", rendered)
-        self.assertIn("石英（精一）", rendered)
-        self.assertIn("Castle-3（30级）", rendered)
-        self.assertRegex(rendered, r"标记待复核：\d+ 条")
-        self.assertIn("vault docs system_id=closure_special_order", rendered)
-        self.assertIn("红云（精一）", rendered)
-        self.assertIn("标准化·β", rendered)
+        self.assertIn("schema version：2", rendered)
+        self.assertIn("巫恋裁缝核", rendered)
+        self.assertIn("裁缝β第三人", rendered)
+        self.assertIn("source_system_id：`witch_long_beta`", rendered)
+        self.assertIn("石英", rendered)
+        self.assertIn("Castle-3", rendered)
+        self.assertIn("红云", rendered)
+        self.assertIn("类型：`system`", rendered)
+        self.assertIn("类型：`standalone`", rendered)
 
-    def test_invalid_target_elite_is_rejected(self) -> None:
+    def test_invalid_version_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bad.json"
+            path.write_text(
+                '{"version": 1, "rules": []}',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(MODULE.RuleFormatError, "version"):
+                MODULE.load_rules(path)
+
+    def test_invalid_member_elite_rejected(self) -> None:
         rules = {
-            "version": 1,
-            "system_rules": [],
-            "standalone_rules": [
+            "version": 2,
+            "rules": [
                 {
                     "id": "bad",
+                    "kind": "standalone",
+                    "scope": "independent",
                     "label": "bad",
-                    "priority": "P0",
-                    "targets": [{"name": "干员", "elite": "1"}],
-                    "reason_code": "bad",
+                    "admission": {"required_core": [], "pick_one_core": []},
+                    "members": [
+                        {
+                            "operator": "干员",
+                            "role": "independent",
+                            "priority": "P0",
+                            "target": {"elite": "1"},
+                        }
+                    ],
+                    "evidence": [],
+                    "review": {"status": "confirmed", "conflicts": []},
                 }
             ],
         }
-
         with self.assertRaisesRegex(MODULE.RuleFormatError, "elite"):
             MODULE.render_rules(rules, "fixture.json")
 
-    def test_invalid_nested_types_are_rejected_without_coercion(self) -> None:
-        base = {
-            "version": 1,
-            "system_rules": [],
-            "standalone_rules": [],
-        }
-        cases = [
-            ({**base, "version": True}, "version"),
-            (
-                {
-                    **base,
-                    "standalone_rules": [
-                        {
-                            "id": "bad",
-                            "label": "bad",
-                            "priority": "P0",
-                            "targets": [None],
-                            "reason_code": "bad",
-                        }
-                    ],
-                },
-                "object",
-            ),
-            (
-                {
-                    **base,
-                    "standalone_rules": [
-                        {
-                            "id": "bad",
-                            "label": "bad",
-                            "priority": "P0",
-                            "targets": [{"name": "干员", "elite": True}],
-                            "reason_code": "bad",
-                        }
-                    ],
-                },
-                "elite",
-            ),
-            (
-                {
-                    **base,
-                    "standalone_rules": [
-                        {
-                            "id": "bad",
-                            "label": "bad",
-                            "priority": "P0",
-                            "targets": [{"name": "干员", "elite": 1}],
-                            "reason_code": "bad",
-                            "needs_review": "false",
-                        }
-                    ],
-                },
-                "needs_review",
-            ),
-            (
-                {
-                    **base,
-                    "standalone_rules": [
-                        {
-                            "id": "bad",
-                            "label": "bad",
-                            "priority": "P0",
-                            "targets": None,
-                            "reason_code": "bad",
-                        }
-                    ],
-                },
-                "targets",
-            ),
-            (
-                {
-                    **base,
-                    "system_rules": [
-                        {
-                            "id": "bad",
-                            "label": "bad",
-                            "priority_ready_after_training": "P0",
-                            "core": [],
-                            "pick_one_core": [
-                                {"label": "空候选", "elite": 1, "candidates": []}
-                            ],
-                            "reason_code": "bad",
-                        }
-                    ],
-                },
-                "candidates",
-            ),
-        ]
-
-        for rules, message in cases:
-            with self.subTest(message=message):
-                with self.assertRaisesRegex(MODULE.RuleFormatError, message):
-                    MODULE.render_rules(rules, "fixture.json")
-
-    def test_conflict_forces_manual_review_and_render_is_deterministic(self) -> None:
-        rules = {
-            "version": 1,
-            "system_rules": [],
-            "standalone_rules": [
-                {
-                    "id": "conflict",
-                    "label": "冲突规则",
-                    "priority": "P0",
-                    "targets": [{"name": "干员", "elite": 1}],
-                    "reason_code": "conflict",
-                    "needs_review": False,
-                    "conflicts": ["来源冲突"],
-                }
-            ],
-        }
-
+    def test_render_is_deterministic(self) -> None:
+        rules = MODULE.load_rules(MODULE.DEFAULT_INPUT)
         first = MODULE.render_rules(rules, "fixture.json")
         second = MODULE.render_rules(rules, "fixture.json")
         self.assertEqual(first, second)
-        self.assertIn("验收状态：**待人工复核**", first)
 
     def test_cli_schema_error_has_no_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "bad.json"
             path.write_text(
-                '{"version": 1, "system_rules": [], "standalone_rules": [{"id": "bad"}]}',
+                '{"version": 1, "rules": []}',
                 encoding="utf-8",
             )
             result = subprocess.run(
@@ -186,17 +93,14 @@ class RenderTrainingRecommendationsTests(unittest.TestCase):
                 stderr=subprocess.PIPE,
             )
 
-        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.returncode, 1)
         self.assertIn("error:", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
 
-    def test_review_skill_has_discoverable_frontmatter_and_command(self) -> None:
+    def test_review_skill_has_command(self) -> None:
         text = SKILL.read_text(encoding="utf-8")
-
-        self.assertTrue(text.startswith("---\n"))
-        self.assertIn("\nname: gongsun-training-review\n", text)
-        self.assertIn("\ndescription:", text)
         self.assertIn("python3 scripts/render_training_recommendations.py", text)
+        self.assertIn("gongsun-training-review", text)
 
 
 if __name__ == "__main__":

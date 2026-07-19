@@ -27,13 +27,14 @@ python3 scripts/render_training_recommendations.py \
 
 ## 逐条门禁
 
-- 核对干员是否已拥有才会产生 train；未拥有只能显示组合缺失信息。
+- 规则表是 v2 结构化索引：`kind` / `scope` / `admission` / `members` / `evidence` / `review`；不应再依赖面向用户的 `message`。
 - 核对目标是实际技能门槛，不按星级机械套精一或精二。
-- 核对体系全部必需核心和 `pick_one` 槽；缺核心时核心、重要成员和挂件全部暂缓。
+- 核对 `system`/`combo` 的必需核心和 `pick_one` 槽；缺核心时该规则下核心、重要成员和挂件全部暂缓。
+- 2/3/4 星与指定赠送五星白名单可进入 `acquire_then_train`；其他未拥有干员不生成培养建议。
 - 同一干员可因独立散件或另一个完整组合获得建议，不能被残缺组合全局禁推。
 - 区分组合角色与 P0/P1/P2 行动优先级。
-- 核对设施、配方、布局和全局资源条件是否在玩家说明中显式出现。
-- `needs_review: true`、`conflicts` 非空或文档冲突必须标记待裁决，不能自行猜测。
+- 第一版不根据设施、配方、布局做过滤；若规则写了这类条件，标记待裁决。
+- `review.status=needs_review` 或 `conflicts` 非空必须标记待裁决，不能自行猜测。
 
 ## 输出格式
 
@@ -46,7 +47,7 @@ python3 scripts/render_training_recommendations.py \
 意见：无，或一条可执行修改
 ```
 
-最终汇总：通过数、修改数、待裁决数，以及本轮明确不处理的条件推荐、RAG、前端或 solver 项。
+最终汇总：通过数、修改数、待裁决数，以及本轮明确不处理的 RAG、前端或 solver 项。
 
 ## 修改边界
 

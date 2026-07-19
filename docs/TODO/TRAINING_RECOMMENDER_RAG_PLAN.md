@@ -73,16 +73,15 @@ RAG 生成回答
 
 ## 3. 分阶段实施
 
-### Phase A — 规格冻结（本切片）
+### Phase A — 规格冻结
 
-状态：进行中
+状态：完成
 
 交付：
 
 - [x] 更新 `docs/练卡推荐规则.md` 为当前合同
 - [x] 将本 active change 改为实施计划
-- [ ] 确认旧 `message` 字段在 v2 中删除，不做兼容层
-- [ ] 确认无外部消费者依赖旧 advice JSON schema；有则单独记兼容输出
+- [x] 旧 `message` 字段在 v2 中删除，不做兼容层
 
 验收：
 
@@ -92,34 +91,25 @@ RAG 生成回答
 
 ### Phase B — 规则 schema v2 与加载器
 
+状态：完成
+
 交付：
 
-- 新 `TrainingRecommendationRules` 类型
-- 加载 / 校验 `version: 2`
-- 全局 `acquisition_policy`
-- 四类 `kind` 与 `admission` / `members` / `evidence` / `review`
-- 拒绝非法组合：standalone 硬核心、hanger 进 required core、空 evidence 等
+- [x] 新 `TrainingRecommendationRules` 类型
+- [x] 加载 / 校验 `version: 2`
+- [x] 全局 `acquisition_policy`
+- [x] 四类 `kind` 与 `admission` / `members` / `evidence` / `review`
+- [x] 拒绝非法组合：standalone 硬核心、hanger 进 required core 等
 
-验收：
+### Phase C — 确定性过滤器
 
-- 合法样例可加载
-- 非法样例确定性失败
+状态：完成（含测试矩阵代表场景）
 
-### Phase C — 确定性过滤器垂直切片
-
-先不批量迁移全表。用 5 条代表规则贯通：
-
-1. `standalone` 独立效率散件
-2. `system` 带挂件的大体系
-3. `combo` 硬核心小组合
-4. `soft_combo` 弱绑定组合
-5. 未拥有但允许获取的低星或赠送五星
-
-过滤器输出：
+过滤器输出 `schema_version: 2`：
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "operbox_label": "...",
   "now": [],
   "conditional": [],
@@ -129,38 +119,23 @@ RAG 生成回答
 }
 ```
 
-干员记录至少含：
-
-```text
-operator
-action
-display_priority
-current
-target
-matches[]
-source_refs[]
-needs_review
-```
-
-验收矩阵见第 5 节。
+干员记录含：`operator` / `action` / `display_priority` / `current` / `target` / `matches[]` / `source_refs[]` / `needs_review`。
 
 ### Phase D — CLI 输出切换
 
-- `infra-cli advice --operbox` 输出 v2 推荐包
-- 不再依赖面向用户的规则 `message`
-- 保留 pretty JSON 供人工核对
+状态：进行中
+
+- [x] advice 命令直接序列化 `TrainingAdviceReport`（字段已切 v2）
+- [ ] 用真实 operbox 做一次 pretty 输出人工核对
 
 ### Phase E — 全量规则迁移
 
-迁移顺序：
+状态：机械迁移完成，语义精修待做
 
-1. 大体系
-2. 硬核心小组合
-3. 独立散件效率档
-4. 弱绑定组合
-5. 获取后培养名单
-
-每条规则只记结构化字段和 evidence，不写最终文案。
+- [x] `scripts/migrate_training_recommendations_v2.py` 将 v1 机械迁到 v2
+- [x] `data/training_recommendations.json` 现为 version 2（28 条）
+- [ ] 人工核对 kind/scope/角色/获取策略与体系文档
+- [ ] 清理迁移遗留的 needs_review 冲突说明
 
 ### Phase F — RAG 输入协议与伪 RAG
 
@@ -237,7 +212,8 @@ needs_review
 
 - 2026-07-19：用户确认产品逻辑与四类规则、核心准入、低星获取例外、RAG 边界。
 - 2026-07-19：canonical `docs/练卡推荐规则.md` 按新合同重写。
-- 下一步：Phase B 规则 schema v2 类型与加载器，并准备 5 条代表规则样例。
+- 2026-07-19：实现 v2 schema、加载校验、确定性过滤器、机械规则迁移、render 脚本；`cargo test -p infra-core training_advice` 14 通过。
+- 下一步：真实 operbox 核对 CLI 输出；人工精修规则 kind/scope/获取策略；再接伪 RAG。
 
 ## 7. 历史说明
 

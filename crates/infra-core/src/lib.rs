@@ -120,10 +120,11 @@ pub use support_facility::{
 pub use tier::PromotionTier;
 pub use training_advice::{
     build_training_advice, default_training_recommendations_path,
-    load_training_recommendation_rules, OperatorTrainingState, PickOneCoreRule, RagContextItem,
-    RecommendationKind, RecommendationPriority, StandaloneRecommendationRule,
-    SystemRecommendationRule, SystemStatus, TrainingAdviceOptions, TrainingAdviceReport,
-    TrainingAdviceSummary, TrainingRecommendation, TrainingRecommendationRules,
-    TrainingSystemReport, TrainingTarget,
+    load_training_recommendation_rules, AcquisitionMode, AcquisitionPolicy, BlockedRuleReport,
+    EvidenceRef, MemberBenefit, MemberRole, OperatorAdviceItem, OperatorTrainingState,
+    PickOneCoreSlot, RecommendationAction, RecommendationPriority, ReviewStatus, RuleAdmission,
+    RuleKind, RuleMatch, RuleMember, RuleReview, RuleScope, TrainingAdviceOptions,
+    TrainingAdviceReport, TrainingAdviceSummary, TrainingRecommendationRules, TrainingRule,
+    TrainingTarget,
 };
 pub use types::*;

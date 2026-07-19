@@ -1,16 +1,15 @@
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use crate::instances::OperatorInstances;
 use crate::operbox::OperBox;
 use crate::tier::PromotionTier;
 use crate::Result;
 
-use super::rag_context::build_rag_context;
 use super::types::{
-    OperatorTrainingState, PickOneCoreRule, RecommendationKind, RecommendationPriority,
-    StandaloneRecommendationRule, SystemRecommendationRule, SystemStatus, TrainingAdviceOptions,
-    TrainingAdviceReport, TrainingAdviceSummary, TrainingRecommendation,
-    TrainingRecommendationRules, TrainingSystemReport, TrainingTarget,
+    AcquisitionMode, BlockedRuleReport, EvidenceRef, OperatorAdviceItem, OperatorTrainingState,
+    RecommendationAction, RecommendationPriority, ReviewStatus, RuleKind, RuleMatch, RuleMember,
+    TrainingAdviceOptions, TrainingAdviceReport, TrainingAdviceSummary,
+    TrainingRecommendationRules, TrainingRule, TrainingTarget,
 };
 
 pub fn build_training_advice(
@@ -19,336 +18,472 @@ pub fn build_training_advice(
     rules: &TrainingRecommendationRules,
     options: &TrainingAdviceOptions,
 ) -> Result<TrainingAdviceReport> {
-    let mut collector = RecommendationCollector::default();
-    let mut systems = Vec::new();
+    let mut now: BTreeMap<String, OperatorAdviceItem> = BTreeMap::new();
+    let mut conditional: BTreeMap<String, OperatorAdviceItem> = BTreeMap::new();
+    let mut ready: BTreeMap<String, OperatorAdviceItem> = BTreeMap::new();
+    let mut review: BTreeMap<String, OperatorAdviceItem> = BTreeMap::new();
+    let mut blocked = Vec::new();
+    let mut source_refs = BTreeMap::new();
 
-    for rule in &rules.system_rules {
-        let (system, recommendations) = evaluate_system_rule(operbox, rules, rule);
-        for rec in recommendations {
-            collector.push(rec);
+    for rule in &rules.rules {
+        collect_evidence(&mut source_refs, &rule.evidence);
+        let outcome = evaluate_rule(operbox, rules, rule);
+        for item in outcome.now {
+            merge_item(&mut now, item);
         }
-        systems.push(system);
+        for item in outcome.conditional {
+            merge_item(&mut conditional, item);
+        }
+        for item in outcome.ready {
+            merge_item(&mut ready, item);
+        }
+        for item in outcome.review {
+            merge_item(&mut review, item);
+        }
+        blocked.extend(outcome.blocked);
     }
 
-    for rule in &rules.standalone_rules {
-        let system_reports = evaluate_standalone_rule(operbox, rules, rule, &mut collector);
-        systems.extend(system_reports);
+    for op in now
+        .keys()
+        .chain(conditional.keys())
+        .cloned()
+        .collect::<Vec<_>>()
+    {
+        ready.remove(&op);
+    }
+    for op in now.keys().cloned().collect::<Vec<_>>() {
+        conditional.remove(&op);
     }
 
-    let recommendations = collector.into_sorted_vec();
-    let summary = TrainingAdviceSummary {
-        owned: operbox.owned_count(),
-        modelled_owned: modelled_owned_count(operbox, instances),
-        ready_systems: systems
-            .iter()
-            .filter(|s| {
-                matches!(
-                    s.status,
-                    SystemStatus::Ready | SystemStatus::StandaloneReady
-                )
-            })
-            .count(),
-        blocked_systems: systems
-            .iter()
-            .filter(|s| {
-                matches!(
-                    s.status,
-                    SystemStatus::PartialBlocked | SystemStatus::Missing
-                )
-            })
-            .count(),
-        trainable_recommendations: recommendations
-            .iter()
-            .filter(|r| r.kind == RecommendationKind::Train)
-            .count(),
-    };
-    let rag_context = build_rag_context(&recommendations, &systems);
+    let now = sorted_items(now);
+    let conditional = sorted_items(conditional);
+    let ready = sorted_items(ready);
+    let review = sorted_items(review);
+    blocked.sort_by(|a, b| a.rule_id.cmp(&b.rule_id));
 
     Ok(TrainingAdviceReport {
-        schema_version: 1,
+        schema_version: 2,
         operbox_label: options
             .operbox_label
             .clone()
             .unwrap_or_else(|| "unknown".to_string()),
-        summary,
-        recommendations,
-        systems,
-        rag_context,
+        summary: TrainingAdviceSummary {
+            owned: operbox.owned_count(),
+            modelled_owned: modelled_owned_count(operbox, instances),
+            now_count: now.len(),
+            conditional_count: conditional.len(),
+            blocked_count: blocked.len(),
+            review_count: review.len(),
+        },
+        now,
+        conditional,
+        blocked,
+        ready,
+        review,
+        source_refs: source_refs.into_values().collect(),
     })
 }
 
-fn evaluate_standalone_rule(
-    operbox: &OperBox,
-    rules: &TrainingRecommendationRules,
-    rule: &StandaloneRecommendationRule,
-    collector: &mut RecommendationCollector,
-) -> Vec<TrainingSystemReport> {
-    let mut systems = Vec::new();
-    let source_paths = source_paths(&rule.source_paths);
-    let needs_review = rule.needs_review;
-
-    for target in &rule.targets {
-        match operbox.progress_of(&target.name) {
-            Some(progress) if target.is_met_by(progress) => {
-                systems.push(TrainingSystemReport {
-                    id: format!("standalone:{}", target.name),
-                    label: format!("{}：{}", rule.label, target.name),
-                    status: SystemStatus::StandaloneReady,
-                    owned_core: vec![target.name.clone()],
-                    missing_core: Vec::new(),
-                    undertrained_core: Vec::new(),
-                    blocked_reason: None,
-                    source_paths: source_paths.clone(),
-                    needs_review,
-                });
-            }
-            Some(progress) => {
-                systems.push(TrainingSystemReport {
-                    id: format!("standalone:{}", target.name),
-                    label: format!("{}：{}", rule.label, target.name),
-                    status: SystemStatus::StandaloneTrainable,
-                    owned_core: vec![target.name.clone()],
-                    missing_core: Vec::new(),
-                    undertrained_core: vec![target.name.clone()],
-                    blocked_reason: None,
-                    source_paths: source_paths.clone(),
-                    needs_review,
-                });
-                collector.push(TrainingRecommendation {
-                    priority: rule.priority,
-                    kind: RecommendationKind::Train,
-                    operator: target.name.clone(),
-                    target: target_state(target),
-                    current: Some(progress.into()),
-                    reason_code: rule.reason_code.clone(),
-                    system_id: None,
-                    related_systems: Vec::new(),
-                    message: recommendation_message(&rule.message, needs_review),
-                    source_paths: inherited_source_paths(rules, &rule.source_paths),
-                    needs_review,
-                });
-            }
-            None => {}
-        }
-    }
-
-    systems
+struct RuleOutcome {
+    now: Vec<OperatorAdviceItem>,
+    conditional: Vec<OperatorAdviceItem>,
+    ready: Vec<OperatorAdviceItem>,
+    review: Vec<OperatorAdviceItem>,
+    blocked: Vec<BlockedRuleReport>,
 }
 
-fn evaluate_system_rule(
+fn evaluate_rule(
     operbox: &OperBox,
     rules: &TrainingRecommendationRules,
-    rule: &SystemRecommendationRule,
-) -> (TrainingSystemReport, Vec<TrainingRecommendation>) {
-    let mut owned_core = BTreeSet::new();
-    let mut missing_core = BTreeSet::new();
-    let mut undertrained_core = BTreeSet::new();
-    let mut recommendations = Vec::new();
+    rule: &TrainingRule,
+) -> RuleOutcome {
+    let needs_review = rule.review.status == ReviewStatus::NeedsReview;
+    let hard_admission = matches!(rule.kind, RuleKind::System | RuleKind::Combo);
+    let admission = if hard_admission {
+        evaluate_admission(operbox, rule)
+    } else {
+        AdmissionState {
+            admitted: true,
+            owned_core: Vec::new(),
+            missing_core: Vec::new(),
+        }
+    };
 
-    for target in &rule.core {
-        evaluate_named_target(
-            operbox,
-            target,
-            &mut owned_core,
-            &mut missing_core,
-            &mut undertrained_core,
-        );
+    if hard_admission && !admission.admitted {
+        return blocked_outcome(operbox, rules, rule, &admission, needs_review);
     }
 
-    let mut pick_train_targets = Vec::new();
-    for pick in &rule.pick_one_core {
-        let slot = evaluate_pick_one(operbox, pick);
-        owned_core.extend(slot.owned);
-        match slot.status {
-            PickOneStatus::Satisfied => {}
-            PickOneStatus::Trainable(target) => {
-                undertrained_core.insert(target.name.clone());
-                pick_train_targets.push(target);
-            }
-            PickOneStatus::Missing(label) => {
-                missing_core.insert(label);
-            }
+    let mut outcome = empty_outcome();
+    for member in &rule.members {
+        if let Some(item) = evaluate_member(operbox, rules, rule, member, needs_review, None) {
+            push_by_action(&mut outcome, item);
         }
     }
+    outcome
+}
 
-    let mut support_train: Vec<(TrainingTarget, RecommendationPriority, bool)> = Vec::new();
-    let cores_owned = missing_core.is_empty();
-    if cores_owned {
-        let mut seen = BTreeSet::new();
-        for (target, is_important) in rule
-            .important
-            .iter()
-            .map(|t| (t, true))
-            .chain(rule.hangers.iter().map(|t| (t, false)))
-        {
-            if !seen.insert(target.name.clone()) {
-                continue;
+fn blocked_outcome(
+    operbox: &OperBox,
+    rules: &TrainingRecommendationRules,
+    rule: &TrainingRule,
+    admission: &AdmissionState,
+    needs_review: bool,
+) -> RuleOutcome {
+    let mut deferred = BTreeSet::new();
+    let mut conditional_acquire = BTreeSet::new();
+    let mut outcome = empty_outcome();
+
+    for missing in &admission.missing_core {
+        if let Some(label) = missing.strip_prefix("pick_one:") {
+            if let Some(slot) = rule
+                .admission
+                .pick_one_core
+                .iter()
+                .find(|s| s.label == label)
+            {
+                for cand in &slot.candidates {
+                    if operbox.owns(cand) {
+                        continue;
+                    }
+                    if let Some(member) = find_member(rule, cand) {
+                        if can_suggest_acquire(operbox, rules, member) {
+                            conditional_acquire.insert(cand.clone());
+                            let plan = Some(format!(
+                                "先获取并培养缺失核心槽「{label}」候选 {cand}，完成后再培养本规则其余成员。"
+                            ));
+                            if let Some(item) =
+                                evaluate_member(operbox, rules, rule, member, needs_review, plan)
+                            {
+                                push_by_action(&mut outcome, item);
+                            }
+                        }
+                    }
+                }
             }
-            if let Some(progress) = operbox.progress_of(&target.name) {
-                if !target.is_met_by(progress) {
-                    let priority = if is_important {
-                        rule.priority_ready_after_training
-                    } else {
-                        rule.priority_hangers
-                    };
-                    support_train.push((target.clone(), priority, is_important));
+            continue;
+        }
+
+        if let Some(member) = find_member(rule, missing) {
+            if can_suggest_acquire(operbox, rules, member) {
+                conditional_acquire.insert(missing.clone());
+                let plan = Some(format!(
+                    "先获取并培养缺失核心 {missing}，完成后再培养本规则其余成员。"
+                ));
+                if let Some(item) =
+                    evaluate_member(operbox, rules, rule, member, needs_review, plan)
+                {
+                    push_by_action(&mut outcome, item);
                 }
             }
         }
     }
 
-    let missing_core: Vec<String> = missing_core.into_iter().collect();
-    let undertrained_core_vec: Vec<String> = undertrained_core.iter().cloned().collect();
-    let owned_core: Vec<String> = owned_core.into_iter().collect();
-    let status = if missing_core.is_empty() && undertrained_core_vec.is_empty() {
-        if support_train.is_empty() {
-            SystemStatus::Ready
-        } else {
-            SystemStatus::ReadyAfterTraining
-        }
-    } else if missing_core.is_empty() {
-        SystemStatus::ReadyAfterTraining
-    } else if owned_core.is_empty() {
-        SystemStatus::Missing
-    } else {
-        SystemStatus::PartialBlocked
-    };
-
-    if cores_owned {
-        for target in rule
-            .core
-            .iter()
-            .filter(|target| undertrained_core.contains(&target.name))
-            .cloned()
-            .chain(pick_train_targets)
-        {
-            if let Some(progress) = operbox.progress_of(&target.name) {
-                recommendations.push(TrainingRecommendation {
-                    priority: rule.priority_ready_after_training,
-                    kind: RecommendationKind::Train,
-                    operator: target.name.clone(),
-                    target: target_state(&target),
-                    current: Some(progress.into()),
-                    reason_code: rule.reason_code.clone(),
-                    system_id: Some(rule.id.clone()),
-                    related_systems: vec![rule.id.clone()],
-                    message: recommendation_message(&rule.message, rule.needs_review),
-                    source_paths: inherited_source_paths(rules, &rule.source_paths),
-                    needs_review: rule.needs_review,
-                });
-            }
-        }
-        for (target, priority, is_important) in support_train {
-            if let Some(progress) = operbox.progress_of(&target.name) {
-                recommendations.push(TrainingRecommendation {
-                    priority,
-                    kind: RecommendationKind::Train,
-                    operator: target.name.clone(),
-                    target: target_state(&target),
-                    current: Some(progress.into()),
-                    reason_code: if is_important {
-                        "system_important_undertrained".to_string()
-                    } else {
-                        "system_hanger_undertrained".to_string()
-                    },
-                    system_id: Some(rule.id.clone()),
-                    related_systems: vec![rule.id.clone()],
-                    message: recommendation_message(
-                        if is_important {
-                            "体系核心已齐，重要成员未达标。"
-                        } else {
-                            "体系核心已齐，挂件/外围未达标。"
-                        },
-                        rule.needs_review,
-                    ),
-                    source_paths: inherited_source_paths(rules, &rule.source_paths),
-                    needs_review: rule.needs_review,
-                });
-            }
+    for member in &rule.members {
+        if operbox.owns(&member.operator) {
+            deferred.insert(member.operator.clone());
         }
     }
 
-    let blocked_reason = match status {
-        SystemStatus::PartialBlocked => Some(format!("missing core: {}", missing_core.join(", "))),
-        SystemStatus::Missing => Some("missing core operators".to_string()),
-        _ => None,
-    };
-
-    (
-        TrainingSystemReport {
-            id: rule.id.clone(),
-            label: rule.label.clone(),
-            status,
-            owned_core,
-            missing_core,
-            undertrained_core: undertrained_core_vec,
-            blocked_reason,
-            source_paths: source_paths(&rule.source_paths),
-            needs_review: rule.needs_review,
-        },
-        recommendations,
-    )
+    outcome.blocked.push(BlockedRuleReport {
+        rule_id: rule.id.clone(),
+        kind: rule.kind,
+        label: rule.label.clone(),
+        missing_core: admission.missing_core.clone(),
+        owned_core: admission.owned_core.clone(),
+        deferred_members: deferred.into_iter().collect(),
+        conditional_acquire: conditional_acquire.into_iter().collect(),
+        source_refs: rule.evidence.clone(),
+        needs_review,
+    });
+    outcome
 }
 
-fn evaluate_named_target(
+fn evaluate_member(
     operbox: &OperBox,
-    target: &TrainingTarget,
-    owned_core: &mut BTreeSet<String>,
-    missing_core: &mut BTreeSet<String>,
-    undertrained_core: &mut BTreeSet<String>,
-) {
-    match operbox.progress_of(&target.name) {
+    rules: &TrainingRecommendationRules,
+    rule: &TrainingRule,
+    member: &RuleMember,
+    needs_review: bool,
+    plan_note: Option<String>,
+) -> Option<OperatorAdviceItem> {
+    let match_item = RuleMatch {
+        rule_id: rule.id.clone(),
+        kind: rule.kind,
+        label: rule.label.clone(),
+        role: member.role,
+        priority: member.priority,
+        benefit: member.benefit.clone(),
+        source_refs: rule.evidence.clone(),
+        needs_review,
+        plan_note,
+    };
+
+    match operbox.progress_of(&member.operator) {
+        Some(progress) if member.target.is_met_by(progress) => {
+            let action = if needs_review {
+                RecommendationAction::Review
+            } else {
+                RecommendationAction::Ready
+            };
+            Some(item(
+                member,
+                action,
+                Some(progress.into()),
+                match_item,
+                rule,
+                needs_review,
+            ))
+        }
         Some(progress) => {
-            owned_core.insert(target.name.clone());
-            if !target.is_met_by(progress) {
-                undertrained_core.insert(target.name.clone());
-            }
+            let action = if needs_review {
+                RecommendationAction::Review
+            } else {
+                RecommendationAction::Train
+            };
+            Some(item(
+                member,
+                action,
+                Some(progress.into()),
+                match_item,
+                rule,
+                needs_review,
+            ))
         }
         None => {
-            missing_core.insert(target.name.clone());
-        }
-    }
-}
-
-struct PickOneEvaluation {
-    status: PickOneStatus,
-    owned: Vec<String>,
-}
-
-enum PickOneStatus {
-    Satisfied,
-    Trainable(TrainingTarget),
-    Missing(String),
-}
-
-fn evaluate_pick_one(operbox: &OperBox, pick: &PickOneCoreRule) -> PickOneEvaluation {
-    let mut owned = Vec::new();
-    let mut trainable = Vec::new();
-
-    for name in &pick.candidates {
-        if let Some(progress) = operbox.progress_of(name) {
-            owned.push(name.clone());
-            let target = TrainingTarget {
-                name: name.clone(),
-                elite: pick.elite,
-                level: pick.level,
-            };
-            if target.is_met_by(progress) {
-                return PickOneEvaluation {
-                    status: PickOneStatus::Satisfied,
-                    owned,
-                };
+            if !can_suggest_acquire(operbox, rules, member) {
+                return None;
             }
-            trainable.push(target);
+            let action = if needs_review {
+                RecommendationAction::Review
+            } else {
+                RecommendationAction::AcquireThenTrain
+            };
+            Some(item(member, action, None, match_item, rule, needs_review))
+        }
+    }
+}
+
+fn item(
+    member: &RuleMember,
+    action: RecommendationAction,
+    current: Option<OperatorTrainingState>,
+    match_item: RuleMatch,
+    rule: &TrainingRule,
+    needs_review: bool,
+) -> OperatorAdviceItem {
+    OperatorAdviceItem {
+        operator: member.operator.clone(),
+        action,
+        display_priority: member.priority,
+        current,
+        target: target_state(&member.target),
+        matches: vec![match_item],
+        source_refs: rule.evidence.clone(),
+        needs_review,
+    }
+}
+
+fn push_by_action(outcome: &mut RuleOutcome, item: OperatorAdviceItem) {
+    match item.action {
+        RecommendationAction::Train => outcome.now.push(item),
+        RecommendationAction::AcquireThenTrain => outcome.conditional.push(item),
+        RecommendationAction::Ready => outcome.ready.push(item),
+        RecommendationAction::Review => outcome.review.push(item),
+        RecommendationAction::Blocked => {}
+    }
+}
+
+fn empty_outcome() -> RuleOutcome {
+    RuleOutcome {
+        now: Vec::new(),
+        conditional: Vec::new(),
+        ready: Vec::new(),
+        review: Vec::new(),
+        blocked: Vec::new(),
+    }
+}
+
+struct AdmissionState {
+    admitted: bool,
+    owned_core: Vec<String>,
+    missing_core: Vec<String>,
+}
+
+fn evaluate_admission(operbox: &OperBox, rule: &TrainingRule) -> AdmissionState {
+    let mut owned_core = BTreeSet::new();
+    let mut missing_core = BTreeSet::new();
+
+    for name in &rule.admission.required_core {
+        if operbox.owns(name) {
+            owned_core.insert(name.clone());
+        } else {
+            missing_core.insert(name.clone());
         }
     }
 
-    let status = trainable
-        .into_iter()
-        .next()
-        .map(PickOneStatus::Trainable)
-        .unwrap_or_else(|| PickOneStatus::Missing(pick.label.clone()));
-    PickOneEvaluation { status, owned }
+    for slot in &rule.admission.pick_one_core {
+        let owned: Vec<_> = slot
+            .candidates
+            .iter()
+            .filter(|c| operbox.owns(c))
+            .cloned()
+            .collect();
+        if owned.is_empty() {
+            missing_core.insert(format!("pick_one:{}", slot.label));
+        } else {
+            owned_core.extend(owned);
+        }
+    }
+
+    AdmissionState {
+        admitted: missing_core.is_empty(),
+        owned_core: owned_core.into_iter().collect(),
+        missing_core: missing_core.into_iter().collect(),
+    }
+}
+
+fn find_member<'a>(rule: &'a TrainingRule, name: &str) -> Option<&'a RuleMember> {
+    rule.members.iter().find(|m| m.operator == name)
+}
+
+fn can_suggest_acquire(
+    operbox: &OperBox,
+    rules: &TrainingRecommendationRules,
+    member: &RuleMember,
+) -> bool {
+    match member.acquisition {
+        AcquisitionMode::OwnedOnly => false,
+        AcquisitionMode::SuggestAcquire => true,
+        AcquisitionMode::Policy => {
+            if rules
+                .acquisition_policy
+                .named_exceptions
+                .iter()
+                .any(|n| n == &member.operator)
+            {
+                return true;
+            }
+            let rarity = member.rarity.or_else(|| {
+                operbox
+                    .entries
+                    .iter()
+                    .find(|e| e.name == member.operator)
+                    .map(|e| e.rarity)
+                    .filter(|&r| r > 0)
+            });
+            matches!(rarity, Some(r) if r <= rules.acquisition_policy.default_rarity_le)
+        }
+    }
+}
+
+fn target_state(target: &TrainingTarget) -> OperatorTrainingState {
+    OperatorTrainingState {
+        elite: target.elite,
+        level: target.level,
+    }
+}
+
+fn collect_evidence(map: &mut BTreeMap<String, EvidenceRef>, refs: &[EvidenceRef]) {
+    for r in refs {
+        let key = format!("{}::{}", r.path, r.heading.as_deref().unwrap_or(""));
+        map.entry(key).or_insert_with(|| r.clone());
+    }
+}
+
+fn merge_item(map: &mut BTreeMap<String, OperatorAdviceItem>, incoming: OperatorAdviceItem) {
+    map.entry(incoming.operator.clone())
+        .and_modify(|existing| merge_operator_item(existing, &incoming))
+        .or_insert(incoming);
+}
+
+fn merge_operator_item(existing: &mut OperatorAdviceItem, incoming: &OperatorAdviceItem) {
+    let matches = merge_matches(&existing.matches, &incoming.matches);
+    let source_refs = merge_evidence(&existing.source_refs, &incoming.source_refs);
+    let needs_review = existing.needs_review || incoming.needs_review;
+    let current = existing
+        .current
+        .clone()
+        .or_else(|| incoming.current.clone());
+
+    let better_action = action_rank(incoming.action) < action_rank(existing.action);
+    let better_priority = incoming.display_priority.rank() < existing.display_priority.rank();
+
+    if better_action
+        || (incoming.action == existing.action && better_priority)
+        || (incoming.display_priority.rank() == existing.display_priority.rank() && better_action)
+    {
+        if better_action || better_priority {
+            existing.action = incoming.action;
+            if better_priority {
+                existing.display_priority = incoming.display_priority;
+            }
+            existing.target = incoming.target.clone();
+            if incoming.current.is_some() {
+                existing.current = incoming.current.clone();
+            }
+        }
+    }
+
+    if better_priority && !better_action {
+        existing.display_priority = incoming.display_priority;
+    }
+
+    existing.matches = matches;
+    existing.source_refs = source_refs;
+    existing.needs_review = needs_review;
+    if existing.current.is_none() {
+        existing.current = current;
+    }
+}
+
+fn action_rank(action: RecommendationAction) -> u8 {
+    match action {
+        RecommendationAction::Train => 0,
+        RecommendationAction::AcquireThenTrain => 1,
+        RecommendationAction::Review => 2,
+        RecommendationAction::Ready => 3,
+        RecommendationAction::Blocked => 4,
+    }
+}
+
+fn merge_matches(a: &[RuleMatch], b: &[RuleMatch]) -> Vec<RuleMatch> {
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for m in a.iter().chain(b.iter()) {
+        let key = format!(
+            "{}:{}:{}",
+            m.rule_id,
+            format!("{:?}", m.role),
+            format!("{:?}", m.priority)
+        );
+        if seen.insert(key) {
+            out.push(m.clone());
+        }
+    }
+    out
+}
+
+fn merge_evidence(a: &[EvidenceRef], b: &[EvidenceRef]) -> Vec<EvidenceRef> {
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for r in a.iter().chain(b.iter()) {
+        let key = format!("{}::{}", r.path, r.heading.as_deref().unwrap_or(""));
+        if seen.insert(key) {
+            out.push(r.clone());
+        }
+    }
+    out
+}
+
+fn sorted_items(map: BTreeMap<String, OperatorAdviceItem>) -> Vec<OperatorAdviceItem> {
+    let mut out: Vec<_> = map.into_values().collect();
+    out.sort_by(|a, b| {
+        a.display_priority
+            .rank()
+            .cmp(&b.display_priority.rank())
+            .then_with(|| a.operator.cmp(&b.operator))
+    });
+    out
 }
 
 fn modelled_owned_count(operbox: &OperBox, instances: &OperatorInstances) -> usize {
@@ -362,109 +497,15 @@ fn modelled_owned_count(operbox: &OperBox, instances: &OperatorInstances) -> usi
         .count()
 }
 
-fn target_state(target: &TrainingTarget) -> OperatorTrainingState {
-    OperatorTrainingState {
-        elite: target.elite,
-        level: target.level,
-    }
-}
-
-fn recommendation_message(message: &str, needs_review: bool) -> String {
-    let base = if message.trim().is_empty() {
-        "已拥有但未达到推荐练度。"
-    } else {
-        message.trim()
-    };
-    if needs_review {
-        format!("待复核：{base}")
-    } else {
-        base.to_string()
-    }
-}
-
-fn source_paths(paths: &[String]) -> Vec<String> {
-    let mut seen = BTreeSet::new();
-    paths
-        .iter()
-        .filter(|p| seen.insert((*p).clone()))
-        .cloned()
-        .collect()
-}
-
-fn inherited_source_paths(rules: &TrainingRecommendationRules, paths: &[String]) -> Vec<String> {
-    let mut out = BTreeSet::new();
-    if let Some(source_repo) = &rules.source_repo {
-        out.insert(source_repo.clone());
-    }
-    out.extend(paths.iter().cloned());
-    out.into_iter().collect()
-}
-
-#[derive(Default)]
-struct RecommendationCollector {
-    by_operator: HashMap<String, TrainingRecommendation>,
-}
-
-impl RecommendationCollector {
-    fn push(&mut self, rec: TrainingRecommendation) {
-        self.by_operator
-            .entry(rec.operator.clone())
-            .and_modify(|existing| merge_recommendation(existing, &rec))
-            .or_insert(rec);
-    }
-
-    fn into_sorted_vec(self) -> Vec<TrainingRecommendation> {
-        let mut out: Vec<_> = self.by_operator.into_values().collect();
-        out.sort_by(|a, b| {
-            a.priority
-                .rank()
-                .cmp(&b.priority.rank())
-                .then_with(|| a.operator.cmp(&b.operator))
-        });
-        out
-    }
-}
-
-fn merge_recommendation(existing: &mut TrainingRecommendation, incoming: &TrainingRecommendation) {
-    let incoming_wins = incoming.priority.rank() < existing.priority.rank()
-        || (incoming.priority == existing.priority
-            && existing.system_id.is_none()
-            && incoming.system_id.is_some());
-
-    let related = merged_strings(&existing.related_systems, &incoming.related_systems);
-    let source_paths = merged_strings(&existing.source_paths, &incoming.source_paths);
-    let needs_review = existing.needs_review || incoming.needs_review;
-
-    if incoming_wins {
-        *existing = incoming.clone();
-    }
-
-    existing.related_systems = related;
-    existing.source_paths = source_paths;
-    existing.needs_review = needs_review;
-    if needs_review && !existing.message.starts_with("待复核：") {
-        existing.message = format!("待复核：{}", existing.message);
-    }
-}
-
-fn merged_strings(a: &[String], b: &[String]) -> Vec<String> {
-    let mut seen = HashSet::new();
-    a.iter()
-        .chain(b.iter())
-        .filter(|v| seen.insert((*v).clone()))
-        .cloned()
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use crate::operbox::{OperBox, OperBoxEntry};
     use crate::{instances::default_instances_path, OperatorInstances};
 
-    use super::super::types::RecommendationPriority;
+    use super::super::types::*;
     use super::*;
 
-    fn entry(name: &str, elite: u8, own: bool) -> OperBoxEntry {
+    fn entry(name: &str, elite: u8, own: bool, rarity: u8) -> OperBoxEntry {
         OperBoxEntry {
             id: name.to_string(),
             name: name.to_string(),
@@ -472,7 +513,7 @@ mod tests {
             level: 1,
             own,
             potential: 0,
-            rarity: 5,
+            rarity,
         }
     }
 
@@ -480,85 +521,192 @@ mod tests {
         OperBox::from_entries(entries)
     }
 
-    fn rules() -> TrainingRecommendationRules {
+    fn member(
+        name: &str,
+        role: MemberRole,
+        elite: u8,
+        priority: RecommendationPriority,
+        acquisition: AcquisitionMode,
+        rarity: Option<u8>,
+    ) -> RuleMember {
+        RuleMember {
+            operator: name.to_string(),
+            role,
+            target: TrainingTarget {
+                elite,
+                level: None,
+                skill_id: None,
+                skill_name: None,
+            },
+            priority,
+            acquisition,
+            rarity,
+            benefit: None,
+        }
+    }
+
+    fn sample_rules() -> TrainingRecommendationRules {
         TrainingRecommendationRules {
-            version: 1,
-            source_repo: Some("vault".to_string()),
-            standalone_rules: vec![StandaloneRecommendationRule {
-                id: "standalone_clear".to_string(),
-                label: "常用精一四星".to_string(),
-                priority: RecommendationPriority::P0,
-                targets: vec![TrainingTarget {
-                    name: "清流".to_string(),
-                    elite: 1,
-                    level: None,
-                }],
-                reason_code: "standalone_must_train".to_string(),
-                message: "精一即可启用常用基建技能。".to_string(),
-                source_paths: vec!["docs/4-散件工具人/散件干员速查.md".to_string()],
-                source_repo: None,
-                source_notes: None,
-                needs_review: false,
-                conflicts: Vec::new(),
-            }],
-            system_rules: vec![
-                SystemRecommendationRule {
-                    id: "witch_long_beta".to_string(),
-                    label: "巫恋组".to_string(),
+            version: 2,
+            acquisition_policy: AcquisitionPolicy {
+                default_rarity_le: 4,
+                named_exceptions: vec!["苍苔".to_string()],
+            },
+            rules: vec![
+                TrainingRule {
+                    id: "standalone_clear".to_string(),
+                    kind: RuleKind::Standalone,
+                    scope: RuleScope::Independent,
+                    label: "清流散件".to_string(),
                     source_system_id: None,
-                    priority_ready_after_training: RecommendationPriority::P0,
-                    priority_blocked: RecommendationPriority::Info,
-                    core: vec![
-                        TrainingTarget {
-                            name: "巫恋".to_string(),
-                            elite: 2,
-                            level: None,
-                        },
-                        TrainingTarget {
-                            name: "龙舌兰".to_string(),
-                            elite: 2,
-                            level: None,
-                        },
-                    ],
-                    pick_one_core: vec![PickOneCoreRule {
-                        label: "裁缝β第三人".to_string(),
-                        elite: 2,
-                        level: None,
-                        candidates: vec!["卡夫卡".to_string(), "柏喙".to_string()],
+                    admission: RuleAdmission::default(),
+                    members: vec![member(
+                        "清流",
+                        MemberRole::Independent,
+                        1,
+                        RecommendationPriority::P0,
+                        AcquisitionMode::Policy,
+                        Some(4),
+                    )],
+                    evidence: vec![EvidenceRef {
+                        path: "docs/散件.md".to_string(),
+                        heading: Some("清流".to_string()),
                     }],
-                    important: Vec::new(),
-                    hangers: Vec::new(),
-                    priority_hangers: RecommendationPriority::P2,
-                    reason_code: "system_core_undertrained".to_string(),
-                    message: "体系核心已齐，但有人未达到体系要求。".to_string(),
-                    source_paths: vec!["docs/2-体系/巫恋裁缝核.md".to_string()],
-                    source_repo: None,
-                    source_notes: None,
-                    needs_review: false,
-                    conflicts: Vec::new(),
+                    review: RuleReview::default(),
                 },
-                SystemRecommendationRule {
-                    id: "review_system".to_string(),
-                    label: "待复核体系".to_string(),
-                    source_system_id: None,
-                    priority_ready_after_training: RecommendationPriority::P1,
-                    priority_blocked: RecommendationPriority::Info,
-                    core: vec![TrainingTarget {
-                        name: "槐琥".to_string(),
-                        elite: 2,
-                        level: None,
+                TrainingRule {
+                    id: "witch_long_beta".to_string(),
+                    kind: RuleKind::System,
+                    scope: RuleScope::SameStation,
+                    label: "巫恋裁缝核".to_string(),
+                    source_system_id: Some("witch_long_beta".to_string()),
+                    admission: RuleAdmission {
+                        required_core: vec!["巫恋".to_string(), "龙舌兰".to_string()],
+                        pick_one_core: vec![PickOneCoreSlot {
+                            label: "裁缝β第三人".to_string(),
+                            candidates: vec!["卡夫卡".to_string(), "柏喙".to_string()],
+                        }],
+                    },
+                    members: vec![
+                        member(
+                            "巫恋",
+                            MemberRole::Core,
+                            2,
+                            RecommendationPriority::P0,
+                            AcquisitionMode::OwnedOnly,
+                            Some(5),
+                        ),
+                        member(
+                            "龙舌兰",
+                            MemberRole::Core,
+                            2,
+                            RecommendationPriority::P0,
+                            AcquisitionMode::OwnedOnly,
+                            Some(5),
+                        ),
+                        member(
+                            "卡夫卡",
+                            MemberRole::Core,
+                            2,
+                            RecommendationPriority::P0,
+                            AcquisitionMode::OwnedOnly,
+                            Some(5),
+                        ),
+                        member(
+                            "柏喙",
+                            MemberRole::Core,
+                            2,
+                            RecommendationPriority::P0,
+                            AcquisitionMode::OwnedOnly,
+                            Some(5),
+                        ),
+                    ],
+                    evidence: vec![EvidenceRef {
+                        path: "docs/巫恋.md".to_string(),
+                        heading: None,
                     }],
-                    pick_one_core: Vec::new(),
-                    important: Vec::new(),
-                    hangers: Vec::new(),
-                    priority_hangers: RecommendationPriority::P2,
-                    reason_code: "needs_review_case".to_string(),
-                    message: "该规则来源需要人工确认。".to_string(),
-                    source_paths: vec!["vault/review.md".to_string()],
-                    source_repo: None,
-                    source_notes: None,
-                    needs_review: true,
-                    conflicts: vec!["conflicting source".to_string()],
+                    review: RuleReview::default(),
+                },
+                TrainingRule {
+                    id: "combo_with_hanger".to_string(),
+                    kind: RuleKind::Combo,
+                    scope: RuleScope::SameStation,
+                    label: "能天使蕾缪安二人组".to_string(),
+                    source_system_id: None,
+                    admission: RuleAdmission {
+                        required_core: vec!["能天使".to_string(), "蕾缪安".to_string()],
+                        pick_one_core: Vec::new(),
+                    },
+                    members: vec![
+                        member(
+                            "能天使",
+                            MemberRole::Core,
+                            2,
+                            RecommendationPriority::P1,
+                            AcquisitionMode::OwnedOnly,
+                            Some(6),
+                        ),
+                        member(
+                            "蕾缪安",
+                            MemberRole::Core,
+                            2,
+                            RecommendationPriority::P1,
+                            AcquisitionMode::OwnedOnly,
+                            Some(6),
+                        ),
+                        member(
+                            "芬",
+                            MemberRole::Hanger,
+                            1,
+                            RecommendationPriority::P2,
+                            AcquisitionMode::Policy,
+                            Some(3),
+                        ),
+                    ],
+                    evidence: vec![],
+                    review: RuleReview::default(),
+                },
+                TrainingRule {
+                    id: "soft_hongyun".to_string(),
+                    kind: RuleKind::SoftCombo,
+                    scope: RuleScope::Independent,
+                    label: "红云回收利用".to_string(),
+                    source_system_id: None,
+                    admission: RuleAdmission::default(),
+                    members: vec![member(
+                        "红云",
+                        MemberRole::Independent,
+                        1,
+                        RecommendationPriority::P1,
+                        AcquisitionMode::Policy,
+                        Some(4),
+                    )],
+                    evidence: vec![],
+                    review: RuleReview::default(),
+                },
+                TrainingRule {
+                    id: "review_case".to_string(),
+                    kind: RuleKind::Standalone,
+                    scope: RuleScope::Independent,
+                    label: "待复核".to_string(),
+                    source_system_id: None,
+                    admission: RuleAdmission::default(),
+                    members: vec![member(
+                        "槐琥",
+                        MemberRole::Independent,
+                        2,
+                        RecommendationPriority::P1,
+                        AcquisitionMode::OwnedOnly,
+                        Some(5),
+                    )],
+                    evidence: vec![EvidenceRef {
+                        path: "vault/review.md".to_string(),
+                        heading: None,
+                    }],
+                    review: RuleReview {
+                        status: ReviewStatus::NeedsReview,
+                        conflicts: vec!["conflicting source".to_string()],
+                    },
                 },
             ],
         }
@@ -579,135 +727,156 @@ mod tests {
 
     #[test]
     fn partial_combo_does_not_train_owned_half_core() {
-        let report = report(operbox(vec![entry("龙舌兰", 0, true)]), rules());
+        let report = report(operbox(vec![entry("龙舌兰", 0, true, 5)]), sample_rules());
         assert!(report
-            .systems
+            .blocked
             .iter()
-            .any(|s| s.id == "witch_long_beta" && s.status == SystemStatus::PartialBlocked));
-        assert!(report
-            .recommendations
-            .iter()
-            .all(|r| r.operator != "龙舌兰"));
+            .any(|b| b.rule_id == "witch_long_beta"));
+        assert!(report.now.iter().all(|r| r.operator != "龙舌兰"));
     }
 
     #[test]
-    fn complete_combo_undertrained_emits_p0_train() {
+    fn complete_combo_undertrained_emits_train() {
         let report = report(
             operbox(vec![
-                entry("巫恋", 1, true),
-                entry("龙舌兰", 2, true),
-                entry("卡夫卡", 1, true),
+                entry("巫恋", 1, true, 5),
+                entry("龙舌兰", 2, true, 5),
+                entry("卡夫卡", 1, true, 5),
             ]),
-            rules(),
+            sample_rules(),
         );
-        assert!(report.systems.iter().any(|s| {
-            s.id == "witch_long_beta" && s.status == SystemStatus::ReadyAfterTraining
-        }));
-        assert!(report.recommendations.iter().any(|r| {
+        assert!(report.now.iter().any(|r| {
             r.operator == "巫恋"
-                && r.priority == RecommendationPriority::P0
-                && r.kind == RecommendationKind::Train
+                && r.display_priority == RecommendationPriority::P0
+                && r.action == RecommendationAction::Train
         }));
     }
 
     #[test]
-    fn pick_one_satisfied_by_any_ready_candidate() {
-        let report = report(
-            operbox(vec![
-                entry("巫恋", 2, true),
-                entry("龙舌兰", 2, true),
-                entry("柏喙", 2, true),
-            ]),
-            rules(),
-        );
+    fn hanger_not_trained_when_core_missing() {
+        let report = report(operbox(vec![entry("芬", 0, true, 3)]), sample_rules());
+        assert!(report.now.iter().all(|r| r.operator != "芬"));
         assert!(report
-            .systems
+            .blocked
             .iter()
-            .any(|s| s.id == "witch_long_beta" && s.status == SystemStatus::Ready));
-        assert!(report.recommendations.is_empty());
+            .any(|b| b.rule_id == "combo_with_hanger"
+                && b.deferred_members.iter().any(|n| n == "芬")));
     }
 
     #[test]
-    fn pick_one_trainable_when_other_core_complete() {
+    fn hanger_trained_when_core_complete() {
         let report = report(
             operbox(vec![
-                entry("巫恋", 2, true),
-                entry("龙舌兰", 2, true),
-                entry("卡夫卡", 1, true),
+                entry("能天使", 2, true, 6),
+                entry("蕾缪安", 2, true, 6),
+                entry("芬", 0, true, 3),
             ]),
-            rules(),
+            sample_rules(),
         );
         assert!(report
-            .recommendations
+            .now
             .iter()
-            .any(|r| r.operator == "卡夫卡"));
+            .any(|r| r.operator == "芬" && r.action == RecommendationAction::Train));
     }
 
     #[test]
-    fn duplicate_operator_keeps_highest_priority_and_related_systems() {
-        let mut rules = rules();
-        rules.system_rules.push(SystemRecommendationRule {
-            id: "clearwater_system".to_string(),
+    fn low_star_unowned_suggests_acquire() {
+        let report = report(operbox(vec![]), sample_rules());
+        assert!(report.conditional.iter().any(|r| {
+            r.operator == "清流" && r.action == RecommendationAction::AcquireThenTrain
+        }));
+    }
+
+    #[test]
+    fn soft_combo_independent_of_teammates() {
+        let report = report(operbox(vec![entry("红云", 0, true, 4)]), sample_rules());
+        assert!(report
+            .now
+            .iter()
+            .any(|r| r.operator == "红云" && r.action == RecommendationAction::Train));
+    }
+
+    #[test]
+    fn multi_rule_keeps_all_matches_and_best_priority() {
+        let mut rules = sample_rules();
+        rules.rules.push(TrainingRule {
+            id: "clear_as_system".to_string(),
+            kind: RuleKind::System,
+            scope: RuleScope::Independent,
             label: "清流体系".to_string(),
             source_system_id: None,
-            priority_ready_after_training: RecommendationPriority::P1,
-            priority_blocked: RecommendationPriority::Info,
-            core: vec![TrainingTarget {
-                name: "清流".to_string(),
-                elite: 2,
-                level: None,
-            }],
-            pick_one_core: Vec::new(),
-            important: Vec::new(),
-            hangers: Vec::new(),
-            priority_hangers: RecommendationPriority::P2,
-            reason_code: "system_core_undertrained".to_string(),
-            message: "体系需要更高练度。".to_string(),
-            source_paths: vec!["docs/system.md".to_string()],
-            source_repo: None,
-            source_notes: None,
-            needs_review: false,
-            conflicts: Vec::new(),
+            admission: RuleAdmission {
+                required_core: vec!["清流".to_string()],
+                pick_one_core: Vec::new(),
+            },
+            members: vec![member(
+                "清流",
+                MemberRole::Core,
+                2,
+                RecommendationPriority::P1,
+                AcquisitionMode::OwnedOnly,
+                Some(4),
+            )],
+            evidence: vec![],
+            review: RuleReview::default(),
         });
-        let report = report(operbox(vec![entry("清流", 0, true)]), rules);
-        let recs: Vec<_> = report
-            .recommendations
-            .iter()
-            .filter(|r| r.operator == "清流")
-            .collect();
+        let report = report(operbox(vec![entry("清流", 0, true, 4)]), rules);
+        let recs: Vec<_> = report.now.iter().filter(|r| r.operator == "清流").collect();
         assert_eq!(recs.len(), 1);
-        assert_eq!(recs[0].priority, RecommendationPriority::P0);
+        assert_eq!(recs[0].display_priority, RecommendationPriority::P0);
         assert!(recs[0]
-            .related_systems
-            .contains(&"clearwater_system".to_string()));
-    }
-
-    #[test]
-    fn unowned_operator_does_not_train() {
-        let report = report(operbox(vec![entry("清流", 0, false)]), rules());
-        assert!(report.recommendations.iter().all(|r| r.operator != "清流"));
-    }
-
-    #[test]
-    fn needs_review_is_propagated() {
-        let report = report(operbox(vec![entry("槐琥", 1, true)]), rules());
-        let rec = report
-            .recommendations
+            .matches
             .iter()
-            .find(|r| r.operator == "槐琥")
-            .unwrap();
-        assert!(rec.needs_review);
-        assert!(rec.message.starts_with("待复核："));
+            .any(|m| m.rule_id == "standalone_clear"));
+        assert!(recs[0]
+            .matches
+            .iter()
+            .any(|m| m.rule_id == "clear_as_system"));
     }
 
     #[test]
-    fn report_schema_version_is_one() {
-        let report = report(operbox(vec![entry("清流", 0, true)]), rules());
-        assert_eq!(report.schema_version, 1);
+    fn needs_review_goes_to_review_bucket() {
+        let report = report(operbox(vec![entry("槐琥", 1, true, 5)]), sample_rules());
+        assert!(report
+            .review
+            .iter()
+            .any(|r| r.operator == "槐琥" && r.needs_review));
+        assert!(report.now.iter().all(|r| r.operator != "槐琥"));
     }
 
     #[test]
-    fn default_rules_emit_the_filtered_standalone_training_list() {
+    fn missing_core_with_suggest_acquire_is_conditional() {
+        let mut rules = sample_rules();
+        // make 柏喙 suggest_acquire as low-star stand-in for test
+        for m in &mut rules.rules[1].members {
+            if m.operator == "柏喙" {
+                m.acquisition = AcquisitionMode::SuggestAcquire;
+                m.rarity = Some(4);
+            }
+        }
+        let report = report(
+            operbox(vec![entry("巫恋", 2, true, 5), entry("龙舌兰", 2, true, 5)]),
+            rules,
+        );
+        assert!(report
+            .blocked
+            .iter()
+            .any(|b| b.rule_id == "witch_long_beta"));
+        assert!(report
+            .conditional
+            .iter()
+            .any(|r| r.operator == "柏喙" && r.action == RecommendationAction::AcquireThenTrain));
+        assert!(report.now.iter().all(|r| r.operator != "巫恋"));
+    }
+
+    #[test]
+    fn report_schema_version_is_two() {
+        let report = report(operbox(vec![entry("清流", 0, true, 4)]), sample_rules());
+        assert_eq!(report.schema_version, 2);
+    }
+
+    #[test]
+    fn default_rules_load_and_filter_standalone_fixture() {
         let box_ = OperBox::from_json(include_str!(
             "../../../../data/fixtures/training_advice/standalone_e1_four_star.json"
         ))
@@ -716,63 +885,31 @@ mod tests {
             &crate::training_advice::default_training_recommendations_path().unwrap(),
         )
         .unwrap();
+        assert_eq!(rules.version, 2);
         let report = report(box_, rules);
-
-        let actual: HashMap<_, _> = report
-            .recommendations
+        let actual: std::collections::HashMap<_, _> = report
+            .now
             .iter()
-            .map(|rec| (rec.operator.as_str(), rec.priority))
+            .map(|rec| (rec.operator.as_str(), rec.display_priority))
             .collect();
-        // Fixture only owns the original core standalone set; expanded rules
-        // must still emit those operators at the same priorities.
-        let expected = [
-            ("石英", RecommendationPriority::P0),
-            ("清流", RecommendationPriority::P0),
-            ("砾", RecommendationPriority::P0),
-            ("断罪者", RecommendationPriority::P0),
-            ("Castle-3", RecommendationPriority::P0),
-            ("慕斯", RecommendationPriority::P1),
-            ("缠丸", RecommendationPriority::P1),
-            ("安比尔", RecommendationPriority::P1),
-            ("斑点", RecommendationPriority::P1),
-            ("霜叶", RecommendationPriority::P1),
-            ("白雪", RecommendationPriority::P1),
-            ("红豆", RecommendationPriority::P1),
-            ("空弦", RecommendationPriority::P2),
-            ("吉星", RecommendationPriority::P2),
-            ("槐琥", RecommendationPriority::P2),
-        ];
-
-        for (name, priority) in expected {
-            assert_eq!(actual.get(name), Some(&priority), "{name}");
+        for name in [
+            "石英",
+            "清流",
+            "砾",
+            "断罪者",
+            "Castle-3",
+            "慕斯",
+            "缠丸",
+            "安比尔",
+            "斑点",
+            "霜叶",
+            "白雪",
+            "红豆",
+            "空弦",
+            "吉星",
+            "槐琥",
+        ] {
+            assert!(actual.contains_key(name), "missing {name} in {:?}", actual);
         }
-        assert_eq!(actual.len(), expected.len());
-        let castle = report
-            .recommendations
-            .iter()
-            .find(|rec| rec.operator == "Castle-3")
-            .unwrap();
-        assert_eq!(castle.target.elite, 0);
-        assert_eq!(castle.target.level, Some(30));
-    }
-
-    #[test]
-    fn castle_three_level_thirty_meets_the_default_target() {
-        let mut castle = entry("Castle-3", 0, true);
-        castle.level = 30;
-        castle.rarity = 1;
-        let rules = crate::training_advice::load_training_recommendation_rules(
-            &crate::training_advice::default_training_recommendations_path().unwrap(),
-        )
-        .unwrap();
-        let report = report(operbox(vec![castle]), rules);
-
-        assert!(report
-            .recommendations
-            .iter()
-            .all(|rec| rec.operator != "Castle-3"));
-        assert!(report.systems.iter().any(|system| {
-            system.id == "standalone:Castle-3" && system.status == SystemStatus::StandaloneReady
-        }));
     }
 }

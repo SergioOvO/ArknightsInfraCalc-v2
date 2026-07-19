@@ -1,1054 +1,1963 @@
 {
-  "version": 1,
-  "source_repo": "ArknightsInfraCalc-v2",
-  "system_rules": [
+  "version": 2,
+  "acquisition_policy": {
+    "default_rarity_le": 4,
+    "named_exceptions": [
+      "苍苔"
+    ]
+  },
+  "rules": [
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [
-        {
-          "label": "裁缝β第三人",
-          "elite": 2,
-          "candidates": [
-            "卡夫卡",
-            "柏喙",
-            "明椒",
-            "折光"
-          ]
-        }
-      ],
-      "important": [],
-      "hangers": [],
-      "priority_hangers": "P2",
-      "reason_code": "system_core_undertrained",
-      "needs_review": false,
-      "conflicts": [],
       "id": "witch_long_beta",
+      "kind": "system",
+      "scope": "cross_station",
       "label": "巫恋裁缝核",
       "source_system_id": "witch_long_beta",
-      "priority_ready_after_training": "P0",
-      "core": [
+      "admission": {
+        "required_core": [
+          "巫恋",
+          "龙舌兰"
+        ],
+        "pick_one_core": [
+          {
+            "label": "裁缝β第三人",
+            "candidates": [
+              "卡夫卡",
+              "柏喙",
+              "明椒",
+              "折光"
+            ]
+          }
+        ]
+      },
+      "members": [
         {
-          "name": "巫恋",
-          "elite": 2
+          "operator": "巫恋",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "owned_only",
+          "rarity": 5
         },
         {
-          "name": "龙舌兰",
-          "elite": 2
+          "operator": "龙舌兰",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "owned_only",
+          "rarity": 5
+        },
+        {
+          "operator": "卡夫卡",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "owned_only",
+          "rarity": 5
+        },
+        {
+          "operator": "柏喙",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "owned_only",
+          "rarity": 5
+        },
+        {
+          "operator": "明椒",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "owned_only",
+          "rarity": 5
+        },
+        {
+          "operator": "折光",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "owned_only",
+          "rarity": 5
         }
       ],
-      "message": "巫恋、龙舌兰练到精二；第三人从卡夫卡、柏喙、明椒、折光里任选一个练到精二。",
-      "source_paths": [
-        "data/base_systems.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/巫恋裁缝核.md"
+      "evidence": [
+        {
+          "path": "data/base_systems.json"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/巫恋裁缝核.md"
+        }
       ],
-      "source_notes": "角色：核心巫恋E2+龙舌兰E2；任选核心裁缝β第三人E2。无挂件。"
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [],
-      "important": [],
-      "hangers": [],
-      "priority_hangers": "P2",
-      "reason_code": "system_core_undertrained",
-      "needs_review": false,
-      "conflicts": [],
       "id": "docus_core",
+      "kind": "combo",
+      "scope": "same_station",
       "label": "但书",
       "source_system_id": null,
-      "priority_ready_after_training": "P0",
-      "core": [
+      "admission": {
+        "required_core": [
+          "但书"
+        ],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "但书",
-          "elite": 2
+          "operator": "但书",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "owned_only",
+          "rarity": 5
         }
       ],
-      "message": "基建幻神就够了。",
-      "source_paths": [
-        "data/trade_segments.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "docs/BASE_ASSIGNMENT.md"
-      ],
-      "source_notes": "训练只推但书E2单人；伺夜/贝洛内/八幡海铃不与但书绑成同一练卡规则（编排亦非 hard core）。"
-    },
-    {
-      "priority_blocked": "Info",
-      "pick_one_core": [],
-      "important": [],
-      "hangers": [
+      "evidence": [
         {
-          "name": "黑键",
-          "elite": 2
+          "path": "data/trade_segments.json"
         },
         {
-          "name": "吉星",
-          "elite": 2
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "docs/BASE_ASSIGNMENT.md"
         }
       ],
-      "priority_hangers": "P1",
-      "reason_code": "system_core_undertrained",
-      "needs_review": true,
-      "conflicts": [
-        "vault docs system_id=closure_special_order operators=[可露希尔]; base_systems blackkey_closure uses 可露希尔+黑键+吉星"
-      ],
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
+    },
+    {
       "id": "blackkey_closure",
+      "kind": "system",
+      "scope": "cross_station",
       "label": "可露希尔特别订单",
       "source_system_id": "blackkey_closure",
-      "priority_ready_after_training": "P0",
-      "core": [
+      "admission": {
+        "required_core": [
+          "可露希尔"
+        ],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "可露希尔",
-          "elite": 2
+          "operator": "可露希尔",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "owned_only",
+          "rarity": 5
+        },
+        {
+          "operator": "黑键",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "owned_only",
+          "rarity": 6
+        },
+        {
+          "operator": "吉星",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "owned_only",
+          "rarity": 5
         }
       ],
-      "message": "可露希尔练到精二。黑键、吉星可后练。",
-      "source_paths": [
-        "data/base_systems.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/可露希尔特别订单.md"
+      "evidence": [
+        {
+          "path": "data/base_systems.json"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/可露希尔特别订单.md"
+        }
       ],
-      "source_notes": "vault 仅可露希尔E2为核心；黑键/吉星为项目 blackkey_closure 三人站挂件，非 vault 硬核。"
+      "review": {
+        "status": "needs_review",
+        "conflicts": [
+          "vault docs system_id=closure_special_order operators=[可露希尔]; base_systems blackkey_closure uses 可露希尔+黑键+吉星"
+        ]
+      }
     },
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [],
-      "important": [],
-      "hangers": [],
-      "priority_hangers": "P2",
-      "reason_code": "system_core_undertrained",
-      "needs_review": false,
-      "conflicts": [],
       "id": "lungmen_manu_pair",
+      "kind": "combo",
+      "scope": "same_station",
       "label": "斩业星熊诗怀雅二人组",
       "source_system_id": "lungmen_manu_pair",
-      "priority_ready_after_training": "P1",
-      "core": [
+      "admission": {
+        "required_core": [
+          "斩业星熊",
+          "诗怀雅"
+        ],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "斩业星熊",
-          "elite": 2
+          "operator": "斩业星熊",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "owned_only",
+          "rarity": 6
         },
         {
-          "name": "诗怀雅",
-          "elite": 0
+          "operator": "诗怀雅",
+          "role": "core",
+          "target": {
+            "elite": 0
+          },
+          "priority": "P1",
+          "acquisition": "owned_only",
+          "rarity": 5
         }
       ],
-      "message": "斩业星熊、诗怀雅二人组：斩业星熊练到精二，诗怀雅可用即可。",
-      "source_paths": [
-        "data/base_systems.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/体系总览.md",
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/4-散件工具人/散件干员速查.md"
+      "evidence": [
+        {
+          "path": "data/base_systems.json"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/体系总览.md"
+        },
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/4-散件工具人/散件干员速查.md"
+        }
       ],
-      "source_notes": "角色：斩业星熊E2+诗怀雅E0 双核心，无挂件。"
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [],
-      "important": [],
-      "hangers": [
-        {
-          "name": "空",
-          "elite": 2
-        },
-        {
-          "name": "芬",
-          "elite": 1
-        }
-      ],
-      "priority_hangers": "P2",
-      "reason_code": "system_core_undertrained",
-      "needs_review": true,
-      "conflicts": [
-        "base_systems penguin_exusiai_lemuen 能天使 elite 0 vs MECHANICS 物流专家 elite 2"
-      ],
       "id": "penguin_exusiai_lemuen",
+      "kind": "combo",
+      "scope": "same_station",
       "label": "能天使蕾缪安二人组",
       "source_system_id": "penguin_exusiai_lemuen",
-      "priority_ready_after_training": "P1",
-      "core": [
+      "admission": {
+        "required_core": [
+          "能天使",
+          "蕾缪安"
+        ],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "能天使",
-          "elite": 2
+          "operator": "能天使",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "owned_only",
+          "rarity": 6
         },
         {
-          "name": "蕾缪安",
-          "elite": 2
+          "operator": "蕾缪安",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "owned_only",
+          "rarity": 6
+        },
+        {
+          "operator": "空",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 5
+        },
+        {
+          "operator": "芬",
+          "role": "hanger",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P2",
+          "acquisition": "policy",
+          "rarity": 3
         }
       ],
-      "message": "能天使、蕾缪安二人组：两人都练到精二。",
-      "source_paths": [
-        "data/base_systems.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
+      "evidence": [
+        {
+          "path": "data/base_systems.json"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
+        }
       ],
-      "source_notes": "核心：能天使E2+蕾缪安E2。"
+      "review": {
+        "status": "needs_review",
+        "conflicts": [
+          "base_systems penguin_exusiai_lemuen 能天使 elite 0 vs MECHANICS 物流专家 elite 2"
+        ]
+      }
     },
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [],
-      "important": [],
-      "hangers": [
-        {
-          "name": "空",
-          "elite": 2
-        },
-        {
-          "name": "芬",
-          "elite": 1
-        }
-      ],
-      "priority_hangers": "P2",
-      "reason_code": "system_core_undertrained",
-      "needs_review": true,
-      "conflicts": [
-        "base_systems 拉普兰德 elite 0；训练按 vault/MECHANICS 取 E2"
-      ],
       "id": "penguin_texlap_e0",
+      "kind": "combo",
+      "scope": "same_station",
       "label": "德克萨斯拉普兰德二人组",
       "source_system_id": "penguin_texlap_e0",
-      "priority_ready_after_training": "P1",
-      "core": [
+      "admission": {
+        "required_core": [
+          "德克萨斯",
+          "拉普兰德"
+        ],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "德克萨斯",
-          "elite": 0
+          "operator": "德克萨斯",
+          "role": "core",
+          "target": {
+            "elite": 0
+          },
+          "priority": "P1",
+          "acquisition": "owned_only",
+          "rarity": 5
         },
         {
-          "name": "拉普兰德",
-          "elite": 2
+          "operator": "拉普兰德",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "owned_only",
+          "rarity": 5
+        },
+        {
+          "operator": "空",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 5
+        },
+        {
+          "operator": "芬",
+          "role": "hanger",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P2",
+          "acquisition": "policy",
+          "rarity": 3
         }
       ],
-      "message": "德克萨斯、拉普兰德二人组：拉普兰德练到精二，德克萨斯精英0即可。",
-      "source_paths": [
-        "data/base_systems.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
+      "evidence": [
+        {
+          "path": "data/base_systems.json"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
+        }
       ],
-      "source_notes": "核心：德克萨斯E0（恩怨）+拉普兰德E2（醉翁·β）。默契线另见 penguin_texangel_e2。"
+      "review": {
+        "status": "needs_review",
+        "conflicts": [
+          "base_systems 拉普兰德 elite 0；训练按 vault/MECHANICS 取 E2"
+        ]
+      }
     },
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [],
-      "important": [],
-      "hangers": [
-        {
-          "name": "空",
-          "elite": 2
-        },
-        {
-          "name": "芬",
-          "elite": 1
-        }
-      ],
-      "priority_hangers": "P2",
-      "reason_code": "system_core_undertrained",
-      "needs_review": false,
-      "conflicts": [],
       "id": "penguin_texangel_e2",
+      "kind": "combo",
+      "scope": "same_station",
       "label": "德克萨斯能天使二人组",
       "source_system_id": "penguin_texangel_e2",
-      "priority_ready_after_training": "P2",
-      "core": [
+      "admission": {
+        "required_core": [
+          "德克萨斯",
+          "能天使"
+        ],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "德克萨斯",
-          "elite": 2
+          "operator": "德克萨斯",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 5
         },
         {
-          "name": "能天使",
-          "elite": 0
+          "operator": "能天使",
+          "role": "core",
+          "target": {
+            "elite": 0
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 6
+        },
+        {
+          "operator": "空",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 5
+        },
+        {
+          "operator": "芬",
+          "role": "hanger",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P2",
+          "acquisition": "policy",
+          "rarity": 3
         }
       ],
-      "message": "德克萨斯、能天使二人组：德克萨斯练到精二。",
-      "source_paths": [
-        "data/base_systems.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
+      "evidence": [
+        {
+          "path": "data/base_systems.json"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
+        }
       ],
-      "source_notes": "核心：德克萨斯E2默契+能天使（恩怨旁路）。优先级低于德狼/能蕾。"
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [],
-      "important": [],
-      "hangers": [],
-      "priority_hangers": "P2",
-      "reason_code": "system_core_undertrained",
-      "needs_review": false,
-      "conflicts": [],
       "id": "snhunt_monhun_control",
+      "kind": "combo",
+      "scope": "control_center",
       "label": "怪猎中枢",
       "source_system_id": "snhunt_monhun_control",
-      "priority_ready_after_training": "P2",
-      "core": [
+      "admission": {
+        "required_core": [
+          "火龙S黑角",
+          "麒麟R夜刀"
+        ],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "火龙S黑角",
-          "elite": 2
+          "operator": "火龙S黑角",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "policy"
         },
         {
-          "name": "麒麟R夜刀",
-          "elite": 2
+          "operator": "麒麟R夜刀",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "policy"
         }
       ],
-      "message": "火龙S黑角、麒麟R夜刀二人组：两人都练到精二。制造站需要调查团成员同班。",
-      "source_paths": [
-        "data/base_systems.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/怪猎中枢.md"
+      "evidence": [
+        {
+          "path": "data/base_systems.json"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/怪猎中枢.md"
+        }
       ],
-      "source_notes": "核心双人缺一不可。消费方为泰拉大陆调查团成员（任意），不写入 fixed hangers。"
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [
-        {
-          "label": "中枢岁干员",
-          "elite": 2,
-          "candidates": [
-            "重岳",
-            "令"
-          ]
-        }
-      ],
-      "important": [],
-      "hangers": [],
-      "priority_hangers": "P2",
-      "reason_code": "system_core_undertrained",
-      "needs_review": true,
-      "conflicts": [
-        "pick_one elite 共享使重岳门槛被抬到 E2；实际知我为我 E0 即可"
-      ],
       "id": "human_fireworks_pure",
+      "kind": "combo",
+      "scope": "same_station",
       "label": "纯人间烟火",
       "source_system_id": "human_fireworks_pure",
-      "priority_ready_after_training": "P1",
-      "core": [
+      "admission": {
+        "required_core": [
+          "乌有",
+          "桑葚"
+        ],
+        "pick_one_core": [
+          {
+            "label": "中枢岁干员",
+            "candidates": [
+              "重岳",
+              "令"
+            ]
+          }
+        ]
+      },
+      "members": [
         {
-          "name": "乌有",
-          "elite": 2
+          "operator": "乌有",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
         },
         {
-          "name": "桑葚",
-          "elite": 2
+          "operator": "桑葚",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "重岳",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "令",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
         }
       ],
-      "message": "乌有、桑葚练到精二，中枢放重岳或令其中一个。",
-      "source_paths": [
-        "data/base_systems.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "docs/FIREWORKS.md"
+      "evidence": [
+        {
+          "path": "data/base_systems.json"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "docs/FIREWORKS.md"
+        }
       ],
-      "source_notes": "核心：乌有贸易E2+桑葚办公室E2；中枢重岳E0/令E2 为 pick_one（schema 共享 elite2，重岳门槛偏高）。"
+      "review": {
+        "status": "needs_review",
+        "conflicts": [
+          "pick_one elite 共享使重岳门槛被抬到 E2；实际知我为我 E0 即可"
+        ]
+      }
     },
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [],
-      "important": [
-        {
-          "name": "清流",
-          "elite": 1
-        },
-        {
-          "name": "承曦格雷伊",
-          "elite": 2
-        }
-      ],
-      "hangers": [
-        {
-          "name": "森蚺",
-          "elite": 2
-        },
-        {
-          "name": "冬时",
-          "elite": 1
-        },
-        {
-          "name": "异客",
-          "elite": 2
-        },
-        {
-          "name": "掠风",
-          "elite": 2
-        }
-      ],
-      "priority_hangers": "P1",
-      "reason_code": "system_core_undertrained",
-      "needs_review": true,
-      "conflicts": [
-        "vault 成套表清流写精2；MECHANICS 再生能源门槛精1——训练取精1"
-      ],
       "id": "automation_group",
+      "kind": "system",
+      "scope": "cross_station",
       "label": "自动化组",
       "source_system_id": "automation_group",
-      "priority_ready_after_training": "P0",
-      "core": [
+      "admission": {
+        "required_core": [
+          "温蒂"
+        ],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "温蒂",
-          "elite": 2
+          "operator": "温蒂",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "清流",
+          "role": "important",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P0",
+          "acquisition": "policy",
+          "rarity": 4
+        },
+        {
+          "operator": "承曦格雷伊",
+          "role": "important",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "森蚺",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "冬时",
+          "role": "hanger",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "异客",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "掠风",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
         }
       ],
-      "message": "温蒂练到精二；清流练到精一，承曦格雷伊练到精二。第三人常见森蚺、冬时、异客、掠风。",
-      "source_paths": [
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/自动化组.md",
-        "data/MECHANICS_REGISTRY.csv",
-        "docs/公孙长乐的体系分析文档/AUTOMATION_GROUP_CHAIN.md"
+      "evidence": [
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/自动化组.md"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "docs/公孙长乐的体系分析文档/AUTOMATION_GROUP_CHAIN.md"
+        }
       ],
-      "source_notes": "核心仅温蒂E2。重要：清流E1、承曦格雷伊E2。挂件第三人：森蚺E2/冬时E1/异客E2/掠风E2（缺不关闭，可换散件）。"
+      "review": {
+        "status": "needs_review",
+        "conflicts": [
+          "vault 成套表清流写精2；MECHANICS 再生能源门槛精1——训练取精1"
+        ]
+      }
     },
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [],
-      "important": [
-        {
-          "name": "灰毫",
-          "elite": 2
-        },
-        {
-          "name": "远牙",
-          "elite": 2
-        },
-        {
-          "name": "野鬃",
-          "elite": 2
-        }
-      ],
-      "hangers": [
-        {
-          "name": "砾",
-          "elite": 1
-        }
-      ],
-      "priority_hangers": "P1",
-      "reason_code": "system_core_undertrained",
-      "needs_review": false,
-      "conflicts": [],
       "id": "red_pine_forest",
+      "kind": "system",
+      "scope": "cross_station",
       "label": "红松林经验",
       "source_system_id": "red_pine_forest",
-      "priority_ready_after_training": "P0",
-      "core": [
+      "admission": {
+        "required_core": [
+          "焰尾",
+          "薇薇安娜"
+        ],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "焰尾",
-          "elite": 2
+          "operator": "焰尾",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "policy"
         },
         {
-          "name": "薇薇安娜",
-          "elite": 2
+          "operator": "薇薇安娜",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "灰毫",
+          "role": "important",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "远牙",
+          "role": "important",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "野鬃",
+          "role": "important",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "砾",
+          "role": "hanger",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 4
         }
       ],
-      "message": "焰尾、薇薇安娜二人组练到精二；灰毫、远牙、野鬃尽量练到精二，砾练到精一。",
-      "source_paths": [
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/红松林经验.md",
-        "data/MECHANICS_REGISTRY.csv",
-        "docs/公孙长乐的体系分析文档/RED_PINE_FOREST_CHAIN.md"
+      "evidence": [
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/红松林经验.md"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "docs/公孙长乐的体系分析文档/RED_PINE_FOREST_CHAIN.md"
+        }
       ],
-      "source_notes": "核心：焰尾E2+薇薇安娜E2（双中枢缺一关闭）。重要：灰毫/远牙/野鬃至少2人E2。挂件：砾E1（赤金线吃薇薇+7%，standalone 亦P0）。"
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [],
-      "important": [
-        {
-          "name": "夕",
-          "elite": 0
-        },
-        {
-          "name": "絮雨",
-          "elite": 2
-        }
-      ],
-      "hangers": [
-        {
-          "name": "爱丽丝",
-          "elite": 2
-        },
-        {
-          "name": "车尔尼",
-          "elite": 2
-        },
-        {
-          "name": "令",
-          "elite": 2
-        },
-        {
-          "name": "琴柳",
-          "elite": 2
-        }
-      ],
-      "priority_hangers": "P1",
-      "reason_code": "system_core_undertrained",
-      "needs_review": false,
-      "conflicts": [],
       "id": "rosemary_perception",
+      "kind": "system",
+      "scope": "cross_station",
       "label": "迷迭香感知链",
       "source_system_id": "rosemary_perception",
-      "priority_ready_after_training": "P0",
-      "core": [
+      "admission": {
+        "required_core": [
+          "迷迭香",
+          "黑键"
+        ],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "迷迭香",
-          "elite": 2
+          "operator": "迷迭香",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "policy"
         },
         {
-          "name": "黑键",
-          "elite": 2
+          "operator": "黑键",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "owned_only",
+          "rarity": 6
+        },
+        {
+          "operator": "夕",
+          "role": "important",
+          "target": {
+            "elite": 0
+          },
+          "priority": "P0",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "絮雨",
+          "role": "important",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P0",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "爱丽丝",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "车尔尼",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "令",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "琴柳",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
         }
       ],
-      "message": "迷迭香、黑键二人组练到精二；夕、絮雨优先，爱丽丝、车尔尼、令、琴柳可后练。",
-      "source_paths": [
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/迷迭香感知链.md",
-        "data/MECHANICS_REGISTRY.csv",
-        "docs/公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md"
+      "evidence": [
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/迷迭香感知链.md"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "docs/公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md"
+        }
       ],
-      "source_notes": "核心：迷迭香E2+黑键E2。重要：夕E0产感知、絮雨E2办公室。挂件：爱丽丝/车尔尼宿舍E2、令E2、琴柳E2。缺核心关闭；外围可砍。"
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [],
-      "important": [],
-      "hangers": [
-        {
-          "name": "琳琅诗怀雅",
-          "elite": 2
-        },
-        {
-          "name": "崖心",
-          "elite": 2
-        },
-        {
-          "name": "锏",
-          "elite": 2
-        }
-      ],
-      "priority_hangers": "P2",
-      "reason_code": "system_core_undertrained",
-      "needs_review": false,
-      "conflicts": [],
       "id": "ling_jie_karlan",
+      "kind": "combo",
+      "scope": "same_station",
       "label": "灵孑银崖喀兰",
       "source_system_id": "ling_jie_karlan",
-      "priority_ready_after_training": "P1",
-      "core": [
+      "admission": {
+        "required_core": [
+          "灵知",
+          "孑",
+          "银灰"
+        ],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "灵知",
-          "elite": 2
+          "operator": "灵知",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
         },
         {
-          "name": "孑",
-          "elite": 1
+          "operator": "孑",
+          "role": "core",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy"
         },
         {
-          "name": "银灰",
-          "elite": 2
+          "operator": "银灰",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "琳琅诗怀雅",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "崖心",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "锏",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "policy"
         }
       ],
-      "message": "灵知精二、孑精一、银灰精二；琳琅诗怀雅、崖心、锏可后练。",
-      "source_paths": [
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/灵孑银崖喀兰.md",
-        "data/MECHANICS_REGISTRY.csv"
+      "evidence": [
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/灵孑银崖喀兰.md"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        }
       ],
-      "source_notes": "核心：灵知E2中枢+孑E1市井+银灰E2。挂件：琳琅诗怀雅/崖心/锏等谢拉格工具人E2。缺灵知或银灰→不开。"
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [],
-      "important": [],
-      "hangers": [
-        {
-          "name": "戴菲恩",
-          "elite": 2
-        }
-      ],
-      "priority_hangers": "P2",
-      "reason_code": "system_core_undertrained",
-      "needs_review": false,
-      "conflicts": [],
       "id": "vina_lungmen",
+      "kind": "combo",
+      "scope": "same_station",
       "label": "推王龙门",
       "source_system_id": "vina_lungmen",
-      "priority_ready_after_training": "P1",
-      "core": [
+      "admission": {
+        "required_core": [
+          "维娜·维多利亚",
+          "摩根"
+        ],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "维娜·维多利亚",
-          "elite": 2
+          "operator": "维娜·维多利亚",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
         },
         {
-          "name": "摩根",
-          "elite": 2
+          "operator": "摩根",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "戴菲恩",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "policy"
         }
       ],
-      "message": "维娜·维多利亚、摩根二人组练到精二；戴菲恩中枢可后练。",
-      "source_paths": [
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/推王龙门.md",
-        "data/MECHANICS_REGISTRY.csv"
+      "evidence": [
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/推王龙门.md"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        }
       ],
-      "source_notes": "核心：维娜E2+摩根E2。挂件：戴菲恩E2中枢（面板 0.95→1.35）。第三人散件不入体系规则。"
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [],
-      "important": [],
-      "hangers": [],
-      "priority_hangers": "P2",
-      "reason_code": "system_core_undertrained",
-      "needs_review": false,
-      "conflicts": [],
       "id": "abyssal_hunters",
+      "kind": "system",
+      "scope": "cross_station",
       "label": "深海链",
       "source_system_id": "abyssal_hunters",
-      "priority_ready_after_training": "P1",
-      "core": [
+      "admission": {
+        "required_core": [
+          "歌蕾蒂娅"
+        ],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "歌蕾蒂娅",
-          "elite": 2
+          "operator": "歌蕾蒂娅",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P1",
+          "acquisition": "policy"
         }
       ],
-      "message": "歌蕾蒂娅练到精二。制造侧深海猎人不用为基建单独练。",
-      "source_paths": [
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/深海链.md",
-        "data/MECHANICS_REGISTRY.csv"
+      "evidence": [
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/深海链.md"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        }
       ],
-      "source_notes": "核心：歌蕾蒂娅E2集群狩猎·β。斯卡蒂/幽灵鲨/安哲拉/乌尔比安制造受buff者E0无需技能，不生成练卡。至少3人进制造为排班约束非训练门槛。"
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
-      "priority_blocked": "Info",
-      "pick_one_core": [],
-      "important": [],
-      "hangers": [
-        {
-          "name": "娜斯提",
-          "elite": 2
-        },
-        {
-          "name": "星源",
-          "elite": 2
-        },
-        {
-          "name": "白面鸮",
-          "elite": 2
-        },
-        {
-          "name": "缪尔赛思",
-          "elite": 2
-        }
-      ],
-      "priority_hangers": "P2",
-      "reason_code": "system_core_undertrained",
-      "needs_review": false,
-      "conflicts": [],
       "id": "rhine_lab",
+      "kind": "system",
+      "scope": "cross_station",
       "label": "莱茵科技",
       "source_system_id": "rhine_lab",
-      "priority_ready_after_training": "P2",
-      "core": [
+      "admission": {
+        "required_core": [
+          "多萝西",
+          "淬羽赫默"
+        ],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "多萝西",
-          "elite": 2
+          "operator": "多萝西",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "policy"
         },
         {
-          "name": "淬羽赫默",
-          "elite": 2
+          "operator": "淬羽赫默",
+          "role": "core",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "娜斯提",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "星源",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "白面鸮",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "policy"
+        },
+        {
+          "operator": "缪尔赛思",
+          "role": "hanger",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "policy"
         }
       ],
-      "message": "多萝西、淬羽赫默二人组练到精二；娜斯提、星源、白面鸮、缪尔赛思可后练。",
-      "source_paths": [
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/莱茵科技.md",
-        "data/MECHANICS_REGISTRY.csv",
-        "docs/公孙长乐的体系分析文档/RHINE_LAB_CHAIN.md"
+      "evidence": [
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/莱茵科技.md"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "docs/公孙长乐的体系分析文档/RHINE_LAB_CHAIN.md"
+        }
       ],
-      "source_notes": "半固定核心：多萝西E2+淬羽赫默E2。挂件第三人/阵营：娜斯提/星源/白面鸮/缪尔赛思。不强制成套。"
-    }
-  ],
-  "standalone_rules": [
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
+    },
     {
       "id": "standalone_high_value_trade",
+      "kind": "standalone",
+      "scope": "independent",
       "label": "高价值贸易站散件",
-      "priority": "P0",
-      "targets": [
+      "source_system_id": null,
+      "admission": {
+        "required_core": [],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "石英",
-          "elite": 1
+          "operator": "石英",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P0",
+          "acquisition": "policy",
+          "rarity": 4
         }
       ],
-      "reason_code": "standalone_high_value_trade",
-      "message": "石英精一后，贸易站订单效率大约+30%，制造站配方种类越多还能再涨一点；培养成本低、收益直观。",
-      "source_paths": [
-        "docs/练卡推荐规则.md",
-        "data/standalone_roster.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "data/operator_instances.json",
-        "data/skill_table.json"
+      "evidence": [
+        {
+          "path": "docs/练卡推荐规则.md"
+        },
+        {
+          "path": "data/standalone_roster.json"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "data/operator_instances.json"
+        },
+        {
+          "path": "data/skill_table.json"
+        }
       ],
-      "source_notes": "MECHANICS：石英精准排期精1，订单效率+30%且随制造配方种类额外+2%。",
-      "needs_review": false,
-      "conflicts": []
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
       "id": "standalone_high_value_gold",
+      "kind": "standalone",
+      "scope": "independent",
       "label": "高价值赤金散件",
-      "priority": "P0",
-      "targets": [
+      "source_system_id": null,
+      "admission": {
+        "required_core": [],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "清流",
-          "elite": 1
+          "operator": "清流",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P0",
+          "acquisition": "policy",
+          "rarity": 4
         },
         {
-          "name": "砾",
-          "elite": 1
+          "operator": "砾",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P0",
+          "acquisition": "policy",
+          "rarity": 4
         }
       ],
-      "reason_code": "standalone_high_value_gold",
-      "message": "清流精一后，每个贸易站都能抬赤金制造；砾精一赤金约+35%。两人都便宜，适合先练。",
-      "source_paths": [
-        "docs/练卡推荐规则.md",
-        "data/standalone_roster.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "data/operator_instances.json",
-        "data/skill_table.json"
+      "evidence": [
+        {
+          "path": "docs/练卡推荐规则.md"
+        },
+        {
+          "path": "data/standalone_roster.json"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "data/operator_instances.json"
+        },
+        {
+          "path": "data/skill_table.json"
+        }
       ],
-      "source_notes": "MECHANICS：清流再生能源精1（每贸易站+20%赤金）；砾金属工艺·β精1+35%赤金。清流收益随贸易站数量结算。",
-      "needs_review": false,
-      "conflicts": []
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
       "id": "standalone_high_value_battle_record",
+      "kind": "standalone",
+      "scope": "independent",
       "label": "高价值经验书散件",
-      "priority": "P0",
-      "targets": [
+      "source_system_id": null,
+      "admission": {
+        "required_core": [],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "断罪者",
-          "elite": 1
+          "operator": "断罪者",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P0",
+          "acquisition": "policy",
+          "rarity": 4
         },
         {
-          "name": "Castle-3",
-          "elite": 0,
-          "level": 30
+          "operator": "Castle-3",
+          "role": "independent",
+          "target": {
+            "elite": 0,
+            "level": 30
+          },
+          "priority": "P0",
+          "acquisition": "policy",
+          "rarity": 1
         }
       ],
-      "reason_code": "standalone_high_value_battle_record",
-      "message": "断罪者精一后经验书制造约+35%；Castle-3 升到30级约+30%。低成本就能把经验线撑起来。",
-      "source_paths": [
-        "docs/练卡推荐规则.md",
-        "data/standalone_roster.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "data/operator_instances.json",
-        "data/skill_table.json"
+      "evidence": [
+        {
+          "path": "docs/练卡推荐规则.md"
+        },
+        {
+          "path": "data/standalone_roster.json"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "data/operator_instances.json"
+        },
+        {
+          "path": "data/skill_table.json"
+        }
       ],
-      "source_notes": "MECHANICS：断罪者拳术指导录像精1/精2+35%经验；Castle-3作战指导录像精0/精1+30%，1星门槛按规则写 level 30。",
-      "needs_review": false,
-      "conflicts": []
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
       "id": "standalone_low_cost_trade_fillers",
+      "kind": "standalone",
+      "scope": "independent",
       "label": "常用低成本贸易站补位",
-      "priority": "P1",
-      "targets": [
+      "source_system_id": null,
+      "admission": {
+        "required_core": [],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "慕斯",
-          "elite": 1
+          "operator": "慕斯",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 4
         },
         {
-          "name": "缠丸",
-          "elite": 1
+          "operator": "缠丸",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 4
         },
         {
-          "name": "安比尔",
-          "elite": 1
+          "operator": "安比尔",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 4
         },
         {
-          "name": "夜烟",
-          "elite": 1
+          "operator": "夜烟",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 4
         },
         {
-          "name": "芬",
-          "elite": 1
+          "operator": "芬",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 3
         },
         {
-          "name": "夜刀",
-          "elite": 1
+          "operator": "夜刀",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 2
         },
         {
-          "name": "古米",
-          "elite": 1
+          "operator": "古米",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 4
         }
       ],
-      "reason_code": "standalone_low_cost_trade_filler",
-      "message": "这些三/四星精一后，贸易站订单效率大约+30%，适合当常驻补位，不必等六星成型。",
-      "source_paths": [
-        "docs/练卡推荐规则.md",
-        "data/MECHANICS_REGISTRY.csv",
-        "data/standalone_roster.json"
+      "evidence": [
+        {
+          "path": "docs/练卡推荐规则.md"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "data/standalone_roster.json"
+        }
       ],
-      "source_notes": "MECHANICS：订单分发·β/交际类 ≥30%。三/四星按规则写精一门槛。",
-      "needs_review": false,
-      "conflicts": []
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
       "id": "standalone_cheap_trade_level30",
+      "kind": "standalone",
+      "scope": "independent",
       "label": "三星贸易30%（等级门槛）",
-      "priority": "P1",
-      "targets": [
+      "source_system_id": null,
+      "admission": {
+        "required_core": [],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "月见夜",
-          "elite": 0,
-          "level": 30
+          "operator": "月见夜",
+          "role": "independent",
+          "target": {
+            "elite": 0,
+            "level": 30
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 3
         },
         {
-          "name": "空爆",
-          "elite": 0,
-          "level": 30
+          "operator": "空爆",
+          "role": "independent",
+          "target": {
+            "elite": 0,
+            "level": 30
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 3
         }
       ],
-      "reason_code": "standalone_cheap_trade_level",
-      "message": "月见夜、空爆升到30级即可用交际技能，贸易站订单效率约+30%，几乎不占精英材料。",
-      "source_paths": [
-        "docs/练卡推荐规则.md",
-        "data/MECHANICS_REGISTRY.csv",
-        "data/standalone_roster.json",
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/4-散件工具人/散件干员速查.md"
+      "evidence": [
+        {
+          "path": "docs/练卡推荐规则.md"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "data/standalone_roster.json"
+        },
+        {
+          "path": "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/4-散件工具人/散件干员速查.md"
+        }
       ],
-      "source_notes": "MECHANICS：古米；月见夜；空爆 交际精0+30%。1-2星/三星低成本按等级30门槛；古米四星归精一补位条。",
-      "needs_review": false,
-      "conflicts": []
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
       "id": "standalone_low_cost_gold_filler",
+      "kind": "standalone",
+      "scope": "independent",
       "label": "常用低成本赤金补位",
-      "priority": "P1",
-      "targets": [
+      "source_system_id": null,
+      "admission": {
+        "required_core": [],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "斑点",
-          "elite": 1
+          "operator": "斑点",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 3
         },
         {
-          "name": "夜烟",
-          "elite": 1
+          "operator": "夜烟",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 4
         },
         {
-          "name": "苍苔",
-          "elite": 1
+          "operator": "苍苔",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 5
         }
       ],
-      "reason_code": "standalone_low_cost_gold_filler",
-      "message": "斑点、夜烟、苍苔精一后，赤金制造大约+30%，适合在还没有高星赤金手时先顶着。",
-      "source_paths": [
-        "docs/练卡推荐规则.md",
-        "data/standalone_roster.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "data/operator_instances.json",
-        "data/skill_table.json"
+      "evidence": [
+        {
+          "path": "docs/练卡推荐规则.md"
+        },
+        {
+          "path": "data/standalone_roster.json"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "data/operator_instances.json"
+        },
+        {
+          "path": "data/skill_table.json"
+        }
       ],
-      "source_notes": "MECHANICS：金属工艺·α 精0/精1 +30%赤金。苍苔另有打工心得精2未要求。",
-      "needs_review": false,
-      "conflicts": []
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
       "id": "standalone_low_cost_battle_record_fillers",
+      "kind": "standalone",
+      "scope": "independent",
       "label": "常用低成本经验书补位",
-      "priority": "P1",
-      "targets": [
+      "source_system_id": null,
+      "admission": {
+        "required_core": [],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "霜叶",
-          "elite": 1
+          "operator": "霜叶",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 4
         },
         {
-          "name": "白雪",
-          "elite": 1
+          "operator": "白雪",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 4
         },
         {
-          "name": "红豆",
-          "elite": 1
+          "operator": "红豆",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 4
         },
         {
-          "name": "食铁兽",
-          "elite": 1
+          "operator": "食铁兽",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 4
         }
       ],
-      "reason_code": "standalone_low_cost_battle_record_filler",
-      "message": "霜叶、白雪、红豆、食铁兽精一后，经验书制造大约+30%（食铁兽还可衔接口更高档），适合经验线补位。",
-      "source_paths": [
-        "docs/练卡推荐规则.md",
-        "data/standalone_roster.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "data/operator_instances.json",
-        "data/skill_table.json"
+      "evidence": [
+        {
+          "path": "docs/练卡推荐规则.md"
+        },
+        {
+          "path": "data/standalone_roster.json"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "data/operator_instances.json"
+        },
+        {
+          "path": "data/skill_table.json"
+        }
       ],
-      "source_notes": "MECHANICS：作战指导录像精0/精1+30%；食铁兽精1可衔接口拳术指导录像+35%。",
-      "needs_review": false,
-      "conflicts": []
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
       "id": "standalone_hongyun_recycle",
+      "kind": "soft_combo",
+      "scope": "independent",
       "label": "红云仓库转化",
-      "priority": "P1",
-      "targets": [
+      "source_system_id": null,
+      "admission": {
+        "required_core": [],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "红云",
-          "elite": 1
+          "operator": "红云",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P1",
+          "acquisition": "policy",
+          "rarity": 4
         }
       ],
-      "reason_code": "standalone_hongyun_recycle",
-      "message": "红云精一后，同站仓库容量会转成生产力：仓库格子越多，制造越快，常和泡泡、泡普卡一类仓容手同站。",
-      "source_paths": [
-        "docs/练卡推荐规则.md",
-        "data/MECHANICS_REGISTRY.csv",
-        "data/standalone_roster.json"
+      "evidence": [
+        {
+          "path": "docs/练卡推荐规则.md"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "data/standalone_roster.json"
+        }
       ],
-      "source_notes": "MECHANICS：红云拾荒者精0仓+8；回收利用精1每格仓+2%生产力。常与泡泡/泡普卡等同站。",
-      "needs_review": false,
-      "conflicts": []
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
       "id": "standalone_high_efficiency_e2",
+      "kind": "standalone",
+      "scope": "independent",
       "label": "高效率精二散件（≥35%或上限档）",
-      "priority": "P2",
-      "targets": [
+      "source_system_id": null,
+      "admission": {
+        "required_core": [],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "空弦",
-          "elite": 2
+          "operator": "空弦",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 6
         },
         {
-          "name": "吉星",
-          "elite": 2
+          "operator": "吉星",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 5
         },
         {
-          "name": "槐琥",
-          "elite": 2
+          "operator": "槐琥",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 5
         },
         {
-          "name": "海蒂",
-          "elite": 2
+          "operator": "海蒂",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 5
         },
         {
-          "name": "能天使",
-          "elite": 2
+          "operator": "能天使",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 6
         },
         {
-          "name": "雪雉",
-          "elite": 2
+          "operator": "雪雉",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 5
         }
       ],
-      "reason_code": "standalone_40pct_efficiency",
-      "message": "这些干员精二后，贸易或相关设施能拿到大约+35%量级的独立效率，适合有材料时补强单人位。",
-      "source_paths": [
-        "docs/练卡推荐规则.md",
-        "data/standalone_roster.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "data/operator_instances.json",
-        "data/skill_table.json"
+      "evidence": [
+        {
+          "path": "docs/练卡推荐规则.md"
+        },
+        {
+          "path": "data/standalone_roster.json"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "data/operator_instances.json"
+        },
+        {
+          "path": "data/skill_table.json"
+        }
       ],
-      "source_notes": "MECHANICS：空弦筹款β、吉星勤俭β、槐琥配合意识、海蒂名流欢会+35%、能天使物流专家+35%、雪雉天道酬勤β上限35%。",
-      "needs_review": false,
-      "conflicts": []
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
       "id": "standalone_trade_30pct_e2",
+      "kind": "standalone",
+      "scope": "independent",
       "label": "贸易站30%精二散件",
-      "priority": "P2",
-      "targets": [
+      "source_system_id": null,
+      "admission": {
+        "required_core": [],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "可颂",
-          "elite": 2
+          "operator": "可颂",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 5
         },
         {
-          "name": "拜松",
-          "elite": 2
+          "operator": "拜松",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 5
         },
         {
-          "name": "衡沙",
-          "elite": 2
+          "operator": "衡沙",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 5
         },
         {
-          "name": "瑰盐",
-          "elite": 2
+          "operator": "瑰盐",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 5
         },
         {
-          "name": "深巡",
-          "elite": 2
+          "operator": "深巡",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 5
         }
       ],
-      "reason_code": "standalone_trade_30pct_e2",
-      "message": "精二后贸易站订单效率到约+30%档，部分人还带订单上限+1，适合当稳定贸易补位。",
-      "source_paths": [
-        "docs/练卡推荐规则.md",
-        "data/MECHANICS_REGISTRY.csv",
-        "data/standalone_roster.json"
+      "evidence": [
+        {
+          "path": "docs/练卡推荐规则.md"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "data/standalone_roster.json"
+        }
       ],
-      "source_notes": "MECHANICS：可颂/拜松/衡沙 精2 +30%且上限+1；瑰盐订单分发·β精2+30%；深巡对陆接洽代表·β精2+30%。不表示优先于战斗。",
-      "needs_review": false,
-      "conflicts": []
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
       "id": "standalone_battle_record_30pct_e2",
+      "kind": "standalone",
+      "scope": "independent",
       "label": "经验书30%以上精二散件",
-      "priority": "P2",
-      "targets": [
+      "source_system_id": null,
+      "admission": {
+        "required_core": [],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "裂响",
-          "elite": 2
+          "operator": "裂响",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 6
         },
         {
-          "name": "酒神",
-          "elite": 2
+          "operator": "酒神",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 6
         },
         {
-          "name": "弑君者",
-          "elite": 2
+          "operator": "弑君者",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 5
         },
         {
-          "name": "圣约送葬人",
-          "elite": 2
+          "operator": "圣约送葬人",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 6
         },
         {
-          "name": "怒潮凛冬",
-          "elite": 2
+          "operator": "怒潮凛冬",
+          "role": "independent",
+          "target": {
+            "elite": 2
+          },
+          "priority": "P2",
+          "acquisition": "owned_only",
+          "rarity": 6
         }
       ],
-      "reason_code": "standalone_battle_record_30pct_e2",
-      "message": "精二后经验书制造大约+30%～35%，适合长期经验线缺人时补强，不必优先于体系核心。",
-      "source_paths": [
-        "docs/练卡推荐规则.md",
-        "data/MECHANICS_REGISTRY.csv",
-        "data/standalone_roster.json"
+      "evidence": [
+        {
+          "path": "docs/练卡推荐规则.md"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        },
+        {
+          "path": "data/standalone_roster.json"
+        }
       ],
-      "source_notes": "MECHANICS：裂响连轴转/酒神戏中人/弑君者逆境荣光 +35%；圣约送葬人公证所教习·β+30%；怒潮凛冬情同手足+30%（同学团额外+10%）。怒潮凛冬精0已有+30%，精2为完整档。",
-      "needs_review": false,
-      "conflicts": []
+      "review": {
+        "status": "confirmed",
+        "conflicts": []
+      }
     },
     {
       "id": "standalone_standard_beta",
+      "kind": "standalone",
+      "scope": "independent",
       "label": "通用标准化·β 25%",
-      "priority": "P2",
-      "targets": [
+      "source_system_id": null,
+      "admission": {
+        "required_core": [],
+        "pick_one_core": []
+      },
+      "members": [
         {
-          "name": "香草",
-          "elite": 1
+          "operator": "香草",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P2",
+          "acquisition": "policy",
+          "rarity": 3
         },
         {
-          "name": "史都华德",
-          "elite": 1
+          "operator": "史都华德",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P2",
+          "acquisition": "policy",
+          "rarity": 3
         },
         {
-          "name": "杰西卡",
-          "elite": 1
+          "operator": "杰西卡",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P2",
+          "acquisition": "policy",
+          "rarity": 4
         },
         {
-          "name": "调香师",
-          "elite": 1
+          "operator": "调香师",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P2",
+          "acquisition": "policy",
+          "rarity": 4
         },
         {
-          "name": "罗比菈塔",
-          "elite": 1
+          "operator": "罗比菈塔",
+          "role": "independent",
+          "target": {
+            "elite": 1
+          },
+          "priority": "P2",
+          "acquisition": "policy",
+          "rarity": 4
         }
       ],
-      "reason_code": "standalone_standard_beta",
-      "message": "香草、史都华德等精一后，制造站通用标准化大约+25%，配方不挑食，适合当万金油制造补位。",
-      "source_paths": [
-        "docs/练卡推荐规则.md",
-        "data/MECHANICS_REGISTRY.csv"
+      "evidence": [
+        {
+          "path": "docs/练卡推荐规则.md"
+        },
+        {
+          "path": "data/MECHANICS_REGISTRY.csv"
+        }
       ],
-      "source_notes": "MECHANICS：史都华德；杰西卡；水月；海沫；罗比菈塔；调香师；香草 标准化·β 精0/1/2 +25%。水月/海沫五星技能E0已可用，本条只收三/四星精一约定档；五星未列入以免违背E0免练。",
-      "needs_review": true,
-      "conflicts": [
-        "MECHANICS lists skill at elite 0 for all; elite 1 follows project 3-4 star convention like 慕斯"
-      ]
+      "review": {
+        "status": "needs_review",
+        "conflicts": [
+          "MECHANICS lists skill at elite 0 for all; elite 1 follows project 3-4 star convention like 慕斯"
+        ]
+      }
     }
   ]
 }

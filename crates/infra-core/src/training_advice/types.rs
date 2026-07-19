@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::roster::OperatorProgress;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum RecommendationPriority {
     P0,
     P1,
@@ -23,28 +23,77 @@ impl RecommendationPriority {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum RecommendationKind {
-    Train,
-    Info,
+pub enum RuleKind {
+    System,
+    Combo,
+    Standalone,
+    SoftCombo,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SystemStatus {
+pub enum RuleScope {
+    SameStation,
+    CrossStation,
+    ControlCenter,
+    Independent,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MemberRole {
+    Core,
+    Important,
+    Hanger,
+    Independent,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AcquisitionMode {
+    OwnedOnly,
+    SuggestAcquire,
+    Policy,
+}
+
+impl Default for AcquisitionMode {
+    fn default() -> Self {
+        Self::Policy
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewStatus {
+    Confirmed,
+    NeedsReview,
+}
+
+impl Default for ReviewStatus {
+    fn default() -> Self {
+        Self::Confirmed
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RecommendationAction {
+    Train,
+    AcquireThenTrain,
     Ready,
-    ReadyAfterTraining,
-    PartialBlocked,
-    Missing,
-    StandaloneReady,
-    StandaloneTrainable,
+    Blocked,
+    Review,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrainingTarget {
-    pub name: String,
     pub elite: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub level: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill_name: Option<String>,
 }
 
 impl TrainingTarget {
@@ -76,85 +125,106 @@ impl From<OperatorProgress> for OperatorTrainingState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PickOneCoreRule {
+pub struct PickOneCoreSlot {
     pub label: String,
-    pub elite: u8,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub level: Option<u32>,
     pub candidates: Vec<String>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RuleAdmission {
+    #[serde(default)]
+    pub required_core: Vec<String>,
+    #[serde(default)]
+    pub pick_one_core: Vec<PickOneCoreSlot>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StandaloneRecommendationRule {
-    pub id: String,
-    pub label: String,
+pub struct MemberBenefit {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub facility: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub product: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub efficiency_tier: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleMember {
+    pub operator: String,
+    pub role: MemberRole,
+    pub target: TrainingTarget,
     pub priority: RecommendationPriority,
-    pub targets: Vec<TrainingTarget>,
-    pub reason_code: String,
     #[serde(default)]
-    pub message: String,
-    #[serde(default)]
-    pub source_paths: Vec<String>,
+    pub acquisition: AcquisitionMode,
+    /// Optional rarity hint for acquisition policy when the operator is unowned.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_repo: Option<String>,
+    pub rarity: Option<u8>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_notes: Option<String>,
+    pub benefit: Option<MemberBenefit>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvidenceRef {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub heading: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RuleReview {
     #[serde(default)]
-    pub needs_review: bool,
+    pub status: ReviewStatus,
     #[serde(default)]
     pub conflicts: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SystemRecommendationRule {
+pub struct TrainingRule {
     pub id: String,
+    pub kind: RuleKind,
+    pub scope: RuleScope,
     pub label: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_system_id: Option<String>,
-    pub priority_ready_after_training: RecommendationPriority,
-    #[serde(default = "default_info_priority")]
-    pub priority_blocked: RecommendationPriority,
-    pub core: Vec<TrainingTarget>,
     #[serde(default)]
-    pub pick_one_core: Vec<PickOneCoreRule>,
+    pub admission: RuleAdmission,
+    pub members: Vec<RuleMember>,
     #[serde(default)]
-    pub important: Vec<TrainingTarget>,
+    pub evidence: Vec<EvidenceRef>,
     #[serde(default)]
-    pub hangers: Vec<TrainingTarget>,
-    #[serde(default = "default_hanger_priority")]
-    pub priority_hangers: RecommendationPriority,
-    pub reason_code: String,
-    #[serde(default)]
-    pub message: String,
-    #[serde(default)]
-    pub source_paths: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_repo: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_notes: Option<String>,
-    #[serde(default)]
-    pub needs_review: bool,
-    #[serde(default)]
-    pub conflicts: Vec<String>,
+    pub review: RuleReview,
 }
 
-fn default_info_priority() -> RecommendationPriority {
-    RecommendationPriority::Info
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AcquisitionPolicy {
+    #[serde(default = "default_rarity_le")]
+    pub default_rarity_le: u8,
+    #[serde(default)]
+    pub named_exceptions: Vec<String>,
 }
 
-fn default_hanger_priority() -> RecommendationPriority {
-    RecommendationPriority::P2
+fn default_rarity_le() -> u8 {
+    4
+}
+
+impl Default for AcquisitionPolicy {
+    fn default() -> Self {
+        Self {
+            default_rarity_le: default_rarity_le(),
+            named_exceptions: vec!["苍苔".to_string()],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainingRecommendationRules {
     pub version: u32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_repo: Option<String>,
     #[serde(default)]
-    pub standalone_rules: Vec<StandaloneRecommendationRule>,
+    pub acquisition_policy: AcquisitionPolicy,
     #[serde(default)]
-    pub system_rules: Vec<SystemRecommendationRule>,
+    pub rules: Vec<TrainingRule>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -167,74 +237,69 @@ pub struct TrainingAdviceReport {
     pub schema_version: u32,
     pub operbox_label: String,
     pub summary: TrainingAdviceSummary,
-    pub recommendations: Vec<TrainingRecommendation>,
-    pub systems: Vec<TrainingSystemReport>,
-    pub rag_context: Vec<RagContextItem>,
+    pub now: Vec<OperatorAdviceItem>,
+    pub conditional: Vec<OperatorAdviceItem>,
+    pub blocked: Vec<BlockedRuleReport>,
+    pub ready: Vec<OperatorAdviceItem>,
+    pub review: Vec<OperatorAdviceItem>,
+    pub source_refs: Vec<EvidenceRef>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainingAdviceSummary {
     pub owned: usize,
     pub modelled_owned: usize,
-    pub ready_systems: usize,
-    pub blocked_systems: usize,
-    pub trainable_recommendations: usize,
+    pub now_count: usize,
+    pub conditional_count: usize,
+    pub blocked_count: usize,
+    pub review_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TrainingRecommendation {
-    pub priority: RecommendationPriority,
-    pub kind: RecommendationKind,
+pub struct OperatorAdviceItem {
     pub operator: String,
-    pub target: OperatorTrainingState,
+    pub action: RecommendationAction,
+    pub display_priority: RecommendationPriority,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current: Option<OperatorTrainingState>,
-    pub reason_code: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub system_id: Option<String>,
+    pub target: OperatorTrainingState,
+    pub matches: Vec<RuleMatch>,
     #[serde(default)]
-    pub related_systems: Vec<String>,
-    pub message: String,
-    #[serde(default)]
-    pub source_paths: Vec<String>,
+    pub source_refs: Vec<EvidenceRef>,
     #[serde(default)]
     pub needs_review: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TrainingSystemReport {
-    pub id: String,
+pub struct RuleMatch {
+    pub rule_id: String,
+    pub kind: RuleKind,
     pub label: String,
-    pub status: SystemStatus,
+    pub role: MemberRole,
+    pub priority: RecommendationPriority,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub benefit: Option<MemberBenefit>,
     #[serde(default)]
+    pub source_refs: Vec<EvidenceRef>,
+    #[serde(default)]
+    pub needs_review: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan_note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockedRuleReport {
+    pub rule_id: String,
+    pub kind: RuleKind,
+    pub label: String,
+    pub missing_core: Vec<String>,
     pub owned_core: Vec<String>,
     #[serde(default)]
-    pub missing_core: Vec<String>,
+    pub deferred_members: Vec<String>,
     #[serde(default)]
-    pub undertrained_core: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub blocked_reason: Option<String>,
+    pub conditional_acquire: Vec<String>,
     #[serde(default)]
-    pub source_paths: Vec<String>,
-    #[serde(default)]
-    pub needs_review: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RagContextItem {
-    pub key: String,
-    #[serde(rename = "type")]
-    pub kind: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub operator: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub system_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reason_code: Option<String>,
-    #[serde(default)]
-    pub source_paths: Vec<String>,
+    pub source_refs: Vec<EvidenceRef>,
     #[serde(default)]
     pub needs_review: bool,
 }
