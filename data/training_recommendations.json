@@ -36,7 +36,7 @@
           "elite": 2
         }
       ],
-      "message": "巫恋线：把巫恋、龙舌兰练到精二，贸易站会稳定吃到裁缝相关加成；第三人从卡夫卡/柏喙/明椒/折光里任选一个练到精二即可成组。",
+      "message": "巫恋、龙舌兰练到精二；第三人从卡夫卡、柏喙、明椒、折光里任选一个练到精二。",
       "source_paths": [
         "data/base_systems.json",
         "data/MECHANICS_REGISTRY.csv",
@@ -101,7 +101,7 @@
           "elite": 2
         }
       ],
-      "message": "可露希尔线：把可露希尔练到精二可开特别订单玩法；黑键、吉星是三人站补位，能加强但不是开局必需。",
+      "message": "可露希尔练到精二。黑键、吉星可后练。",
       "source_paths": [
         "data/base_systems.json",
         "data/MECHANICS_REGISTRY.csv",
@@ -119,7 +119,7 @@
       "needs_review": false,
       "conflicts": [],
       "id": "lungmen_manu_pair",
-      "label": "龙门中枢组",
+      "label": "斩业星熊诗怀雅二人组",
       "source_system_id": "lungmen_manu_pair",
       "priority_ready_after_training": "P1",
       "core": [
@@ -132,7 +132,7 @@
           "elite": 0
         }
       ],
-      "message": "龙门中枢：斩业星熊练到精二、诗怀雅保持可用即可；两人一起坐中枢时制造侧收益更完整。",
+      "message": "斩业星熊、诗怀雅二人组：斩业星熊练到精二，诗怀雅可用即可。",
       "source_paths": [
         "data/base_systems.json",
         "data/MECHANICS_REGISTRY.csv",
@@ -162,7 +162,7 @@
         "base_systems penguin_exusiai_lemuen 能天使 elite 0 vs MECHANICS 物流专家 elite 2"
       ],
       "id": "penguin_exusiai_lemuen",
-      "label": "企鹅物流·能蕾",
+      "label": "能天使蕾缪安二人组",
       "source_system_id": "penguin_exusiai_lemuen",
       "priority_ready_after_training": "P1",
       "core": [
@@ -175,13 +175,13 @@
           "elite": 2
         }
       ],
-      "message": "企鹅物流·能蕾：能天使与蕾缪安都练到精二后贸易站效率很强；空、芬可作为第三人补位再练。",
+      "message": "能天使、蕾缪安二人组：两人都练到精二。",
       "source_paths": [
         "data/base_systems.json",
         "data/MECHANICS_REGISTRY.csv",
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
       ],
-      "source_notes": "核心：能天使E2+蕾缪安E2。第三人流星无贸易技能不入规则；空贸易βE2、芬订单分发β按精一。base 写能天使 elite0 已按 MECHANICS 纠正。"
+      "source_notes": "核心：能天使E2+蕾缪安E2。"
     },
     {
       "priority_blocked": "Info",
@@ -204,7 +204,7 @@
         "base_systems 拉普兰德 elite 0；训练按 vault/MECHANICS 取 E2"
       ],
       "id": "penguin_texlap_e0",
-      "label": "企鹅物流·德狼",
+      "label": "德克萨斯拉普兰德二人组",
       "source_system_id": "penguin_texlap_e0",
       "priority_ready_after_training": "P1",
       "core": [
@@ -217,7 +217,7 @@
           "elite": 2
         }
       ],
-      "message": "企鹅物流·德狼：德克萨斯精英0就能用恩怨，拉普兰德练到精二开醉翁；空、芬可作第三人补位。",
+      "message": "德克萨斯、拉普兰德二人组：拉普兰德练到精二，德克萨斯精英0即可。",
       "source_paths": [
         "data/base_systems.json",
         "data/MECHANICS_REGISTRY.csv",
@@ -244,7 +244,7 @@
       "needs_review": false,
       "conflicts": [],
       "id": "penguin_texangel_e2",
-      "label": "企鹅物流·德能默契",
+      "label": "德克萨斯能天使二人组",
       "source_system_id": "penguin_texangel_e2",
       "priority_ready_after_training": "P2",
       "core": [
@@ -257,7 +257,7 @@
           "elite": 0
         }
       ],
-      "message": "企鹅物流·德能默契：德克萨斯精二默契搭配能天使，是另一条较少触发的加成线；优先级通常低于德狼和能蕾。",
+      "message": "德克萨斯、能天使二人组：德克萨斯练到精二。",
       "source_paths": [
         "data/base_systems.json",
         "data/MECHANICS_REGISTRY.csv",
@@ -288,7 +288,7 @@
           "elite": 2
         }
       ],
-      "message": "怪猎中枢：火龙S黑角与麒麟R夜刀都要精二；中枢开起来后，需要调查团成员同班才能吃满效果。",
+      "message": "火龙S黑角、麒麟R夜刀二人组：两人都练到精二。制造站需要调查团成员同班。",
       "source_paths": [
         "data/base_systems.json",
         "data/MECHANICS_REGISTRY.csv",
@@ -330,7 +330,7 @@
           "elite": 2
         }
       ],
-      "message": "人间烟火：乌有贸易、桑葚办公室都练到精二，中枢再放重岳或令其一；三人齐了整条线才完整。",
+      "message": "乌有、桑葚练到精二，中枢放重岳或令其中一个。",
       "source_paths": [
         "data/base_systems.json",
         "data/MECHANICS_REGISTRY.csv",
@@ -385,7 +385,7 @@
           "elite": 2
         }
       ],
-      "message": "自动化组：先把温蒂练到精二；清流精一、承曦格雷伊精二能明显抬收益，第三人可用森蚺/冬时/异客/掠风或普通散件。",
+      "message": "温蒂练到精二；清流练到精一，承曦格雷伊练到精二。第三人常见森蚺、冬时、异客、掠风。",
       "source_paths": [
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/自动化组.md",
         "data/MECHANICS_REGISTRY.csv",
@@ -434,7 +434,7 @@
           "elite": 2
         }
       ],
-      "message": "红松林：焰尾、薇薇安娜精二坐中枢是前提；灰毫/远牙/野鬃经验线尽量补齐，砾精一还能吃赤金加成。",
+      "message": "焰尾、薇薇安娜二人组练到精二；灰毫、远牙、野鬃尽量练到精二，砾练到精一。",
       "source_paths": [
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/红松林经验.md",
         "data/MECHANICS_REGISTRY.csv",
@@ -491,7 +491,7 @@
           "elite": 2
         }
       ],
-      "message": "迷迭香感知链：迷迭香与黑键精二是开线前提；夕、絮雨负责产感知，宿舍与令/琴柳是外围加强，可按投入取舍。",
+      "message": "迷迭香、黑键二人组练到精二；夕、絮雨优先，爱丽丝、车尔尼、令、琴柳可后练。",
       "source_paths": [
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/迷迭香感知链.md",
         "data/MECHANICS_REGISTRY.csv",
@@ -539,7 +539,7 @@
           "elite": 2
         }
       ],
-      "message": "灵孑银崖：灵知中枢精二、孑贸易精一、银灰精二是成组门槛；琳琅诗怀雅、崖心、锏等是喀兰补位，可后练。",
+      "message": "灵知精二、孑精一、银灰精二；琳琅诗怀雅、崖心、锏可后练。",
       "source_paths": [
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/灵孑银崖喀兰.md",
         "data/MECHANICS_REGISTRY.csv"
@@ -574,7 +574,7 @@
           "elite": 2
         }
       ],
-      "message": "推王龙门：维娜与摩根都练到精二是主线；戴菲恩放中枢是满配加强，没有也能先开两人。",
+      "message": "维娜·维多利亚、摩根二人组练到精二；戴菲恩中枢可后练。",
       "source_paths": [
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/推王龙门.md",
         "data/MECHANICS_REGISTRY.csv"
@@ -600,7 +600,7 @@
           "elite": 2
         }
       ],
-      "message": "深海链：歌蕾蒂娅练到精二开集群狩猎；斯卡蒂、幽灵鲨等猎人在制造站受加成，一般不必为基建单独拉练度。",
+      "message": "歌蕾蒂娅练到精二。制造侧深海猎人不用为基建单独练。",
       "source_paths": [
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/深海链.md",
         "data/MECHANICS_REGISTRY.csv"
@@ -647,7 +647,7 @@
           "elite": 2
         }
       ],
-      "message": "莱茵科技：多萝西与淬羽赫默精二是半固定核心；娜斯提/星源/白面鸮/缪尔赛思可作第三人与阵营补位，不强制成套。",
+      "message": "多萝西、淬羽赫默二人组练到精二；娜斯提、星源、白面鸮、缪尔赛思可后练。",
       "source_paths": [
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/莱茵科技.md",
         "data/MECHANICS_REGISTRY.csv",
@@ -668,7 +668,7 @@
         }
       ],
       "reason_code": "standalone_high_value_trade",
-      "message": "石英精一后，贸易站订单效率大约+30%，制造站配方种类越多还能再涨一点；培养成本低、收益直观。",
+      "message": "石英练到精一。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
@@ -695,7 +695,7 @@
         }
       ],
       "reason_code": "standalone_high_value_gold",
-      "message": "清流精一后，每个贸易站都能抬赤金制造；砾精一赤金约+35%。两人都便宜，适合先练。",
+      "message": "清流、砾练到精一。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
@@ -723,7 +723,7 @@
         }
       ],
       "reason_code": "standalone_high_value_battle_record",
-      "message": "断罪者精一后经验书制造约+35%；Castle-3 升到30级约+30%。低成本就能把经验线撑起来。",
+      "message": "断罪者练到精一，Castle-3 练到 30 级。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
@@ -770,7 +770,7 @@
         }
       ],
       "reason_code": "standalone_low_cost_trade_filler",
-      "message": "这些三/四星精一后，贸易站订单效率大约+30%，适合当常驻补位，不必等六星成型。",
+      "message": "这些三星、四星贸易补位练到精一。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/MECHANICS_REGISTRY.csv",
@@ -797,7 +797,7 @@
         }
       ],
       "reason_code": "standalone_cheap_trade_level",
-      "message": "月见夜、空爆升到30级即可用交际技能，贸易站订单效率约+30%，几乎不占精英材料。",
+      "message": "月见夜、空爆练到 30 级。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/MECHANICS_REGISTRY.csv",
@@ -827,7 +827,7 @@
         }
       ],
       "reason_code": "standalone_low_cost_gold_filler",
-      "message": "斑点、夜烟、苍苔精一后，赤金制造大约+30%，适合在还没有高星赤金手时先顶着。",
+      "message": "斑点、夜烟、苍苔练到精一。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
@@ -862,7 +862,7 @@
         }
       ],
       "reason_code": "standalone_low_cost_battle_record_filler",
-      "message": "霜叶、白雪、红豆、食铁兽精一后，经验书制造大约+30%（食铁兽还可衔接口更高档），适合经验线补位。",
+      "message": "霜叶、白雪、红豆、食铁兽练到精一。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
@@ -885,7 +885,7 @@
         }
       ],
       "reason_code": "standalone_hongyun_recycle",
-      "message": "红云精一后，同站仓库容量会转成生产力：仓库格子越多，制造越快，常和泡泡、泡普卡一类仓容手同站。",
+      "message": "红云练到精一。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/MECHANICS_REGISTRY.csv",
@@ -926,7 +926,7 @@
         }
       ],
       "reason_code": "standalone_40pct_efficiency",
-      "message": "这些干员精二后，贸易或相关设施能拿到大约+35%量级的独立效率，适合有材料时补强单人位。",
+      "message": "空弦、吉星、槐琥、海蒂、能天使、雪雉练到精二。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
@@ -965,7 +965,7 @@
         }
       ],
       "reason_code": "standalone_trade_30pct_e2",
-      "message": "精二后贸易站订单效率到约+30%档，部分人还带订单上限+1，适合当稳定贸易补位。",
+      "message": "可颂、拜松、衡沙、瑰盐、深巡练到精二。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/MECHANICS_REGISTRY.csv",
@@ -1002,7 +1002,7 @@
         }
       ],
       "reason_code": "standalone_battle_record_30pct_e2",
-      "message": "精二后经验书制造大约+30%～35%，适合长期经验线缺人时补强，不必优先于体系核心。",
+      "message": "裂响、酒神、弑君者、圣约送葬人、怒潮凛冬练到精二。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/MECHANICS_REGISTRY.csv",
@@ -1039,7 +1039,7 @@
         }
       ],
       "reason_code": "standalone_standard_beta",
-      "message": "香草、史都华德等精一后，制造站通用标准化大约+25%，配方不挑食，适合当万金油制造补位。",
+      "message": "香草、史都华德、杰西卡、调香师、罗比菈塔练到精一。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/MECHANICS_REGISTRY.csv"
