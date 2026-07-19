@@ -668,7 +668,7 @@
         }
       ],
       "reason_code": "standalone_high_value_trade",
-      "message": "石英练到精一。",
+      "message": "石英精一后，贸易站订单效率大约+30%，制造站配方种类越多还能再涨一点；培养成本低、收益直观。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
@@ -695,7 +695,7 @@
         }
       ],
       "reason_code": "standalone_high_value_gold",
-      "message": "清流、砾练到精一。",
+      "message": "清流精一后，每个贸易站都能抬赤金制造；砾精一赤金约+35%。两人都便宜，适合先练。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
@@ -723,7 +723,7 @@
         }
       ],
       "reason_code": "standalone_high_value_battle_record",
-      "message": "断罪者练到精一，Castle-3 练到 30 级。",
+      "message": "断罪者精一后经验书制造约+35%；Castle-3 升到30级约+30%。低成本就能把经验线撑起来。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
@@ -770,7 +770,7 @@
         }
       ],
       "reason_code": "standalone_low_cost_trade_filler",
-      "message": "这些三星、四星贸易补位练到精一。",
+      "message": "这些三/四星精一后，贸易站订单效率大约+30%，适合当常驻补位，不必等六星成型。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/MECHANICS_REGISTRY.csv",
@@ -797,7 +797,7 @@
         }
       ],
       "reason_code": "standalone_cheap_trade_level",
-      "message": "月见夜、空爆练到 30 级。",
+      "message": "月见夜、空爆升到30级即可用交际技能，贸易站订单效率约+30%，几乎不占精英材料。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/MECHANICS_REGISTRY.csv",
@@ -827,7 +827,7 @@
         }
       ],
       "reason_code": "standalone_low_cost_gold_filler",
-      "message": "斑点、夜烟、苍苔练到精一。",
+      "message": "斑点、夜烟、苍苔精一后，赤金制造大约+30%，适合在还没有高星赤金手时先顶着。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
@@ -862,7 +862,7 @@
         }
       ],
       "reason_code": "standalone_low_cost_battle_record_filler",
-      "message": "霜叶、白雪、红豆、食铁兽练到精一。",
+      "message": "霜叶、白雪、红豆、食铁兽精一后，经验书制造大约+30%（食铁兽还可衔接口更高档），适合经验线补位。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
@@ -885,7 +885,7 @@
         }
       ],
       "reason_code": "standalone_hongyun_recycle",
-      "message": "红云练到精一。",
+      "message": "红云精一后，同站仓库容量会转成生产力：仓库格子越多，制造越快，常和泡泡、泡普卡一类仓容手同站。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/MECHANICS_REGISTRY.csv",
@@ -926,7 +926,7 @@
         }
       ],
       "reason_code": "standalone_40pct_efficiency",
-      "message": "空弦、吉星、槐琥、海蒂、能天使、雪雉练到精二。",
+      "message": "这些干员精二后，贸易或相关设施能拿到大约+35%量级的独立效率，适合有材料时补强单人位。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
@@ -965,7 +965,7 @@
         }
       ],
       "reason_code": "standalone_trade_30pct_e2",
-      "message": "可颂、拜松、衡沙、瑰盐、深巡练到精二。",
+      "message": "精二后贸易站订单效率到约+30%档，部分人还带订单上限+1，适合当稳定贸易补位。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/MECHANICS_REGISTRY.csv",
@@ -1002,7 +1002,7 @@
         }
       ],
       "reason_code": "standalone_battle_record_30pct_e2",
-      "message": "裂响、酒神、弑君者、圣约送葬人、怒潮凛冬练到精二。",
+      "message": "精二后经验书制造大约+30%～35%，适合长期经验线缺人时补强，不必优先于体系核心。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/MECHANICS_REGISTRY.csv",
@@ -1039,7 +1039,7 @@
         }
       ],
       "reason_code": "standalone_standard_beta",
-      "message": "香草、史都华德、杰西卡、调香师、罗比菈塔练到精一。",
+      "message": "香草、史都华德等精一后，制造站通用标准化大约+25%，配方不挑食，适合当万金油制造补位。",
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/MECHANICS_REGISTRY.csv"
