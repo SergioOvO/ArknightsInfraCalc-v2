@@ -117,6 +117,12 @@ pub struct SystemRecommendationRule {
     pub core: Vec<TrainingTarget>,
     #[serde(default)]
     pub pick_one_core: Vec<PickOneCoreRule>,
+    #[serde(default)]
+    pub important: Vec<TrainingTarget>,
+    #[serde(default)]
+    pub hangers: Vec<TrainingTarget>,
+    #[serde(default = "default_hanger_priority")]
+    pub priority_hangers: RecommendationPriority,
     pub reason_code: String,
     #[serde(default)]
     pub message: String,
@@ -134,6 +140,10 @@ pub struct SystemRecommendationRule {
 
 fn default_info_priority() -> RecommendationPriority {
     RecommendationPriority::Info
+}
+
+fn default_hanger_priority() -> RecommendationPriority {
+    RecommendationPriority::P2
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

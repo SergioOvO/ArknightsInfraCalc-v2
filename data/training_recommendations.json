@@ -3,21 +3,7 @@
   "source_repo": "ArknightsInfraCalc-v2",
   "system_rules": [
     {
-      "id": "witch_long_beta",
-      "label": "巫恋组",
-      "source_system_id": "witch_long_beta",
-      "priority_ready_after_training": "P0",
       "priority_blocked": "Info",
-      "core": [
-        {
-          "name": "巫恋",
-          "elite": 2
-        },
-        {
-          "name": "龙舌兰",
-          "elite": 2
-        }
-      ],
       "pick_one_core": [
         {
           "label": "裁缝β第三人",
@@ -30,54 +16,83 @@
           ]
         }
       ],
+      "important": [],
+      "hangers": [],
+      "priority_hangers": "P2",
       "reason_code": "system_core_undertrained",
+      "needs_review": false,
+      "conflicts": [],
+      "id": "witch_long_beta",
+      "label": "巫恋裁缝核",
+      "source_system_id": "witch_long_beta",
+      "priority_ready_after_training": "P0",
+      "core": [
+        {
+          "name": "巫恋",
+          "elite": 2
+        },
+        {
+          "name": "龙舌兰",
+          "elite": 2
+        }
+      ],
       "message": "巫恋组核心已齐，但有人未达到体系要求。",
       "source_paths": [
         "data/base_systems.json",
-        "data/trade_shortcuts.json",
         "data/MECHANICS_REGISTRY.csv",
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/巫恋裁缝核.md"
       ],
-      "source_notes": "MECHANICS：巫恋低语精2、龙舌兰投资·β精2；卡夫卡手工艺品·β精2，柏喙/明椒/折光裁缝β或鉴定师手段精2。",
-      "needs_review": false,
-      "conflicts": []
+      "source_notes": "角色：核心巫恋E2+龙舌兰E2；任选核心裁缝β第三人E2。无挂件。"
     },
     {
+      "priority_blocked": "Info",
+      "pick_one_core": [],
+      "important": [
+        {
+          "name": "伺夜",
+          "elite": 2
+        },
+        {
+          "name": "贝洛内",
+          "elite": 2
+        }
+      ],
+      "hangers": [
+        {
+          "name": "八幡海铃",
+          "elite": 2
+        }
+      ],
+      "priority_hangers": "P1",
+      "reason_code": "system_core_undertrained",
+      "needs_review": false,
+      "conflicts": [
+        "编排文档将伺夜/贝洛内/八幡列为非硬核心；vault 成套表列为满配成员——映射为 important/hangers"
+      ],
       "id": "docus_core",
-      "label": "但书贸易核心",
+      "label": "但书叙拉古链",
       "source_system_id": null,
       "priority_ready_after_training": "P0",
-      "priority_blocked": "Info",
       "core": [
         {
           "name": "但书",
           "elite": 2
         }
       ],
-      "pick_one_core": [],
-      "reason_code": "system_core_undertrained",
-      "message": "但书已拥有但未精二，合同法·β / 违约索赔·β 未就绪。",
+      "message": "但书核心已齐；叙拉古搭子与中枢海铃按重要/挂件补练。",
       "source_paths": [
         "data/trade_segments.json",
         "data/MECHANICS_REGISTRY.csv",
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/但书叙拉古链.md",
         "docs/BASE_ASSIGNMENT.md"
       ],
-      "source_notes": "MECHANICS：违约索赔·α精0、违约索赔·β精2、合同法精0。训练门槛以β为准精2。伺夜/贝洛内/八幡海铃非编排硬核心，不写入本条 core；满配另见 vault 但书叙拉古链。",
-      "needs_review": false,
-      "conflicts": []
+      "source_notes": "vault 成套：但书E2核心；伺夜E2+贝洛内E2为满配重要成员（缺则但书可单走）；八幡海铃E2中枢挂件（+5%/叙拉古）。编排层伺夜/贝洛内/海铃非 hard required，故不进 core。"
     },
     {
-      "id": "blackkey_closure",
-      "label": "可露希尔 / 黑键 / 吉星特别订单",
-      "source_system_id": "blackkey_closure",
-      "priority_ready_after_training": "P1",
       "priority_blocked": "Info",
-      "core": [
-        {
-          "name": "可露希尔",
-          "elite": 2
-        },
+      "pick_one_core": [],
+      "important": [],
+      "hangers": [
         {
           "name": "黑键",
           "elite": 2
@@ -87,28 +102,43 @@
           "elite": 2
         }
       ],
-      "pick_one_core": [],
+      "priority_hangers": "P1",
       "reason_code": "system_core_undertrained",
-      "message": "可露希尔特别订单相关核心已齐，但有人未达到体系要求。",
+      "needs_review": true,
+      "conflicts": [
+        "vault docs system_id=closure_special_order operators=[可露希尔]; base_systems blackkey_closure uses 可露希尔+黑键+吉星"
+      ],
+      "id": "blackkey_closure",
+      "label": "可露希尔特别订单",
+      "source_system_id": "blackkey_closure",
+      "priority_ready_after_training": "P0",
+      "core": [
+        {
+          "name": "可露希尔",
+          "elite": 2
+        }
+      ],
+      "message": "可露希尔特别订单核心已齐；第三人散件按挂件补练。",
       "source_paths": [
         "data/base_systems.json",
-        "data/trade_segments.json",
-        "data/trade_shortcuts.json",
         "data/MECHANICS_REGISTRY.csv",
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/可露希尔特别订单.md"
       ],
-      "source_notes": "MECHANICS：可露希尔特别订单精2+10%；黑键怅惘和声精2；吉星勤俭经营·β精2。vault 仅列可露希尔为体系 operator，项目 blackkey_closure 为三人站。",
-      "needs_review": true,
-      "conflicts": [
-        "vault docs system_id=closure_special_order only lists 可露希尔 as operator; current data/base_systems.json uses 可露希尔+黑键+吉星 for blackkey_closure"
-      ]
+      "source_notes": "vault 仅可露希尔E2为核心；黑键/吉星为项目 blackkey_closure 三人站挂件，非 vault 硬核。"
     },
     {
+      "priority_blocked": "Info",
+      "pick_one_core": [],
+      "important": [],
+      "hangers": [],
+      "priority_hangers": "P2",
+      "reason_code": "system_core_undertrained",
+      "needs_review": false,
+      "conflicts": [],
       "id": "lungmen_manu_pair",
-      "label": "龙门组中枢",
+      "label": "龙门中枢组",
       "source_system_id": "lungmen_manu_pair",
       "priority_ready_after_training": "P1",
-      "priority_blocked": "Info",
       "core": [
         {
           "name": "斩业星熊",
@@ -119,24 +149,39 @@
           "elite": 0
         }
       ],
-      "pick_one_core": [],
-      "reason_code": "system_core_undertrained",
       "message": "龙门中枢组核心已齐，但有人未达到体系要求。",
       "source_paths": [
         "data/base_systems.json",
         "data/MECHANICS_REGISTRY.csv",
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/体系总览.md",
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/4-散件工具人/散件干员速查.md"
       ],
-      "source_notes": "MECHANICS：斩业星熊共事情谊精2（与龙门近卫局同中枢全制造+3%）；诗怀雅大小姐精0（全贸易+7%）。单独斩业星熊无效。",
-      "needs_review": false,
-      "conflicts": []
+      "source_notes": "角色：斩业星熊E2+诗怀雅E0 双核心，无挂件。"
     },
     {
+      "priority_blocked": "Info",
+      "pick_one_core": [],
+      "important": [],
+      "hangers": [
+        {
+          "name": "空",
+          "elite": 2
+        },
+        {
+          "name": "芬",
+          "elite": 1
+        }
+      ],
+      "priority_hangers": "P2",
+      "reason_code": "system_core_undertrained",
+      "needs_review": true,
+      "conflicts": [
+        "base_systems penguin_exusiai_lemuen 能天使 elite 0 vs MECHANICS 物流专家 elite 2"
+      ],
       "id": "penguin_exusiai_lemuen",
       "label": "企鹅物流·能蕾",
       "source_system_id": "penguin_exusiai_lemuen",
       "priority_ready_after_training": "P1",
-      "priority_blocked": "Info",
       "core": [
         {
           "name": "能天使",
@@ -147,77 +192,38 @@
           "elite": 2
         }
       ],
-      "pick_one_core": [
-        {
-          "label": "企鹅第三人",
-          "elite": 0,
-          "candidates": [
-            "空",
-            "流星",
-            "芬"
-          ]
-        }
-      ],
-      "reason_code": "system_core_undertrained",
-      "message": "企鹅物流能蕾路线核心已齐，但有人未达到体系要求。",
+      "message": "能蕾核心已齐；第三人可按挂件补练。",
       "source_paths": [
         "data/base_systems.json",
-        "data/trade_segments.json",
         "data/MECHANICS_REGISTRY.csv",
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
       ],
-      "source_notes": "MECHANICS：能天使物流专家精2+35%；蕾缪安相伴精2。vault 能蕾要求双精2。base_systems 能天使写 elite 0，训练按实际技能门槛取精2。第三人 base 为精0；空的贸易企鹅物流·β为精2，流星无贸易技能，芬订单分发·β精0/精1。",
-      "needs_review": true,
-      "conflicts": [
-        "base_systems penguin_exusiai_lemuen sets 能天使 elite 0; vault and MECHANICS 物流专家 gate is elite 2",
-        "pick_one 空/流星/芬 share elite 0 but 空 trade β requires elite 2"
-      ]
+      "source_notes": "核心：能天使E2+蕾缪安E2。第三人流星无贸易技能不入规则；空贸易βE2、芬订单分发β按精一。base 写能天使 elite0 已按 MECHANICS 纠正。"
     },
     {
-      "id": "penguin_texangel_e2",
-      "label": "企鹅物流·德能默契",
-      "source_system_id": "penguin_texangel_e2",
-      "priority_ready_after_training": "P2",
       "priority_blocked": "Info",
-      "core": [
+      "pick_one_core": [],
+      "important": [],
+      "hangers": [
         {
-          "name": "德克萨斯",
+          "name": "空",
           "elite": 2
         },
         {
-          "name": "能天使",
-          "elite": 0
+          "name": "芬",
+          "elite": 1
         }
       ],
-      "pick_one_core": [
-        {
-          "label": "企鹅第三人",
-          "elite": 0,
-          "candidates": [
-            "空",
-            "流星",
-            "芬"
-          ]
-        }
-      ],
+      "priority_hangers": "P2",
       "reason_code": "system_core_undertrained",
-      "message": "企鹅物流德能默契路线核心已齐，但有人未达到体系要求。",
-      "source_paths": [
-        "data/base_systems.json",
-        "data/trade_segments.json",
-        "data/MECHANICS_REGISTRY.csv",
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
+      "needs_review": true,
+      "conflicts": [
+        "base_systems 拉普兰德 elite 0；训练按 vault/MECHANICS 取 E2"
       ],
-      "source_notes": "MECHANICS：德克萨斯默契精2（与能天使同站心情-0.3）；恩怨精0仍在。vault 称当前实践以德狼/能蕾为主，默契线较少触发，故优先级 P2。",
-      "needs_review": false,
-      "conflicts": []
-    },
-    {
       "id": "penguin_texlap_e0",
       "label": "企鹅物流·德狼",
       "source_system_id": "penguin_texlap_e0",
       "priority_ready_after_training": "P1",
-      "priority_blocked": "Info",
       "core": [
         {
           "name": "德克萨斯",
@@ -228,37 +234,67 @@
           "elite": 2
         }
       ],
-      "pick_one_core": [
-        {
-          "label": "企鹅第三人",
-          "elite": 0,
-          "candidates": [
-            "空",
-            "流星",
-            "芬"
-          ]
-        }
-      ],
-      "reason_code": "system_core_undertrained",
-      "message": "企鹅物流德狼路线核心已齐，但有人未达到体系要求。",
+      "message": "德狼核心已齐；第三人可按挂件补练。",
       "source_paths": [
         "data/base_systems.json",
-        "data/trade_segments.json",
         "data/MECHANICS_REGISTRY.csv",
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
       ],
-      "source_notes": "MECHANICS：德克萨斯恩怨精0+65%；拉普兰德醉翁之意·α精0上限+2、·β精2上限+4。vault 要求拉普兰德精2。base_systems 写拉普兰德 elite 0，训练按β门槛精2。",
-      "needs_review": true,
-      "conflicts": [
-        "base_systems penguin_texlap_e0 sets 拉普兰德 elite 0; MECHANICS 醉翁之意·β and vault require elite 2 for full cap"
-      ]
+      "source_notes": "核心：德克萨斯E0（恩怨）+拉普兰德E2（醉翁·β）。默契线另见 penguin_texangel_e2。"
     },
     {
+      "priority_blocked": "Info",
+      "pick_one_core": [],
+      "important": [],
+      "hangers": [
+        {
+          "name": "空",
+          "elite": 2
+        },
+        {
+          "name": "芬",
+          "elite": 1
+        }
+      ],
+      "priority_hangers": "P2",
+      "reason_code": "system_core_undertrained",
+      "needs_review": false,
+      "conflicts": [],
+      "id": "penguin_texangel_e2",
+      "label": "企鹅物流·德能默契",
+      "source_system_id": "penguin_texangel_e2",
+      "priority_ready_after_training": "P2",
+      "core": [
+        {
+          "name": "德克萨斯",
+          "elite": 2
+        },
+        {
+          "name": "能天使",
+          "elite": 0
+        }
+      ],
+      "message": "德能默契线核心已齐（vault 称实践较少触发）。",
+      "source_paths": [
+        "data/base_systems.json",
+        "data/MECHANICS_REGISTRY.csv",
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
+      ],
+      "source_notes": "核心：德克萨斯E2默契+能天使（恩怨旁路）。优先级低于德狼/能蕾。"
+    },
+    {
+      "priority_blocked": "Info",
+      "pick_one_core": [],
+      "important": [],
+      "hangers": [],
+      "priority_hangers": "P2",
+      "reason_code": "system_core_undertrained",
+      "needs_review": false,
+      "conflicts": [],
       "id": "snhunt_monhun_control",
       "label": "怪猎中枢",
       "source_system_id": "snhunt_monhun_control",
       "priority_ready_after_training": "P2",
-      "priority_blocked": "Info",
       "core": [
         {
           "name": "火龙S黑角",
@@ -269,34 +305,16 @@
           "elite": 2
         }
       ],
-      "pick_one_core": [],
-      "reason_code": "system_core_undertrained",
-      "message": "怪猎中枢双核心已齐，但有人未达到体系要求。",
+      "message": "怪猎中枢双核心已齐；须调查团消费方同班（消费方未建模为固定名单）。",
       "source_paths": [
         "data/base_systems.json",
         "data/MECHANICS_REGISTRY.csv",
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/怪猎中枢.md"
       ],
-      "source_notes": "MECHANICS：火龙S黑角秘传交涉术精2；麒麟R夜刀以身作则精2。须调查团制造消费方同班才值得开；消费方未写入 core。",
-      "needs_review": false,
-      "conflicts": []
+      "source_notes": "核心双人缺一不可。消费方为泰拉大陆调查团成员（任意），不写入 fixed hangers。"
     },
     {
-      "id": "human_fireworks_pure",
-      "label": "纯人间烟火",
-      "source_system_id": "human_fireworks_pure",
-      "priority_ready_after_training": "P1",
       "priority_blocked": "Info",
-      "core": [
-        {
-          "name": "乌有",
-          "elite": 2
-        },
-        {
-          "name": "桑葚",
-          "elite": 2
-        }
-      ],
       "pick_one_core": [
         {
           "label": "中枢岁干员",
@@ -307,18 +325,352 @@
           ]
         }
       ],
+      "important": [],
+      "hangers": [],
+      "priority_hangers": "P2",
       "reason_code": "system_core_undertrained",
+      "needs_review": true,
+      "conflicts": [
+        "pick_one elite 共享使重岳门槛被抬到 E2；实际知我为我 E0 即可"
+      ],
+      "id": "human_fireworks_pure",
+      "label": "纯人间烟火",
+      "source_system_id": "human_fireworks_pure",
+      "priority_ready_after_training": "P1",
+      "core": [
+        {
+          "name": "乌有",
+          "elite": 2
+        },
+        {
+          "name": "桑葚",
+          "elite": 2
+        }
+      ],
       "message": "纯人间烟火核心已齐，但有人未达到体系要求。",
       "source_paths": [
         "data/base_systems.json",
         "data/MECHANICS_REGISTRY.csv",
         "docs/FIREWORKS.md"
       ],
-      "source_notes": "MECHANICS：乌有愿者上钩精2；桑葚灾后普查精2；令山河远阔精2；重岳知我为我精0即可产烟火、孤光共照精2。pick_one 共享 elite 2，重岳实际门槛精0会被高估。",
+      "source_notes": "核心：乌有贸易E2+桑葚办公室E2；中枢重岳E0/令E2 为 pick_one（schema 共享 elite2，重岳门槛偏高）。"
+    },
+    {
+      "priority_blocked": "Info",
+      "pick_one_core": [],
+      "important": [
+        {
+          "name": "清流",
+          "elite": 1
+        },
+        {
+          "name": "承曦格雷伊",
+          "elite": 2
+        }
+      ],
+      "hangers": [
+        {
+          "name": "森蚺",
+          "elite": 2
+        },
+        {
+          "name": "冬时",
+          "elite": 1
+        },
+        {
+          "name": "异客",
+          "elite": 2
+        },
+        {
+          "name": "掠风",
+          "elite": 2
+        }
+      ],
+      "priority_hangers": "P1",
+      "reason_code": "system_core_undertrained",
       "needs_review": true,
       "conflicts": [
-        "human_fireworks_pure control is required_count=1 between 重岳(elite 0) and 令(elite 2); pick_one schema forces one elite"
-      ]
+        "vault 成套表清流写精2；MECHANICS 再生能源门槛精1——训练取精1"
+      ],
+      "id": "automation_group",
+      "label": "自动化组",
+      "source_system_id": "automation_group",
+      "priority_ready_after_training": "P0",
+      "core": [
+        {
+          "name": "温蒂",
+          "elite": 2
+        }
+      ],
+      "message": "自动化组温蒂核心已齐；清流/承曦/第三人按角色补练。",
+      "source_paths": [
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/自动化组.md",
+        "data/MECHANICS_REGISTRY.csv",
+        "docs/公孙长乐的体系分析文档/AUTOMATION_GROUP_CHAIN.md"
+      ],
+      "source_notes": "核心仅温蒂E2。重要：清流E1、承曦格雷伊E2。挂件第三人：森蚺E2/冬时E1/异客E2/掠风E2（缺不关闭，可换散件）。"
+    },
+    {
+      "priority_blocked": "Info",
+      "pick_one_core": [],
+      "important": [
+        {
+          "name": "灰毫",
+          "elite": 2
+        },
+        {
+          "name": "远牙",
+          "elite": 2
+        },
+        {
+          "name": "野鬃",
+          "elite": 2
+        }
+      ],
+      "hangers": [
+        {
+          "name": "砾",
+          "elite": 1
+        }
+      ],
+      "priority_hangers": "P1",
+      "reason_code": "system_core_undertrained",
+      "needs_review": false,
+      "conflicts": [],
+      "id": "red_pine_forest",
+      "label": "红松林经验",
+      "source_system_id": "red_pine_forest",
+      "priority_ready_after_training": "P0",
+      "core": [
+        {
+          "name": "焰尾",
+          "elite": 2
+        },
+        {
+          "name": "薇薇安娜",
+          "elite": 2
+        }
+      ],
+      "message": "红松林中枢核心已齐；经验线三人与砾按角色补练。",
+      "source_paths": [
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/红松林经验.md",
+        "data/MECHANICS_REGISTRY.csv",
+        "docs/公孙长乐的体系分析文档/RED_PINE_FOREST_CHAIN.md"
+      ],
+      "source_notes": "核心：焰尾E2+薇薇安娜E2（双中枢缺一关闭）。重要：灰毫/远牙/野鬃至少2人E2。挂件：砾E1（赤金线吃薇薇+7%，standalone 亦P0）。"
+    },
+    {
+      "priority_blocked": "Info",
+      "pick_one_core": [],
+      "important": [
+        {
+          "name": "夕",
+          "elite": 0
+        },
+        {
+          "name": "絮雨",
+          "elite": 2
+        }
+      ],
+      "hangers": [
+        {
+          "name": "爱丽丝",
+          "elite": 2
+        },
+        {
+          "name": "车尔尼",
+          "elite": 2
+        },
+        {
+          "name": "令",
+          "elite": 2
+        },
+        {
+          "name": "琴柳",
+          "elite": 2
+        }
+      ],
+      "priority_hangers": "P1",
+      "reason_code": "system_core_undertrained",
+      "needs_review": false,
+      "conflicts": [],
+      "id": "rosemary_perception",
+      "label": "迷迭香感知链",
+      "source_system_id": "rosemary_perception",
+      "priority_ready_after_training": "P0",
+      "core": [
+        {
+          "name": "迷迭香",
+          "elite": 2
+        },
+        {
+          "name": "黑键",
+          "elite": 2
+        }
+      ],
+      "message": "感知链核心已齐；夕/絮雨为重要感知源，宿舍与令/琴柳为外围。",
+      "source_paths": [
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/迷迭香感知链.md",
+        "data/MECHANICS_REGISTRY.csv",
+        "docs/公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md"
+      ],
+      "source_notes": "核心：迷迭香E2+黑键E2。重要：夕E0产感知、絮雨E2办公室。挂件：爱丽丝/车尔尼宿舍E2、令E2、琴柳E2。缺核心关闭；外围可砍。"
+    },
+    {
+      "priority_blocked": "Info",
+      "pick_one_core": [],
+      "important": [],
+      "hangers": [
+        {
+          "name": "琳琅诗怀雅",
+          "elite": 2
+        },
+        {
+          "name": "崖心",
+          "elite": 2
+        },
+        {
+          "name": "锏",
+          "elite": 2
+        }
+      ],
+      "priority_hangers": "P2",
+      "reason_code": "system_core_undertrained",
+      "needs_review": false,
+      "conflicts": [],
+      "id": "ling_jie_karlan",
+      "label": "灵孑银崖喀兰",
+      "source_system_id": "ling_jie_karlan",
+      "priority_ready_after_training": "P1",
+      "core": [
+        {
+          "name": "灵知",
+          "elite": 2
+        },
+        {
+          "name": "孑",
+          "elite": 1
+        },
+        {
+          "name": "银灰",
+          "elite": 2
+        }
+      ],
+      "message": "灵孑银崖核心已齐；喀兰工具人按挂件补练。",
+      "source_paths": [
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/灵孑银崖喀兰.md",
+        "data/MECHANICS_REGISTRY.csv"
+      ],
+      "source_notes": "核心：灵知E2中枢+孑E1市井+银灰E2。挂件：琳琅诗怀雅/崖心/锏等谢拉格工具人E2。缺灵知或银灰→不开。"
+    },
+    {
+      "priority_blocked": "Info",
+      "pick_one_core": [],
+      "important": [],
+      "hangers": [
+        {
+          "name": "戴菲恩",
+          "elite": 2
+        }
+      ],
+      "priority_hangers": "P2",
+      "reason_code": "system_core_undertrained",
+      "needs_review": false,
+      "conflicts": [],
+      "id": "vina_lungmen",
+      "label": "推王龙门",
+      "source_system_id": "vina_lungmen",
+      "priority_ready_after_training": "P1",
+      "core": [
+        {
+          "name": "维娜·维多利亚",
+          "elite": 2
+        },
+        {
+          "name": "摩根",
+          "elite": 2
+        }
+      ],
+      "message": "推王+摩根核心已齐；戴菲恩中枢为挂件满配。",
+      "source_paths": [
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/推王龙门.md",
+        "data/MECHANICS_REGISTRY.csv"
+      ],
+      "source_notes": "核心：维娜E2+摩根E2。挂件：戴菲恩E2中枢（面板 0.95→1.35）。第三人散件不入体系规则。"
+    },
+    {
+      "priority_blocked": "Info",
+      "pick_one_core": [],
+      "important": [],
+      "hangers": [],
+      "priority_hangers": "P2",
+      "reason_code": "system_core_undertrained",
+      "needs_review": false,
+      "conflicts": [],
+      "id": "abyssal_hunters",
+      "label": "深海链",
+      "source_system_id": "abyssal_hunters",
+      "priority_ready_after_training": "P1",
+      "core": [
+        {
+          "name": "歌蕾蒂娅",
+          "elite": 2
+        }
+      ],
+      "message": "深海链歌蕾蒂娅核心已齐；制造侧猎人E0无需练卡。",
+      "source_paths": [
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/深海链.md",
+        "data/MECHANICS_REGISTRY.csv"
+      ],
+      "source_notes": "核心：歌蕾蒂娅E2集群狩猎·β。斯卡蒂/幽灵鲨/安哲拉/乌尔比安制造受buff者E0无需技能，不生成练卡。至少3人进制造为排班约束非训练门槛。"
+    },
+    {
+      "priority_blocked": "Info",
+      "pick_one_core": [],
+      "important": [],
+      "hangers": [
+        {
+          "name": "娜斯提",
+          "elite": 2
+        },
+        {
+          "name": "星源",
+          "elite": 2
+        },
+        {
+          "name": "白面鸮",
+          "elite": 2
+        },
+        {
+          "name": "缪尔赛思",
+          "elite": 2
+        }
+      ],
+      "priority_hangers": "P2",
+      "reason_code": "system_core_undertrained",
+      "needs_review": false,
+      "conflicts": [],
+      "id": "rhine_lab",
+      "label": "莱茵科技",
+      "source_system_id": "rhine_lab",
+      "priority_ready_after_training": "P2",
+      "core": [
+        {
+          "name": "多萝西",
+          "elite": 2
+        },
+        {
+          "name": "淬羽赫默",
+          "elite": 2
+        }
+      ],
+      "message": "莱茵科技半固定核心已齐；第三人与缪尔赛思按角色补练。",
+      "source_paths": [
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/莱茵科技.md",
+        "data/MECHANICS_REGISTRY.csv",
+        "docs/公孙长乐的体系分析文档/RHINE_LAB_CHAIN.md"
+      ],
+      "source_notes": "半固定核心：多萝西E2+淬羽赫默E2。挂件第三人/阵营：娜斯提/星源/白面鸮/缪尔赛思。不强制成套。"
     }
   ],
   "standalone_rules": [

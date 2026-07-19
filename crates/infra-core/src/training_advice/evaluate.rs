@@ -7,10 +7,10 @@ use crate::Result;
 
 use super::rag_context::build_rag_context;
 use super::types::{
-    OperatorTrainingState, PickOneCoreRule, RecommendationKind, StandaloneRecommendationRule,
-    SystemRecommendationRule, SystemStatus, TrainingAdviceOptions, TrainingAdviceReport,
-    TrainingAdviceSummary, TrainingRecommendation, TrainingRecommendationRules,
-    TrainingSystemReport, TrainingTarget,
+    OperatorTrainingState, PickOneCoreRule, RecommendationKind, RecommendationPriority,
+    StandaloneRecommendationRule, SystemRecommendationRule, SystemStatus, TrainingAdviceOptions,
+    TrainingAdviceReport, TrainingAdviceSummary, TrainingRecommendation,
+    TrainingRecommendationRules, TrainingSystemReport, TrainingTarget,
 };
 
 pub fn build_training_advice(
@@ -171,11 +171,41 @@ fn evaluate_system_rule(
         }
     }
 
+    let mut support_train: Vec<(TrainingTarget, RecommendationPriority, bool)> = Vec::new();
+    let cores_owned = missing_core.is_empty();
+    if cores_owned {
+        let mut seen = BTreeSet::new();
+        for (target, is_important) in rule
+            .important
+            .iter()
+            .map(|t| (t, true))
+            .chain(rule.hangers.iter().map(|t| (t, false)))
+        {
+            if !seen.insert(target.name.clone()) {
+                continue;
+            }
+            if let Some(progress) = operbox.progress_of(&target.name) {
+                if !target.is_met_by(progress) {
+                    let priority = if is_important {
+                        rule.priority_ready_after_training
+                    } else {
+                        rule.priority_hangers
+                    };
+                    support_train.push((target.clone(), priority, is_important));
+                }
+            }
+        }
+    }
+
     let missing_core: Vec<String> = missing_core.into_iter().collect();
     let undertrained_core_vec: Vec<String> = undertrained_core.iter().cloned().collect();
     let owned_core: Vec<String> = owned_core.into_iter().collect();
     let status = if missing_core.is_empty() && undertrained_core_vec.is_empty() {
-        SystemStatus::Ready
+        if support_train.is_empty() {
+            SystemStatus::Ready
+        } else {
+            SystemStatus::ReadyAfterTraining
+        }
     } else if missing_core.is_empty() {
         SystemStatus::ReadyAfterTraining
     } else if owned_core.is_empty() {
@@ -184,7 +214,7 @@ fn evaluate_system_rule(
         SystemStatus::PartialBlocked
     };
 
-    if status == SystemStatus::ReadyAfterTraining {
+    if cores_owned {
         for target in rule
             .core
             .iter()
@@ -203,6 +233,34 @@ fn evaluate_system_rule(
                     system_id: Some(rule.id.clone()),
                     related_systems: vec![rule.id.clone()],
                     message: recommendation_message(&rule.message, rule.needs_review),
+                    source_paths: inherited_source_paths(rules, &rule.source_paths),
+                    needs_review: rule.needs_review,
+                });
+            }
+        }
+        for (target, priority, is_important) in support_train {
+            if let Some(progress) = operbox.progress_of(&target.name) {
+                recommendations.push(TrainingRecommendation {
+                    priority,
+                    kind: RecommendationKind::Train,
+                    operator: target.name.clone(),
+                    target: target_state(&target),
+                    current: Some(progress.into()),
+                    reason_code: if is_important {
+                        "system_important_undertrained".to_string()
+                    } else {
+                        "system_hanger_undertrained".to_string()
+                    },
+                    system_id: Some(rule.id.clone()),
+                    related_systems: vec![rule.id.clone()],
+                    message: recommendation_message(
+                        if is_important {
+                            "体系核心已齐，重要成员未达标。"
+                        } else {
+                            "体系核心已齐，挂件/外围未达标。"
+                        },
+                        rule.needs_review,
+                    ),
                     source_paths: inherited_source_paths(rules, &rule.source_paths),
                     needs_review: rule.needs_review,
                 });
@@ -468,6 +526,9 @@ mod tests {
                         level: None,
                         candidates: vec!["卡夫卡".to_string(), "柏喙".to_string()],
                     }],
+                    important: Vec::new(),
+                    hangers: Vec::new(),
+                    priority_hangers: RecommendationPriority::P2,
                     reason_code: "system_core_undertrained".to_string(),
                     message: "体系核心已齐，但有人未达到体系要求。".to_string(),
                     source_paths: vec!["docs/2-体系/巫恋裁缝核.md".to_string()],
@@ -488,6 +549,9 @@ mod tests {
                         level: None,
                     }],
                     pick_one_core: Vec::new(),
+                    important: Vec::new(),
+                    hangers: Vec::new(),
+                    priority_hangers: RecommendationPriority::P2,
                     reason_code: "needs_review_case".to_string(),
                     message: "该规则来源需要人工确认。".to_string(),
                     source_paths: vec!["vault/review.md".to_string()],
@@ -594,6 +658,9 @@ mod tests {
                 level: None,
             }],
             pick_one_core: Vec::new(),
+            important: Vec::new(),
+            hangers: Vec::new(),
+            priority_hangers: RecommendationPriority::P2,
             reason_code: "system_core_undertrained".to_string(),
             message: "体系需要更高练度。".to_string(),
             source_paths: vec!["docs/system.md".to_string()],

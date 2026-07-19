@@ -138,6 +138,25 @@ def render_system_rule(rule: dict[str, Any], index: int) -> list[str]:
     else:
         lines.append("- 任选核心：无")
 
+    important = rule.get("important", [])
+    hangers = rule.get("hangers", [])
+    if not isinstance(important, list) or not isinstance(hangers, list):
+        raise RuleFormatError(f"{context} 的 important/hangers 必须是数组")
+    lines.append(
+        "- 重要成员（不阻塞；核心齐后练）："
+        + (
+            "、".join(format_target(target, f"{context}.important") for target in important)
+            or "无"
+        )
+    )
+    hanger_priority = rule.get("priority_hangers", "P2")
+    if hanger_priority not in PRIORITIES:
+        raise RuleFormatError(f"{context}.priority_hangers 使用了未知优先级")
+    lines.append(
+        f"- 挂件/外围（不阻塞；核心齐后 **{hanger_priority}**）："
+        + ("、".join(format_target(target, f"{context}.hangers") for target in hangers) or "无")
+    )
+
     source_system_id = optional_string(rule, "source_system_id", context)
     lines.append(f"- 来源体系 ID：`{source_system_id}`" if source_system_id else "- 来源体系 ID：未登记")
     lines.extend(render_common_rule_fields(rule, context))
