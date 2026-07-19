@@ -47,30 +47,14 @@
     {
       "priority_blocked": "Info",
       "pick_one_core": [],
-      "important": [
-        {
-          "name": "伺夜",
-          "elite": 2
-        },
-        {
-          "name": "贝洛内",
-          "elite": 2
-        }
-      ],
-      "hangers": [
-        {
-          "name": "八幡海铃",
-          "elite": 2
-        }
-      ],
-      "priority_hangers": "P1",
+      "important": [],
+      "hangers": [],
+      "priority_hangers": "P2",
       "reason_code": "system_core_undertrained",
       "needs_review": false,
-      "conflicts": [
-        "编排文档将伺夜/贝洛内/八幡列为非硬核心；vault 成套表列为满配成员——映射为 important/hangers"
-      ],
+      "conflicts": [],
       "id": "docus_core",
-      "label": "但书叙拉古链",
+      "label": "但书",
       "source_system_id": null,
       "priority_ready_after_training": "P0",
       "core": [
@@ -79,14 +63,13 @@
           "elite": 2
         }
       ],
-      "message": "但书线：把但书练到精二即可单独撑起贸易；伺夜、贝洛内是满配搭档，八幡海铃放中枢能再抬一截，没有也能先练但书。",
+      "message": "基建幻神就够了。",
       "source_paths": [
         "data/trade_segments.json",
         "data/MECHANICS_REGISTRY.csv",
-        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/但书叙拉古链.md",
         "docs/BASE_ASSIGNMENT.md"
       ],
-      "source_notes": "vault 成套：但书E2核心；伺夜E2+贝洛内E2为满配重要成员（缺则但书可单走）；八幡海铃E2中枢挂件（+5%/叙拉古）。编排层伺夜/贝洛内/海铃非 hard required，故不进 core。"
+      "source_notes": "训练只推但书E2单人；伺夜/贝洛内/八幡海铃不与但书绑成同一练卡规则（编排亦非 hard core）。"
     },
     {
       "priority_blocked": "Info",
