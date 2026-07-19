@@ -24,9 +24,32 @@
       "source_paths": [
         "data/base_systems.json",
         "data/trade_shortcuts.json",
+        "data/MECHANICS_REGISTRY.csv",
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/巫恋裁缝核.md"
       ],
-      "source_notes": "外部知识库与当前 base_systems 均要求巫恋、龙舌兰和裁缝β第三人达标。",
+      "source_notes": "MECHANICS：巫恋低语精2、龙舌兰投资·β精2；卡夫卡手工艺品·β精2，柏喙/明椒/折光裁缝β或鉴定师手段精2。",
+      "needs_review": false,
+      "conflicts": []
+    },
+    {
+      "id": "docus_core",
+      "label": "但书贸易核心",
+      "source_system_id": null,
+      "priority_ready_after_training": "P0",
+      "priority_blocked": "Info",
+      "core": [
+        { "name": "但书", "elite": 2 }
+      ],
+      "pick_one_core": [],
+      "reason_code": "system_core_undertrained",
+      "message": "但书已拥有但未精二，合同法·β / 违约索赔·β 未就绪。",
+      "source_paths": [
+        "data/trade_segments.json",
+        "data/MECHANICS_REGISTRY.csv",
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/但书叙拉古链.md",
+        "docs/BASE_ASSIGNMENT.md"
+      ],
+      "source_notes": "MECHANICS：违约索赔·α精0、违约索赔·β精2、合同法精0。训练门槛以β为准精2。伺夜/贝洛内/八幡海铃非编排硬核心，不写入本条 core；满配另见 vault 但书叙拉古链。",
       "needs_review": false,
       "conflicts": []
     },
@@ -48,12 +71,179 @@
         "data/base_systems.json",
         "data/trade_segments.json",
         "data/trade_shortcuts.json",
+        "data/MECHANICS_REGISTRY.csv",
         "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/可露希尔特别订单.md"
       ],
-      "source_notes": "外部知识库以可露希尔特别订单为主，当前 base_systems 存在 blackkey_closure 三人站；MVP 暂按当前项目三人体系建规则。",
+      "source_notes": "MECHANICS：可露希尔特别订单精2+10%；黑键怅惘和声精2；吉星勤俭经营·β精2。vault 仅列可露希尔为体系 operator，项目 blackkey_closure 为三人站。",
       "needs_review": true,
       "conflicts": [
         "vault docs system_id=closure_special_order only lists 可露希尔 as operator; current data/base_systems.json uses 可露希尔+黑键+吉星 for blackkey_closure"
+      ]
+    },
+    {
+      "id": "lungmen_manu_pair",
+      "label": "龙门组中枢",
+      "source_system_id": "lungmen_manu_pair",
+      "priority_ready_after_training": "P1",
+      "priority_blocked": "Info",
+      "core": [
+        { "name": "斩业星熊", "elite": 2 },
+        { "name": "诗怀雅", "elite": 0 }
+      ],
+      "pick_one_core": [],
+      "reason_code": "system_core_undertrained",
+      "message": "龙门中枢组核心已齐，但有人未达到体系要求。",
+      "source_paths": [
+        "data/base_systems.json",
+        "data/MECHANICS_REGISTRY.csv",
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/4-散件工具人/散件干员速查.md"
+      ],
+      "source_notes": "MECHANICS：斩业星熊共事情谊精2（与龙门近卫局同中枢全制造+3%）；诗怀雅大小姐精0（全贸易+7%）。单独斩业星熊无效。",
+      "needs_review": false,
+      "conflicts": []
+    },
+    {
+      "id": "penguin_exusiai_lemuen",
+      "label": "企鹅物流·能蕾",
+      "source_system_id": "penguin_exusiai_lemuen",
+      "priority_ready_after_training": "P1",
+      "priority_blocked": "Info",
+      "core": [
+        { "name": "能天使", "elite": 2 },
+        { "name": "蕾缪安", "elite": 2 }
+      ],
+      "pick_one_core": [
+        {
+          "label": "企鹅第三人",
+          "elite": 0,
+          "candidates": ["空", "流星", "芬"]
+        }
+      ],
+      "reason_code": "system_core_undertrained",
+      "message": "企鹅物流能蕾路线核心已齐，但有人未达到体系要求。",
+      "source_paths": [
+        "data/base_systems.json",
+        "data/trade_segments.json",
+        "data/MECHANICS_REGISTRY.csv",
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
+      ],
+      "source_notes": "MECHANICS：能天使物流专家精2+35%；蕾缪安相伴精2。vault 能蕾要求双精2。base_systems 能天使写 elite 0，训练按实际技能门槛取精2。第三人 base 为精0；空的贸易企鹅物流·β为精2，流星无贸易技能，芬订单分发·β精0/精1。",
+      "needs_review": true,
+      "conflicts": [
+        "base_systems penguin_exusiai_lemuen sets 能天使 elite 0; vault and MECHANICS 物流专家 gate is elite 2",
+        "pick_one 空/流星/芬 share elite 0 but 空 trade β requires elite 2"
+      ]
+    },
+    {
+      "id": "penguin_texangel_e2",
+      "label": "企鹅物流·德能默契",
+      "source_system_id": "penguin_texangel_e2",
+      "priority_ready_after_training": "P2",
+      "priority_blocked": "Info",
+      "core": [
+        { "name": "德克萨斯", "elite": 2 },
+        { "name": "能天使", "elite": 0 }
+      ],
+      "pick_one_core": [
+        {
+          "label": "企鹅第三人",
+          "elite": 0,
+          "candidates": ["空", "流星", "芬"]
+        }
+      ],
+      "reason_code": "system_core_undertrained",
+      "message": "企鹅物流德能默契路线核心已齐，但有人未达到体系要求。",
+      "source_paths": [
+        "data/base_systems.json",
+        "data/trade_segments.json",
+        "data/MECHANICS_REGISTRY.csv",
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
+      ],
+      "source_notes": "MECHANICS：德克萨斯默契精2（与能天使同站心情-0.3）；恩怨精0仍在。vault 称当前实践以德狼/能蕾为主，默契线较少触发，故优先级 P2。",
+      "needs_review": false,
+      "conflicts": []
+    },
+    {
+      "id": "penguin_texlap_e0",
+      "label": "企鹅物流·德狼",
+      "source_system_id": "penguin_texlap_e0",
+      "priority_ready_after_training": "P1",
+      "priority_blocked": "Info",
+      "core": [
+        { "name": "德克萨斯", "elite": 0 },
+        { "name": "拉普兰德", "elite": 2 }
+      ],
+      "pick_one_core": [
+        {
+          "label": "企鹅第三人",
+          "elite": 0,
+          "candidates": ["空", "流星", "芬"]
+        }
+      ],
+      "reason_code": "system_core_undertrained",
+      "message": "企鹅物流德狼路线核心已齐，但有人未达到体系要求。",
+      "source_paths": [
+        "data/base_systems.json",
+        "data/trade_segments.json",
+        "data/MECHANICS_REGISTRY.csv",
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/企鹅物流.md"
+      ],
+      "source_notes": "MECHANICS：德克萨斯恩怨精0+65%；拉普兰德醉翁之意·α精0上限+2、·β精2上限+4。vault 要求拉普兰德精2。base_systems 写拉普兰德 elite 0，训练按β门槛精2。",
+      "needs_review": true,
+      "conflicts": [
+        "base_systems penguin_texlap_e0 sets 拉普兰德 elite 0; MECHANICS 醉翁之意·β and vault require elite 2 for full cap"
+      ]
+    },
+    {
+      "id": "snhunt_monhun_control",
+      "label": "怪猎中枢",
+      "source_system_id": "snhunt_monhun_control",
+      "priority_ready_after_training": "P2",
+      "priority_blocked": "Info",
+      "core": [
+        { "name": "火龙S黑角", "elite": 2 },
+        { "name": "麒麟R夜刀", "elite": 2 }
+      ],
+      "pick_one_core": [],
+      "reason_code": "system_core_undertrained",
+      "message": "怪猎中枢双核心已齐，但有人未达到体系要求。",
+      "source_paths": [
+        "data/base_systems.json",
+        "data/MECHANICS_REGISTRY.csv",
+        "/mnt/c/Users/KnightCode/projects/arknights-base-vault/docs/2-体系/怪猎中枢.md"
+      ],
+      "source_notes": "MECHANICS：火龙S黑角秘传交涉术精2；麒麟R夜刀以身作则精2。须调查团制造消费方同班才值得开；消费方未写入 core。",
+      "needs_review": false,
+      "conflicts": []
+    },
+    {
+      "id": "human_fireworks_pure",
+      "label": "纯人间烟火",
+      "source_system_id": "human_fireworks_pure",
+      "priority_ready_after_training": "P1",
+      "priority_blocked": "Info",
+      "core": [
+        { "name": "乌有", "elite": 2 },
+        { "name": "桑葚", "elite": 2 }
+      ],
+      "pick_one_core": [
+        {
+          "label": "中枢岁干员",
+          "elite": 2,
+          "candidates": ["重岳", "令"]
+        }
+      ],
+      "reason_code": "system_core_undertrained",
+      "message": "纯人间烟火核心已齐，但有人未达到体系要求。",
+      "source_paths": [
+        "data/base_systems.json",
+        "data/MECHANICS_REGISTRY.csv",
+        "docs/FIREWORKS.md"
+      ],
+      "source_notes": "MECHANICS：乌有愿者上钩精2；桑葚灾后普查精2；令山河远阔精2；重岳知我为我精0即可产烟火、孤光共照精2。pick_one 共享 elite 2，重岳实际门槛精0会被高估。",
+      "needs_review": true,
+      "conflicts": [
+        "human_fireworks_pure control is required_count=1 between 重岳(elite 0) and 令(elite 2); pick_one schema forces one elite"
       ]
     }
   ],
@@ -70,10 +260,11 @@
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
+        "data/MECHANICS_REGISTRY.csv",
         "data/operator_instances.json",
         "data/skill_table.json"
       ],
-      "source_notes": "从搜索剪枝散件池人工筛选；只收录不依赖缺失具名组合核心且值得达到技能门槛的条目。",
+      "source_notes": "MECHANICS：石英精准排期精1，订单效率+30%且随制造配方种类额外+2%。",
       "needs_review": false,
       "conflicts": []
     },
@@ -90,10 +281,11 @@
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
+        "data/MECHANICS_REGISTRY.csv",
         "data/operator_instances.json",
         "data/skill_table.json"
       ],
-      "source_notes": "清流收益随实际贸易站数量结算；砾提供独立赤金效率。二者都不依赖具名组合核心。",
+      "source_notes": "MECHANICS：清流再生能源精1（每贸易站+20%赤金）；砾金属工艺·β精1+35%赤金。清流收益随贸易站数量结算。",
       "needs_review": false,
       "conflicts": []
     },
@@ -110,10 +302,11 @@
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
+        "data/MECHANICS_REGISTRY.csv",
         "data/operator_instances.json",
         "data/skill_table.json"
       ],
-      "source_notes": "从搜索剪枝散件池人工筛选；只收录不依赖缺失具名组合核心且值得达到技能门槛的条目。",
+      "source_notes": "MECHANICS：断罪者拳术指导录像精1/精2+35%经验；Castle-3作战指导录像精0/精1+30%，1星门槛按规则写 level 30。",
       "needs_review": false,
       "conflicts": []
     },
@@ -131,10 +324,11 @@
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
+        "data/MECHANICS_REGISTRY.csv",
         "data/operator_instances.json",
         "data/skill_table.json"
       ],
-      "source_notes": "低星精一贸易补位档；优先级低于高价值低成本散件。",
+      "source_notes": "MECHANICS：三人订单分发·β均为精0；精1。精1为规则约定的四星技能门槛。",
       "needs_review": false,
       "conflicts": []
     },
@@ -150,10 +344,11 @@
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
+        "data/MECHANICS_REGISTRY.csv",
         "data/operator_instances.json",
         "data/skill_table.json"
       ],
-      "source_notes": "低星精一赤金补位档；优先级低于高价值低成本散件。",
+      "source_notes": "MECHANICS：斑点金属工艺·α精0；精1+30%赤金。",
       "needs_review": false,
       "conflicts": []
     },
@@ -171,10 +366,11 @@
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
+        "data/MECHANICS_REGISTRY.csv",
         "data/operator_instances.json",
         "data/skill_table.json"
       ],
-      "source_notes": "低星精一经验书补位档；优先级低于高价值低成本散件。",
+      "source_notes": "MECHANICS：三人作战指导录像均为精0；精1+30%经验。",
       "needs_review": false,
       "conflicts": []
     },
@@ -192,10 +388,11 @@
       "source_paths": [
         "docs/练卡推荐规则.md",
         "data/standalone_roster.json",
+        "data/MECHANICS_REGISTRY.csv",
         "data/operator_instances.json",
         "data/skill_table.json"
       ],
-      "source_notes": "只在已拥有但未达标时生成 P2；不表示基建收益优先于战斗培养。",
+      "source_notes": "MECHANICS：空弦虔诚筹款·β精2；吉星勤俭经营·β精2；槐琥配合意识精2（同站每5%额外5%，上限40%）。不表示基建优先于战斗。",
       "needs_review": false,
       "conflicts": []
     }
