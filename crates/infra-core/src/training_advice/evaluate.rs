@@ -656,6 +656,8 @@ mod tests {
             .iter()
             .map(|rec| (rec.operator.as_str(), rec.priority))
             .collect();
+        // Fixture only owns the original core standalone set; expanded rules
+        // must still emit those operators at the same priorities.
         let expected = [
             ("石英", RecommendationPriority::P0),
             ("清流", RecommendationPriority::P0),
@@ -674,10 +676,10 @@ mod tests {
             ("槐琥", RecommendationPriority::P2),
         ];
 
-        assert_eq!(actual.len(), expected.len());
         for (name, priority) in expected {
             assert_eq!(actual.get(name), Some(&priority), "{name}");
         }
+        assert_eq!(actual.len(), expected.len());
         let castle = report
             .recommendations
             .iter()
