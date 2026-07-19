@@ -213,7 +213,9 @@ RAG 生成回答
 - 2026-07-19：用户确认产品逻辑与四类规则、核心准入、低星获取例外、RAG 边界。
 - 2026-07-19：canonical `docs/练卡推荐规则.md` 按新合同重写。
 - 2026-07-19：实现 v2 schema、加载校验、确定性过滤器、机械规则迁移、render 脚本；`cargo test -p infra-core training_advice` 14 通过。
-- 下一步：真实 operbox 核对 CLI 输出；人工精修规则 kind/scope/获取策略；再接伪 RAG。
+- 2026-07-19：5 个 fixture CLI 验收：核心主语义通过；`conditional`/`blocked` 噪声与 ready/review 交叉待裁。
+- 2026-07-19：文档路由补齐——`docs/INDEX.md` / `PROJECT_MAP.md` / `AGENTS.md` / canonical Agent 入口 / gongsun skill。
+- 下一步：人工精修规则 kind/scope/获取策略；折叠未相关 conditional/blocked；再接伪 RAG。
 
 ## 7. 历史说明
 

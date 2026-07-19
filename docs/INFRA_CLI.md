@@ -41,6 +41,7 @@ crates/infra-cli/src/
 ├── main.rs              # 进程入口 + 子命令路由（其余子命令暂留此处，见「待拆」）
 ├── commands/
 │   ├── mod.rs           # 子命令模块聚合；对外 re-export
+│   ├── advice.rs        # `advice`：练卡推荐（operbox + training_recommendations v2）
 │   ├── bake.rs          # `bake`：生成贸易/制造 3/2/1 人单房候选索引表（运行时验证后优先读取）
 │   ├── plan.rs          # `plan`：box profile + αβγ 排班 + MAA
 │   ├── serve.rs         # `serve`：前端常驻 worker；stdin/stdout JSON line 协议
@@ -70,6 +71,7 @@ crates/infra-cli/src/
 
 | 模块 | 职责 | 不负责 |
 |------|------|--------|
+| `advice.rs` | **`advice`**：加载 `training_recommendations.json` v2 + operbox，输出 `now`/`conditional`/`blocked`/`ready`/`review` 结构化包 | 规则语义真源（见 [练卡推荐规则](练卡推荐规则.md)）；RAG 文案；solver 候选池 |
 | `bake.rs` | `bake`：并行生成 schema v12 的整数效率 `combo_table.bin`、`operators.json`、`manifest.json`；贸易行显式保存首批 room-local 机制签名，manifest 保存 table hash/count；`bake validate` 校验当前 CLI 指纹和完整贸易 row universe | 贸易/制造效率公式；手写搜索排序 |
 | `plan.rs` | **`plan`**：box profile JSON + `schedule_team_rotation` + MAA；`--operbox` 支持 JSON/xlsx；布局默认 243 | 画像算法（`box_profile/`）；排班逻辑（`schedule/`） |
 | `serve.rs` | `serve`：常驻读取 stdin JSON line，复用加载好的机制数据，按请求写出前端指定路径 | 新业务公式；替代 core 求解 API |
