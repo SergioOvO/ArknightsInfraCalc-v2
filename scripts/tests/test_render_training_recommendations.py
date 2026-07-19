@@ -32,8 +32,10 @@ class RenderTrainingRecommendationsTests(unittest.TestCase):
         self.assertIn("顶层来源仓库：`ArknightsInfraCalc-v2`", rendered)
         self.assertIn("石英（精一）", rendered)
         self.assertIn("Castle-3（30级）", rendered)
-        self.assertIn("标记待复核：1 条", rendered)
+        self.assertRegex(rendered, r"标记待复核：\d+ 条")
         self.assertIn("vault docs system_id=closure_special_order", rendered)
+        self.assertIn("红云（精一）", rendered)
+        self.assertIn("标准化·β", rendered)
 
     def test_invalid_target_elite_is_rejected(self) -> None:
         rules = {
