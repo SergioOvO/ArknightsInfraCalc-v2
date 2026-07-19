@@ -124,12 +124,13 @@ pub use support_facility::{
 };
 pub use tier::PromotionTier;
 pub use training_advice::{
-    build_training_advice, default_training_recommendations_path,
+    build_training_advice, build_training_advice_rag_input, default_training_recommendations_path,
     load_training_recommendation_rules, AcquisitionMode, AcquisitionPolicy, BlockedRuleReport,
-    EvidenceRef, MemberBenefit, MemberRole, OperatorAdviceItem, OperatorTrainingState,
-    PickOneCoreSlot, RecommendationAction, RecommendationPriority, ReviewStatus, RuleAdmission,
-    RuleKind, RuleMatch, RuleMember, RuleReview, RuleScope, TrainingAdviceOptions,
-    TrainingAdviceReport, TrainingAdviceSummary, TrainingRecommendationRules, TrainingRule,
-    TrainingTarget,
+    EvidenceRef, EvidenceSnippet, MemberBenefit, MemberRole, MissingCoreGroupReport,
+    OperatorAdviceItem, OperatorTrainingState, PickOneCoreSlot, RecommendationAction,
+    RecommendationPriority, RequiredCoreGroup, ReviewStatus, RuleAdmission, RuleKind, RuleMatch,
+    RuleMember, RuleReview, RuleScope, TrainingAdviceBundle, TrainingAdviceFact,
+    TrainingAdviceOptions, TrainingAdviceRagInput, TrainingAdviceReport, TrainingAdviceSummary,
+    TrainingRecommendationRules, TrainingRule, TrainingTarget,
 };
 pub use types::*;

@@ -107,6 +107,7 @@ def render_rule(rule: Any, index: int) -> list[str]:
     admission = require_object(rule.get("admission") or {}, f"rules[{index}].admission")
     required = admission.get("required_core") or []
     pick_one = admission.get("pick_one_core") or []
+    required_groups = admission.get("required_core_groups") or []
     members = rule.get("members") or []
     evidence = rule.get("evidence") or []
 
@@ -125,6 +126,18 @@ def render_rule(rule: Any, index: int) -> list[str]:
         lines.append(
             f"- 任选核心「{require_string(slot, 'label', 'pick_one')}」："
             + " / ".join(slot.get("candidates") or [])
+        )
+    for group in required_groups:
+        group = require_object(group, f"rules[{index}].required_core_groups")
+        count = group.get("required_count")
+        if not is_int(count) or count < 2:
+            raise RuleFormatError(
+                f"rules[{index}].required_core_groups.required_count 必须是至少 2 的整数"
+            )
+        lines.append(
+            f"- 核心组「{require_string(group, 'label', 'required_core_groups')}」"
+            f"至少 {count} 人："
+            + " / ".join(group.get("candidates") or [])
         )
     lines.append("- 成员：")
     for i, m in enumerate(members):

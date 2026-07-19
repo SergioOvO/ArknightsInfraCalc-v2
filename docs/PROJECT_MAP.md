@@ -111,7 +111,7 @@ ArknightsInfraCalc-v2/
 | **instances** | `src/instances.rs` | `operator_instances.json`；`resolve_buff_ids`（含 stepwise 技能）；`buff_stem` |
 | **roster** | `src/roster.rs` | 贸易站干员名单 CSV（`roster.csv` 等），按设施过滤 |
 | **operbox** | `src/operbox/mod.rs`、`operbox/xlsx.rs` | 玩家练度盒 JSON / 一图流 xlsx 导入 |
-| **training_advice** | `src/training_advice/` | 练卡推荐：加载 `training_recommendations.json` v2，按 operbox 输出 `now` / `conditional` / `blocked` / `ready` / `review` → [练卡推荐规则](练卡推荐规则.md) |
+| **training_advice** | `src/training_advice/` | 练卡推荐：加载 `training_recommendations.json` v2，按 operbox 输出 `now` / `conditional` / `blocked` / `ready` / `review`；`rag.rs` 生成受限伪 RAG 输入 → [练卡推荐规则](练卡推荐规则.md) |
 | **error** | `src/error.rs` | 统一 `Error` / `Result` |
 | **pool** | `src/pool/trade.rs`、`pool/manufacture.rs`、`pool/control.rs`、`pool/power.rs`、`pool/base.rs` | 设施可求解池；泛型 `PoolCore<T>` 消除结构体重复 |
 | **search** | `src/search/trade.rs`、`search/manufacture.rs`、`search/control.rs`、`search/power.rs`、`search/role_pick.rs` | C(n,k) 穷举 + 评分；中枢/发电搜索 |
@@ -168,7 +168,7 @@ ArknightsInfraCalc-v2/
 | 命令 | 用途 |
 |------|------|
 | **`plan`** | **用户主入口 / Agent 默认模拟入口**：账号画像 JSON + Team ABC / Shift 1–3 排班 + MAA；`--operbox` 支持 JSON/xlsx；布局默认 243 |
-| `advice --operbox <path>` | **练卡推荐**：加载 `data/training_recommendations.json` v2，按 operbox 输出结构化建议包（`now`/`conditional`/`blocked`/`ready`/`review`）；`--rules` 可换规则文件；`--pretty` 美化 JSON。领域真源：[练卡推荐规则](练卡推荐规则.md) |
+| `advice --operbox <path>` | **练卡推荐**：加载 `data/training_recommendations.json` v2，按 operbox 输出结构化建议包（`now`/`conditional`/`blocked`/`ready`/`review`）；`--explain` 包装确定性事实骨架与仓库内 Markdown 片段；`--rules` 可换规则文件；`--pretty` 美化 JSON。领域真源：[练卡推荐规则](练卡推荐规则.md) |
 | `verify --case <id>` / `--all` | 跑 `REGRESSION_CASES.csv` + `UNIT_OUTPUT_ANCHORS.csv` |
 | `pool [--trade] [--manufacture]` | 打印贸易 / 制造池统计与跳过原因；至少选择一类，制造池需要 operbox |
 | `search trade [--roster] [--top N]` | 全池 C(n,3) 搜索 Top-K |
@@ -193,7 +193,7 @@ ArknightsInfraCalc-v2/
 | 路径 | 职责 |
 |------|------|
 | `src/main.rs` | 进程入口、子命令路由；`pool` / `search` / `trade` / `bench` 编排（部分暂留 `main.rs`） |
-| `src/commands/advice.rs` | `advice`：加载 v2 练卡规则 + operbox，输出 `TrainingAdviceReport`（不含 RAG 文案） |
+| `src/commands/advice.rs` | `advice`：加载 v2 练卡规则 + operbox；默认输出 `TrainingAdviceReport`，`--explain` 输出 report + `TrainingAdviceRagInput` |
 | `src/commands/bake.rs` | `bake`：生成或校验加速表 |
 | `src/commands/plan.rs` | **`plan`**：box profile + `schedule_team_rotation` + MAA |
 | `src/commands/layout.rs` | `layout test` / `team-rotation` / `analyze` / `eval` 全部子命令 |
@@ -317,7 +317,7 @@ ArknightsInfraCalc-v2/
 | 导入玩家练度 | `operbox/mod.rs`、`operbox/xlsx.rs`、`inspect_xlsx_operators.py` | operbox JSON |
 | 数据一致性报错 | `check_trade_roster.py`、`instances.rs` | roster / instances / skill_table |
 | 练度概况分析（box profile） | `box_profile/` | `plan` / `layout analyze` CLI |
-| **练卡推荐 / advice / 该练谁** | [练卡推荐规则](练卡推荐规则.md)、`training_advice/`、`data/training_recommendations.json` | `advice` CLI；夹具 `data/fixtures/training_advice/`；验收 skill `gongsun-training-review`；开放项 [TODO/TRAINING_RECOMMENDER_RAG_PLAN.md](TODO/TRAINING_RECOMMENDER_RAG_PLAN.md) |
+| **练卡推荐 / advice / 该练谁** | [练卡推荐规则](练卡推荐规则.md)、`training_advice/`、`data/training_recommendations.json` | `advice` CLI；夹具 `data/fixtures/training_advice/`；验收 skill `gongsun-training-review`；开放项 [练卡推荐规则表剩余人工验收](TODO/练卡推荐规则表剩余人工验收.md) |
 | 练卡规则表人工验收 | `gongsun-training-review` + `render_training_recommendations.py` | 只改规则/canonical，不改 solver 候选池 |
 | 前端集成 / 发布包 | [FRONTEND_CLI.md](FRONTEND_CLI.md)、`release/README.md` | `plan`、`--maa-out` |
 | MAA 排班导出 | `export/maa.rs` | `plan` 或 `layout team-rotation --maa-out` |

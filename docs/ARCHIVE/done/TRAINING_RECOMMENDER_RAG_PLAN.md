@@ -1,9 +1,11 @@
 # 练卡推荐规则与 RAG 实施计划
 
-> 文档角色：active-change
-> 生命周期状态：in-progress
-> 当前真源：docs/练卡推荐规则.md
-> 摘要：按人工规则表、确定性过滤、RAG 解释三层落地基建练卡推荐
+> 文档角色：archive
+> 生命周期状态：completed
+> 替代项：docs/练卡推荐规则.md；docs/TODO/练卡推荐规则表剩余人工验收.md
+> 历史原因：v2 规则、确定性过滤与伪 RAG 输入已落地，剩余外部规则裁决已拆分
+> 快照日期：2026-07-20
+> 摘要：保存练卡推荐 v2 与伪 RAG 输入协议的完成记录
 
 ## 0. 目标
 
@@ -123,33 +125,38 @@ RAG 生成回答
 
 ### Phase D — CLI 输出切换
 
-状态：进行中
+状态：完成
 
 - [x] advice 命令直接序列化 `TrainingAdviceReport`（字段已切 v2）
-- [ ] 用真实 operbox 做一次 pretty 输出人工核对
+- [x] 用 `data/operbox_gongsun.json` 完成 pretty + explain 真实账号核对
 
 ### Phase E — 全量规则迁移
 
-状态：机械迁移完成，语义精修待做
+状态：完成；外部来源裁决已拆分
 
 - [x] `scripts/migrate_training_recommendations_v2.py` 将 v1 机械迁到 v2
 - [x] `data/training_recommendations.json` 现为 version 2（28 条）
-- [ ] 人工核对 kind/scope/角色/获取策略与体系文档
-- [ ] 清理迁移遗留的 needs_review 冲突说明
+- [x] 完成 28 条中文验收稿核对并修正仓库 canonical 可证明项
+- [x] 将 3 条外部 vault 才能裁决的 needs_review 规则拆到独立任务
 
 ### Phase F — RAG 输入协议与伪 RAG
 
-- 由过滤结果生成 `source_refs`
-- 按 path/heading/operator 检索体系文档片段
-- 固定事实骨架 + RAG 解释
-- 硬约束：不新增候选、不改 priority/target、术语优先原文
+状态：完成
+
+- [x] 由过滤结果生成 `source_refs`
+- [x] 按 path/heading/operator 检索仓库内 Markdown 片段
+- [x] `--explain` 输出固定事实骨架、来源片段、不可用来源和 guardrails
+- [x] 硬约束：不新增候选、不改 priority/target/action；review 不伪装成确定事实
+- [x] 自定义规则来源限制在仓库根目录，绝对路径和目录逃逸不可读取
 
 ### Phase G — 收尾
 
-- 删除旧 schema 与冲突路径
-- 更新 gongsun 验收 skill / render 脚本
-- 用 evidence 工具记录 test / CLI / format
-- 吸收确认事实到 canonical，拆剩余开放项，归档本计划
+状态：完成
+
+- [x] 删除旧 schema 与冲突路径
+- [x] 更新 gongsun 验收 skill / render 脚本
+- [x] 用 evidence 工具记录 test / CLI / format / full-suite failure comparison
+- [x] 吸收确认事实到 canonical，拆剩余开放项，归档本计划
 
 ## 4. 规则表 v2 最小样例
 
@@ -215,7 +222,10 @@ RAG 生成回答
 - 2026-07-19：实现 v2 schema、加载校验、确定性过滤器、机械规则迁移、render 脚本；`cargo test -p infra-core training_advice` 14 通过。
 - 2026-07-19：5 个 fixture CLI 验收：核心主语义通过；`conditional`/`blocked` 噪声与 ready/review 交叉待裁。
 - 2026-07-19：文档路由补齐——`docs/INDEX.md` / `PROJECT_MAP.md` / `AGENTS.md` / canonical Agent 入口 / gongsun skill。
-- 下一步：人工精修规则 kind/scope/获取策略；折叠未相关 conditional/blocked；再接伪 RAG。
+- 2026-07-20：收窄无关 blocked、完成跨分区单记录合并与命中来源收集；新增 N-of-M 核心组并修正红松林准入。
+- 2026-07-20：新增 `advice --explain` 事实骨架与仓库内 Markdown 检索；路径边界和 review 隔离通过回归。
+- 2026-07-20：28 条规则中 25 条 confirmed；3 条外部来源待裁决项拆至 `docs/TODO/练卡推荐规则表剩余人工验收.md`。
+- 2026-07-20：targeted、renderer、workspace build、五个 fixture 和真实 operbox 通过；full-suite 相对 HEAD 无新增失败。
 
 ## 7. 历史说明
 

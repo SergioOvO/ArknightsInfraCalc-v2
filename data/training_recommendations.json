@@ -10,7 +10,7 @@
     {
       "id": "witch_long_beta",
       "kind": "system",
-      "scope": "cross_station",
+      "scope": "same_station",
       "label": "巫恋裁缝核",
       "source_system_id": "witch_long_beta",
       "admission": {
@@ -151,7 +151,7 @@
     {
       "id": "blackkey_closure",
       "kind": "system",
-      "scope": "cross_station",
+      "scope": "same_station",
       "label": "可露希尔特别订单",
       "source_system_id": "blackkey_closure",
       "admission": {
@@ -213,7 +213,7 @@
     {
       "id": "lungmen_manu_pair",
       "kind": "combo",
-      "scope": "same_station",
+      "scope": "control_center",
       "label": "斩业星熊诗怀雅二人组",
       "source_system_id": "lungmen_manu_pair",
       "admission": {
@@ -533,7 +533,7 @@
     {
       "id": "human_fireworks_pure",
       "kind": "combo",
-      "scope": "same_station",
+      "scope": "cross_station",
       "label": "纯人间烟火",
       "source_system_id": "human_fireworks_pure",
       "admission": {
@@ -574,7 +574,7 @@
           "operator": "重岳",
           "role": "core",
           "target": {
-            "elite": 2
+            "elite": 0
           },
           "priority": "P1",
           "acquisition": "policy"
@@ -597,14 +597,13 @@
           "path": "data/MECHANICS_REGISTRY.csv"
         },
         {
-          "path": "docs/FIREWORKS.md"
+          "path": "docs/FIREWORKS.md",
+          "heading": "已确认分支"
         }
       ],
       "review": {
-        "status": "needs_review",
-        "conflicts": [
-          "pick_one elite 共享使重岳门槛被抬到 E2；实际知我为我 E0 即可"
-        ]
+        "status": "confirmed",
+        "conflicts": []
       }
     },
     {
@@ -693,7 +692,8 @@
           "path": "data/MECHANICS_REGISTRY.csv"
         },
         {
-          "path": "docs/公孙长乐的体系分析文档/AUTOMATION_GROUP_CHAIN.md"
+          "path": "docs/公孙长乐的体系分析文档/AUTOMATION_GROUP_CHAIN.md",
+          "heading": "3. 成套组成"
         }
       ],
       "review": {
@@ -712,7 +712,18 @@
           "焰尾",
           "薇薇安娜"
         ],
-        "pick_one_core": []
+        "pick_one_core": [],
+        "required_core_groups": [
+          {
+            "label": "红松制造成员",
+            "candidates": [
+              "灰毫",
+              "远牙",
+              "野鬃"
+            ],
+            "required_count": 2
+          }
+        ]
       },
       "members": [
         {
@@ -735,7 +746,7 @@
         },
         {
           "operator": "灰毫",
-          "role": "important",
+          "role": "core",
           "target": {
             "elite": 2
           },
@@ -744,7 +755,7 @@
         },
         {
           "operator": "远牙",
-          "role": "important",
+          "role": "core",
           "target": {
             "elite": 2
           },
@@ -753,22 +764,12 @@
         },
         {
           "operator": "野鬃",
-          "role": "important",
+          "role": "core",
           "target": {
             "elite": 2
           },
           "priority": "P0",
           "acquisition": "policy"
-        },
-        {
-          "operator": "砾",
-          "role": "hanger",
-          "target": {
-            "elite": 1
-          },
-          "priority": "P1",
-          "acquisition": "policy",
-          "rarity": 4
         }
       ],
       "evidence": [
@@ -779,7 +780,8 @@
           "path": "data/MECHANICS_REGISTRY.csv"
         },
         {
-          "path": "docs/公孙长乐的体系分析文档/RED_PINE_FOREST_CHAIN.md"
+          "path": "docs/公孙长乐的体系分析文档/RED_PINE_FOREST_CHAIN.md",
+          "heading": "3. 成套组成与可选收益"
         }
       ],
       "review": {
@@ -883,7 +885,8 @@
           "path": "data/MECHANICS_REGISTRY.csv"
         },
         {
-          "path": "docs/公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md"
+          "path": "docs/公孙长乐的体系分析文档/ROSEMARY_PERCEPTION_CHAIN.md",
+          "heading": "4. 成套组成"
         }
       ],
       "review": {
@@ -1142,7 +1145,8 @@
           "path": "data/MECHANICS_REGISTRY.csv"
         },
         {
-          "path": "docs/公孙长乐的体系分析文档/RHINE_LAB_CHAIN.md"
+          "path": "docs/公孙长乐的体系分析文档/RHINE_LAB_CHAIN.md",
+          "heading": "4. 莱茵科技制造组合"
         }
       ],
       "review": {

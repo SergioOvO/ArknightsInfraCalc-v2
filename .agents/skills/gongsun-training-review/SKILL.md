@@ -34,13 +34,13 @@ cargo run -p infra-cli -- advice --operbox data/fixtures/training_advice/witch_o
 2. 完整读取生成的验收稿。
 3. 只在具体条目需要时读取其 `evidence.path` / 对应体系 canonical 和技能数据，不默认通读全仓。
 4. `data/standalone_roster.json` 只证明候选进入搜索缩池，不证明值得培养。
-5. 开放实现项见 `docs/TODO/TRAINING_RECOMMENDER_RAG_PLAN.md`；代码 owner 见 `docs/PROJECT_MAP.md` 的 `training_advice` / `advice`。
+5. 开放规则项见 `docs/TODO/练卡推荐规则表剩余人工验收.md`；代码 owner 见 `docs/PROJECT_MAP.md` 的 `training_advice` / `advice`。
 
 ## 逐条门禁
 
 - 规则表是 v2 结构化索引：`kind` / `scope` / `admission` / `members` / `evidence` / `review`；不应再依赖面向用户的 `message`。
 - 核对目标是实际技能门槛，不按星级机械套精一或精二。
-- 核对 `system`/`combo` 的必需核心和 `pick_one` 槽；缺核心时该规则下核心、重要成员和挂件全部暂缓。
+- 核对 `system`/`combo` 的必需核心、`pick_one` 槽和 `required_core_groups` N-of-M 门槛；缺核心时该规则下核心、重要成员和挂件全部暂缓。
 - 2/3/4 星与指定赠送五星白名单可进入 `acquire_then_train`；其他未拥有干员不生成培养建议。
 - 同一干员可因独立散件或另一个完整组合获得建议，不能被残缺组合全局禁推。
 - 区分组合角色与 P0/P1/P2 行动优先级。

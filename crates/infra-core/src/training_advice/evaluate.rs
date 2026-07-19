@@ -6,8 +6,8 @@ use crate::tier::PromotionTier;
 use crate::Result;
 
 use super::types::{
-    AcquisitionMode, BlockedRuleReport, EvidenceRef, OperatorAdviceItem, OperatorTrainingState,
-    RecommendationAction, RecommendationPriority, ReviewStatus, RuleKind, RuleMatch, RuleMember,
+    AcquisitionMode, BlockedRuleReport, EvidenceRef, MissingCoreGroupReport, OperatorAdviceItem,
+    OperatorTrainingState, RecommendationAction, ReviewStatus, RuleKind, RuleMatch, RuleMember,
     TrainingAdviceOptions, TrainingAdviceReport, TrainingAdviceSummary,
     TrainingRecommendationRules, TrainingRule, TrainingTarget,
 };
@@ -18,24 +18,19 @@ pub fn build_training_advice(
     rules: &TrainingRecommendationRules,
     options: &TrainingAdviceOptions,
 ) -> Result<TrainingAdviceReport> {
-    let mut now: BTreeMap<String, OperatorAdviceItem> = BTreeMap::new();
-    let mut conditional: BTreeMap<String, OperatorAdviceItem> = BTreeMap::new();
-    let mut ready: BTreeMap<String, OperatorAdviceItem> = BTreeMap::new();
+    let mut confirmed: BTreeMap<String, OperatorAdviceItem> = BTreeMap::new();
     let mut review: BTreeMap<String, OperatorAdviceItem> = BTreeMap::new();
     let mut blocked = Vec::new();
-    let mut source_refs = BTreeMap::new();
 
     for rule in &rules.rules {
-        collect_evidence(&mut source_refs, &rule.evidence);
         let outcome = evaluate_rule(operbox, rules, rule);
-        for item in outcome.now {
-            merge_item(&mut now, item);
-        }
-        for item in outcome.conditional {
-            merge_item(&mut conditional, item);
-        }
-        for item in outcome.ready {
-            merge_item(&mut ready, item);
+        for item in outcome
+            .now
+            .into_iter()
+            .chain(outcome.conditional)
+            .chain(outcome.ready)
+        {
+            merge_item(&mut confirmed, item);
         }
         for item in outcome.review {
             merge_item(&mut review, item);
@@ -43,16 +38,31 @@ pub fn build_training_advice(
         blocked.extend(outcome.blocked);
     }
 
-    for op in now
-        .keys()
-        .chain(conditional.keys())
-        .cloned()
-        .collect::<Vec<_>>()
-    {
-        ready.remove(&op);
+    for operator in review.keys().cloned().collect::<Vec<_>>() {
+        if let Some(existing) = confirmed.get_mut(&operator) {
+            let review_item = review
+                .remove(&operator)
+                .expect("review key came from the same map");
+            merge_review_context(existing, &review_item);
+        }
     }
-    for op in now.keys().cloned().collect::<Vec<_>>() {
-        conditional.remove(&op);
+
+    let mut now = BTreeMap::new();
+    let mut conditional = BTreeMap::new();
+    let mut ready = BTreeMap::new();
+    for (operator, item) in confirmed {
+        match item.action {
+            RecommendationAction::Train => {
+                now.insert(operator, item);
+            }
+            RecommendationAction::AcquireThenTrain => {
+                conditional.insert(operator, item);
+            }
+            RecommendationAction::Ready => {
+                ready.insert(operator, item);
+            }
+            RecommendationAction::Review | RecommendationAction::Blocked => {}
+        }
     }
 
     let now = sorted_items(now);
@@ -60,6 +70,14 @@ pub fn build_training_advice(
     let ready = sorted_items(ready);
     let review = sorted_items(review);
     blocked.sort_by(|a, b| a.rule_id.cmp(&b.rule_id));
+
+    let mut source_refs = BTreeMap::new();
+    for item in now.iter().chain(&conditional).chain(&ready).chain(&review) {
+        collect_evidence(&mut source_refs, &item.source_refs);
+    }
+    for rule in &blocked {
+        collect_evidence(&mut source_refs, &rule.source_refs);
+    }
 
     Ok(TrainingAdviceReport {
         schema_version: 2,
@@ -106,6 +124,7 @@ fn evaluate_rule(
             admitted: true,
             owned_core: Vec::new(),
             missing_core: Vec::new(),
+            missing_core_groups: Vec::new(),
         }
     };
 
@@ -132,42 +151,48 @@ fn blocked_outcome(
     let mut deferred = BTreeSet::new();
     let mut conditional_acquire = BTreeSet::new();
     let mut outcome = empty_outcome();
+    let owns_any_member = rule.members.iter().any(|member| {
+        let Some(progress) = operbox.progress_of(&member.operator) else {
+            return false;
+        };
+        if !member.target.is_met_by(progress) {
+            deferred.insert(member.operator.clone());
+        }
+        true
+    });
+    let follow_up = deferred.iter().cloned().collect::<Vec<_>>();
 
     for missing in &admission.missing_core {
-        if let Some(label) = missing.strip_prefix("pick_one:") {
-            if let Some(slot) = rule
-                .admission
-                .pick_one_core
-                .iter()
-                .find(|s| s.label == label)
-            {
-                for cand in &slot.candidates {
-                    if operbox.owns(cand) {
-                        continue;
-                    }
-                    if let Some(member) = find_member(rule, cand) {
-                        if can_suggest_acquire(operbox, rules, member) {
-                            conditional_acquire.insert(cand.clone());
-                            let plan = Some(format!(
-                                "先获取并培养缺失核心槽「{label}」候选 {cand}，完成后再培养本规则其余成员。"
-                            ));
-                            if let Some(item) =
-                                evaluate_member(operbox, rules, rule, member, needs_review, plan)
-                            {
-                                push_by_action(&mut outcome, item);
-                            }
-                        }
-                    }
-                }
-            }
-            continue;
-        }
-
         if let Some(member) = find_member(rule, missing) {
             if can_suggest_acquire(operbox, rules, member) {
                 conditional_acquire.insert(missing.clone());
-                let plan = Some(format!(
-                    "先获取并培养缺失核心 {missing}，完成后再培养本规则其余成员。"
+                let plan = Some(conditional_plan(&format!("缺失核心 {missing}"), &follow_up));
+                if let Some(item) =
+                    evaluate_member(operbox, rules, rule, member, needs_review, plan)
+                {
+                    push_by_action(&mut outcome, item);
+                }
+            }
+        }
+    }
+
+    for group in &admission.missing_core_groups {
+        let missing_count = group.required_count.saturating_sub(group.owned.len());
+        for candidate in &group.candidates {
+            if operbox.owns(candidate) {
+                continue;
+            }
+            let Some(member) = find_member(rule, candidate) else {
+                continue;
+            };
+            if can_suggest_acquire(operbox, rules, member) {
+                conditional_acquire.insert(candidate.clone());
+                let plan = Some(conditional_plan(
+                    &format!(
+                        "核心组「{}」候选 {}（仍需 {} 人）",
+                        group.label, candidate, missing_count
+                    ),
+                    &follow_up,
                 ));
                 if let Some(item) =
                     evaluate_member(operbox, rules, rule, member, needs_review, plan)
@@ -178,24 +203,31 @@ fn blocked_outcome(
         }
     }
 
-    for member in &rule.members {
-        if operbox.owns(&member.operator) {
-            deferred.insert(member.operator.clone());
-        }
+    if owns_any_member || !conditional_acquire.is_empty() {
+        outcome.blocked.push(BlockedRuleReport {
+            rule_id: rule.id.clone(),
+            kind: rule.kind,
+            label: rule.label.clone(),
+            missing_core: admission.missing_core.clone(),
+            missing_core_groups: admission.missing_core_groups.clone(),
+            owned_core: admission.owned_core.clone(),
+            deferred_members: deferred.into_iter().collect(),
+            conditional_acquire: conditional_acquire.into_iter().collect(),
+            source_refs: rule.evidence.clone(),
+            needs_review,
+        });
     }
-
-    outcome.blocked.push(BlockedRuleReport {
-        rule_id: rule.id.clone(),
-        kind: rule.kind,
-        label: rule.label.clone(),
-        missing_core: admission.missing_core.clone(),
-        owned_core: admission.owned_core.clone(),
-        deferred_members: deferred.into_iter().collect(),
-        conditional_acquire: conditional_acquire.into_iter().collect(),
-        source_refs: rule.evidence.clone(),
-        needs_review,
-    });
     outcome
+}
+
+fn conditional_plan(missing: &str, follow_up: &[String]) -> String {
+    if follow_up.is_empty() {
+        return format!("先获取并培养{missing}。");
+    }
+    format!(
+        "先获取并培养{missing}，完成后再培养已拥有且未达标的 {}。",
+        follow_up.join("、")
+    )
 }
 
 fn evaluate_member(
@@ -212,6 +244,7 @@ fn evaluate_member(
         label: rule.label.clone(),
         role: member.role,
         priority: member.priority,
+        target: target_state(&member.target),
         benefit: member.benefit.clone(),
         source_refs: rule.evidence.clone(),
         needs_review,
@@ -307,11 +340,13 @@ struct AdmissionState {
     admitted: bool,
     owned_core: Vec<String>,
     missing_core: Vec<String>,
+    missing_core_groups: Vec<MissingCoreGroupReport>,
 }
 
 fn evaluate_admission(operbox: &OperBox, rule: &TrainingRule) -> AdmissionState {
     let mut owned_core = BTreeSet::new();
     let mut missing_core = BTreeSet::new();
+    let mut missing_core_groups = Vec::new();
 
     for name in &rule.admission.required_core {
         if operbox.owns(name) {
@@ -329,16 +364,40 @@ fn evaluate_admission(operbox: &OperBox, rule: &TrainingRule) -> AdmissionState 
             .cloned()
             .collect();
         if owned.is_empty() {
-            missing_core.insert(format!("pick_one:{}", slot.label));
+            missing_core_groups.push(MissingCoreGroupReport {
+                label: slot.label.clone(),
+                required_count: 1,
+                owned: Vec::new(),
+                candidates: slot.candidates.clone(),
+            });
         } else {
             owned_core.extend(owned);
         }
     }
 
+    for group in &rule.admission.required_core_groups {
+        let owned: Vec<_> = group
+            .candidates
+            .iter()
+            .filter(|candidate| operbox.owns(candidate))
+            .cloned()
+            .collect();
+        owned_core.extend(owned.iter().cloned());
+        if owned.len() < group.required_count {
+            missing_core_groups.push(MissingCoreGroupReport {
+                label: group.label.clone(),
+                required_count: group.required_count,
+                owned,
+                candidates: group.candidates.clone(),
+            });
+        }
+    }
+
     AdmissionState {
-        admitted: missing_core.is_empty(),
+        admitted: missing_core.is_empty() && missing_core_groups.is_empty(),
         owned_core: owned_core.into_iter().collect(),
         missing_core: missing_core.into_iter().collect(),
+        missing_core_groups,
     }
 }
 
@@ -408,23 +467,15 @@ fn merge_operator_item(existing: &mut OperatorAdviceItem, incoming: &OperatorAdv
     let better_action = action_rank(incoming.action) < action_rank(existing.action);
     let better_priority = incoming.display_priority.rank() < existing.display_priority.rank();
 
-    if better_action
-        || (incoming.action == existing.action && better_priority)
-        || (incoming.display_priority.rank() == existing.display_priority.rank() && better_action)
-    {
-        if better_action || better_priority {
-            existing.action = incoming.action;
-            if better_priority {
-                existing.display_priority = incoming.display_priority;
-            }
-            existing.target = incoming.target.clone();
-            if incoming.current.is_some() {
-                existing.current = incoming.current.clone();
-            }
+    if better_action || (incoming.action == existing.action && better_priority) {
+        existing.action = incoming.action;
+        existing.target = incoming.target.clone();
+        if incoming.current.is_some() {
+            existing.current = incoming.current.clone();
         }
     }
 
-    if better_priority && !better_action {
+    if better_priority {
         existing.display_priority = incoming.display_priority;
     }
 
@@ -434,6 +485,12 @@ fn merge_operator_item(existing: &mut OperatorAdviceItem, incoming: &OperatorAdv
     if existing.current.is_none() {
         existing.current = current;
     }
+}
+
+fn merge_review_context(existing: &mut OperatorAdviceItem, review: &OperatorAdviceItem) {
+    existing.matches = merge_matches(&existing.matches, &review.matches);
+    existing.source_refs = merge_evidence(&existing.source_refs, &review.source_refs);
+    existing.needs_review = true;
 }
 
 fn action_rank(action: RecommendationAction) -> u8 {
@@ -586,6 +643,7 @@ mod tests {
                             label: "裁缝β第三人".to_string(),
                             candidates: vec!["卡夫卡".to_string(), "柏喙".to_string()],
                         }],
+                        required_core_groups: Vec::new(),
                     },
                     members: vec![
                         member(
@@ -636,6 +694,7 @@ mod tests {
                     admission: RuleAdmission {
                         required_core: vec!["能天使".to_string(), "蕾缪安".to_string()],
                         pick_one_core: Vec::new(),
+                        required_core_groups: Vec::new(),
                     },
                     members: vec![
                         member(
@@ -736,6 +795,16 @@ mod tests {
     }
 
     #[test]
+    fn untouched_hard_rules_are_not_reported_as_blocked() {
+        let report = report(operbox(vec![]), sample_rules());
+        assert!(report.blocked.is_empty());
+        assert!(report
+            .source_refs
+            .iter()
+            .all(|source| source.path != "docs/巫恋.md"));
+    }
+
+    #[test]
     fn complete_combo_undertrained_emits_train() {
         let report = report(
             operbox(vec![
@@ -808,6 +877,7 @@ mod tests {
             admission: RuleAdmission {
                 required_core: vec!["清流".to_string()],
                 pick_one_core: Vec::new(),
+                required_core_groups: Vec::new(),
             },
             members: vec![member(
                 "清流",
@@ -835,6 +905,47 @@ mod tests {
     }
 
     #[test]
+    fn cross_bucket_merge_keeps_ready_and_train_matches() {
+        let mut rules = sample_rules();
+        rules.rules.push(TrainingRule {
+            id: "clear_upgrade".to_string(),
+            kind: RuleKind::System,
+            scope: RuleScope::Independent,
+            label: "清流升级".to_string(),
+            source_system_id: None,
+            admission: RuleAdmission {
+                required_core: vec!["清流".to_string()],
+                pick_one_core: Vec::new(),
+                required_core_groups: Vec::new(),
+            },
+            members: vec![member(
+                "清流",
+                MemberRole::Core,
+                2,
+                RecommendationPriority::P1,
+                AcquisitionMode::OwnedOnly,
+                Some(4),
+            )],
+            evidence: vec![],
+            review: RuleReview::default(),
+        });
+
+        let report = report(operbox(vec![entry("清流", 1, true, 4)]), rules);
+        let item = report
+            .now
+            .iter()
+            .find(|item| item.operator == "清流")
+            .unwrap();
+        assert_eq!(item.action, RecommendationAction::Train);
+        assert_eq!(item.display_priority, RecommendationPriority::P0);
+        assert_eq!(item.target.elite, 2);
+        assert_eq!(item.matches.len(), 2);
+        assert!(item.matches.iter().any(|m| m.target.elite == 1));
+        assert!(item.matches.iter().any(|m| m.target.elite == 2));
+        assert!(report.ready.iter().all(|item| item.operator != "清流"));
+    }
+
+    #[test]
     fn needs_review_goes_to_review_bucket() {
         let report = report(operbox(vec![entry("槐琥", 1, true, 5)]), sample_rules());
         assert!(report
@@ -842,6 +953,41 @@ mod tests {
             .iter()
             .any(|r| r.operator == "槐琥" && r.needs_review));
         assert!(report.now.iter().all(|r| r.operator != "槐琥"));
+    }
+
+    #[test]
+    fn confirmed_result_absorbs_review_context_without_changing_action() {
+        let mut rules = sample_rules();
+        rules.rules.push(TrainingRule {
+            id: "confirmed_huaihu".to_string(),
+            kind: RuleKind::Standalone,
+            scope: RuleScope::Independent,
+            label: "槐琥散件".to_string(),
+            source_system_id: None,
+            admission: RuleAdmission::default(),
+            members: vec![member(
+                "槐琥",
+                MemberRole::Independent,
+                1,
+                RecommendationPriority::P2,
+                AcquisitionMode::OwnedOnly,
+                Some(5),
+            )],
+            evidence: vec![],
+            review: RuleReview::default(),
+        });
+
+        let report = report(operbox(vec![entry("槐琥", 1, true, 5)]), rules);
+        let item = report
+            .ready
+            .iter()
+            .find(|item| item.operator == "槐琥")
+            .unwrap();
+        assert_eq!(item.action, RecommendationAction::Ready);
+        assert_eq!(item.target.elite, 1);
+        assert!(item.needs_review);
+        assert_eq!(item.matches.len(), 2);
+        assert!(report.review.iter().all(|item| item.operator != "槐琥"));
     }
 
     #[test]
@@ -867,6 +1013,167 @@ mod tests {
             .iter()
             .any(|r| r.operator == "柏喙" && r.action == RecommendationAction::AcquireThenTrain));
         assert!(report.now.iter().all(|r| r.operator != "巫恋"));
+    }
+
+    #[test]
+    fn required_core_group_enforces_n_of_m_admission() {
+        let rules = TrainingRecommendationRules {
+            version: 2,
+            acquisition_policy: AcquisitionPolicy::default(),
+            rules: vec![TrainingRule {
+                id: "red_pine".to_string(),
+                kind: RuleKind::System,
+                scope: RuleScope::CrossStation,
+                label: "红松林".to_string(),
+                source_system_id: None,
+                admission: RuleAdmission {
+                    required_core: vec!["焰尾".to_string(), "薇薇安娜".to_string()],
+                    pick_one_core: Vec::new(),
+                    required_core_groups: vec![RequiredCoreGroup {
+                        label: "红松制造成员".to_string(),
+                        candidates: vec![
+                            "灰毫".to_string(),
+                            "远牙".to_string(),
+                            "野鬃".to_string(),
+                        ],
+                        required_count: 2,
+                    }],
+                },
+                members: vec![
+                    member(
+                        "焰尾",
+                        MemberRole::Core,
+                        2,
+                        RecommendationPriority::P0,
+                        AcquisitionMode::OwnedOnly,
+                        Some(6),
+                    ),
+                    member(
+                        "薇薇安娜",
+                        MemberRole::Core,
+                        2,
+                        RecommendationPriority::P0,
+                        AcquisitionMode::OwnedOnly,
+                        Some(6),
+                    ),
+                    member(
+                        "灰毫",
+                        MemberRole::Core,
+                        2,
+                        RecommendationPriority::P0,
+                        AcquisitionMode::OwnedOnly,
+                        Some(5),
+                    ),
+                    member(
+                        "远牙",
+                        MemberRole::Core,
+                        2,
+                        RecommendationPriority::P0,
+                        AcquisitionMode::OwnedOnly,
+                        Some(6),
+                    ),
+                    member(
+                        "野鬃",
+                        MemberRole::Core,
+                        2,
+                        RecommendationPriority::P0,
+                        AcquisitionMode::OwnedOnly,
+                        Some(5),
+                    ),
+                ],
+                evidence: Vec::new(),
+                review: RuleReview::default(),
+            }],
+        };
+
+        let blocked = report(
+            operbox(vec![
+                entry("焰尾", 2, true, 6),
+                entry("薇薇安娜", 2, true, 6),
+                entry("灰毫", 1, true, 5),
+            ]),
+            rules.clone(),
+        );
+        assert!(blocked.now.is_empty());
+        let missing = &blocked.blocked[0].missing_core_groups[0];
+        assert_eq!(missing.required_count, 2);
+        assert_eq!(missing.owned, vec!["灰毫"]);
+
+        let admitted = report(
+            operbox(vec![
+                entry("焰尾", 2, true, 6),
+                entry("薇薇安娜", 2, true, 6),
+                entry("灰毫", 1, true, 5),
+                entry("远牙", 1, true, 6),
+            ]),
+            rules,
+        );
+        assert!(admitted.blocked.is_empty());
+        assert!(admitted.now.iter().any(|item| item.operator == "灰毫"));
+        assert!(admitted.now.iter().any(|item| item.operator == "远牙"));
+    }
+
+    #[test]
+    fn required_core_group_conditional_plan_preserves_missing_count() {
+        let rules = TrainingRecommendationRules {
+            version: 2,
+            acquisition_policy: AcquisitionPolicy::default(),
+            rules: vec![TrainingRule {
+                id: "low_star_group".to_string(),
+                kind: RuleKind::Combo,
+                scope: RuleScope::SameStation,
+                label: "低星核心组".to_string(),
+                source_system_id: None,
+                admission: RuleAdmission {
+                    required_core: Vec::new(),
+                    pick_one_core: Vec::new(),
+                    required_core_groups: vec![RequiredCoreGroup {
+                        label: "三选二".to_string(),
+                        candidates: vec!["甲".to_string(), "乙".to_string(), "丙".to_string()],
+                        required_count: 2,
+                    }],
+                },
+                members: ["甲", "乙", "丙"]
+                    .into_iter()
+                    .map(|name| {
+                        member(
+                            name,
+                            MemberRole::Core,
+                            1,
+                            RecommendationPriority::P1,
+                            AcquisitionMode::Policy,
+                            Some(3),
+                        )
+                    })
+                    .collect(),
+                evidence: Vec::new(),
+                review: RuleReview::default(),
+            }],
+        };
+
+        let empty = report(operbox(Vec::new()), rules.clone());
+        assert_eq!(empty.conditional.len(), 3);
+        assert!(empty
+            .conditional
+            .iter()
+            .all(|item| item.matches.iter().any(|matched| {
+                matched
+                    .plan_note
+                    .as_deref()
+                    .is_some_and(|note| note.contains("仍需 2 人"))
+            })));
+
+        let partial = report(operbox(vec![entry("甲", 0, true, 3)]), rules);
+        assert_eq!(partial.conditional.len(), 2);
+        assert!(partial
+            .conditional
+            .iter()
+            .all(|item| item.matches.iter().any(|matched| {
+                matched
+                    .plan_note
+                    .as_deref()
+                    .is_some_and(|note| note.contains("仍需 1 人"))
+            })));
     }
 
     #[test]

@@ -35,6 +35,7 @@ class RenderTrainingRecommendationsTests(unittest.TestCase):
         self.assertIn("红云", rendered)
         self.assertIn("类型：`system`", rendered)
         self.assertIn("类型：`standalone`", rendered)
+        self.assertIn("核心组「红松制造成员」至少 2 人", rendered)
 
     def test_invalid_version_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

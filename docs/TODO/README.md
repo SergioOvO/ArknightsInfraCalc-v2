@@ -16,8 +16,8 @@
 |---|---|---|
 | [设施无关条件化响应 Bake 实施计划](CONDITIONAL_ROOM_RESPONSE_BAKE_PLAN.md) | `ready-on-request` | 设施无关条件化响应 Bake 的后续实施任务 |
 | [动态 Producer A+：设施无关候选列 + 精确索引 Join](DYNAMIC_PRODUCER_BAKED_SEARCH_PLAN.md) | `ready-on-request` | 动态 producer 候选列、精确索引 Join 和 winner dependency 任务 |
-| [练卡推荐规则与 RAG 实施计划](TRAINING_RECOMMENDER_RAG_PLAN.md) | `in-progress` | 按人工规则表、确定性过滤、RAG 解释三层落地基建练卡推荐 |
 | [体系注册表后续缺口](体系注册表后续缺口.md) | `ready-on-request` | 承接旧组合体系规范化报告中仍有效但未获当前授权的开放项 |
+| [练卡推荐规则表剩余人工验收](练卡推荐规则表剩余人工验收.md) | `ready-on-request` | 裁决剩余 needs_review 规则并补齐规则表来源精度 |
 | [罗德岛基建管家 — 网站页面结构设计](网站页面结构设计.md) | `proposal` | 网站页面结构和前端线框图提案，尚未获得实施授权 |
 | [罗德岛基建管家](罗德岛基建管家.md) | `proposal` | 一站式基建管家的产品愿景提案，尚未获得实施授权 |
 | [近期已知缺口修复清单](近期已知缺口修复清单.md) | `ready-on-request` | 按独立授权逐项恢复的近期已知缺口清单 |

@@ -130,12 +130,21 @@ pub struct PickOneCoreSlot {
     pub candidates: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RequiredCoreGroup {
+    pub label: String,
+    pub candidates: Vec<String>,
+    pub required_count: usize,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RuleAdmission {
     #[serde(default)]
     pub required_core: Vec<String>,
     #[serde(default)]
     pub pick_one_core: Vec<PickOneCoreSlot>,
+    #[serde(default)]
+    pub required_core_groups: Vec<RequiredCoreGroup>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -277,6 +286,7 @@ pub struct RuleMatch {
     pub label: String,
     pub role: MemberRole,
     pub priority: RecommendationPriority,
+    pub target: OperatorTrainingState,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub benefit: Option<MemberBenefit>,
     #[serde(default)]
@@ -293,6 +303,8 @@ pub struct BlockedRuleReport {
     pub kind: RuleKind,
     pub label: String,
     pub missing_core: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub missing_core_groups: Vec<MissingCoreGroupReport>,
     pub owned_core: Vec<String>,
     #[serde(default)]
     pub deferred_members: Vec<String>,
@@ -302,4 +314,47 @@ pub struct BlockedRuleReport {
     pub source_refs: Vec<EvidenceRef>,
     #[serde(default)]
     pub needs_review: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MissingCoreGroupReport {
+    pub label: String,
+    pub required_count: usize,
+    pub owned: Vec<String>,
+    pub candidates: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrainingAdviceBundle {
+    pub report: TrainingAdviceReport,
+    pub rag_input: TrainingAdviceRagInput,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrainingAdviceRagInput {
+    pub schema_version: u32,
+    pub fact_skeleton: Vec<TrainingAdviceFact>,
+    pub evidence_snippets: Vec<EvidenceSnippet>,
+    pub unavailable_source_refs: Vec<EvidenceRef>,
+    pub guardrails: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrainingAdviceFact {
+    pub action: RecommendationAction,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operator: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<RecommendationPriority>,
+    pub text: String,
+    #[serde(default)]
+    pub source_refs: Vec<EvidenceRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvidenceSnippet {
+    pub source_ref: EvidenceRef,
+    pub excerpt: String,
 }
