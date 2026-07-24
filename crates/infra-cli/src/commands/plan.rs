@@ -3,13 +3,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use super::plan_compute::{compute_plan, PlanComputeInput, PlanResources, RequestedOutputs};
 use crate::output::{print_box_profile_report, print_team_rotation_text};
-use infra_core::box_profile::{baseline_path_or_default, build_box_profile, BoxProfileOptions};
-use infra_core::export::{build_from_team_rotation, MaaExportOptions};
+use infra_core::box_profile::baseline_path_or_default;
 use infra_core::instances::{default_instances_path, OperatorInstances};
-use infra_core::layout::{AssignBaseOptions, BaseBlueprint};
+use infra_core::layout::BaseBlueprint;
 use infra_core::operbox::{default_layout_243_path, default_operbox_full_e2_path, OperBox};
-use infra_core::schedule::schedule_timed_rotation;
 use infra_core::skill_table::{default_skill_table_path, SkillTable};
 use infra_core::Error;
 
@@ -38,42 +37,43 @@ pub fn plan_cmd(args: &[String]) -> Result<(), Error> {
     let operbox_label = operbox_path.to_string_lossy().into_owned();
     let owned = operbox.owned_count();
 
-    // ── 1. 账号画像 / 分析 ──────────────────────────────────────────────
-    let profile = build_box_profile(
-        &blueprint,
-        &operbox,
-        &instances,
-        &table,
-        &layout_label,
-        &operbox_label,
-        &BoxProfileOptions {
+    let maa_out = maa_out_from_args(args);
+    let maa_title = args
+        .windows(2)
+        .find(|w| w[0] == "--maa-title")
+        .map(|w| w[1].as_str());
+    let computed = compute_plan(
+        PlanResources {
+            instances: &instances,
+            table: &table,
+        },
+        PlanComputeInput {
+            blueprint: &blueprint,
+            operbox: &operbox,
+            layout_label: &layout_label,
+            operbox_label: &operbox_label,
+            baseline_operbox: Some(&baseline_path),
             top_k,
-            baseline_operbox: Some(baseline_path),
             rotation_profile,
-            system_preferences: system_preferences.clone(),
-            ..BoxProfileOptions::default()
+            system_preferences: &system_preferences,
+            maa_title,
+        },
+        RequestedOutputs {
+            profile: true,
+            maa: maa_out.is_some(),
         },
     )?;
+    let profile = computed
+        .profile
+        .as_ref()
+        .expect("profile was requested for plan command");
+    let rotation = &computed.current.rotation;
 
     let profile_out = profile_out_path(args, &operbox_path);
     let profile_json = serde_json::to_string_pretty(&profile)?;
     ensure_parent_dir(&profile_out)?;
     fs::write(&profile_out, format!("{profile_json}\n"))?;
     eprintln!("profile JSON → {}", profile_out.display());
-
-    // ── 2. αβγ 三队排班 ─────────────────────────────────────────────────
-    let rotation = schedule_timed_rotation(
-        &blueprint,
-        &operbox,
-        &instances,
-        &table,
-        &AssignBaseOptions {
-            top_k,
-            system_preferences,
-            ..AssignBaseOptions::default()
-        },
-        rotation_profile,
-    )?;
 
     if let Some(dir) = output_dir_from_args(args) {
         fs::create_dir_all(&dir)?;
@@ -84,17 +84,11 @@ pub fn plan_cmd(args: &[String]) -> Result<(), Error> {
         }
     }
 
-    if let Some(maa_path) = maa_out_from_args(args) {
-        let mut maa_opts = MaaExportOptions::for_blueprint(&blueprint);
-        maa_opts.enable_gongsun_fiammetta_priority();
-        if let Some(title) = args
-            .windows(2)
-            .find(|w| w[0] == "--maa-title")
-            .map(|w| w[1].clone())
-        {
-            maa_opts.title = title;
-        }
-        let schedule = build_from_team_rotation(&blueprint, &rotation, &maa_opts)?;
+    if let Some(maa_path) = maa_out {
+        let schedule = computed
+            .maa
+            .as_ref()
+            .expect("MAA schedule was requested when --maa-out is present");
         schedule.save(&maa_path)?;
         eprintln!("MAA 排班 JSON → {}", maa_path.display());
     }

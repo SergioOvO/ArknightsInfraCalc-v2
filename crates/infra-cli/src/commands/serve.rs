@@ -1,25 +1,36 @@
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Instant;
 
+use super::plan_compute::{compute_plan, PlanComputeInput, PlanResources, RequestedOutputs};
 use infra_core::bake::{
     bake_catalogs, default_baked_out_dir, set_runtime_bake_in_progress, validate_baked_catalog,
     warm_runtime_baked_table, BakeGeneratorFingerprint, BakeOptions, BakeProgressEvent,
 };
-use infra_core::box_profile::{
-    baseline_path_or_default, build_box_profile_from_current_probe,
-    run_user_rotation_probe_with_profile, BoxProfileOptions,
-};
-use infra_core::export::{build_from_team_rotation, MaaExportOptions};
+use infra_core::box_profile::{baseline_path_or_default, BoxProfile};
+use infra_core::export::MaaSchedule;
 use infra_core::instances::{default_instances_path, OperatorInstances};
 use infra_core::layout::BaseBlueprint;
-use infra_core::operbox::{default_layout_243_path, default_operbox_full_e2_path, OperBox};
-use infra_core::schedule::TimedRotationProfile;
+use infra_core::operbox::{
+    default_layout_243_path, default_operbox_full_e2_path, OperBox, OperBoxEntry,
+};
+use infra_core::schedule::{
+    DailyTotals, ShiftEfficiencies, TeamLabel, TeamRotationReport, TimedRotationProfile,
+};
 use infra_core::skill_table::{default_skill_table_path, SkillTable};
 use infra_core::Error;
 use serde::{Deserialize, Serialize};
+
+const PLAN_SCHEMA_VERSION: u32 = 1;
+const PROTOCOL_VERSION: u32 = 1;
+const MAX_FRAME_BYTES: usize = 8 * 1024 * 1024;
+const MAX_OPERBOX_ENTRIES: usize = 1000;
+const MAX_LAYOUT_ROOMS: usize = 64;
+const MAX_LABEL_BYTES: usize = 200;
+const MAX_TOP_K: usize = 100;
 
 pub fn serve_cmd(args: &[String]) -> Result<(), Error> {
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
@@ -41,16 +52,31 @@ pub fn serve_cmd(args: &[String]) -> Result<(), Error> {
 
     eprintln!("infra-cli serve ready: line-delimited JSON on stdin/stdout");
     let stdin = io::stdin();
+    let mut input = stdin.lock();
     let mut stdout = io::stdout().lock();
-    for line in stdin.lock().lines() {
-        let line = line?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        let response = handle_request(&state, &line);
-        serde_json::to_writer(&mut stdout, &response)?;
-        stdout.write_all(b"\n")?;
-        stdout.flush()?;
+    loop {
+        let Some(frame) = read_ndjson_frame(&mut input, MAX_FRAME_BYTES)? else {
+            break;
+        };
+        let response = match frame {
+            NdjsonFrame::Line(line) if line.trim().is_empty() => continue,
+            NdjsonFrame::Line(line) => handle_request(&state, &line),
+            NdjsonFrame::TooLarge => coded_error_response(
+                serde_json::Value::Null,
+                0,
+                "FRAME_TOO_LARGE",
+                "protocol",
+                format!("request frame exceeds {MAX_FRAME_BYTES} bytes"),
+            ),
+            NdjsonFrame::InvalidUtf8 => coded_error_response(
+                serde_json::Value::Null,
+                0,
+                "INVALID_UTF8",
+                "protocol",
+                "request frame must be UTF-8".to_string(),
+            ),
+        };
+        write_response(&mut stdout, response)?;
     }
     Ok(())
 }
@@ -65,6 +91,83 @@ fn print_serve_usage() {
     eprintln!(
         "  plan: params {{ operbox, layout?, baseline?, top?, rotation?, profile_out?, maa_out?, output_dir?, maa_title? }}"
     );
+    eprintln!("  plan.compute: params {{ schema_version, layout, operbox, labels?, options? }}");
+}
+
+enum NdjsonFrame {
+    Line(String),
+    TooLarge,
+    InvalidUtf8,
+}
+
+fn read_ndjson_frame(
+    reader: &mut impl BufRead,
+    max_bytes: usize,
+) -> io::Result<Option<NdjsonFrame>> {
+    let mut bytes = Vec::new();
+    let mut too_large = false;
+    let mut saw_input = false;
+
+    loop {
+        let available = reader.fill_buf()?;
+        if available.is_empty() {
+            if !saw_input {
+                return Ok(None);
+            }
+            break;
+        }
+        saw_input = true;
+
+        let newline = available.iter().position(|byte| *byte == b'\n');
+        let consumed = newline.map_or(available.len(), |index| index + 1);
+        if !too_large {
+            if bytes.len().saturating_add(consumed) > max_bytes {
+                too_large = true;
+                bytes.clear();
+            } else {
+                bytes.extend_from_slice(&available[..consumed]);
+            }
+        }
+        reader.consume(consumed);
+        if newline.is_some() {
+            break;
+        }
+    }
+
+    if too_large {
+        return Ok(Some(NdjsonFrame::TooLarge));
+    }
+    if bytes.last() == Some(&b'\n') {
+        bytes.pop();
+    }
+    if bytes.last() == Some(&b'\r') {
+        bytes.pop();
+    }
+    Ok(Some(match String::from_utf8(bytes) {
+        Ok(line) => NdjsonFrame::Line(line),
+        Err(_) => NdjsonFrame::InvalidUtf8,
+    }))
+}
+
+fn write_response(
+    stdout: &mut impl Write,
+    response: ServeResponse<serde_json::Value>,
+) -> Result<(), Error> {
+    let id = response.id.clone();
+    let mut encoded = serde_json::to_vec(&response)?;
+    if encoded.len().saturating_add(1) > MAX_FRAME_BYTES {
+        encoded = serde_json::to_vec(&coded_error_response(
+            id,
+            response.elapsed_ms,
+            "RESPONSE_TOO_LARGE",
+            "protocol",
+            format!("response frame exceeds {MAX_FRAME_BYTES} bytes"),
+        ))?;
+    }
+    stdout.write_all(&encoded)?;
+    stdout.write_all(b"\n")?;
+    stdout.flush()?;
+    Ok(())
 }
 
 struct ServeState {
@@ -170,6 +273,10 @@ struct ServeResponse<T: Serialize> {
 
 #[derive(Debug, Serialize)]
 struct ServeError {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    code: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stage: Option<&'static str>,
     message: String,
 }
 
@@ -195,6 +302,44 @@ struct PlanParams {
     maa_title: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PlanComputeParams {
+    schema_version: u32,
+    layout: BaseBlueprint,
+    operbox: Vec<OperBoxEntry>,
+    #[serde(default)]
+    labels: PlanComputeLabels,
+    #[serde(default)]
+    options: PlanComputeOptions,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PlanComputeLabels {
+    #[serde(default)]
+    layout: Option<String>,
+    #[serde(default)]
+    operbox: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PlanComputeOptions {
+    #[serde(default)]
+    rotation: TimedRotationProfile,
+    #[serde(default = "default_top_k")]
+    top: usize,
+    #[serde(default)]
+    system_preferences: HashMap<String, String>,
+    #[serde(default)]
+    maa_title: Option<String>,
+}
+
+fn default_top_k() -> usize {
+    20
+}
+
 #[derive(Debug, Serialize)]
 struct PlanResult {
     layout: String,
@@ -214,6 +359,56 @@ struct PlanResult {
     shifts: Vec<infra_core::schedule::TeamShiftResult>,
 }
 
+#[derive(Debug, Serialize)]
+struct PlanComputeResult {
+    schema_version: u32,
+    profile: BoxProfile,
+    rotation: RotationSummary,
+    maa: MaaSchedule,
+}
+
+#[derive(Debug, Serialize)]
+struct RotationSummary {
+    profile: TimedRotationProfile,
+    daily: DailyTotals,
+    shifts: Vec<RotationShiftSummary>,
+}
+
+#[derive(Debug, Serialize)]
+struct RotationShiftSummary {
+    index: usize,
+    duration_hours: f64,
+    active_teams: Vec<TeamLabel>,
+    resting_team: TeamLabel,
+    efficiencies: ShiftEfficiencies,
+    weighted_trade: infra_core::Efficiency,
+    weighted_manufacture: infra_core::Efficiency,
+    weighted_power: infra_core::Efficiency,
+}
+
+impl From<&TeamRotationReport> for RotationSummary {
+    fn from(rotation: &TeamRotationReport) -> Self {
+        Self {
+            profile: rotation.profile,
+            daily: rotation.daily.clone(),
+            shifts: rotation
+                .shifts
+                .iter()
+                .map(|shift| RotationShiftSummary {
+                    index: shift.index,
+                    duration_hours: shift.duration_hours,
+                    active_teams: shift.active_teams.clone(),
+                    resting_team: shift.resting_team,
+                    efficiencies: shift.efficiencies.clone(),
+                    weighted_trade: shift.weighted_trade,
+                    weighted_manufacture: shift.weighted_manufacture,
+                    weighted_power: shift.weighted_power,
+                })
+                .collect(),
+        }
+    }
+}
+
 fn handle_request(state: &ServeState, line: &str) -> ServeResponse<serde_json::Value> {
     let start = Instant::now();
     let request: ServeRequest = match serde_json::from_str(line) {
@@ -227,10 +422,27 @@ fn handle_request(state: &ServeState, line: &str) -> ServeResponse<serde_json::V
         }
     };
     let id = request.id.clone();
-    let result = match request.method.as_str() {
-        "plan" => handle_plan(state, request.params),
-        "ping" => Ok(serde_json::json!({ "pong": true })),
-        other => Err(Error::msg(format!("unknown serve method {other:?}"))),
+    let (result, error_code, error_stage) = match request.method.as_str() {
+        "plan" => (handle_plan(state, request.params), None, None),
+        "plan.compute" => (
+            handle_plan_compute(state, request.params),
+            Some("PLAN_FAILED"),
+            Some("plan.compute"),
+        ),
+        "ping" => (
+            Ok(serde_json::json!({
+                "pong": true,
+                "protocol_version": PROTOCOL_VERSION,
+                "plan_schema_version": PLAN_SCHEMA_VERSION,
+            })),
+            None,
+            None,
+        ),
+        other => (
+            Err(Error::msg(format!("unknown serve method {other:?}"))),
+            None,
+            None,
+        ),
     };
     match result {
         Ok(result) => ServeResponse {
@@ -240,7 +452,16 @@ fn handle_request(state: &ServeState, line: &str) -> ServeResponse<serde_json::V
             result: Some(result),
             error: None,
         },
-        Err(err) => error_response(id, start.elapsed().as_millis(), err.to_string()),
+        Err(err) => match (error_code, error_stage) {
+            (Some(code), Some(stage)) => coded_error_response(
+                id,
+                start.elapsed().as_millis(),
+                code,
+                stage,
+                err.to_string(),
+            ),
+            _ => error_response(id, start.elapsed().as_millis(), err.to_string()),
+        },
     }
 }
 
@@ -254,8 +475,164 @@ fn error_response(
         ok: false,
         elapsed_ms,
         result: None,
-        error: Some(ServeError { message }),
+        error: Some(ServeError {
+            code: None,
+            stage: None,
+            message,
+        }),
     }
+}
+
+fn coded_error_response(
+    id: serde_json::Value,
+    elapsed_ms: u128,
+    code: &'static str,
+    stage: &'static str,
+    message: String,
+) -> ServeResponse<serde_json::Value> {
+    ServeResponse {
+        id,
+        ok: false,
+        elapsed_ms,
+        result: None,
+        error: Some(ServeError {
+            code: Some(code),
+            stage: Some(stage),
+            message,
+        }),
+    }
+}
+
+fn handle_plan_compute(
+    state: &ServeState,
+    params: serde_json::Value,
+) -> Result<serde_json::Value, Error> {
+    let params: PlanComputeParams = serde_json::from_value(params)?;
+    if params.schema_version != PLAN_SCHEMA_VERSION {
+        return Err(Error::msg(format!(
+            "unsupported plan schema version {}; expected {PLAN_SCHEMA_VERSION}",
+            params.schema_version
+        )));
+    }
+    if params.options.top == 0 || params.options.top > MAX_TOP_K {
+        return Err(Error::msg(format!("top must be between 1 and {MAX_TOP_K}")));
+    }
+    if params.layout.rooms.is_empty() || params.layout.rooms.len() > MAX_LAYOUT_ROOMS {
+        return Err(Error::msg(format!(
+            "layout rooms must contain between 1 and {MAX_LAYOUT_ROOMS} entries"
+        )));
+    }
+    params.layout.validate()?;
+
+    let layout_label = validated_label(
+        params.labels.layout,
+        params.layout.template.as_deref().unwrap_or("inline-layout"),
+        "layout label",
+    )?;
+    let operbox_label = validated_label(params.labels.operbox, "inline-operbox", "operbox label")?;
+    let operbox = inline_operbox(params.operbox)?;
+
+    let computed = compute_plan(
+        PlanResources {
+            instances: &state.instances,
+            table: &state.table,
+        },
+        PlanComputeInput {
+            blueprint: &params.layout,
+            operbox: &operbox,
+            layout_label: &layout_label,
+            operbox_label: &operbox_label,
+            baseline_operbox: None,
+            top_k: params.options.top,
+            rotation_profile: params.options.rotation,
+            system_preferences: &params.options.system_preferences,
+            maa_title: params.options.maa_title.as_deref(),
+        },
+        RequestedOutputs {
+            profile: true,
+            maa: true,
+        },
+    )?;
+
+    let profile = computed
+        .profile
+        .expect("profile is always requested by plan.compute");
+    let maa = computed
+        .maa
+        .expect("MAA schedule is always requested by plan.compute");
+    serde_json::to_value(PlanComputeResult {
+        schema_version: PLAN_SCHEMA_VERSION,
+        profile,
+        rotation: RotationSummary::from(&computed.current.rotation),
+        maa,
+    })
+    .map_err(Error::from)
+}
+
+fn validated_label(value: Option<String>, fallback: &str, field: &str) -> Result<String, Error> {
+    let value = value.unwrap_or_else(|| fallback.to_string());
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(Error::msg(format!("{field} must not be empty")));
+    }
+    if value.len() > MAX_LABEL_BYTES {
+        return Err(Error::msg(format!(
+            "{field} must not exceed {MAX_LABEL_BYTES} bytes"
+        )));
+    }
+    Ok(value.to_string())
+}
+
+fn inline_operbox(mut entries: Vec<OperBoxEntry>) -> Result<OperBox, Error> {
+    if entries.is_empty() || entries.len() > MAX_OPERBOX_ENTRIES {
+        return Err(Error::msg(format!(
+            "operbox must contain between 1 and {MAX_OPERBOX_ENTRIES} entries"
+        )));
+    }
+
+    let mut ids = HashSet::new();
+    let mut names = HashSet::new();
+    for (index, entry) in entries.iter_mut().enumerate() {
+        entry.id = entry.id.trim().to_string();
+        entry.name = entry.name.trim().to_string();
+        if entry.id.is_empty() || entry.name.is_empty() {
+            return Err(Error::msg(format!(
+                "operbox entry {} must have non-empty id and name",
+                index + 1
+            )));
+        }
+        if !ids.insert(entry.id.clone()) {
+            return Err(Error::msg(format!("duplicate operbox id {}", entry.id)));
+        }
+        if !names.insert(entry.name.clone()) {
+            return Err(Error::msg(format!("duplicate operbox name {}", entry.name)));
+        }
+        if entry.elite > 2 {
+            return Err(Error::msg(format!(
+                "{} elite must be between 0 and 2",
+                entry.name
+            )));
+        }
+        if !(1..=90).contains(&entry.level) {
+            return Err(Error::msg(format!(
+                "{} level must be between 1 and 90",
+                entry.name
+            )));
+        }
+        if !(1..=6).contains(&entry.potential) {
+            return Err(Error::msg(format!(
+                "{} potential must be between 1 and 6",
+                entry.name
+            )));
+        }
+        if !(1..=6).contains(&entry.rarity) {
+            return Err(Error::msg(format!(
+                "{} rarity must be between 1 and 6",
+                entry.name
+            )));
+        }
+    }
+    Ok(OperBox::from_entries(entries))
 }
 
 fn handle_plan(state: &ServeState, params: serde_json::Value) -> Result<serde_json::Value, Error> {
@@ -273,49 +650,51 @@ fn handle_plan(state: &ServeState, params: serde_json::Value) -> Result<serde_js
 
     let layout_label = layout_path.to_string_lossy().into_owned();
     let operbox_label = operbox_path.to_string_lossy().into_owned();
-    let current = run_user_rotation_probe_with_profile(
-        &blueprint,
-        &operbox,
-        &state.instances,
-        &state.table,
-        top,
-        rotation_profile,
+    let system_preferences = std::collections::HashMap::new();
+    let computed = compute_plan(
+        PlanResources {
+            instances: &state.instances,
+            table: &state.table,
+        },
+        PlanComputeInput {
+            blueprint: &blueprint,
+            operbox: &operbox,
+            layout_label: &layout_label,
+            operbox_label: &operbox_label,
+            baseline_operbox: Some(&baseline_path),
+            top_k: top,
+            rotation_profile,
+            system_preferences: &system_preferences,
+            maa_title: params.maa_title.as_deref(),
+        },
+        RequestedOutputs {
+            profile: params.profile_out.is_some(),
+            maa: params.maa_out.is_some(),
+        },
     )?;
+    let rotation = &computed.current.rotation;
 
     if let Some(dir) = params.output_dir.as_ref() {
         fs::create_dir_all(dir)?;
-        for shift in &current.rotation.shifts {
+        for shift in &rotation.shifts {
             let path = dir.join(format!("team_shift_{}.json", shift.index + 1));
             shift.assignment.save(&path)?;
         }
     }
 
     if let Some(path) = params.maa_out.as_ref() {
-        let mut maa_opts = MaaExportOptions::for_blueprint(&blueprint);
-        maa_opts.enable_gongsun_fiammetta_priority();
-        if let Some(title) = params.maa_title.clone() {
-            maa_opts.title = title;
-        }
-        let schedule = build_from_team_rotation(&blueprint, &current.rotation, &maa_opts)?;
+        let schedule = computed
+            .maa
+            .as_ref()
+            .expect("MAA schedule was requested when maa_out is present");
         schedule.save(path)?;
     }
 
     if let Some(path) = params.profile_out.as_ref() {
-        let profile = build_box_profile_from_current_probe(
-            &current,
-            &blueprint,
-            &operbox,
-            &state.instances,
-            &state.table,
-            &layout_label,
-            &operbox_label,
-            &BoxProfileOptions {
-                top_k: top,
-                baseline_operbox: Some(baseline_path),
-                rotation_profile,
-                ..BoxProfileOptions::default()
-            },
-        )?;
+        let profile = computed
+            .profile
+            .as_ref()
+            .expect("profile was requested when profile_out is present");
         write_pretty_json(path, &profile)?;
     }
 
@@ -337,10 +716,10 @@ fn handle_plan(state: &ServeState, params: serde_json::Value) -> Result<serde_js
             .output_dir
             .as_ref()
             .map(|path| path.to_string_lossy().into_owned()),
-        daily_trade_efficiency: current.rotation.daily.trade,
-        daily_manufacture_efficiency: current.rotation.daily.manufacture,
-        daily_power_efficiency: current.rotation.daily.power,
-        shifts: current.rotation.shifts.clone(),
+        daily_trade_efficiency: rotation.daily.trade,
+        daily_manufacture_efficiency: rotation.daily.manufacture,
+        daily_power_efficiency: rotation.daily.power,
+        shifts: rotation.shifts.clone(),
     };
     serde_json::to_value(result).map_err(Error::from)
 }
@@ -354,4 +733,57 @@ fn write_pretty_json(path: &Path, value: &impl Serialize) -> Result<(), Error> {
     let json = serde_json::to_string_pretty(value)?;
     fs::write(path, format!("{json}\n"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use super::*;
+
+    fn operbox_entry(id: &str, name: &str) -> OperBoxEntry {
+        OperBoxEntry {
+            id: id.to_string(),
+            name: name.to_string(),
+            elite: 2,
+            level: 90,
+            own: true,
+            potential: 6,
+            rarity: 6,
+        }
+    }
+
+    #[test]
+    fn bounded_reader_drains_oversized_frame_and_reads_next_line() {
+        let mut input = Cursor::new(b"12345\n{}\n".to_vec());
+        assert!(matches!(
+            read_ndjson_frame(&mut input, 5).unwrap(),
+            Some(NdjsonFrame::TooLarge)
+        ));
+        match read_ndjson_frame(&mut input, 5).unwrap() {
+            Some(NdjsonFrame::Line(line)) => assert_eq!(line, "{}"),
+            _ => panic!("expected the frame after the oversized line"),
+        }
+    }
+
+    #[test]
+    fn inline_operbox_trims_and_rejects_duplicate_names() {
+        let operbox = inline_operbox(vec![operbox_entry(" a ", " 甲 ")]).unwrap();
+        assert!(operbox.owns("甲"));
+
+        let error =
+            inline_operbox(vec![operbox_entry("a", "甲"), operbox_entry("b", "甲")]).unwrap_err();
+        assert!(error.to_string().contains("duplicate operbox name"));
+    }
+
+    #[test]
+    fn compute_params_reject_unknown_fields() {
+        let value = serde_json::json!({
+            "schema_version": 1,
+            "layout": { "rooms": [] },
+            "operbox": [],
+            "unexpected": true,
+        });
+        assert!(serde_json::from_value::<PlanComputeParams>(value).is_err());
+    }
 }

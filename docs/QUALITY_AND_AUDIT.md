@@ -100,7 +100,7 @@
 - 至少运行一次用户真实 `plan` 或 `layout team-rotation` 入口。
 - profile JSON 和 MAA JSON 使用任务专属路径写入 `out/`。
 - 对 stdout / MAA 断言设施类型、实际成员、工作 / 休息状态和核心字段；profile 只断言账号分析与 rotation 指标，不要求它包含最终 MAA 那次完整房间 assignment。
-- `plan` 当前会为 profile 和最终 stdout / MAA 分别运行 rotation；比较两者时核对指标与不变量，不宣称它们共享同一个 in-memory assignment。
+- `plan`、legacy serve 和 `plan.compute` 都通过 `commands/plan_compute.rs` 生成一次用户 rotation；profile、stdout、MAA 和 Worker rotation 摘要必须消费该同一结果。
 
 ## 4. 验证留痕
 

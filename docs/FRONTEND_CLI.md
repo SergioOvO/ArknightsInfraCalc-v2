@@ -8,6 +8,7 @@
 
 > 面向前端 / 排班 UI。**Layout 蓝图**用静态页 `layout-gen` 编辑；**排班求解 + MAA JSON** 用 `infra-cli`（子进程或后续 WASM）。
 > **Beta Release 构建**：2026-06-25 · backend commit `9e52de9` · frontend beta source `3259eaa` · 见 `release/VERSION.txt`
+> **Worker v1 落地状态（2026-07-23）**：后端与 Next BFF 的 `plan.compute` 实现及本地证据已完成；目标分支集成、发布部署和真实浏览器验收仍由 [Worker 内联 JSON 集成与部署验收](TODO/Worker内联JSON集成与部署验收.md) 跟踪。上述 Beta Release 不包含本轮迁移；已安装 Worker 是否支持 v1 以 `ping` 版本字段为准。
 
 ---
 
@@ -110,8 +111,8 @@ infra-cli plan \
 | `--operbox <path>` | 是 | `OperBox` JSON 数组，或一图流导出的 **xlsx** |
 | `--layout <path>` | 否 | 默认 `data/fixtures/243/layout.json` |
 | `--rotation <profile>` | 否 | 默认 `3`；可选 `2`、`fiammetta-8844`、`abyssal-7575`；裸 `4` 硬错误 |
-| `--maa-out <path>` | 否* | MAA 自定义基建排班 JSON；前端主链路应传入已知临时路径 |
-| `--profile-out <path>` | 否 | 账号画像 JSON；前端主链路应传入已知临时路径 |
+| `--maa-out <path>` | 否* | MAA 自定义基建排班 JSON；一次性 CLI 集成应传入已知临时路径 |
+| `--profile-out <path>` | 否 | 账号画像 JSON；一次性 CLI 集成应传入已知临时路径 |
 | `--baseline <operbox>` | 否 | 对比基准练度盒（画像用） |
 | `--maa-title <text>` | 否 | 覆盖 MAA JSON 顶层 `title` |
 | `--top <n>` | 否 | 搜索深度，默认 `20` |
@@ -128,7 +129,7 @@ infra-cli plan \
 
 **前端结构化数据契约：**
 
-前端不要解析 stdout 文本作为结构化数据。主链路应始终传入 `--profile-out` 和 `--maa-out` 两个路径，CLI 退出码为 0 后分别读取：
+前端不要解析 stdout 文本作为结构化数据。直接调用一次性 CLI 时，传入 `--profile-out` 和 `--maa-out` 两个路径，CLI 退出码为 0 后分别读取：
 
 | 文件 | 用途 |
 |------|------|
@@ -257,13 +258,25 @@ infra-cli layout team-rotation \
 
 **前端解析建议：**
 
-- 一体化 UI：优先 **`plan`**，传入 `--profile-out` + `--maa-out`，读取 `profileJson` / `maaJson`。
+- 一次性 CLI 集成：使用 **`plan`**，传入 `--profile-out` + `--maa-out`，读取对应文件。
+- 常驻 Next BFF：使用 `infra-cli serve` 的 `plan.compute`，内联提交 layout/operbox，并从同一响应读取 profile、rotation 和 MAA。
 - stdout / stderr 作为日志或人类可读报告展示，不作为结构化数据源。
-- 下载 / 导入 MAA：使用 **`--maa-out` 已知路径** 读文件。
+- 下载 / 导入 MAA：一次性 CLI 使用 **`--maa-out` 已知路径** 读文件；常驻 Worker 直接读取 `result.maa`。
 - 成功：`exit code == 0`；失败：stderr 含 `error:`，非零退出码。
 
-`serve` 的 `method: "plan"` 参数新增可选 `rotation`，取序列化 profile 名：
-`abc_12_6_6`、`main_backup_12_12`、`fiammetta_8_8_4_4`、`abyssal_7_5_7_5`。省略时仍为默认 ABC。响应 result 同时回传 `rotation`，`shifts[]` 长度随 profile 为 2 / 3 / 4；非法值在反序列化阶段返回错误，不降级。
+`serve` 的机器主入口是 `method: "plan.compute"`：
+
+```json
+{"id":1,"method":"plan.compute","params":{"schema_version":1,"layout":{},"operbox":[],"labels":{"layout":"243","operbox":"Full E2"},"options":{"rotation":"abc_12_6_6","top":20,"system_preferences":{},"maa_title":"My schedule"}}}
+```
+
+响应 `result.schema_version=1`，并内联返回 `profile`（schema v4）、`rotation`（profile/daily/shifts 摘要）和 `maa`。`rotation.shifts[]` 承载 index、duration、active/resting teams、weighted 指标和 `efficiencies.room_lines`，不承载完整 assignment。`rotation` 取值为 `abc_12_6_6`、`main_backup_12_12`、`fiammetta_8_8_4_4`、`abyssal_7_5_7_5`；省略时为默认 ABC，非法值明确失败。
+
+协议边界：request/response 单帧均不超过 8 MiB；layout 包含 1 至 64 个房间；operbox 包含 1 至 1000 项；`top` 为 1 至 100；layout/operbox label 均为非空且不超过 200 UTF-8 bytes。
+
+旧 `method: "plan"` 仅作为已发布前端的兼容入口，继续接收路径并按请求写 profile/MAA/shift 文件；它与 `plan.compute` 共用一次 Plan 编排，不是第二套 solver。新前端遇到 ping 缺少 `protocol_version=1` 时要求升级，不回退旧路径协议。
+
+在 [集成与部署验收](TODO/Worker内联JSON集成与部署验收.md) 完成且部署 inventory 证明旧调用方已退出前，不得删除该兼容入口；退役工作单独由 [Worker 旧路径协议清理](TODO/Worker旧路径协议清理.md) 跟踪。
 
 ### 4.5 stderr 提示示例
 
@@ -403,19 +416,19 @@ JSON **数组**，每项一名干员：
 
 | 命令 | 用途 |
 |------|------|
-| **`plan`** | **账号画像 + 所选定时换班 profile + MAA**（前端首选） |
+| **`plan`** | **账号画像 + 所选定时换班 profile + MAA**（一次性 CLI 集成首选） |
 | `layout team-rotation` | 仅排班；支持 2 / 默认 3 / 两个具名 4 班 profile |
 | `layout test` | 单班贸易/制造 Top-K 搜索（无轮换） |
 | `layout analyze` | 账号画像（不写 MAA） |
 | `layout eval` | 给定 `--assignment` 结算直接效率 |
 
-前端若做「练度导入 → 分析 → 排班 → 导出 MAA」，**用 `plan` 一条命令即可**。
+前端若使用一次性 CLI 子进程完成「练度导入 → 分析 → 排班 → 导出 MAA」，**用 `plan` 一条命令即可**；常驻 Next BFF 使用 §4.4 的 `serve` / `plan.compute`。
 
 ---
 
 ## 8. 前端集成示例（Node）
 
-### 8.1 `plan`（推荐）
+### 8.1 `plan`（一次性 CLI 集成）
 
 ```javascript
 import { spawn } from "node:child_process";

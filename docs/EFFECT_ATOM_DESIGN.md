@@ -9,7 +9,7 @@
 > 本文档记录 ArknightsInfraCalc 重建模的核心设计。
 > **已建模干员详情**见 [`MODELLED_OPERATORS.md`](MODELLED_OPERATORS.md)。
 > **体系链**见 [`SYSTEM_CHAINS.md`](SYSTEM_CHAINS.md)。
-> **改机制协作流程**见 [`../AGENTS.md`](../AGENTS.md) §5；准备实现事项见 [`TODO/`](TODO/)。
+> **改机制协作流程**见 [AGENTS.md 的“核心分层边界”](../AGENTS.md#4-核心分层边界)；准备实现事项见 [`TODO/`](TODO/)。
 
 ---
 

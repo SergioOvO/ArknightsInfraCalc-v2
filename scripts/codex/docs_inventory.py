@@ -44,6 +44,7 @@ ROLE_STATES = {
 GENERATED_SECTIONS = {
     "canonical": ("<!-- BEGIN GENERATED CANONICAL -->", "<!-- END GENERATED CANONICAL -->"),
     "active": ("<!-- BEGIN GENERATED ACTIVE CHANGES -->", "<!-- END GENERATED ACTIVE CHANGES -->"),
+    "decisions": ("<!-- BEGIN GENERATED DECISIONS -->", "<!-- END GENERATED DECISIONS -->"),
 }
 META_RE = re.compile(r"^>\s*([^：:]+)[：:]\s*(.*?)\s*$")
 H1_RE = re.compile(r"^#\s+(.+?)\s*$")
@@ -271,6 +272,17 @@ def render_active_table(documents: Iterable[Document]) -> str:
     return "\n".join(lines)
 
 
+def render_decision_table(documents: Iterable[Document]) -> str:
+    rows = [document for document in documents if document.role == "decision"]
+    lines = ["| 决策 | 状态 | 摘要 |", "|---|---|---|"]
+    for document in sorted(rows, key=lambda item: item.path):
+        link = Path(document.path).relative_to("docs").as_posix()
+        lines.append(
+            f"| [{document.title}]({link}) | `{document.status}` | {document.metadata['摘要']} |"
+        )
+    return "\n".join(lines)
+
+
 def replace_generated_section(text: str, section: str, body: str) -> str:
     begin, end = GENERATED_SECTIONS[section]
     replacement = f"{begin}\n{body}\n{end}"
@@ -284,6 +296,7 @@ def _generated_targets(repo: Path, documents: list[Document]) -> dict[str, tuple
     return {
         "canonical": (repo / "docs/INDEX.md", render_canonical_table(documents)),
         "active": (repo / "docs/TODO/README.md", render_active_table(documents)),
+        "decisions": (repo / "docs/INDEX.md", render_decision_table(documents)),
     }
 
 

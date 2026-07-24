@@ -2,6 +2,7 @@ mod advice;
 mod bake;
 mod layout;
 mod plan;
+mod plan_compute;
 mod profile;
 mod serve;
 pub(crate) mod verify;

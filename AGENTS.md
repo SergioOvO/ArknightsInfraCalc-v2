@@ -42,6 +42,8 @@ debug / feature / quality Skill 是任务意图的 primary owner；`arknights-sy
 
 领域入口未知时查 `docs/INDEX.md`；代码 owner 或命令事实未知时查 `docs/PROJECT_MAP.md` 的相关段，不默认通读。选定的 Skill 和 canonical 领域文档必须完整读取。
 
+根 `AGENTS.md` 是任务分类、真源顺序和项目硬门禁的唯一入口；`docs/INDEX.md` 只负责定位文档与后续阅读，不另行定义 Skill 触发词或真源优先级。
+
 ## 3. 所有任务通用硬门禁
 
 - 未授权修改时只读；诊断不自动等于实现。区分用户事实、用户推测、Agent 推断和关键未知项。

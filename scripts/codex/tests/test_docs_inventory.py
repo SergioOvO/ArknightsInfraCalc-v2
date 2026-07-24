@@ -34,6 +34,23 @@ class DocsInventoryTests(unittest.TestCase):
         )
         return docs_inventory.parse_document(self.repo, target)
 
+    def decision(
+        self,
+        path: str,
+        *,
+        status: str = "accepted",
+        summary: str = "decision fixture",
+    ) -> docs_inventory.Document:
+        target = write_doc(
+            self.repo,
+            path,
+            "> 文档角色：decision\n"
+            f"> 生命周期状态：{status}\n"
+            "> 当前真源：docs/A.md\n"
+            f"> 摘要：{summary}",
+        )
+        return docs_inventory.parse_document(self.repo, target)
+
     def test_parses_and_validates_canonical(self) -> None:
         document = self.canonical()
         self.assertEqual(document.role, "canonical")
@@ -135,6 +152,18 @@ class DocsInventoryTests(unittest.TestCase):
         second = self.canonical("docs/A.md", "a")
         table = docs_inventory.render_canonical_table([first, second])
         self.assertLess(table.index("`a`"), table.index("`z`"))
+
+    def test_generated_decision_index_is_deterministic(self) -> None:
+        canonical = self.canonical()
+        second = self.decision("docs/ADR/0002-second.md", summary="second decision")
+        first = self.decision(
+            "docs/ADR/0001-first.md", status="proposed", summary="first decision"
+        )
+        targets = docs_inventory._generated_targets(self.repo, [canonical, second, first])
+        table = targets["decisions"][1]
+        self.assertLess(table.index("0001-first.md"), table.index("0002-second.md"))
+        self.assertIn("`proposed`", table)
+        self.assertIn("first decision", table)
 
     def test_owner_must_be_governed_current_document(self) -> None:
         canonical = self.canonical()

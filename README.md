@@ -20,36 +20,36 @@
 |------|----------|
 | 单房结算 | 计算贸易、制造、发电和中枢结果；贸易输出纸面效率、单位产出倍率、最终效率与规则 ID |
 | 候选搜索 | 在合法池中枚举房间组合，并按各生产域的 `final_efficiency` 排序 |
-| 单班编制 | 执行 `System → AssignmentPlan → Execute → Fill → Resolve`，用全局 `used` 保证一人一岗 |
+| 单班编制 | 把 Rule/兼容 System 编译为 `AssignmentPlan`，再 Execute → Fill → Resolve，用全局 `used` 保证一人一岗 |
 | 跨设施机制 | 汇总中枢注入、感知信息、人间烟火、木天蓼、虚拟发电等 producer，再让消费房读取 |
 | 体系编排 | 表达 required anchor、同房 bond、禁止同房、配方限制、降级与班次绑定 |
-| 三队轮换 | 生成 αβγ ABC 轮换：`12h + 6h + 6h`，每班两队工作、一队休息 |
+| 定时轮换 | 默认生成 αβγ ABC `12h + 6h + 6h`；也支持二班 `12/12`、菲亚 `8/8/4/4` 和深海 `7/5/7/5` 具名 profile |
 | 账号分析 | 对 operbox 生成练度画像，并与基准盒比较 |
 | 导出 | 输出人类可读排班、账号画像 JSON 和 MAA 排班 JSON；core `BaseAssignment` 本身支持 serde |
 
 贸易站是目前分层最完整的领域（L1 + L2 + L3）；制造、发电、中枢、全局资源和编排已经进入同一条全基建主路径，但各自的机制深度并不相同。当前事实地图见 [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)。
 
-2026-07-14 的机制登记册收录 727 条原始机制，运行时数据包含 297 个技能定义、487 个练度实例（282 个逻辑干员）、12 个编排 System 和 16 个贸易 shortcut。仅控制中枢、贸易站、制造站的设施全集就分别对应 `C(55,5)=3,478,761`、`C(77,3)=73,150`、`C(90,3)=117,480` 个原始满房组合。这些数字不是“覆盖率 100%”的营销口号，而是为什么项目必须同时建设机制分层、候选池、Bake 与严格回归的工程尺度。详见 [性能工程](docs/PERFORMANCE_ENGINEERING.md) 和 [已建模干员](docs/MODELLED_OPERATORS.md)。
+当前数据包含 727 条机制登记、298 个技能定义和 487 个练度实例（282 个逻辑干员）；编排同时使用 6 条声明式 Rule、8 个兼容 registry System 和 4 个中枢制造注入器，另有 16 个贸易 shortcut。仅控制中枢、贸易站、制造站的设施全集就分别对应 `C(55,5)=3,478,761`、`C(77,3)=73,150`、`C(90,3)=117,480` 个原始满房组合。这些数字不是“覆盖率 100%”的营销口号，而是为什么项目必须同时建设机制分层、候选池、Bake 与严格回归的工程尺度。事实入口见 [项目地图](docs/PROJECT_MAP.md)、[性能工程](docs/PERFORMANCE_ENGINEERING.md) 和 [已建模干员](docs/MODELLED_OPERATORS.md)。
 
 ## 架构一览
 
 ```text
-维护期 Markdown（业务语义与预期行为）
-                  ↓
-operator_instances + skill_table + systems / segments / shortcuts
-                  ↓
-         operbox + BaseBlueprint
-                  ↓
-      pool / role / System 候选边界
-                  ↓
-     build_plan → execute_plan → fill
-                  ↓
- resolve_base：workforce → 发电/中枢/办公室
-               → cross_facility → 全局转化 → 各房输入快照
-                  ↓
-       各设施 search / solver（L1、L2、L3 分层）
-                  ↓
- BaseAssignment → αβγ rotation → MAA JSON
+用户当前裁决 → 对应领域 canonical Markdown
+                         ↓ 由代码与生成 help 实现和证明
+runtime data + operbox + BaseBlueprint
+                         ↓
+                    compute_plan
+                         ↓
+               一次用户 rotation probe
+                         ↓
+              schedule_timed_rotation
+                         ↓
+              assign_shift*（按 profile）
+              ├─ build_plan → execute_plan
+              ├─ 建池与各设施 fill / search
+              └─ 反复 resolve → BaseAssignment
+                         ↓
+        TeamRotationReport → profile / CLI 文本 / MAA / Worker 响应
 ```
 
 这里有一条重要边界：shortcut 负责“这个实际组合怎样结算”，不能代替“谁必须进编”；`shift_bind` 负责已入选成员怎样同上同下，也不能代替 required anchor。正因为这些责任被分开，项目才能同时容纳硬体系和自然搜索。
@@ -58,7 +58,7 @@ operator_instances + skill_table + systems / segments / shortcuts
 
 ## 直接运行一套真实方案
 
-日常运行只需要能构建本 workspace 的 Rust / Cargo 工具链；Python 仅用于 `scripts/` 下的数据维护。仓库自带全精二 243 夹具。下面的命令会执行账号分析、αβγ 三队轮换，并分别留下账号画像和 MAA JSON：
+日常运行只需要能构建本 workspace 的 Rust / Cargo 工具链；Python 仅用于 `scripts/` 下的数据维护。仓库自带全精二 243 夹具。下面的命令只计算一次用户 rotation，默认使用 αβγ ABC，并从同一结果生成账号画像和 MAA JSON：
 
 ```bash
 cargo run -q -p infra-cli -- plan \
@@ -99,7 +99,7 @@ cargo run -q -p infra-cli -- bake validate
 
 - 贸易等适用领域使用工具人池和 role policy 缩小候选边界；普通排班制造仍搜索全部合法普通制造候选；
 - 单房组合求值可用 Rayon 并行，跨房则按稳定生命周期提交并重新 `resolve`；
-- Bake 可生成 schema v10 的 3/2/1 人单房候选索引；运行时只有在数据指纹、布局、练度和动态上下文都兼容时才读取；仓库内旧 catalog 失配时会安全回退；
+- Bake 可生成 schema v12 的 3/2/1 人单房候选索引；运行时只有在数据指纹、布局、练度和动态上下文都兼容时才读取；仓库内旧 catalog 失配时会安全回退；
 - Bake 不兼容、缺失或过期时回退到实时 solver。缓存失效只应影响速度，不能改变语义；
 - `Efficiency` 用千分整数保存和排序，避免浮点尾差改变候选次序。
 
@@ -109,12 +109,13 @@ cargo run -q -p infra-cli -- bake validate
 
 项目把“可信”做成了可检查的工程链路：
 
-1. 维护期 Markdown 是业务语义和预期行为的最高权威；当前对话中的用户裁决优先。
-2. `skill_table.id == buff_id`，干员与技能归属只在 `operator_instances.json` 维护。
-3. L1 解释器只认 `buff_id`，不会按干员中文名偷偷改公式。
-4. 生产域统一输出三位小数直接效率；机制等效效率只作解释，不会重复乘入产出。
-5. CSV 回归锚点、单位产出锚点、Rust 测试和真实 CLI 夹具覆盖不同责任层。
-6. 维护流程要求先复现、定位生命周期边界、删除冲突旧路径、补不变量回归，并保留可点击验证日志和 JSON 产物。
+1. 当前用户明确裁决优先；稳定业务语义由对应领域的唯一 canonical Markdown 拥有。
+2. 代码和生成 help 证明当前实现事实；JSON、CSV、fixture 和 Bake 只承载或核对实现。
+3. `skill_table.id == buff_id`，干员与技能归属只在 `operator_instances.json` 维护。
+4. L1 解释器只认 `buff_id`，不会按干员中文名偷偷改公式。
+5. 生产域统一输出三位小数直接效率；机制等效效率只作解释，不会重复乘入产出。
+6. CSV 回归锚点、单位产出锚点、Rust 测试和真实 CLI 夹具覆盖不同责任层。
+7. Debug 流程要求先复现、定位生命周期边界、删除冲突旧路径、补不变量回归，并保留可点击验证日志和 JSON 产物。
 
 这不意味着仓库永远没有 bug；它意味着一个结果可以追到文档口径、数据条目、解释阶段、搜索边界、回归断言和实际 CLI 输出，而不是只能相信一张最终截图。
 
@@ -128,7 +129,7 @@ cargo run -q -p infra-cli -- bake validate
 | 想运行 CLI 或接前端 | [docs/INFRA_CLI.md](docs/INFRA_CLI.md)、[docs/FRONTEND_CLI.md](docs/FRONTEND_CLI.md) |
 | 想判断结果或性能是否可信 | [docs/QUALITY_AND_AUDIT.md](docs/QUALITY_AND_AUDIT.md)、[docs/PERFORMANCE_ENGINEERING.md](docs/PERFORMANCE_ENGINEERING.md) |
 | 想理解机制建模 | [docs/EFFECT_ATOM_DESIGN.md](docs/EFFECT_ATOM_DESIGN.md)、[docs/EFFICIENCY_MODEL.md](docs/EFFICIENCY_MODEL.md) |
-| 想理解编排与轮换 | [docs/BASE_ASSIGNMENT.md](docs/BASE_ASSIGNMENT.md)、[docs/SCHEDULE_ROTATION.md](docs/SCHEDULE_ROTATION.md) |
+| 想理解编排与轮换 | [docs/BASE_ASSIGNMENT.md](docs/BASE_ASSIGNMENT.md)、[docs/排班模式.md](docs/排班模式.md)、[docs/SCHEDULE_ROTATION.md](docs/SCHEDULE_ROTATION.md) |
 | 想修 bug / 审计体系 | [AGENTS.md](AGENTS.md)、[docs/MAINTENANCE_MODE.md](docs/MAINTENANCE_MODE.md)、[docs/SYSTEM_AUDIT_WORKFLOW.md](docs/SYSTEM_AUDIT_WORKFLOW.md) |
 | 想查文件和模块 | [docs/INDEX.md](docs/INDEX.md)、[docs/PROJECT_MAP.md](docs/PROJECT_MAP.md) |
 

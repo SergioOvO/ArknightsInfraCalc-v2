@@ -11,7 +11,7 @@
 
 ## 当前已经实现
 
-`plan`、`layout team-rotation` 和前端 `serve plan` 生成 ABC 排班时，会从 peak 主力选择一个菲亚梅塔目标：
+`plan`、`layout team-rotation` 和 `infra-cli serve` 的 `plan.compute`（兼容期内也包括 legacy `plan`）生成 ABC 排班时，会从 peak 主力选择一个菲亚梅塔目标：
 
 ```text
 但书 > 巫恋 > 龙舌兰 > 清流 > 可露希尔

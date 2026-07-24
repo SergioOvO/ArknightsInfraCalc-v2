@@ -44,6 +44,7 @@ crates/infra-cli/src/
 │   ├── advice.rs        # `advice`：练卡推荐（operbox + training_recommendations v2）
 │   ├── bake.rs          # `bake`：生成贸易/制造 3/2/1 人单房候选索引表（运行时验证后优先读取）
 │   ├── plan.rs          # `plan`：box profile + αβγ 排班 + MAA
+│   ├── plan_compute.rs  # `plan` / `serve` 共用的一次 Plan 编排
 │   ├── serve.rs         # `serve`：前端常驻 worker；stdin/stdout JSON line 协议
 │   ├── layout.rs        # `layout test` / `team-rotation` / `analyze` / `eval` 全部子命令
 │   ├── profile.rs       # `profile`：性能画像 / 分析链路对比辅助
@@ -73,8 +74,9 @@ crates/infra-cli/src/
 |------|------|--------|
 | `advice.rs` | **`advice`**：加载规则 + operbox；默认输出结构化 JSON，`--answer` 输出 core 生成的确定性中文答卷，`--explain` 输出 report + 事实骨架/仓库内 Markdown 片段 | 规则语义真源（见 [练卡推荐规则](练卡推荐规则.md)）；自由生成文案；solver 候选池 |
 | `bake.rs` | `bake`：并行生成 schema v12 的整数效率 `combo_table.bin`、`operators.json`、`manifest.json`；贸易行显式保存首批 room-local 机制签名，manifest 保存 table hash/count；`bake validate` 校验当前 CLI 指纹和完整贸易 row universe | 贸易/制造效率公式；手写搜索排序 |
-| `plan.rs` | **`plan`**：box profile JSON + `schedule_team_rotation` + MAA；`--operbox` 支持 JSON/xlsx；布局默认 243 | 画像算法（`box_profile/`）；排班逻辑（`schedule/`） |
-| `serve.rs` | `serve`：常驻读取 stdin JSON line，复用加载好的机制数据，按请求写出前端指定路径 | 新业务公式；替代 core 求解 API |
+| `plan_compute.rs` | `plan` 与 `serve` 共用的唯一 Plan 编排：一次 user rotation，再按调用方请求派生 profile/MAA | argv、文件写出、wire envelope、机制公式 |
+| `plan.rs` | **`plan`**：解析 argv/文件，调用共享 Plan 编排，再写 profile/MAA 和人类输出 | 画像算法（`box_profile/`）；排班逻辑（`schedule/`） |
+| `serve.rs` | `serve`：常驻读取 stdin JSON line；`plan.compute` 内联收发，legacy `plan` 暂时保留路径适配 | 新业务公式；第二套 Plan 编排 |
 | `layout.rs` | `layout test` / `team-rotation` / `analyze` / `eval`：蓝图 JSON + operbox → `assign_shift` 宏观落位（或自定义 `--assignment`）→ `resolve_base` → 搜索/效率结算 | 蓝图格式定义（`infra-core::layout::blueprint`）；求解公式（在 `infra-core`） |
 | `profile.rs` | `profile layout-full` / `profile analyze-compare`：采集 CLI 热路径、搜索规模和分析链路耗时 | 业务求解公式；用户主流程输出契约 |
 | `verify.rs` | `verify_cmd`：遍历 `REGRESSION_CASES.csv`；按 `rule_id` 选夹具；对比三位小数最终效率、机制等效效率与规则 ID；再跑 `UNIT_OUTPUT_ANCHORS.csv` | 夹具定义（在 `verify/fixtures.rs`）；CSV 列定义（在 `verify/cases.rs`） |
@@ -128,8 +130,8 @@ crates/infra-cli/src/
 
 | 用户命令 | 编排（当前） | 输出 | 数据 / 夹具 |
 |----------|--------------|------|-------------|
-| **`plan`** | `commands/plan.rs` | profile JSON 文件 + stdout 分析/排班表；可选 MAA | 必选 `--operbox`（JSON/xlsx）；布局默认 `data/fixtures/243/layout.json` |
-| `serve` | `commands/serve.rs` | stdout JSON response line；stderr 日志；前端指定输出文件 | 常驻 worker；当前支持 `method=plan` |
+| **`plan`** | `commands/plan.rs` -> `commands/plan_compute.rs` | profile JSON 文件 + stdout 分析/排班表；可选 MAA | 必选 `--operbox`（JSON/xlsx）；布局默认 `data/fixtures/243/layout.json` |
+| `serve` | `commands/serve.rs` -> `commands/plan_compute.rs` | `plan.compute` 内联 profile/rotation/MAA；legacy `plan` 可写文件 | 常驻 worker；stdout 仅 JSON response line，stderr 仅日志 |
 | `bake` | `commands/bake.rs` | 本地 `data/baked` catalog + stderr progress/summary | `infra-core::bake`；生成后自动校验 signature/row，并抽样用 live solver 对账 response；`bake verify` 可对既有 catalog 重跑门禁 |
 | `verify` | `commands/verify.rs` | stdout/stderr 行文本 | `verify/cases.rs` + `verify/fixtures.rs` + `data/*.csv` |
 | `pool` | `main.rs` | `output::emit_pool` | operbox / roster → `infra-core::pool` |

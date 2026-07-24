@@ -298,9 +298,241 @@ class RepositoryFactsTests(unittest.TestCase):
         (self.repo / "docs/A.md").write_text(original + "\n[target](<target file.md>)\n", encoding="utf-8")
         self.assertEqual(check_repository_facts.check_markdown_links(self.repo, ["docs/A.md"]), [])
 
+    def test_secondary_command_parsers_accept_multiline_arms_and_fail_closed(self) -> None:
+        bake = '''
+match args[i].as_str() {
+    "all"
+    | "trade"
+    | "manufacture" => {
+        match nested {
+            "internal" => {}
+            other => {}
+        }
+    }
+    "validate" => {}
+    "verify" => {}
+    /* "commented" => {} */
+    "--help" | "-h" => {}
+    other => {}
+}
+'''
+        self.assertEqual(
+            check_repository_facts.parse_bake_actions(bake),
+            ({"all", "trade", "manufacture", "validate", "verify"}, None),
+        )
+        profile = '''
+match args.first().map(String::as_str) {
+    Some(
+        "layout-full"
+    ) => {
+        match nested {
+            Some("internal") => action(),
+            _ => fallback(),
+        }
+    },
+    Some("analyze-compare") => action(),
+    Some("bake-dependencies") => action(),
+    /* Some("commented") => action(), */
+    _ => fallback(),
+}
+'''
+        self.assertEqual(
+            check_repository_facts.parse_profile_actions(profile),
+            ({"layout-full", "analyze-compare", "bake-dependencies"}, None),
+        )
+        for malformed in ("", 'match args[i].as_str() { "all" => {} }'):
+            with self.subTest(parser="bake", malformed=malformed):
+                self.assertIsNotNone(check_repository_facts.parse_bake_actions(malformed)[1])
+        for malformed in ("", 'match args.first().map(String::as_str) { _ => {} }'):
+            with self.subTest(parser="profile", malformed=malformed):
+                self.assertIsNotNone(check_repository_facts.parse_profile_actions(malformed)[1])
+
+        pseudo_bake_fallback = '''
+match args[i].as_str() {
+    "all" => {}
+    "--help" | "-h" => {}
+    /* other => {} */
+}
+match unrelated { other => {} }
+'''
+        self.assertIsNotNone(
+            check_repository_facts.parse_bake_actions(pseudo_bake_fallback)[1]
+        )
+        later_profile_fallback = '''
+match args.first().map(String::as_str) {
+    Some("layout-full") => action(),
+}
+match unrelated { _ => fallback() }
+'''
+        self.assertIsNotNone(
+            check_repository_facts.parse_profile_actions(later_profile_fallback)[1]
+        )
+
+    def test_secondary_command_contract_rejects_source_and_docs_omitting_help_action(self) -> None:
+        core_src = self.repo / "crates/infra-core/src"
+        cli_commands = self.repo / "crates/infra-cli/src/commands"
+        core_src.mkdir(parents=True)
+        cli_commands.mkdir(parents=True)
+        (core_src / "lib.rs").write_text("pub mod layout;\n", encoding="utf-8")
+        (cli_commands / "bake.rs").write_text(
+            '''
+match args[i].as_str() {
+    "all" => {}
+    "--help" | "-h" => {}
+    other => {}
+}
+eprintln!("infra-cli bake all");
+eprintln!("infra-cli bake verify");
+''',
+            encoding="utf-8",
+        )
+        (cli_commands / "profile.rs").write_text(
+            '''
+match args.first().map(String::as_str) {
+    Some("layout-full") => action(),
+    _ => fallback(),
+}
+eprintln!("infra-cli profile layout-full");
+''',
+            encoding="utf-8",
+        )
+        (self.repo / "docs/PROJECT_MAP.md").write_text(
+            "## `infra-core` 模块索引\n\n"
+            "| 模块 | 职责 |\n"
+            "|---|---|\n"
+            "| `layout` | layout |\n\n"
+            "### `layout/` Owner\n\n"
+            "## `infra-cli` 命令\n\n"
+            "| 命令 | 用途 |\n"
+            "|---|---|\n"
+            "| `bake all` | bake |\n"
+            "| `profile layout-full` | profile |\n\n"
+            "### `infra-cli` 源码 Owner\n",
+            encoding="utf-8",
+        )
+
+        errors = check_repository_facts.check_project_map_owner_contract(self.repo)
+        self.assertTrue(
+            any("bake source/help mismatch" in error and "verify" in error for error in errors)
+        )
+
+    def test_project_map_protected_facts_reject_semantic_reversal(self) -> None:
+        valid = "\n".join(check_repository_facts.PROJECT_MAP_PROTECTED_FACTS)
+        self.assertEqual(check_repository_facts.check_project_map_protected_facts(valid), [])
+
+        shared_owner = (
+            "`src/commands/plan_compute.rs` | `plan` / `serve` 共用的单次 rotation + "
+            "profile/MAA 编排"
+        )
+        reversed_owner = valid.replace(
+            shared_owner,
+            "`src/commands/plan_compute.rs` | `plan` / `serve` 各自重新计算 rotation",
+        )
+        self.assertTrue(
+            any(
+                shared_owner in error
+                for error in check_repository_facts.check_project_map_protected_facts(
+                    reversed_owner
+                )
+            )
+        )
+
+        frontend_route = (
+            "Next BFF 使用 `serve` / `plan.compute`；一次性调用使用 `plan` / "
+            "`--maa-out`。"
+        )
+        reversed_route = valid.replace(
+            frontend_route,
+            "Next BFF 使用 `plan`；一次性调用使用 `serve` / `plan.compute`。",
+        )
+        self.assertTrue(
+            any(
+                frontend_route in error
+                for error in check_repository_facts.check_project_map_protected_facts(
+                    reversed_route
+                )
+            )
+        )
+
+    def test_project_map_retrieval_routes_cannot_disappear(self) -> None:
+        valid = "\n".join(check_repository_facts.PROJECT_MAP_PROTECTED_FACTS)
+        for route in check_repository_facts.PROJECT_MAP_RETRIEVAL_FACTS:
+            with self.subTest(route=route):
+                errors = check_repository_facts.check_project_map_protected_facts(
+                    valid.replace(route, "")
+                )
+                self.assertTrue(any(route in error for error in errors))
+
+    def _write_navigation_fixture(
+        self, *, extra: str = "", sections: list[str] | None = None
+    ) -> None:
+        (self.repo / "AGENTS.md").write_text(
+            "根 `AGENTS.md` 是任务分类、真源顺序和项目硬门禁的唯一入口。\n",
+            encoding="utf-8",
+        )
+        if sections is None:
+            sections = [
+                "## 1. 开始",
+                "## 2. 使用与集成",
+                "## 3. 概念与能力",
+                "## 4. 领域规范",
+                "## 5. 技术参考",
+                "## 6. 开发与项目治理",
+            ]
+        body = "\n\n".join(f"{heading}\n\nReader navigation." for heading in sections)
+        retrieval_routes = "\n".join(check_repository_facts.INDEX_RETRIEVAL_FACTS)
+        (self.repo / "docs/INDEX.md").write_text(
+            "本文不维护第二份分类表；任务路由见 [AGENTS.md](../AGENTS.md)。\n\n"
+            f"{body}\n{retrieval_routes}\n{extra}",
+            encoding="utf-8",
+        )
+        (self.repo / "docs/GLOSSARY.md").write_text("current terms\n", encoding="utf-8")
+
+    def test_navigation_contract_rejects_parallel_classifier_shapes(self) -> None:
+        self._write_navigation_fixture()
+        self.assertEqual(check_repository_facts.check_navigation_contract(self.repo), [])
+
+        direct_skill_route = (
+            "\n[Debug Skill](../.agents/skills/arknights-maintenance/SKILL.md)\n"
+        )
+        self._write_navigation_fixture(extra=direct_skill_route)
+        self.assertTrue(
+            any(
+                "routes project Skills directly" in error
+                for error in check_repository_facts.check_navigation_contract(self.repo)
+            )
+        )
+
+        self._write_navigation_fixture(sections=["## 1. 开始", "## 2. 使用与集成"])
+        self.assertTrue(
+            any(
+                "six-section reader IA" in error
+                for error in check_repository_facts.check_navigation_contract(self.repo)
+            )
+        )
+
+    def test_navigation_contract_rejects_missing_owner_retrieval_route(self) -> None:
+        self._write_navigation_fixture()
+        index_path = self.repo / "docs/INDEX.md"
+        valid = index_path.read_text(encoding="utf-8")
+        for route in check_repository_facts.INDEX_RETRIEVAL_FACTS:
+            with self.subTest(route=route):
+                index_path.write_text(valid.replace(route, ""), encoding="utf-8")
+                errors = check_repository_facts.check_navigation_contract(self.repo)
+                self.assertTrue(any(route in error for error in errors))
+        index_path.write_text(valid, encoding="utf-8")
+
     def test_repository_cli_map_matches_dispatch(self) -> None:
         repo = CODEX_DIR.parents[1]
         self.assertEqual(check_repository_facts.check_cli_help_map(repo), [])
+
+    def test_repository_project_map_matches_current_owners(self) -> None:
+        repo = CODEX_DIR.parents[1]
+        self.assertEqual(check_repository_facts.check_project_map_owner_contract(repo), [])
+
+    def test_repository_navigation_contract(self) -> None:
+        repo = CODEX_DIR.parents[1]
+        self.assertEqual(check_repository_facts.check_navigation_contract(repo), [])
 
 
 class TaskScopeTests(unittest.TestCase):

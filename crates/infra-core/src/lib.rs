@@ -1,3 +1,30 @@
+//! Arknights base mechanics, search, layout assignment, timed scheduling, and export types.
+//!
+//! # Main entrypoints
+//!
+//! - Load runtime inputs with [`SkillTable`], [`OperatorInstances`], [`OperBox`], and
+//!   [`BaseBlueprint`].
+//! - Build one shift with [`assign_shift`] or [`assign_base_greedy`], then inspect derived
+//!   context with [`resolve_base`]. The [`layout`] module owns Plan execution and facility fill.
+//! - Build a named timed schedule with [`schedule_timed_rotation`].
+//!   [`schedule_team_rotation`] is the default ABC convenience wrapper.
+//! - Evaluate facility candidates through [`search`] and the [`trade`], [`manufacture`],
+//!   [`power`], and [`control`] domain modules.
+//! - Export an already solved rotation with [`build_from_team_rotation`] and [`MaaSchedule`].
+//! - Build account analysis through [`box_profile`] and training recommendations through
+//!   [`training_advice`].
+//!
+//! # Boundaries
+//!
+//! This crate owns mechanisms and solver results. `infra-cli` owns transport, file loading, and
+//! output formatting; exporters do not recompute mechanisms or choose a different assignment.
+//! Canonical domain rules live in the repository `docs/` owners rather than in crate-level API
+//! prose.
+//!
+//! Fallible public operations use [`Result`] and [`Error`]. Direct I/O and data-format conversions
+//! can retain typed sources; domain validation, unsupported states, and contextualized failures use
+//! [`Error::Msg`].
+
 pub mod bake;
 pub mod box_profile;
 pub mod candidate;
